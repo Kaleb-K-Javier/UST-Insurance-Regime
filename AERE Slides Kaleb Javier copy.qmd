@@ -1,0 +1,389 @@
+---
+title: "Incentivizing Risk Reduction: The Role of Risk-Based Liability Insurance in Managing Underground Storage Tank Pollution"
+subtitle: "AEA SMPC Summer 2025"
+author: "Kaleb Javier, UC Berkeley"
+institute: "Department of Agricultural and Resource Economics, UC Berkeley"
+format:
+  beamer: 
+    aspectratio: 169
+    navigation: "empty"
+    theme: "CambridgeUS"
+    colortheme: "dolphin"
+    keep-tex: true
+    link-citations: true
+header-includes:
+  - "\\usepackage{color}"
+  - "\\usepackage{amsmath}"
+  - "\\usepackage{hyperref}"
+  - "\\definecolor{lightgreen}{rgb}{0.56, 0.93, 0.56}"
+  - "\\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}"
+  - "\\definecolor{lightgrey}{rgb}{0.83, 0.83, 0.83}"
+  - "\\definecolor{grey}{rgb}{0.5, 0.5, 0.5}"
+  - "\\usepackage{tikz}"
+  - "\\usepackage{adjustbox}"
+  - "\\usepackage{xcolor}"
+  - "\\usepackage{booktabs}"
+  - "\\newenvironment{fullslide}{}{}"
+  - "\\setbeamertemplate{footline}{\\leavevmode\\hbox{\\begin{beamercolorbox}[wd=.5\\paperwidth,ht=2.25ex,dp=1ex,left]{author in head/foot}\\usebeamerfont{author in head/foot}\\hspace*{2ex}Kaleb Javier, UC Berkeley\\end{beamercolorbox}\\begin{beamercolorbox}[wd=.5\\paperwidth,ht=2.25ex,dp=1ex,right]{page number in head/foot}\\usebeamerfont{page number in head/foot}\\insertframenumber\\kern1em\\end{beamercolorbox}}\\vskip0pt}"
+---
+
+# What is a UST?
+
+**Underground Storage Tanks (USTs)** are containers storing hazardous substances underground, primarily at gas stations.
+
+:::{.figure}
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.45\textwidth]{C:/Users/kaleb/Box/UST-Insurance/ust-monitoring-system-infographic-768x484.jpg}
+\end{figure}
+:::
+
+
+# Motivation & Environmental Context
+## Environmental Risk
+
+Leaking Underground Storage Tanks (USTs) are the leading source of groundwater contamination in the US (EPA, UST facts 2024). 
+
+  - Approximately 500,000 facilities nationwide storing hazardous motor fuels
+  - Significant threat to drinking water supplies and public health (Marcus, 2021)
+
+## Research Gaps
+
+Critical knowledge gaps persist in UST regulation:
+
+- No rigorous evaluation of regulatory effectiveness
+- Unknown how financial responsibility mechanisms affect pollution outcomes
+
+**I leverage Texas's 1999 transition from flat-fee to risk-based insurance as a natural experiment to identify how insurance pricing structure affects environmental outcomes through facility owners' investment decisions.**
+
+
+
+#  Research Questions for Today
+
+
+# Research Questions & Theoretical Predictions
+
+**Core Mechanism:** Risk-based pricing directly connects premiums to expected damage costs, internalizing pollution externalities that flat-fee systems allow firms to ignore
+
+**Theory predicts transition to risk-based insurance pricing can improve welfare. This work tests the necessary conditions and their implications:**
+
+1. **Can observable characteristics create effective risk-differentiated contracts?**
+   - Efficient risk-based pricing requires observable tank characteristics to be strong predictors of leak risk
+
+2. **Do firms respond strategically to risk-based price signals?**
+   - For welfare improvements, it is *necessary* for firms' behavior to be responsive to the prices/contracts they face
+
+3. **Do these behavioral responses translate into environmental benefits?**
+   - If firms respond to incentives by removing or upgrading risky tanks, pollution
+
+---
+
+# Empirical Setting: Texas as Natural Experiment
+
+Texas' 1999 transition from public to private insurance creates ideal identification:
+
+::: {.columns}
+::: {.column width="48%"}
+**Before (pre-1999)**
+
+- Uniform flat-fee premiums
+- State-run insurance program
+- No risk differentiation
+:::
+
+::: {.column width="48%"}
+**After (post-1999)**
+
+- Risk-adjusted premiums in Texas, but not control
+- Private market insurance
+- Pricing based on facility risk
+:::
+:::
+
+**Identification Strategy**: Difference-in-differences  comparing Texas facilities (treated) to facilities in other EPA UST Trust fund states (control)
+
+
+# Data: Universe of Underground Storage Tanks (1970-2020)
+
+- **Total unique facilities:** 309,640
+  - Texas facilities: 64,090
+  - Control state facilities: 245,550 (across 18 states)
+
+- **Control states:** AL, AR, ID, IL, KS, LA, MA, ME, MN, MT, NC, NM, OH, OK, PA, SD, TN, VA
+
+## Estimation Sample
+
+- **Full dataset:** 309,640 unique facilities across 19 states
+  
+- **Primary analysis sample:** Single-walled facilities existing before 1999
+  - 143,647 facilities (46.4% of full sample)
+  - Texas: 7,884 facilities
+  - Control states: 135,763 facilities
+  
+- **Sample restriction rationale:**
+  - Single-walled tanks represent the highest observable risk category
+  - Pre-1999 restriction ensures clean identification
+  - Focuses analysis on incumbent behavior under policy change
+
+
+
+
+# Can we predict UST reported leaks?
+
+$$
+\begin{aligned}
+10\text{-fold cross-validation:} &\\
+\text{Reported Leak}_{i,s,t} =& \alpha_t + \delta_s + \sum_{k} \beta_k \text{Wall}_{k,i} + \sum_{m} \gamma_m \text{Age Bins}_{m,i} + \\
+&\sum_{k,m} \zeta_{km} (\text{Wall}_{k,i} \times \text{Age}_{m,i}) + \theta\mathbf{X}_{i,s,t} + \epsilon_{i,s,t}
+\end{aligned}
+$$
+
+
+- $\text{Reported Leak}_{i,s,t}$: Dependent variable for individual $i$ in location $s$ at time $t$
+- $\alpha_t,\delta_s$: Year fixed effects & State effects
+- $\text{Wall}_{k,i}$: Indicator for Single-Walled  UST Systems 
+- $\text{AgeBin}_{m,i}$: 5 year facility Age bins 
+- $\mathbf{X}_{i,s,t}$: Additional Control variables (e.g., tank size, material, release detection method)
+
+**I plot predicted leak probability by tank age and wall type.**
+
+---
+
+
+:::{.fullslide}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/cv_leak_risk_abs.png}
+\end{figure}
+:::
+
+---
+
+#
+
+**How do incumbent UST owners alter UST closure decisions under new policy?**
+$$
+\text{Tank Closure}_{i,t} = \beta \cdot \text{Treatment}_{i,t} + \sum_{a=1}^{N} \gamma_a \cdot \mathbf{1}[\text{AgeBin}_a]_{i,t} + \alpha_i + \alpha_t + \epsilon_{i,t}
+$$
+
+- $\text{Treatment}_{i,t}$ is an indicator for Texas facilities post-1999
+- $\mathbf{1}[\text{AgeBin}_a]_{i,t}$ is an indicator for tank age bins (e.g., 0-5, 6-10, etc.)
+- $\alpha_i$ and $\alpha_t$  facility and year fixed effects
+
+**Has the nature of tank closures changed?**
+
+$$
+\text{Y}_{i,t} = \beta \cdot \text{Treatment}_{i,t} + \sum_{a=1}^{N} \gamma_a \cdot \mathbf{1}[\text{AgeBin}_a]_{i,t} + \alpha_i + \alpha_t + \epsilon_{i,t} \mid \text{Tank Closure}_{i,t} =1
+$$
+
+- $Y_{i,t}$ is an indicator for $\text{Exit}_{i,t}$ or $\text{Replace}_{i,t}$ 
+- run separately for exit and replacement indicators
+
+
+
+
+
+
+
+#
+\hypertarget{closure-results}{}
+\begin{table}[htbp]
+\centering
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Dependent Variables:} & \multicolumn{2}{c}{\textbf{Tank Closure}} & \multicolumn{2}{c}{\textbf{Exit | Closure}} & \multicolumn{2}{c}{\textbf{Replace | Closure}} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+\textbf{Model:} & (1) & (2) & (3) & (4) & (5) & (6) \\
+\midrule
+Texas × Post-Policy & 0.0303$^{***}$ & 0.0183$^{***}$ & -0.0953$^{**}$ & -0.1107$^{***}$ & 0.0733 & 0.1032$^{**}$ \\
+      & (0.0058) & (0.0054) & (0.0348) & (0.0345) & (0.0420) & (0.0361) \\
+\midrule
+Age Bin Controls        & No & Yes & No & Yes & No & Yes \\
+\midrule
+\textbf{Fixed-effects} & & & & & & \\
+Year FE             & Yes & Yes & Yes & Yes & Yes & Yes \\
+Facility FE         & Yes & Yes & Yes & Yes & Yes & Yes \\
+\bottomrule
+\multicolumn{7}{p{0.95\textwidth}}{\small \textit{Notes:} Clustered (state) standard errors in parentheses. 
+Significance: $^{***}p<0.01$, $^{**}p<0.05$, $^{*}p<0.1$. Sample restricted to Single-Walled facilities (pre-1999). Observations: 3,816,313 (Closure models), 136,078 (Exit and Replace models).}
+\end{tabular}
+}
+\end{table}
+
+\small \textbf{Age-specific HTE:} Replacement rates stable at ~10% across ages; exit rates vary - higher in younger facilities, lower in older ones.
+
+
+\hyperlink{hte-closure}{\beamerbutton{HTE Closure}}
+\hspace{1cm}
+\hyperlink{hte-change-nature}{\beamerbutton{HTE Change in Nature}}
+\hspace{1cm}
+\hyperlink{hte-event_study_closure}{\beamerbutton{Event Study}}
+
+
+
+
+# Effect of Risk-Based Pricing on Reported Leaks
+
+To assess how the policy change affected environmental outcomes, I estimate:
+
+$$
+\text{Reported Leak}_{i,t} = \beta \cdot \text{Texas}_{i} \times \text{Post1999}_{t} + \sum_{a=1}^{N} \gamma_a \cdot \mathbf{1}[\text{AgeBin}_a]_{i,t} + \alpha_i + \alpha_t + \epsilon_{i,t}
+$$
+
+Where:
+
+- $\text{Reported Leak}_{i,t}$ indicates whether facility $i$ reported a leak in year $t$
+- $\text{Texas}_{i} \times \text{Post1999}_{t}$ captures the treatment effect
+- Fixed effects control for time-invariant facility characteristics and temporal trends
+- Model estimated on single-walled tanks only, the highest risk category
+
+ **Risk-based pricing should reduce leak incidents through:**
+
+1. Improved technology choices (replacement effect)
+2. Exit of highest-risk facilities
+
+---
+
+#
+\hypertarget{leak-results}{}
+\begin{table}[htbp]
+  \centering
+  \begin{tabular}{lcc}
+    \tabularnewline \midrule \midrule
+    \textbf{Dependent Variable:} & \multicolumn{2}{c}{\textbf{Reported Leak  (0/1)}}\\
+    \textbf{Model:}              & (1)                   & (2)\\
+    \midrule
+    Texas × Post-1999            & -0.0097$^{***}$       & -0.0124$^{***}$\\   
+                        & (0.0030)              & (0.0032)\\
+    \midrule
+    Age Bin Controls             & No                    & Yes\\
+    \midrule
+    \textbf{Fixed-effects}\\
+    Year FE                      & Yes                   & Yes\\
+    Facility FE                  & Yes                   & Yes\\
+    \midrule \midrule
+    \multicolumn{3}{p{0.95\textwidth}}{\small \textit{Notes:} Clustered (state) standard errors in parentheses. 
+    Significance: $^{***}p<0.01$, $^{**}p<0.05$, $^{*}p<0.1$. Sample restricted to Single-Walled facilities (pre-1999).}\\
+  \end{tabular}
+\end{table}
+
+
+\hyperlink{hte-leaks}{\beamerbutton{HTE Leaks}}
+\hspace{1cm}
+\hyperlink{hte-event_study_leak}{\beamerbutton{Event Study}}
+
+
+---
+
+# Summary of Findings
+
+- **Policy (TX, 1999):** Flat‐fee → risk‐based pricing
+- **Owner Responses:**
+  - Closure ↑ 1.8 ppt (p < 0.01)
+  - Replacement ↑ 10.3 ppt (p < 0.05)
+  - Exit ↓ 11 ppt (p < 0.01)
+- **Leak Outcomes:**
+  - Overall ↓ 1.24 ppt (p < 0.01)
+
+Overall findings suggest that risk-based insurance pricing effectively incentivizes UST owners to reduce pollution risk through increased closures and replacements, while decreasing the likelihood of exiting the market relative to control states.
+
+---
+
+# Ongoing and Future Work
+
+1. **Heterogeneity Analysis**
+   - Effects by facility size, ownership structure
+   - Geographic variation in policy response
+   - Study selection effects of FR Mechanisms and Pollution
+
+3. **Policy Counterfactuals with Structural Model**
+   - Alternative insurance designs 
+   - Targeted subsidy programs
+   - Incorporating unpriced health externalities
+   
+
+
+
+---
+
+#
+
+:::{.fullslide}
+\hypertarget{hte-closure}{}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/policy_effect_any_closure_sw_only_by_age.png}
+\end{figure}
+\vspace{-0.5cm}
+\begin{center}
+\hyperlink{closure-results}{\beamerbutton{Back to Results}}
+\end{center}
+:::
+
+
+
+#
+
+:::{.fullslide}
+\hypertarget{hte-change-nature}{}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/policy_effect_exit_vs_replace_conditional_sw_only_by_age.png}
+\end{figure}
+\vspace{-0.5cm}
+\begin{center}
+\hyperlink{closure-results}{\beamerbutton{Back to Results}}
+\end{center}
+:::
+
+
+#
+
+:::{.fullslide}
+\hypertarget{hte-leaks}{}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/policy_effect_leak_incidents_sw_only_by_age.png}
+\end{figure}
+\vspace{-0.5cm}
+\begin{center}
+\hyperlink{leak-results}{\beamerbutton{Back to Results}}
+\end{center}
+:::
+
+#
+:::{.fullslide}
+\hypertarget{hte-event_study_closure}{}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/event_study_tank_closures.png}
+\end{figure}
+\vspace{-0.5cm}
+\begin{center}
+\hyperlink{closure-results}{\beamerbutton{Back to Results}}
+\end{center}
+:::
+
+
+#
+:::{.fullslide}
+\hypertarget{hte-event_study_leak}{}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/event_study_leaks_single_wall.png}
+\end{figure}
+\vspace{-0.5cm}
+\begin{center}
+\hyperlink{leak-results}{\beamerbutton{Back to Results}}
+\end{center}
+:::
+
+
+<!-- texas x post_period x age_bin2 = 5-10     0.0004 (0.0026)
+texas x post_period x age_bin2 = 10-15   -0.0001 (0.0046)
+texas x post_period x age_bin2 = 15-20    0.0054 (0.0065)
+texas x post_period x age_bin2 = 20-25    0.0117 (0.0080)
+texas x post_period x age_bin2 = 25-30    0.0164 (0.0100)
+texas x post_period x age_bin2 = 30-35   0.0218. (0.0121)
+texas x post_period x age_bin2 = 35+     0.0261. (0.0137) -->

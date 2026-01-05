@@ -1,0 +1,221 @@
+---
+title: "Incentivizing Risk Reduction: The Role of Risk-Based Liability Insurance in Managing Underground Storage Tank Pollution"
+subtitle: "Camp Resources XXXI"
+author: "Kaleb Javier, UC Berkeley"
+institute: "Department of Agricultural and Resource Economics, UC Berkeley"
+format:
+  beamer: 
+    aspectratio: 169
+    navigation: "empty"
+    theme: "CambridgeUS"
+    colortheme: "dolphin"
+    keep-tex: true
+    link-citations: true
+header-includes:
+  - "\\usepackage{color}"
+  - "\\usepackage{amsmath}"
+  - "\\usepackage{hyperref}"
+  - "\\definecolor{lightgreen}{rgb}{0.56, 0.93, 0.56}"
+  - "\\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}"
+  - "\\definecolor{lightgrey}{rgb}{0.83, 0.83, 0.83}"
+  - "\\definecolor{grey}{rgb}{0.5, 0.5, 0.5}"
+  - "\\usepackage{tikz}"
+  - "\\usepackage{adjustbox}"
+  - "\\usepackage{xcolor}"
+  - "\\usepackage{booktabs}"
+  - "\\setbeamertemplate{footline}{\\leavevmode\\hbox{\\begin{beamercolorbox}[wd=.5\\paperwidth,ht=2.25ex,dp=1ex,left]{author in head/foot}\\usebeamerfont{author in head/foot}\\hspace*{2ex}Kaleb Javier, UC Berkeley\\end{beamercolorbox}\\begin{beamercolorbox}[wd=.5\\paperwidth,ht=2.25ex,dp=1ex,right]{page number in head/foot}\\usebeamerfont{page number in head/foot}\\insertframenumber\\kern1em\\end{beamercolorbox}}\\vskip0pt}"
+---
+
+
+
+
+# Motivation & Environmental Context
+## Environmental Risk
+
+Leaking Underground Storage Tanks (USTs) are the leading source of groundwater contamination in the US (EPA, UST facts 2024). 
+
+  - Approximately 500,000 facilities nationwide storing hazardous motor fuels
+  - Significant threat to drinking water supplies and public health (Marcus, 2021)
+
+## Research Gaps
+
+  - **No causal evidence:** No rigorous facility-level analyses of how federally mandated insurance affects pollution outcomes
+
+  - **Limited empirical evidence:** Few studies test theoretical predictions about liability insurance as an environmental policy tool (Shavell, 2007)
+
+  **I leverage Texas's 1999 transition from uniform-pricing to risk-based pricing market as a natural experiment to identify how insurance pricing structure affects environmental outcomes through facility owners' investment decisions.**
+
+
+
+
+
+# Research Questions & Theoretical Predictions
+
+**Core Mechanism:** Risk-based pricing directly connects premiums to expected damage costs, internalizing pollution externalities that flat-fee systems allow firms to ignore
+
+**Theory predicts transition to risk-based insurance pricing can improve welfare. This work tests the necessary conditions and their implications:**
+
+1. **Can observable characteristics create effective risk-differentiated contracts?**
+   - Efficient risk-based pricing requires observable tank characteristics to be strong predictors of leak risk
+
+2. **Do firms respond strategically to risk-based price signals?**
+   - For welfare improvements, it is *necessary* for firms' behavior to be responsive to the prices/contracts they face
+
+3. **Do these behavioral responses translate into environmental benefits?**
+   - If firms respond to incentives by removing or upgrading risky tanks, pollution
+
+
+# Data & Empirical Strategy
+
+## Data: Universe of Underground Storage Tanks (1970-2020)
+
+- Panel dataset of 309,640 facilities across 19 states ( Texas (treated): 64,090 facilities, Control states: 245,550 facilities)
+- Primary analysis dataset: 143,647 single-walled facilities (pre-1999) $\rightarrow$ Highest risk facilities types
+
+##  Empirical Strategy: Difference-in-Differences
+
+**Identification Strategy**: Difference-in-differences comparing Texas facilities (treated) to facilities in EPA UST Trust Fund states (control) following Texas's 1999 policy change
+
+$$\text{Y}_{i,t} = \beta \cdot (\text{Texas}_i \times \text{Post}_t) + \gamma \cdot \text{Controls}_{i,t} + \alpha_i + \alpha_t + \epsilon_{i,t}$$
+
+- Outcomes: Facility closure, tank replacement, market exit, leaks
+- Fixed effects: Facility ($\alpha_i$) and year ($\alpha_t$)
+
+
+
+# Headline Results: Risk Predictability & Firm Response
+
+**1. UST Leak Risk is Predictable** \hyperlink{leak-risk}{\beamerbutton{Risk Graph}}
+
+- Single-walled tanks have higher risk than double-walled tanks
+- Risk increases substantially with tank age
+- Oldest single-walled tanks show 7-8% annual leak probability
+
+**2. Firm Response to Risk-Based Pricing** \hyperlink{hte-event_study_closure}{\beamerbutton{Event Study}}
+
+- **Tank Closures** ↑ 1.8 percentage points (p < 0.01) \hyperlink{hte-closure}{\beamerbutton{By Age}}
+- **Conditional on Closure:**
+  - **Replacement:** ↑ 10.3 percentage points (p < 0.05)
+  - **Exit:** ↓ 11.0 percentage points (p < 0.01) \hyperlink{hte-change-nature}{\beamerbutton{Exit vs Replace}}
+
+
+
+# Headline Results: Environmental Outcomes
+**Impact on Reported Leaks:**
+
+- Overall leak probability ↓ 1.24 percentage points (p < 0.01) \hyperlink{hte-event_study_leak}{\beamerbutton{Event Study}}
+- Represents ~30% reduction relative to mean leak probability
+
+
+ \hyperlink{hte-leaks}{\beamerbutton{HTE By Age}}
+
+
+#  Next Steps and Ongoing Work
+
+1. **Rust Style Structural Model of Retrofit/Closure Behavior**
+  - Quantifying welfare loss of uniform insurance and decompose the effects into discrete behavioral responses
+  - Welfare impacts of fully internalizing externality through insurance pricing
+  - Comparing non-price interventions (e.g., mandates and subsidies) to risk-based insurance
+
+2. **Econometric Extensions**
+  - Replicate the OLS results using hazard models 
+
+3. **Heterogeneity Analysis**
+  - Effects by facility size, ownership structure, and geography
+  - Selection effects of financial responsibility mechanisms
+  - Distributional impacts across different facility types
+
+
+---
+
+
+#
+:::{.fullslide}
+\hypertarget{hte-event_study_closure}{}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/event_study_tank_closures.png}
+\end{figure}
+\vspace{-0.5cm}
+\begin{center}
+\hyperlink{closure-results}{\beamerbutton{Back to Results}}
+\end{center}
+:::
+
+
+#
+:::{.fullslide}
+\hypertarget{hte-event_study_leak}{}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/event_study_leaks_single_wall.png}
+\end{figure}
+\vspace{-0.5cm}
+\begin{center}
+\hyperlink{leak-results}{\beamerbutton{Back to Results}}
+\end{center}
+:::
+
+
+
+#
+
+:::{.fullslide}
+\hypertarget{leak-risk}{}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/cv_leak_risk_abs.png}
+\end{figure}
+\vspace{-0.5cm}
+\begin{center}
+\hyperlink{leak-results}{\beamerbutton{Back to Results}}
+\end{center}
+:::
+
+---
+
+
+#
+
+:::{.fullslide}
+\hypertarget{hte-closure}{}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/policy_effect_any_closure_sw_only_by_age.png}
+\end{figure}
+\vspace{-0.5cm}
+\begin{center}
+\hyperlink{closure-results}{\beamerbutton{Back to Results}}
+\end{center}
+:::
+
+
+
+#
+
+:::{.fullslide}
+\hypertarget{hte-change-nature}{}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/policy_effect_exit_vs_replace_conditional_sw_only_by_age.png}
+\end{figure}
+\vspace{-0.5cm}
+\begin{center}
+\hyperlink{closure-results}{\beamerbutton{Back to Results}}
+\end{center}
+:::
+
+
+#
+
+:::{.fullslide}
+\hypertarget{hte-leaks}{}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/policy_effect_leak_incidents_sw_only_by_age.png}
+\end{figure}
+\vspace{-0.5cm}
+\begin{center}
+\hyperlink{leak-results}{\beamerbutton{Back to Results}}
+\end{center}
+:::
