@@ -1,0 +1,18 @@
+# R Essentials
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+# Data Files (Strictly Local)
+*.csv
+*.rds
+*.rdata
+*.xlsx
+*.xls
+*.txt
+*.dat
+*.dta
+*.sas7bdat
+# System Files
+.DS_Store
+Thumbs.db
