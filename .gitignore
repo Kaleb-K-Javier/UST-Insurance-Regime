@@ -16,3 +16,6 @@
 # System Files
 .DS_Store
 Thumbs.db
+*.mdb
+# Ignore the entire Data directory and all contents
+Data/
