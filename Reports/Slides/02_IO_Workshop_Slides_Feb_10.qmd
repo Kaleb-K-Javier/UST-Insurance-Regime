@@ -1,0 +1,88 @@
+---
+title: "Universal DiD Analysis: Texas UST Insurance Reform"
+subtitle: "Multi-Model Estimation with Mechanism Decomposition"
+author: "Kaleb K."
+format: 
+  beamer:
+    template: "my-template.tex" #
+    keep-tex: true
+    aspectratio: 169
+theme-bg-color: "0D2D52" # Matches \BerkeleyMode Matte Blue
+---
+
+
+
+## Methodological Constraints
+
+\BerkeleyMode 
+
+::: {.callout-warning}
+**Critical Filter: Incumbent Facilities Only**
+To satisfy DiD requirements, the sample is restricted to facilities active prior to 1999.
+- **Excluded:** New entrants post-reform.
+- **Included:** 18,000+ facility-months (Incumbents).
+:::
+
+::: {.callout-note}
+**Step-In Controls (Part A.2)**
+We control for:
+- Motor Fuel Heterogeneity (Triple Interaction)
+- EPA 1998 Deadline Effects
+- Regulatory Vintage (Pre-RCRA vs. Post-Deadline)
+:::
+
+
+## Part A: Naive 2WFE Benchmarks
+
+## Part A: Naive 2WFE Benchmarks
+
+\BerkeleyLightMode 
+::: {.layout-dense} 
+\input{Output/Tables/A2_LUST_StepIn_Results.tex}
+:::
+
+## Part C: Time-Average Hazard Trends
+
+\hidefootersection
+::: {.layout-full-figure}
+![](Output/Figures/G2_Hazard_Trends.png){width=100%}
+:::
+\showfootersection
+
+---
+
+## Part C.4: Age Stratification
+
+\BerkeleyMode
+
+:::: {.columns}
+
+::: {.column width="45%"}
+**Key Findings:**
+- **Parallel Gradients:** Joint F-tests confirm parallel age gradients ($p > 0.10$).
+- **Heterogeneity:** Older tanks show stronger treatment effects in the "Exit" channel.
+:::
+
+::: {.column width="55%"}
+![](Output/Figures/G3_AgeBin_HTE_Plot.png){width=100%}
+:::
+
+::::
+
+
+## 
+\BerkeleyMode
+::: {.layout-statement}
+Mechanism 
+Decomposition
+:::
+
+---
+
+## Exit vs. Retrofit Behavior
+
+\BerkeleyLightMode
+
+::: {.layout-table}
+\input{Output/Tables/D1_Conditional_Closure_Behavior.tex}
+:::

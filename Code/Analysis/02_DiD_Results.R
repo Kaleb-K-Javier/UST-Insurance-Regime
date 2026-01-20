@@ -197,25 +197,26 @@ filtered_data <- facility_data[
 
 cat(sprintf("After state/age filter: %s facility-months\n", format(nrow(filtered_data), big.mark = ",")))
 
-#------------------------------------------------------------------------------
+
+
 # CONSTRAINT 4: INCUMBENT FILTER (CRITICAL FOR DiD)
 # Facilities must have active tanks BEFORE treatment (pre-1999)
 #------------------------------------------------------------------------------
 cat("\n--- Applying Incumbent Filter ---\n")
 
-# Identify facilities with active tanks in pre-1999 period
-incumbents <- filtered_data[
-  panel_year < 1999 & active_tanks > 0,
-  .(first_pre_year = min(panel_year)),
-  by = .(facility_id, state)
-]
+# Store initial count for diagnostics
+n_before <- nrow(filtered_data)
+
+# 1. Identify Incumbents: Unique panel_ids active pre-1999
+incumbent_ids <- unique(filtered_data[panel_year < 1999 & active_tanks > 0, panel_id])
 
 cat(sprintf("Incumbent facilities (active pre-1999): %s\n", 
-            format(nrow(incumbents), big.mark = ",")))
+            format(length(incumbent_ids), big.mark = ",")))
 
-# Filter to incumbents only
-n_before <- nrow(filtered_data)
-filtered_data <- filtered_data[incumbents, on = .(facility_id, state), nomatch = 0L]
+# 2. Filter Direct: Keep only rows belonging to incumbent IDs
+filtered_data <- filtered_data[panel_id %in% incumbent_ids]
+
+# Diagnostics
 n_dropped <- n_before - nrow(filtered_data)
 
 cat(sprintf("Dropped %s rows from non-incumbent facilities\n", 
