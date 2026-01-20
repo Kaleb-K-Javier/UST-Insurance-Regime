@@ -1,0 +1,331 @@
+\documentclass[$if(aspectratio)$aspectratio=$aspectratio$,$endif$]{beamer}
+
+% -------------------------------------------------------------------------
+% 1. REQUIRED PACKAGES (The "Batteries" Quarto usually includes)
+% -------------------------------------------------------------------------
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage[most]{tcolorbox} % REQUIRED for Quarto Callouts
+\usepackage{fontawesome5}    % REQUIRED for Callout Icons
+\usepackage{framed}          % REQUIRED for standard blocks
+
+% Fix for Pandoc's "tightlist"
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+% -------------------------------------------------------------------------
+% 2. CUSTOM DESIGN PACKAGES
+% -------------------------------------------------------------------------
+\usepackage{tikz}
+\usepackage{calc}
+\usepackage{xcolor}
+\usepackage{xparse} 
+\usepackage{etoolbox} 
+\usepackage[default]{sourcesanspro} 
+\usetikzlibrary{calc, positioning, shapes.geometric}
+
+% -------------------------------------------------------------------------
+% DEFINE QUARTO CALLOUT COLORS (REQUIRED)
+% -------------------------------------------------------------------------
+% We map these to your "Elegant Dark Mode" aesthetic.
+% Note: Quarto expects these EXACT names.
+
+% 1. Note (Blue)
+\definecolor{quarto-callout-note-color}{HTML}{3498DB}        % Icon/Title Color
+\definecolor{quarto-callout-note-color-frame}{HTML}{2980B9}  % Border Color
+
+% 2. Tip (Green)
+\definecolor{quarto-callout-tip-color}{HTML}{27AE60}
+\definecolor{quarto-callout-tip-color-frame}{HTML}{2ECC71}
+
+% 3. Important (Red/Crimson)
+\definecolor{quarto-callout-important-color}{HTML}{C0392B}
+\definecolor{quarto-callout-important-color-frame}{HTML}{E74C3C}
+
+% 4. Warning (Orange)
+\definecolor{quarto-callout-warning-color}{HTML}{F39C12}
+\definecolor{quarto-callout-warning-color-frame}{HTML}{E67E22}
+
+% 5. Caution (Yellow/Gold)
+\definecolor{quarto-callout-caution-color}{HTML}{F1C40F}
+\definecolor{quarto-callout-caution-color-frame}{HTML}{D4AC0D}
+
+% -------------------------------------------------------------------------
+% NEW: COLOR THEME COMMANDS (Robust Single-Slide Overrides)
+% -------------------------------------------------------------------------
+
+% 1. Light Mode Command
+\newcommand{\LightMode}{
+  % 1. Draw White Background (TikZ Overlay)
+  \begin{tikzpicture}[remember picture, overlay]
+    \fill[white] (current page.south west) rectangle (current page.north east);
+  \end{tikzpicture}
+  % 2. Force Text Colors to Black
+  \setbeamercolor{normal text}{fg=black}
+  \setbeamercolor{frametitle}{fg=black}
+  \setbeamercolor{itemize item}{fg=black}
+  \setbeamercolor{structure}{fg=black}
+  \usebeamercolor[fg]{normal text}
+}
+
+% 2. Black Mode Command
+\newcommand{\BlackMode}{
+  \begin{tikzpicture}[remember picture, overlay]
+    \fill[black] (current page.south west) rectangle (current page.north east);
+  \end{tikzpicture}
+  \setbeamercolor{normal text}{fg=white}
+  \setbeamercolor{frametitle}{fg=white}
+  \setbeamercolor{itemize item}{fg=white}
+  \setbeamercolor{structure}{fg=white}
+  \usebeamercolor[fg]{normal text}
+}
+
+% 3. Brand Mode Command
+\newcommand{\BrandMode}{
+  \begin{tikzpicture}[remember picture, overlay]
+    \definecolor{tempBrand}{HTML}{7D181E}
+    \fill[tempBrand] (current page.south west) rectangle (current page.north east);
+  \end{tikzpicture}
+  \setbeamercolor{normal text}{fg=white}
+  \setbeamercolor{frametitle}{fg=white}
+  \setbeamercolor{itemize item}{fg=white}
+  \setbeamercolor{structure}{fg=white}
+  \usebeamercolor[fg]{normal text}
+}
+
+
+
+% 4. UC Berkeley Theme (Modern Matte)
+% A softer, less aggressive dark mode.
+% - Uses a slightly desaturated blue to reduce eye strain.
+% - Uses Gold ONLY for bullets/accents, not text.
+
+% 4. UC Berkeley Theme (Modern Matte) - FIXED SCOPE
+\newcommand{\BerkeleyMode}{
+  % 1. DEFINE COLORS FIRST (Global to the slide)
+  \definecolor{BerkeleyBlue}{HTML}{003262}
+  \definecolor{CaliforniaGold}{HTML}{FDB515}
+  \definecolor{BerkeleyMatte}{HTML}{0D2D52} 
+  \definecolor{SoftWhite}{HTML}{F8F9FA}
+
+  % 2. Draw Background
+  \begin{tikzpicture}[remember picture, overlay]
+    \fill[BerkeleyMatte] (current page.south west) rectangle (current page.north east);
+    % Accent Strip
+    \fill[CaliforniaGold] (current page.south west) rectangle ($$(current page.north west)+(0.15cm,0)$$);
+  \end{tikzpicture}
+  
+  % 3. Set Text Colors (Now CaliforniaGold is visible here)
+  \setbeamercolor{normal text}{fg=SoftWhite}
+  \setbeamercolor{frametitle}{fg=white}
+  \setbeamercolor{itemize item}{fg=CaliforniaGold} 
+  \setbeamercolor{structure}{fg=CaliforniaGold}
+  \setbeamercolor{footline}{fg=white!60!black}
+  
+  \usebeamercolor[fg]{normal text}
+}
+
+% 5. UC Berkeley Theme (Academic Light) - FIXED SCOPE
+\newcommand{\BerkeleyLightMode}{
+  % 1. DEFINE COLORS FIRST
+  \definecolor{BerkeleyBlue}{HTML}{003262}
+  \definecolor{CaliforniaGold}{HTML}{FDB515}
+  
+  % 2. Draw Background
+  \begin{tikzpicture}[remember picture, overlay]
+    \fill[white] (current page.south west) rectangle (current page.north east);
+    % Header Bar
+    \fill[BerkeleyBlue] (current page.north west) rectangle ($$(current page.north east)+(0,-1.4cm)$$);
+    % Gold Line
+    \fill[CaliforniaGold] ($$(current page.north west)+(0,-1.4cm)$$) rectangle ($$(current page.north east)+(0,-1.45cm)$$);
+  \end{tikzpicture}
+  
+  % 3. Set Text Colors
+  \setbeamercolor{normal text}{fg=black}
+  \setbeamercolor{frametitle}{fg=white} 
+  \setbeamercolor{itemize item}{fg=BerkeleyBlue}
+  \setbeamercolor{structure}{fg=BerkeleyBlue}
+  \setbeamercolor{footline}{fg=gray}
+  
+  \usebeamercolor[fg]{normal text}
+}
+
+% -------------------------------------------------------------------------
+% NEW: ACADEMIC POWER LAYOUTS
+% -------------------------------------------------------------------------
+
+% 1. Statement Layout (Big Impact Transitions)
+% Usage: ::: {.layout-statement} Content :::
+\newenvironment{layout-statement}{
+  \vspace*{\fill}
+  \centering
+  \Huge \bfseries
+  \setbeamercolor{normal text}{fg=CaliforniaGold} % Use Gold for impact
+  \usebeamercolor[fg]{normal text}
+}{
+  \vspace*{\fill}
+}
+
+% 2. Dense Data Layout (Regression Tables)
+% Usage: ::: {.layout-dense} Table :::
+\newenvironment{layout-dense}{
+  \vspace*{\fill}
+  \tiny                  % Force tiny font
+  \setlength\tabcolsep{2pt} % Tighten table columns
+  \centering
+}{
+  \vspace*{\fill}
+}
+
+% 3. Split Slide Macro (Vertical Centering)
+% Usage: \SplitSlide{Left Content}{Right Content}
+\newcommand{\SplitSlide}[2]{
+  \begin{columns}[c] % 'c' option forces vertical centering
+    \begin{column}{0.48\textwidth}
+      #1
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      #2
+    \end{column}
+  \end{columns}
+}
+
+% -------------------------------------------------------------------------
+% 3. DYNAMIC BACKGROUND & CONTRAST LOGIC
+% -------------------------------------------------------------------------
+$if(theme-bg-color)$
+  \definecolor{mainbg}{HTML}{$theme-bg-color$}
+$else$
+  \definecolor{mainbg}{HTML}{2c3e50} 
+$endif$
+
+\setbeamercolor{background canvas}{bg=mainbg}
+
+% Logic to calculate luminance and set text color automatically
+\makeatletter
+\newcommand{\AutoSetContrast}{
+  \extractcolorspec{mainbg}{\mainbgspec}
+  \expandafter\convertcolorspec\mainbgspec{rgb}\mainbgrgb
+  \def\calculatebrightness##1,##2,##3;{
+    \pgfmathparse{0.2126*##1 + 0.7152*##2 + 0.0722*##3}
+  }
+  \expandafter\calculatebrightness\mainbgrgb;
+  \pgfmathparse{\pgfmathresult > 0.5 ? 1 : 0}
+  \ifnum\pgfmathresult=1
+    \definecolor{maintext}{HTML}{222222}
+    \definecolor{dimtext}{HTML}{555555}
+  \else
+    \definecolor{maintext}{HTML}{FFFFFF}
+    \definecolor{dimtext}{HTML}{CCCCCC}
+  \fi
+}
+\makeatother
+
+\AutoSetContrast
+
+\setbeamercolor{normal text}{fg=maintext}
+\setbeamercolor{frametitle}{fg=maintext}
+\setbeamercolor{title}{fg=maintext}
+\setbeamercolor{structure}{fg=maintext} 
+
+% -------------------------------------------------------------------------
+% 4. FOOTER CUSTOMIZATION
+% -------------------------------------------------------------------------
+\setbeamercolor{footline}{fg=dimtext}
+\setbeamerfont{footline}{size=\tiny}
+
+\newtoggle{hidesection}
+\togglefalse{hidesection}
+
+\setbeamertemplate{footline}{
+  \begin{beamercolorbox}[wd=\paperwidth, ht=2.5ex, dp=1.125ex, leftskip=.3cm, rightskip=.3cm]{footline}
+    \iftoggle{hidesection}{}{
+      \insertsectionhead
+    }
+    \hfill
+    \insertframenumber
+  \end{beamercolorbox}
+}
+\setbeamertemplate{navigation symbols}{}
+
+% -------------------------------------------------------------------------
+% 5. CUSTOM COMMANDS & ENVIRONMENTS (FIXED FOR STABILITY)
+% -------------------------------------------------------------------------
+\NewDocumentCommand{\navbutton}{ O{} O{fill=gray} m }{
+  \hyperlink{#1}{
+    \tikz[baseline=(node.base)]{
+      \node(node)[
+        anchor=base,
+        rounded corners=3pt,
+        inner sep=5pt,
+        text=white,
+        font=\small\bfseries,
+        #2
+      ]{#3};
+    }
+  }
+}
+
+\newenvironment{layout-math}{
+  \vspace*{\fill}
+  \centering
+  \begin{minipage}{\linewidth}
+  \centering
+}{
+  \end{minipage}
+  \vspace*{\fill}
+}
+
+% SAFE Layout for Tables (Removed risky \makebox)
+\newenvironment{layout-table}{
+  \vspace*{\fill}
+  \begin{center}
+}{
+  \end{center}
+  \vspace*{\fill}
+}
+
+% SAFE Layout for Full Figures (Uses LRBOX to capture content first)
+\newsavebox{\fullfigbox}
+\newenvironment{layout-full-figure}{
+  \begin{lrbox}{\fullfigbox}
+    \begin{minipage}{\paperwidth}
+      \centering
+}{
+    \end{minipage}
+  \end{lrbox}
+  \begin{tikzpicture}[remember picture, overlay]
+    \node[anchor=center, inner sep=0pt] at (current page.center) {
+      \usebox{\fullfigbox}
+    };
+  \end{tikzpicture}
+}
+
+\newcommand{\hidefootersection}{\global\toggletrue{hidesection}}
+\newcommand{\showfootersection}{\global\togglefalse{hidesection}}
+
+% -------------------------------------------------------------------------
+% 6. DOCUMENT BODY
+% -------------------------------------------------------------------------
+$if(title)$
+\title{$title$}
+$endif$
+$if(author)$
+\author{$author$}
+$endif$
+$if(date)$
+\date{$date$}
+$endif$
+
+\begin{document}
+
+$if(title)$
+\frame{\titlepage}
+$endif$
+
+$body$
+
+\end{document}

@@ -1,0 +1,265 @@
+---
+title: "Academic Template: Feature & Layout Showcase"
+author: "Kaleb K."
+format: 
+  beamer:
+    template: "my-template.tex"
+    keep-tex: true
+    aspectratio: 169
+theme-bg-color: "2c3e50" 
+---
+
+## 1. Standard Content Layout
+
+This is the **Default Layout** for general content.
+
+- **Typography**: Clean sans-serif font (Source Sans Pro).
+- **Contrast**: Text color auto-adapts to your `theme-bg-color`.
+- **Aspect Ratio**: 16:9 Widescreen standard.
+
+### Sub-header Example
+You can use standard Markdown sub-headers to organize text.
+
+> **Blockquotes** look crisp and professional in this theme.
+
+---
+
+## 2. Callout Boxes (Styled)
+
+We manually enabled `tcolorbox` support to make these work.
+
+::: {.callout-note}
+**Note Box:** Use this for neutral information or side notes.
+:::
+
+::: {.callout-tip}
+**Tip Box:** Perfect for highlighting best practices or "pro tips."
+:::
+
+::: {.callout-warning}
+**Warning Box:** Use for potential pitfalls or data limitations.
+:::
+
+::: {.callout-important}
+**Important Box:** Critical takeaways or "bottom line" statements.
+:::
+
+---
+
+## 3. Math Layout (Vertical Centering)
+
+Use the `layout-math` environment to center complex equations.
+
+```{=latex}
+\begin{layout-math}
+```
+$$
+\text{LogLikelihood}(\theta) = \sum_{i=1}^{N} \ln P(d_i | x_i, \theta)
+$$
+
+$$
+\hat{P}_{it} = \beta_0 + \beta_1 \text{Risk}_{it} + \beta_2 \text{Subsidy}_{it} + \epsilon_{it}
+$$
+
+*Equations serve as the visual focal point of the slide.*
+```{=latex}
+\end{layout-math}
+```
+
+---
+
+## 4. Table Layout (Maximized)
+
+Use the `layout-table` environment to center tables.
+
+```{=latex}
+\begin{layout-table}
+```
+| Facility Type | Count | Avg Cost | Leak Prob |
+|:--------------|------:|---------:|----------:|
+| Commercial    | 1,240 |  $45,000 |      12.5%|
+| Industrial    |   850 | $120,000 |      28.0%|
+| Municipal     |   300 |  $32,000 |       5.2%|
+
+: Summary Statistics of UST Facilities
+```{=latex}
+\end{layout-table}
+```
+
+---
+
+## 5. Full-Screen Figure (With Footer)
+
+Use `layout-full-figure` for edge-to-edge images.
+
+```{=latex}
+\begin{layout-full-figure}
+```
+![](example-image.png){width=100%}
+```{=latex}
+\end{layout-full-figure}
+```
+
+---
+
+## 6. Full-Screen Figure (Clean / No Footer Text)
+
+Use `\hidefootersection` to remove the text "Result Visualization".
+
+\hidefootersection
+```{=latex}
+\begin{layout-full-figure}
+```
+![](example-image.png){width=100%}
+```{=latex}
+\end{layout-full-figure}
+```
+\showfootersection
+
+---
+
+## 7. Custom Navigation Buttons
+
+**Syntax:** `\navbutton[label-name][color-options]{Button Text}`
+
+\vspace{1cm}
+
+\centering
+\navbutton[standard-content-layout][fill=teal]{Go to Start} \quad \navbutton[math-layout-vertical-centering][fill=purple]{Review Math}
+
+\vspace{0.5cm}
+
+\navbutton[callout-boxes-styled][fill=orange!80!black]{Check Callouts}
+
+---
+
+## 8. Theme Reference Gallery
+
+The following slides demonstrate how to override the global color scheme.
+
+---
+
+## 
+\LightMode
+### Reference: Light Mode
+
+This layout forces a **White Background** and **Black Text**.
+
+- Safe for printing handouts.
+- Overrides the global dark theme.
+- **Usage:** Put `\LightMode` at the top of the slide.
+
+---
+
+## 
+\BlackMode
+### Reference: OLED Black
+
+This layout forces a **Pure Black Background**.
+
+- High contrast.
+- Great for OLED screens.
+- **Usage:** Put `\BlackMode` at the top of the slide.
+
+---
+
+## 
+\BrandMode
+### Reference: Brand Color
+
+This layout uses your brand hex code (e.g., #7D181E).
+
+- Good for section dividers.
+- **Usage:** Put `\BrandMode` at the top of the slide.
+
+---
+
+## 
+\BerkeleyMode
+### Reference: Berkeley Matte (Modern)
+
+This layout uses the **Modern Matte** aesthetic (Softened Dark Mode).
+
+- **Background**: Matte Blue (`#0D2D52`) reduces eye strain compared to the official high-contrast blue.
+- **Accent**: Gold is used only for bullets and thin strips.
+- **Usage**: `\BerkeleyMode` at the start of the slide.
+
+---
+
+## 
+\BerkeleyLightMode
+### Reference: Berkeley Academic (Light)
+
+This layout is optimized for **Data-Heavy Presentations**.
+
+- **Background**: Pure White (preserves integrity of imported R/Python plots).
+- **Header**: Official Blue bar with Gold accent line.
+- **Usage**: `\BerkeleyLightMode` at the start of the slide.
+
+::: {.callout-tip}
+**Plotting Advice:**
+Use this layout when your slide contains complex charts with white backgrounds. It eliminates the "white box on dark slide" amateur look.
+:::
+
+---
+
+## 
+\BerkeleyMode
+```{=latex}
+\begin{layout-statement}
+```
+Results &
+Analysis
+```{=latex}
+\end{layout-statement}
+```
+
+---
+
+## 
+\BerkeleyLightMode
+### Reference: Dense Data (Regressions)
+
+Use `layout-dense` to fit massive tables.
+
+```{=latex}
+\begin{layout-dense}
+```
+| Variable | Model 1 (OLS) | Model 2 (Fixed Effects) | Model 3 (IV) |
+|:---------|:-------------:|:-----------------------:|:------------:|
+| Intercept| 0.45*** | 0.12                    | 0.89** |
+|          | (0.05)        | (0.10)                  | (0.32)       |
+| Treatment| 0.12* | 0.34*** | 0.56*** |
+|          | (0.06)        | (0.08)                  | (0.15)       |
+| Controls | Yes           | Yes                     | Yes          |
+| N        | 1,240         | 1,240                   | 1,240        |
+| R2       | 0.34          | 0.56                    | 0.45         |
+
+: *Significance levels: \*\*\* p<0.01, \*\* p<0.05, \* p<0.1*
+```{=latex}
+\end{layout-dense}
+```
+
+---
+
+## 
+\BerkeleyMode
+### Reference: Split Slide (Native Columns)
+
+Use standard **Columns** for robust content splitting.
+
+:::: {.columns}
+
+::: {.column width="45%"}
+**Key Takeaways:**
+
+- The map shows clustered USTs.
+- High density in urban zones.
+- Correlation with subsidy rates.
+:::
+
+::: {.column width="55%"}
+![](example-image.png){width=100%}
+:::
+
+::::
