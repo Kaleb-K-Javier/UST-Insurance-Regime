@@ -1,7 +1,7 @@
 #==============================================================================
 # TABLE SAVING HELPER: Specialized Table Export with Julia-Based Wild Bootstrap
 # 
-# Location: Code/Helpers/table_helper.R
+# Location: Code/Helpers/table_saving_helper.R
 #
 # This script provides 5 specialized table-saving functions for DiD analysis:
 #   1. save_standard_did_table()   - Standard 2x2 DiD (Parts A.1, D.1, D.2, D.3, E.1)
@@ -99,11 +99,9 @@ if (!requireNamespace("fwildclusterboot", quietly = TRUE)) {
 #' @param param Character: coefficient name to test
 #' @param cluster_var Character: clustering variable name
 #' @param n_reps Integer: number of bootstrap replications
-#' @param seed Integer: random seed for reproducibility
 #' 
 #' @return List with beta_obs, se_boot, p_val, ci_lower, ci_upper, label
-run_wcb_single <- function(model, param, cluster_var = "state", 
-                           n_reps = 999, seed = 20250120) {
+run_wcb_single <- function(model, param, cluster_var = "state", n_reps = 999) {
   
   # Validate coefficient exists
   model_coefs <- coef(model)
@@ -122,18 +120,18 @@ run_wcb_single <- function(model, param, cluster_var = "state",
   
   beta_obs <- model_coefs[[param]]
   
-  # Run bootstrap
+ # Run bootstrap - note: fwildclusterboot 0.13+ changed API
+ # - 'seed' removed, use set.seed() before calling
+ # - 'clustid' expects formula for fixest objects
   boot_result <- tryCatch({
     fwildclusterboot::boottest(
       object = model,
       param = param,
-      clustid = cluster_var,
+      clustid = as.formula(paste0("~", cluster_var)),
       B = n_reps,
       type = "webb",                    # 6-point distribution for small G
       engine = "WildBootTests.jl",      # Memory-efficient Julia engine
-      impose_null = TRUE,               # WCR bootstrap (recommended)
-      seed = seed,
-      nthreads = parallel::detectCores() - 1
+      impose_null = TRUE                # WCR bootstrap (recommended)
     )
   }, error = function(e) {
     warning(sprintf("Bootstrap failed for '%s': %s", param, e$message))
@@ -179,11 +177,9 @@ run_wcb_single <- function(model, param, cluster_var = "state",
 #' @param R Numeric vector: weights for each coefficient (same length as params)
 #' @param cluster_var Character: clustering variable name
 #' @param n_reps Integer: number of bootstrap replications
-#' @param seed Integer: random seed
 #' 
 #' @return List with beta_obs (sum), se_boot, p_val, ci_lower, ci_upper, label
-run_wcb_combination <- function(model, params, R, cluster_var = "state",
-                                 n_reps = 999, seed = 20250120) {
+run_wcb_combination <- function(model, params, R, cluster_var = "state", n_reps = 999) {
   
   stopifnot(length(params) == length(R))
   
@@ -207,18 +203,17 @@ run_wcb_combination <- function(model, params, R, cluster_var = "state",
   beta_obs <- sum(R * model_coefs[params])
   
   # Run bootstrap for linear combination
+  # Note: fwildclusterboot 0.13+ API - no seed argument, clustid as formula
   boot_result <- tryCatch({
     fwildclusterboot::boottest(
       object = model,
       param = params,
       R = R,                            # Linear combination weights
-      clustid = cluster_var,
+      clustid = as.formula(paste0("~", cluster_var)),
       B = n_reps,
       type = "webb",
       engine = "WildBootTests.jl",
-      impose_null = TRUE,
-      seed = seed,
-      nthreads = parallel::detectCores() - 1
+      impose_null = TRUE
     )
   }, error = function(e) {
     warning(sprintf("Bootstrap failed for combination: %s", e$message))
@@ -403,15 +398,29 @@ save_standard_did_table <- function(
   #---------------------------------------------------------------------------
   # 2. Build Results data.table
   #---------------------------------------------------------------------------
+  # Extract values safely, converting NULL to NA
+  safe_extract <- function(lst, field) {
+    val <- lst[[field]]
+    if (is.null(val)) NA_real_ else val
+  }
+  
   coef_dt <- data.table(
     Model = headers,
-    Coefficient = sapply(results_list, `[[`, "beta_obs"),
-    SE = sapply(results_list, function(x) x$se_boot %||% x$se_hc2),
-    CI_Lower = sapply(results_list, `[[`, "ci_lower"),
-    CI_Upper = sapply(results_list, `[[`, "ci_upper"),
-    P_Value = sapply(results_list, `[[`, "p_val"),
-    P_Label = sapply(results_list, `[[`, "label"),
-    SE_Type = sapply(results_list, `[[`, "se_type"),
+    Coefficient = sapply(results_list, safe_extract, "beta_obs"),
+    SE = sapply(results_list, function(x) {
+      if (!is.null(x$se_boot) && !is.na(x$se_boot)) {
+        x$se_boot
+      } else if (!is.null(x$se_hc2) && !is.na(x$se_hc2)) {
+        x$se_hc2
+      } else {
+        NA_real_
+      }
+    }),
+    CI_Lower = sapply(results_list, safe_extract, "ci_lower"),
+    CI_Upper = sapply(results_list, safe_extract, "ci_upper"),
+    P_Value = sapply(results_list, safe_extract, "p_val"),
+    P_Label = sapply(results_list, function(x) if (is.null(x$label)) "NA" else x$label),
+    SE_Type = sapply(results_list, function(x) if (is.null(x$se_type)) "Unknown" else x$se_type),
     N = sapply(models, nobs),
     R2 = sapply(models, function(m) tryCatch(r2(m, type = "r2"), error = function(e) NA_real_))
   )
@@ -456,7 +465,7 @@ save_standard_did_table <- function(
   if (length(treat_row_idx) > 0) {
     se_row_idx <- treat_row_idx[1] + 1
     
-    p_labels <- sapply(results_list, `[[`, "label")
+    p_labels <- sapply(results_list, function(x) if (is.null(x$label)) "NA" else x$label)
     se_label <- if (use_bootstrap) "WCB p-val" else "HC2 p-val"
     p_row <- paste0("$[$", se_label, "$]$ & ", paste(p_labels, collapse = " & "), " \\\\")
     
@@ -639,10 +648,10 @@ save_triple_did_table <- function(
     
     if (use_bootstrap) {
       # Test 1: β₁ (Non-motor fuel effect)
-      base_res <- run_wcb_single(model, base_term, cluster_var, n_reps, seed = 20250120)
+      base_res <- run_wcb_single(model, base_term, cluster_var, n_reps)
       
       # Test 2: β₃ (Motor fuel differential)
-      interact_res <- run_wcb_single(model, interact_term, cluster_var, n_reps, seed = 20250121)
+      interact_res <- run_wcb_single(model, interact_term, cluster_var, n_reps)
       
       # Test 3: β₁ + β₃ (Motor fuel total effect)
       sum_res <- run_wcb_combination(
@@ -650,8 +659,7 @@ save_triple_did_table <- function(
         params = c(base_term, interact_term),
         R = c(1, 1),
         cluster_var = cluster_var,
-        n_reps = n_reps,
-        seed = 20250122
+        n_reps = n_reps
       )
     } else {
       # HC2 fallback

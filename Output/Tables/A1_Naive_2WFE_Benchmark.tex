@@ -1,0 +1,30 @@
+
+\begin{table}[htbp]
+   \caption{Naive 2WFE DiD (Biased Benchmark, Motor Fuel Only)}
+   \centering
+   \begin{tabular}{lccc}
+      \tabularnewline \midrule \midrule
+      Dependent Variables:                  & leak\_incident    & exit\_flag       & replacement\_event\\   
+                                            & LUST              & Exit             & Retrofit \\   
+      Model:                                & (1)               & (2)              & (3)\\  
+      \midrule
+      \emph{Variables}\\
+      texas\_treated                        & 1.20585           & 2.43287          & -4.27273\\   
+                                            & (17,026.3)        & (59,789.8)       & (2,268.74)\\   
+      texas\_treated $\times$ post\_1999    & -0.000683$^{***}$ & 0.001786$^{***}$ & $4.22\times 10^{-5}$\\    
+                                            & (0.000111)        & (0.000320)       & ($9.22\times 10^{-5}$)\\    
+      \midrule
+      \emph{Fixed-effects}\\
+      panel\_id                             & Yes               & Yes              & Yes\\  
+      year\_month                           & Yes               & Yes              & Yes\\  
+      \midrule
+      \emph{Fit statistics}\\
+      Observations                          & 47,915,244        & 47,915,244       & 47,915,244\\  
+      R$^2$                                 & 0.00629           & 0.01989          & 0.03976\\  
+      \midrule \midrule
+      \multicolumn{4}{l}{\emph{Clustered (state) standard-errors in parentheses}}\\
+      \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+   \end{tabular}
+\end{table}
+
+

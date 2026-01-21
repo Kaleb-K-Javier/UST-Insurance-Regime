@@ -36,7 +36,7 @@
 # Master switch for bootstrap inference
 # Set USE_BOOTSTRAP = FALSE for fast testing, TRUE for final production
 USE_BOOTSTRAP <- FALSE   # <-- CHANGE TO TRUE FOR FINAL RUN
-N_BOOTSTRAP   <- 999     # Bootstrap replications (999 for testing, 9999 for final)
+N_BOOTSTRAP   <- 100     # Bootstrap replications (999 for testing, 9999 for final)
 # -----------------------------------------------------------------------------
 
 # Load packages
