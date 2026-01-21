@@ -255,9 +255,8 @@ cat("--- A.1: Naive DiD on Levels (Motor Fuel Only) ---\n")
 
 mf_data <- filtered_data[is_motor_fuel == TRUE]
 cat(sprintf("Motor fuel sample: %s facility-months\n", format(nrow(mf_data), big.mark = ",")))
-
 did_lust_naive <- feols(
-  leak_incident ~ texas_treated*post_1999 | panel_id + year_month,
+  leak_incident ~ texas_treated:post_1999 | panel_id +  year_month,
   data = mf_data,
   cluster = "state",
   lean = TRUE,
@@ -265,7 +264,7 @@ did_lust_naive <- feols(
 )
 
 did_exit_naive <- feols(
-  exit_flag ~ texas_treated*post_1999 | panel_id + year_month,
+  exit_flag ~ texas_treated:post_1999 | panel_id + year_month,
   data = mf_data,
   cluster = "state",
   lean = TRUE,
@@ -273,7 +272,7 @@ did_exit_naive <- feols(
 )
 
 did_retrofit_naive <- feols(
-  replacement_event ~ texas_treated*post_1999 | panel_id + year_month,
+  replacement_event ~ texas_treated:post_1999 | panel_id + year_month,
   data = mf_data,
   cluster = "state",
   lean = TRUE,
@@ -292,6 +291,8 @@ save_standard_did_table(
   n_reps = N_BOOTSTRAP,
   digits = 6
 )
+
+
 
 #------------------------------------------------------------------------------
 # A.2: Step-In Control Specifications (LUST) - WITH TRIPLE INTERACTION
