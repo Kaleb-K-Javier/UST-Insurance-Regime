@@ -47,7 +47,7 @@ library(scales)
 
 options(scipen = 999)
 set.seed(20250120 + 12345)  # Date-based seed convention
-
+setDTthreads(14)
 # Source helper functions
 source(here("Code", "Helpers", "bootstrap_helper.R"))
 source(here("Code", "Helpers", "table_helper.R"))
