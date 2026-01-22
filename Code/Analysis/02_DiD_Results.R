@@ -440,9 +440,23 @@ cat(sprintf("IPS weights: median = %.3f, range = [%.3f, %.3f]\n",
 # B.3: IPS-Weighted Event Studies
 #------------------------------------------------------------------------------
 cat("\n--- B.3: IPS-Weighted Event Studies ---\n")
+#------------------------------------------------------------------------------
+# B.3: IPS-Weighted Event Studies (Monthly - Memory Optimized)
+#------------------------------------------------------------------------------
+cat("\n--- B.3: IPS-Weighted Event Studies (Monthly Optimized) ---\n")
+
+# CRITICAL STEP 1: Floor dates to the 1st of the month
+# This prevents 'hidden' daily coefficients if your dates aren't perfectly aligned
+mf_data[, event_month := as.Date(format(event_date, "%Y-%m-01"))]
+ref_month <- as.Date(format(ref_event_date, "%Y-%m-01"))
+
+# Reduce threads to safe level for memory
+setFixest_nthreads(2)
 
 es_lust_ips <- feols(
-  leak_incident ~ i(event_date, texas_treated, ref = ref_event_date) | panel_id + event_date,
+  # CRITICAL STEP 2: Add 'sparse = TRUE' to the interaction
+  leak_incident ~ i(event_month, texas_treated, ref = ref_month, sparse = TRUE) | 
+                  panel_id + event_month,
   data = mf_data,
   weights = ~ips_weight,
   cluster = "state",
@@ -451,7 +465,8 @@ es_lust_ips <- feols(
 )
 
 es_exit_ips <- feols(
-  exit_flag ~ i(event_date, texas_treated, ref = ref_event_date) | panel_id + event_date,
+  exit_flag ~ i(event_month, texas_treated, ref = ref_month, sparse = TRUE) | 
+              panel_id + event_month,
   data = mf_data,
   weights = ~ips_weight,
   cluster = "state",
@@ -459,7 +474,7 @@ es_exit_ips <- feols(
   mem.clean = TRUE
 )
 
-cat("IPS-weighted event studies estimated\n")
+cat("Monthly IPS-weighted event studies estimated (Sparse Mode).\n")
 
 #==============================================================================
 # PART C: DEANER & KU (2024) HAZARD ANALYSIS

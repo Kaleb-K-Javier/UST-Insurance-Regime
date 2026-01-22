@@ -732,7 +732,183 @@ if (USE_CLAIMS_DATA) {
 }
 track_section_time("Section 01B: Data Integration")
 
+# ==============================================================================
+# SECTION 01C: LEAK-CLOSURE TEMPORAL CLASSIFICATION (MONTHLY APPROX)
+# ==============================================================================
+# Purpose: Classify leaks as Reactive (closure-triggered) vs. Proactive.
+# Input:   facility_leak_behavior (monthly panel)
+# Logic:   Matches first leak date to first closure date per facility.
+#          Reactive: Leak in [Month 0, Month +2] relative to closure.
+#          Proactive: Leak > 6 months before closure.
+#          Includes Kleven (2016) bunching test diagnostics.
+# ==============================================================================
 
+if (!exists("track_section_time")) track_section_time <- function(x) cat(paste("Completed:", x, "\n"))
+track_section_time("Start Section 01C")
+
+cat(rep("=", 80), "\n", sep = "")
+cat("SECTION 01C: LEAK-CLOSURE TEMPORAL CLASSIFICATION & BUNCHING\n")
+cat(rep("=", 80), "\n\n")
+
+cat("Calculating event timing relative to facility closure...\n")
+
+# Ensure we are working with the main panel object
+if (exists("panel") && !exists("facility_leak_behavior")) {
+  target_dt <- panel
+} else {
+  target_dt <- facility_leak_behavior
+}
+
+# 1. Identify First Event Dates (Per Facility)
+# ------------------------------------------------------------------------------
+closure_dates <- target_dt[
+  tanks_closed > 0, 
+  .(first_closure_date = min(date, na.rm = TRUE)), 
+  by = panel_id
+]
+
+leak_dates <- target_dt[
+  leak_incident == 1, 
+  .(first_leak_date = min(date, na.rm = TRUE)), 
+  by = panel_id
+]
+
+# 2. Merge and Calculate Differences
+# ------------------------------------------------------------------------------
+timing_dt <- merge(closure_dates, leak_dates, by = "panel_id", all = TRUE)
+
+# Calculate months and approximate days between events
+# Note: Data is monthly (1st of month). 
+# We use 30.44 days per month to approximate daily diffs for the figure.
+timing_dt[, months_leak_to_closure := as.numeric(difftime(first_closure_date, first_leak_date, units = "days")) / 30.44]
+timing_dt[, days_leak_to_closure := months_leak_to_closure * 30.44] 
+
+# 3. Apply Classification Logic
+# ------------------------------------------------------------------------------
+timing_dt[, leak_closure_category := fcase(
+  # Reactive: ~0 to 60 days (0 to 2 months)
+  !is.na(months_leak_to_closure) & months_leak_to_closure >= -2.1 & months_leak_to_closure <= 0.1, "A_reactive",
+  
+  # Proactive: > 180 days (> 6 months)
+  !is.na(months_leak_to_closure) & months_leak_to_closure > 6, "B_proactive",
+  
+  # Ambiguous: Everything else
+  !is.na(months_leak_to_closure), "C_ambiguous",
+  
+  default = NA_character_
+)]
+
+# 4. Merge Indicators Back to Main Panel
+# ------------------------------------------------------------------------------
+cat("Merging classification flags back to main panel...\n")
+class_lookup <- timing_dt[, .(
+  panel_id, 
+  leak_closure_category
+)]
+
+if (exists("panel") && !exists("facility_leak_behavior")) {
+  panel <- merge(panel, class_lookup, by = "panel_id", all.x = TRUE)
+  panel[, `:=`(
+    is_reactive_facility  = (leak_closure_category == "A_reactive"),
+    is_proactive_facility = (leak_closure_category == "B_proactive"),
+    is_ambiguous_facility = (leak_closure_category == "C_ambiguous"),
+    leak_reactive   = as.integer(leak_incident == 1 & leak_closure_category == "A_reactive"),
+    leak_proactive  = as.integer(leak_incident == 1 & leak_closure_category == "B_proactive"),
+    leak_ambiguous  = as.integer(leak_incident == 1 & leak_closure_category == "C_ambiguous"),
+    leak_no_closure = as.integer(leak_incident == 1 & is.na(leak_closure_category))
+  )]
+} else {
+  facility_leak_behavior <- merge(facility_leak_behavior, class_lookup, by = "panel_id", all.x = TRUE)
+  facility_leak_behavior[, `:=`(
+    is_reactive_facility  = (leak_closure_category == "A_reactive"),
+    is_proactive_facility = (leak_closure_category == "B_proactive"),
+    is_ambiguous_facility = (leak_closure_category == "C_ambiguous"),
+    leak_reactive   = as.integer(leak_incident == 1 & leak_closure_category == "A_reactive"),
+    leak_proactive  = as.integer(leak_incident == 1 & leak_closure_category == "B_proactive"),
+    leak_ambiguous  = as.integer(leak_incident == 1 & leak_closure_category == "C_ambiguous"),
+    leak_no_closure = as.integer(leak_incident == 1 & is.na(leak_closure_category))
+  )]
+}
+
+# ==============================================================================
+# BUNCHING ANALYSIS & FIGURE (Integrated)
+# ==============================================================================
+cat("\nRunning Bunching Analysis & Generating Figure...\n")
+
+# A. Prepare Data (Facilities with BOTH events within ±2 years)
+plot_data <- timing_dt[
+  !is.na(first_closure_date) & !is.na(first_leak_date) & 
+  abs(days_leak_to_closure) <= 730
+]
+
+# B. Formal Bunching Test Stats
+# ------------------------------------------------------------------------------
+# Define windows (Approx Days)
+# Reactive: -60 to 0 (Closure follows leak closely or matches)
+# Counterfactuals: -120 to -60 AND 0 to 60 (Immediate adjacent windows)
+bunching_stats <- plot_data[, .(
+  n_reactive = sum(days_leak_to_closure >= -65 & days_leak_to_closure <= 5), # widened slightly for monthly binning
+  n_before   = sum(days_leak_to_closure >= -125 & days_leak_to_closure < -65),
+  n_after    = sum(days_leak_to_closure > 5 & days_leak_to_closure <= 65)
+)]
+
+bunching_stats[, `:=`(
+  counterfactual_avg = (n_before + n_after) / 2,
+  excess_mass = n_reactive - (n_before + n_after) / 2,
+  bunching_ratio = n_reactive / ((n_before + n_after) / 2)
+)]
+
+# Create Label String for Plot
+stat_label <- sprintf(
+  "Bunching Ratio: %.2f\nExcess Mass: %.0f\n(N Reactive: %s)", 
+  bunching_stats$bunching_ratio, 
+  bunching_stats$excess_mass,
+  format(bunching_stats$n_reactive, big.mark=",")
+)
+
+# C. Generate Figure with Stats Embedded
+# ------------------------------------------------------------------------------
+p_bunching <- ggplot(plot_data, aes(x = days_leak_to_closure)) +
+  # Histogram (Binwidth 30 approx 1 month)
+  geom_histogram(binwidth = 30, fill = "steelblue", color = "white", alpha = 0.7, center = 15) +
+  
+  # Reference Lines
+  geom_vline(xintercept = 0, linetype = "solid", color = "red", linewidth = 1) +
+  geom_vline(xintercept = -60, linetype = "dashed", color = "darkred", linewidth = 0.8) +
+  geom_vline(xintercept = 180, linetype = "dashed", color = "darkgreen", linewidth = 0.8) +
+  
+  # Shaded Regions
+  annotate("rect", xmin = -60, xmax = 0, ymin = -Inf, ymax = Inf, fill = "red", alpha = 0.1) +
+  annotate("rect", xmin = 180, xmax = 730, ymin = -Inf, ymax = Inf, fill = "green", alpha = 0.1) +
+  
+  # Text Labels for Categories
+  annotate("text", x = -30, y = Inf, label = "Category A\n(Reactive)", 
+           vjust = 2, color = "darkred", size = 3.5, fontface = "bold") +
+  annotate("text", x = 400, y = Inf, label = "Category B\n(Proactive)", 
+           vjust = 2, color = "darkgreen", size = 3.5, fontface = "bold") +
+  
+  # STATS ANNOTATION (Top Left Placement)
+  annotate("label", x = -700, y = Inf, label = stat_label, 
+           vjust = 1.2, hjust = 0, fill = "white", alpha = 0.9, size = 3.5, color = "black") +
+
+  # Formatting
+  scale_x_continuous(breaks = seq(-720, 720, 180)) +
+  labs(
+    title = "Discovery Timing: Days from Leak Report to Closure",
+    subtitle = "Positive = Leak reported before closure decision (Proactive)\nNegative = Leak reported after/during closure (Reactive)",
+    x = "Approx. Days (Leak Date - Closure Date)",
+    y = "Number of Facilities",
+    caption = paste0("Bin width = 30 days (1 month). N = ", format(nrow(plot_data), big.mark=","))
+  ) +
+  theme_academic()
+
+# Save
+save_figure(p_bunching, "F_01C_leak_closure_bunching", width = 10, height = 6)
+
+cat("Bunching Figure Saved. Test Results:\n")
+print(bunching_stats)
+
+track_section_time("Section 01C: Leak Classification & Bunching")
 
 
 # ==============================================================================
