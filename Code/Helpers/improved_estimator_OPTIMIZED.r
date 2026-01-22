@@ -29,7 +29,7 @@ suppressPackageStartupMessages({
 # USER ACTION REQUIRED: Uncomment and set correct path to your .cpp file
 # If Rcpp functions are not loaded, estimation will use R fallback (~10x slower)
 #
-Rcpp::sourceCpp(here('Code','Public_to_Private',"structural_estimation.cpp"))
+Rcpp::sourceCpp(here('Code\\Helpers\\cpp_engine.cpp'))
 #
 # After sourcing, verify functions are available:
 if (!exists("e_step_cpp", mode = "function")) {
@@ -1332,4 +1332,985 @@ validate_estimation_inputs <- function(panel_data, states, premiums, hazards,
 #   print(est$theta_hat)
 # }
 
+
+
+# ==============================================================================
+# MODEL B: BINARY OPTIMAL STOPPING (MAINTAIN VS CLOSE)
+# ==============================================================================
+# PURPOSE: NPL Estimation for binary choice model with premium preference parameter
+#
+# STATE SPACE: 36 states = 9 age bins × 2 wall types × 2 regimes
+#   - Age bins: 1=[0-5), 2=[5-10), ..., 8=[40-45), 9=[45+] (absorbing for age)
+#   - Wall types: {single, double}
+#   - Regimes: {FF (flat-fee), RB (risk-based)}
+#
+# PARAMETERS: θ_B = (κ, γ)
+#   - κ: Tank closure value (can be negative if remediation > scrap)
+#   - γ: Premium preference parameter (marginal utility of insurance costs)
+#
+# KEY INNOVATION: γ·p(x) term creates cross-regime variation for identification
+#
+# DEPENDENCIES: data.table, Matrix
+# ==============================================================================
+
+suppressPackageStartupMessages({
+  library(data.table)
+  library(Matrix)
+})
+
+# ==============================================================================
+# SECTION 1: MODEL B CONFIGURATION
+# ==============================================================================
+
+#' Create Configuration for Model B Estimation
+#'
+#' @param beta Monthly discount factor (default 0.9957 = 5% annual)
+#' @param sigma2 Scale parameter for Type I EV errors
+#' @return Configuration list with bounds, tolerances, and calibrated values
+#'
+#' @details
+#' Parameter bounds:
+#'   - κ ∈ [-500, 500]: closure value in revenue units (negative = net cost)
+#'   - γ price ∈ [-20, 5]: premium preference (γ=-1 is dollar-for-dollar)
+#'   - γ risk ∈ [0, 10]: risk prefeences (γ=-1 is full risk internalized)
+create_estimation_config_model_b <- function(beta = 0.9957, sigma2 = 0.3, npl_iter = 600) {
+  list(
+    beta = beta,
+    sigma2 = sigma2,
+    gamma_E = 0.5772156649,
+    
+    tol_theta = 1e-8,
+    tol_P = 1e-7,
+    max_npl_iter = npl_iter,
+    
+    eps_prob = 1e-10,
+    min_log_val = 1e-12,
+    
+    # --- UPDATED BOUNDS ---
+    kappa_bounds = c(-500, 500),
+    gamma_price_bounds = c(-20, 5),   # Price sensitivity (Expect negative)
+    gamma_risk_bounds  = c(0, 10),    # Risk internalization (Expect positive ~1.0)
+    # ----------------------
+    
+    n_actions = 2
+  )
+}
+
+# ==============================================================================
+# SECTION 2: MODEL B ESTIMATION CACHE
+# ==============================================================================
+
+#' Create Estimation Cache for Model B
+#'
+#' @param states State space data.table (36 states: 9 age bins × 2 wall × 2 regime)
+#' @param premiums Premium vector [n_states]
+#' @param hazards Hazard rate vector [n_states]
+#' @param losses Expected loss vector [n_states]
+#' @param transitions List with $maintain and $exit sparse matrices
+#' @param config Configuration from create_estimation_config_model_b()
+#' @return Cache list for Model B estimation
+create_estimation_cache_model_b <- function(states, premiums, hazards, losses,
+                                             transitions, config) {
+  n <- nrow(states)
+  
+  # Precompute hazard*loss product (state-dependent expected cleanup cost)
+  hazard_loss <- hazards * losses
+  
+  list(
+    n_states = n,
+    premiums = premiums,
+    hazards = hazards,
+    losses = losses,
+    hazard_loss = hazard_loss,
+    F_maintain = transitions$maintain,  # Sparse matrix [n × n]
+    F_exit = transitions$exit,          # Identity (absorbing)
+    beta = config$beta
+  )
+}
+
+# ==============================================================================
+# SECTION 3: FLOW UTILITIES (VECTORIZED)
+# ==============================================================================
+
+#' Calculate Flow Utilities for Model B
+#'
+#' @param theta Named vector c(kappa, gamma)
+#' @param cache Model B estimation cache
+#' @param profit_mult Revenue normalization multiplier (default 1.0)
+#' @return Matrix [n_states × 2] with columns [maintain, close]
+#'
+#' @details
+#' Flow utility specification (revenue-normalized):
+#'   u_maintain = ψ + γ·p(x) - h(x)ℓ(x)
+#'   u_close = κ
+#'
+#' Under normalization: ψ = profit_mult (typically 1.0)
+#'
+#' Parameter interpretation:
+#'   - κ: closure value in annual revenue units
+#'   - γ: dimensionless premium multiplier (γ=-1 is dollar-for-dollar)
+calculate_flow_utilities_model_b <- function(theta, cache, profit_mult = 1.0) {
+  
+  # theta is now vector of length 3
+  kappa       <- theta["kappa"]
+  gamma_price <- theta["gamma_price"]
+  gamma_risk  <- theta["gamma_risk"]
+  
+  n_states <- cache$n_states
+  
+  U <- matrix(0, n_states, 2, dimnames = list(NULL, c("maintain", "close")))
+  
+  # Maintain Utility:
+  # Profit + (Price Sensitivity * Premium) - (Risk Internalization * Expected Loss)
+  U[, "maintain"] <- profit_mult + 
+                     (gamma_price * cache$premiums) - 
+                     (gamma_risk * cache$hazard_loss)
+  
+  # Close Utility: Scrap Value
+  U[, "close"] <- kappa
+  
+  return(U)
+}
+
+# ==============================================================================
+# SECTION 4: HOTZ-MILLER VALUE FUNCTION INVERSION (CLOSED-FORM)
+# ==============================================================================
+
+#' Invert Value Function Using Hotz-Miller (Closed-Form for Binary Choice)
+#'
+#' @param P Matrix [n_states × 2] of CCPs
+#' @param U Matrix [n_states × 2] of flow utilities
+#' @param config Configuration list
+#' @return Vector [n_states] of state values V(x)
+#'
+#' @details
+#' For binary logit with terminal action (close), Hotz-Miller gives:
+#'   V(x) = u_close - σ·log(P_close) + σ·γ_E
+#'
+#' This is the CLOSED-FORM inversion, not iterative.
+#' Analogous to Model A's invert_value_function_standard().
+invert_value_function_model_b <- function(P, U, config) {
+  
+  sigma <- config$sigma2
+  u_close <- U[, "close"]
+  P_close <- pmax(P[, "close"], config$min_log_val)
+  
+  # Hotz-Miller closed-form inversion for binary choice
+  V <- u_close - sigma * log(P_close) + sigma * config$gamma_E
+  
+  return(as.numeric(V))
+}
+
+# ==============================================================================
+# SECTION 5: CCP COMPUTATION (VECTORIZED)
+# ==============================================================================
+
+#' Compute CCPs for Model B (Vectorized Binary Logit)
+#'
+#' @param U Matrix [n_states × 2] of flow utilities
+#' @param V Vector [n_states] of state values
+#' @param cache Model B estimation cache
+#' @param config Configuration list
+#' @return Matrix [n_states × 2] of choice probabilities
+#'
+#' @details
+#' Standard binary logit:
+#'   P(d|x) = exp(v_d/σ) / Σ_d' exp(v_d'/σ)
+#' where v_d = u(x,d) + β·E[V(x')|x,d]
+#'
+#' Uses log-sum-exp trick for numerical stability.
+compute_ccps_model_b <- function(U, V, cache, config) {
+  
+  sigma <- config$sigma2
+  beta <- config$beta
+  
+  # Continuation values (sparse matrix multiplication)
+  # EV_maintain: expected value if maintain (stochastic aging)
+  # EV_close: expected value if close (absorbing, so EV = V for exit state)
+  EV_maintain <- as.numeric(cache$F_maintain %*% V)
+  EV_close <- as.numeric(cache$F_exit %*% V)  # = V (identity matrix)
+  
+  # Choice-specific value functions
+# Choice-specific value functions
+  v_maintain <- U[, "maintain"] + beta * EV_maintain
+  v_close <- U[, "close"]                    # <--- FIX: Terminal exit has no future V  
+  # Vectorized log-sum-exp for binary logit
+  v_mat <- cbind(v_maintain, v_close)
+  v_max <- apply(v_mat, 1, max)
+  
+  exp_v <- exp((v_mat - v_max) / sigma)
+  row_sums <- rowSums(exp_v)
+  
+  P <- exp_v / row_sums
+  
+  # Floor probabilities and renormalize
+  P[P < config$eps_prob] <- config$eps_prob
+  P <- P / rowSums(P)
+  
+  colnames(P) <- c("maintain", "close")
+  return(P)
+}
+
+# ==============================================================================
+# SECTION 6: EMPIRICAL CCP COMPUTATION
+# ==============================================================================
+
+#' Compute Empirical CCPs from Counts (Model B)
+#'
+#' @param counts_vec Vector or matrix of state-action counts
+#' @param n_states Number of states
+#' @param eps_prob Probability floor for numerical stability
+#' @return Matrix [n_states × 2] of empirical CCPs
+compute_empirical_ccps_model_b <- function(counts_vec, n_states, eps_prob = 1e-10) {
+  
+  # Handle vector or matrix input
+
+  if (is.vector(counts_vec)) {
+    counts_mat <- matrix(counts_vec, nrow = n_states, ncol = 2, byrow = FALSE)
+  } else {
+    counts_mat <- counts_vec
+  }
+  
+  colnames(counts_mat) <- c("maintain", "close")
+  
+  # Compute row totals
+  row_totals <- rowSums(counts_mat)
+  row_totals[row_totals == 0] <- 1  # Avoid division by zero
+  
+  # Empirical CCPs
+  P <- counts_mat / row_totals
+  
+  # Floor and renormalize
+  P[P < eps_prob] <- eps_prob
+  P <- P / rowSums(P)
+  
+  return(P)
+}
+
+# ==============================================================================
+# SECTION 7: NPL LIKELIHOOD (VECTORIZED)
+# ==============================================================================
+
+#' NPL Pseudo-Likelihood for Model B (Vectorized)
+#'
+#' @param theta Parameter vector c(kappa, gamma)
+#' @param P_fixed Fixed CCP matrix from previous NPL iteration
+#' @param cache Model B estimation cache
+#' @param config Configuration list
+#' @param counts_vec State-action counts (vector or matrix)
+#' @param profit_mult Revenue multiplier (default 1.0)
+#' @return Negative log-likelihood (for minimization)
+#'
+#' @details
+#' NPL objective: -Σ_{s,d} n_{s,d} log P(d|s; θ, V(P_fixed))
+npl_likelihood_model_b <- function(theta, P_fixed, cache, config, counts_vec,
+                                    profit_mult = 1.0) {
+  
+  # Ensure named parameters
+  if (is.null(names(theta))) {
+    names(theta) <- c("kappa", "gamma")
+  }
+  
+  # Step 1: Flow utilities given theta
+  U <- calculate_flow_utilities_model_b(theta, cache, profit_mult)
+  
+  # Step 2: Hotz-Miller inversion using P_fixed
+  V <- invert_value_function_model_b(P_fixed, U, config)
+  
+  # Step 3: Compute CCPs given theta and V
+  P_theta <- compute_ccps_model_b(U, V, cache, config)
+  
+  # Step 4: Log-likelihood
+  # Handle counts format
+  if (is.vector(counts_vec)) {
+    counts_mat <- matrix(counts_vec, nrow = cache$n_states, ncol = 2, byrow = FALSE)
+  } else {
+    counts_mat <- counts_vec
+  }
+  
+  log_P <- log(pmax(P_theta, config$min_log_val))
+  ll <- sum(counts_mat * log_P)
+  
+  # Return negative for minimization
+  if (!is.finite(ll)) {
+    return(1e10)
+  }
+  
+  return(-ll)
+}
+
+# ==============================================================================
+# SECTION 8: MAIN NPL ESTIMATOR
+# ==============================================================================
+
+#' NPL Estimator for Model B (Binary Optimal Stopping)
+#'
+#' @param counts_vec State-action counts (vector [n_states*2] or matrix [n_states × 2])
+#' @param states State space data.table
+#' @param premiums Premium vector
+#' @param hazards Hazard rate vector
+#' @param losses Expected loss vector
+#' @param transitions List of transition matrices ($maintain, $exit)
+#' @param config Configuration from create_estimation_config_model_b()
+#' @param theta_init Initial parameter values (optional)
+#' @param P_init Initial CCPs (optional, uses empirical if NULL)
+#' @param verbose Print progress?
+#' @return List with theta_hat, P_hat, V_hat, convergence info, diagnostics
+#'
+#' @details
+#' Implements NPL algorithm:
+#'   1. Initialize P^(0) from empirical CCPs
+#'   2. Loop:
+#'      a. Invert V^(k) given P^(k) using Hotz-Miller
+#'      b. Update θ^(k+1) by maximizing pseudo-LL given V^(k)
+#'      c. Update P^(k+1) given θ^(k+1) and V^(k)
+#'      d. Check convergence
+#'   3. Return estimates and diagnostics
+npl_estimator_model_b <- function(counts_vec,
+                                   states,
+                                   premiums,
+                                   hazards,
+                                   losses,
+                                   transitions,
+                                   config,
+                                   theta_init = NULL,
+                                   P_init = NULL,
+                                   verbose = TRUE) {
+  
+  if (verbose) cat("\n=== NPL ESTIMATOR MODEL B (3-Param: Kappa, Price, Risk) ===\n")
+  
+  # Create cache
+  cache <- create_estimation_cache_model_b(states, premiums, hazards, losses,
+                                            transitions, config)
+  n_states <- cache$n_states
+  
+  # Initialize parameters (Length 3 now)
+  if (is.null(theta_init)) {
+    theta_init <- c(kappa = 20, gamma_price = -1.0, gamma_risk = 1.0)
+  }
+  # Ensure names are correct
+  if(is.null(names(theta_init))) names(theta_init) <- c("kappa", "gamma_price", "gamma_risk")
+  
+  theta_curr <- theta_init
+  
+  # Initialize CCPs
+  if (!is.null(P_init)) {
+    P <- P_init
+    if (verbose) cat("  Using provided initial CCPs\n")
+  } else {
+    P <- compute_empirical_ccps_model_b(counts_vec, n_states, config$eps_prob)
+    if (verbose) cat("  Using empirical CCPs as starting values\n")
+  }
+  
+  # Storage for iteration path (Now 3 columns)
+  theta_path <- matrix(NA, config$max_npl_iter, 3)
+  colnames(theta_path) <- c("kappa", "gamma_price", "gamma_risk")
+  ll_path <- numeric(config$max_npl_iter)
+  
+  # NPL iteration loop
+  converged <- FALSE
+  
+  for (npl_iter in 1:config$max_npl_iter) {
+    
+    theta_old <- theta_curr
+    theta_path[npl_iter, ] <- theta_curr
+    
+    # Construct Bounds vectors for optim (3 params)
+    lower_b <- c(config$kappa_bounds[1], config$gamma_price_bounds[1], config$gamma_risk_bounds[1])
+    upper_b <- c(config$kappa_bounds[2], config$gamma_price_bounds[2], config$gamma_risk_bounds[2])
+    
+    # Step 1: Optimize theta given fixed P
+    opt <- optim(
+      par = theta_curr,
+      fn = npl_likelihood_model_b,
+      P_fixed = P,
+      cache = cache,
+      config = config,
+      counts_vec = counts_vec,
+      method = "L-BFGS-B",
+      lower = lower_b,
+      upper = upper_b,
+      control = list(maxit = 300, factr = 1e8)
+    )
+    
+    if (opt$convergence != 0 && verbose) {
+      warning(sprintf("  optim() convergence code %d at iter %d", 
+                      opt$convergence, npl_iter))
+    }
+    
+    theta_curr <- opt$par
+    names(theta_curr) <- c("kappa", "gamma_price", "gamma_risk")
+    ll_path[npl_iter] <- -opt$value
+    
+    # Step 2: Update CCPs given new theta
+    U <- calculate_flow_utilities_model_b(theta_curr, cache)
+    V <- invert_value_function_model_b(P, U, config)
+    P_new <- compute_ccps_model_b(U, V, cache, config)
+    
+    # Convergence check
+    theta_diff <- max(abs(theta_curr - theta_old))
+    P_diff <- max(abs(P_new - P))
+    
+    if (verbose && npl_iter %% 10 == 0) {
+      cat(sprintf("  Iter %3d: k=%6.2f gP=%6.3f gR=%6.3f | dTh=%.1e dP=%.1e\n",
+                  npl_iter, theta_curr[1], theta_curr[2], theta_curr[3], 
+                  theta_diff, P_diff))
+    }
+    
+    # Update P for next iteration
+    P <- P_new
+    
+    # Check convergence
+    if (theta_diff < config$tol_theta && P_diff < config$tol_P) {
+      converged <- TRUE
+      if (verbose) {
+        cat(sprintf("\n  *** CONVERGED at iteration %d ***\n", npl_iter))
+        cat(sprintf("  Final: kappa=%.4f, gamma_price=%.4f, gamma_risk=%.4f\n",
+                    theta_curr["kappa"], theta_curr["gamma_price"], theta_curr["gamma_risk"]))
+      }
+      break
+    }
+  }
+  
+  if (!converged && verbose) {
+    warning(sprintf("NPL did not converge in %d iterations", config$max_npl_iter))
+  }
+  
+  # Final value function
+  U_final <- calculate_flow_utilities_model_b(theta_curr, cache)
+  V_final <- invert_value_function_model_b(P, U_final, config)
+  
+  return(list(
+    theta_hat = theta_curr,
+    P_hat = P,
+    V_hat = V_final,
+    converged = converged,
+    n_iterations = npl_iter,
+    log_likelihood = ll_path[npl_iter],
+    theta_path = theta_path[1:npl_iter, , drop = FALSE],
+    ll_path = ll_path[1:npl_iter],
+    cache = cache,
+    config = config
+  ))
+}
+
+# ==============================================================================
+# SECTION 9: POLICY ITERATION SOLVER (FOR DATA GENERATION)
+# ==============================================================================
+
+#' Solve Equilibrium Policy for Model B via Policy Iteration
+#'
+#' @param theta Named vector c(kappa, gamma)
+#' @param cache Model B estimation cache
+#' @param config Configuration list
+#' @param profit_mult Revenue multiplier
+#' @param check_bellman Verify Bellman residual convergence?
+#' @return List with P (CCPs), V (values), converged flag
+#' Solve Equilibrium Policy for Model B (Robust Version)
+solve_equilibrium_policy_model_b <- function(theta, cache, config,
+                                              profit_mult = 1.0,
+                                              check_bellman = TRUE) {
+  
+  U <- calculate_flow_utilities_model_b(theta, cache, profit_mult)
+  n_states <- cache$n_states
+  P <- matrix(0.5, n_states, 2, dimnames = list(NULL, c("maintain", "close")))
+  
+  max_iter <- 5000
+  tol <- 1e-8
+  
+  for (iter in 1:max_iter) {
+    # 1. Invert Value Function
+    V_old <- invert_value_function_model_b(P, U, config)
+    
+    # SAFETY CHECK: If V contains NAs, reset or abort
+    if (any(is.na(V_old))) {
+      V_old[is.na(V_old)] <- -1e5 # Assign low value to undefined states
+    }
+
+    # 2. Update CCPs
+    P_new <- compute_ccps_model_b(U, V_old, cache, config)
+    
+    # 3. Check Convergence (Robust to NA)
+    ccp_diff <- max(abs(P_new - P), na.rm = TRUE)
+    
+    # Calculate Bellman error if requested
+    bellman_converged <- TRUE
+    if (check_bellman) {
+      V_new <- invert_value_function_model_b(P_new, U, config)
+      bellman_error <- max(abs(V_new - V_old), na.rm = TRUE)
+      bellman_converged <- (bellman_error < tol)
+    }
+    
+    # Robust Loop Break
+    if (!is.na(ccp_diff) && ccp_diff < tol && bellman_converged) {
+      P <- P_new
+      break
+    }
+    
+    P <- P_new
+  }
+  
+  # Final calculation
+  V_final <- invert_value_function_model_b(P, U, config)
+  
+  # Return result
+  return(list(P = P, V = V_final, converged = (iter < max_iter)))
+}
+
+# ==============================================================================
+# SECTION 10: DATA GENERATION
+# ==============================================================================
+
+#' Generate Synthetic Panel Data for Model B
+#'
+#' @param N_facilities Number of facilities
+#' @param T_periods Maximum time periods
+#' @param kappa_true True closure value parameter (can be negative)
+#' @param gamma_true True premium preference parameter
+#' @param seed Random seed
+#' @return List with counts, states, auxiliary functions, panel data, true params
+#'
+#' @details
+#' State space: 36 states (9 age bins × 2 wall × 2 regime)
+#' Age bins: 5-year bins from [0-5) to [45+], where bin 9 is absorbing
+generate_model_b_data <- function(N_facilities = 1000,
+                                   T_periods = 50,
+                                   kappa_true = 75,
+                                   gamma_true = -1.2,
+                                   seed = 2025) {
+  
+  set.seed(seed)
+  
+  # Exogenous parameters (calibrated)
+  params <- list(
+    h0 = 0.02, h_single = 0.09, h_age = 0.008,
+    ell0 = 1.0, ell_age = 0.08,
+    p_FF_annual = 0.08, p0_RB_annual = 0.03,
+    p_single_RB_annual = 0.1, p_age_RB_annual = 0.0055
+  )
+  
+  # Age transitions for 9 bins (5-year bins, bin 9 is absorbing for age)
+  # p_up[i] = probability of aging from bin i to bin i+1
+  # Bin 9 (45+) is absorbing: p_up[9] = 0, p_stay[9] = 1
+  age_probs <- list(
+    p_stay = c(0.985, 0.982, 0.978, 0.974, 0.970, 0.965, 0.960, 0.955, 1.00),
+    p_up   = c(0.015, 0.018, 0.022, 0.026, 0.030, 0.035, 0.040, 0.045, 0.00)
+  )
+  
+
+  # Create state space (36 states: 9 age bins × 2 wall × 2 regime)
+  # Age bins: 1=[0-5), 2=[5-10), ..., 8=[35-40), 9=[45+] (absorbing for age)
+  states <- CJ(
+    A = 1:9,
+    w = factor(c("single", "double"), levels = c("single", "double")),
+    rho = factor(c("FF", "RB"), levels = c("FF", "RB")),
+    sorted = FALSE
+  )
+  states[, state_idx := .I]
+  setkey(states, state_idx)
+  
+  n_states <- nrow(states)  # = 36
+  
+  # Compute auxiliary functions
+  # NOTE: For 5-year bins, A=1 means [0-5), A=9 means [45+]
+  # Map age bin to representative age for calculations: bin_midpoint = (A-1)*5 + 2.5
+  # Or use bin index directly if params are calibrated for bins
+  
+  premiums <- params$p_FF_annual + 
+              ifelse(states$rho == "RB", params$p0_RB_annual, 0) +
+              ifelse(states$w == "single", params$p_single_RB_annual, 0) +
+              (states$A - 1) * params$p_age_RB_annual
+  
+  hazards <- pmin(pmax(params$h0 + 
+                        (states$w == "single") * params$h_single + 
+                        params$h_age * states$A, 0.001), 0.50)
+  
+  losses <- pmax(params$ell0 + params$ell_age * states$A, 0.1)
+  
+  # Build transition matrices for 9 age bins
+  state_map <- setNames(states$state_idx, 
+                        paste(states$A, states$w, states$rho, sep = "_"))
+  
+  F_maintain <- Matrix(0, n_states, n_states, sparse = TRUE)
+  for (i in 1:n_states) {
+    A_i <- states$A[i]
+    if (A_i < 9) {
+      # Can stay or age up
+      k_s <- paste(A_i, states$w[i], states$rho[i], sep = "_")
+      k_u <- paste(A_i + 1, states$w[i], states$rho[i], sep = "_")
+      F_maintain[i, state_map[k_s]] <- age_probs$p_stay[A_i]
+      F_maintain[i, state_map[k_u]] <- age_probs$p_up[A_i]
+    } else {
+      # Age bin 9 (45+) is absorbing for age dimension
+      F_maintain[i, i] <- 1.0
+    }
+  }
+  
+  transitions <- list(
+    maintain = F_maintain,
+    exit = Diagonal(n_states)  # Identity (absorbing)
+  )
+  
+  # Configuration
+  config <- create_estimation_config_model_b()
+  
+  # Create cache
+  cache <- create_estimation_cache_model_b(states, premiums, hazards, losses,
+                                            transitions, config)
+  
+  # Solve equilibrium
+  theta_true <- c(kappa = kappa_true, gamma = gamma_true)
+  eq <- solve_equilibrium_policy_model_b(theta_true, cache, config)
+  P_equilibrium <- eq$P
+  
+  if (!eq$converged) {
+    warning("Equilibrium policy did not converge")
+  }
+  
+  # Build transition maps for simulation
+  state_map <- setNames(states$state_idx, 
+                        paste(states$A, states$w, states$rho, sep = "_"))
+  
+  next_state_stay <- integer(n_states)
+  next_state_up <- integer(n_states)
+  
+  for (s in 1:n_states) {
+    A <- states$A[s]
+    w <- states$w[s]
+    rho <- states$rho[s]
+    
+    # Stay transition (same state)
+    k_stay <- paste(A, w, rho, sep = "_")
+    next_state_stay[s] <- state_map[k_stay]
+    
+    # Age up transition (capped at 9 = 45+ bin)
+    A_next <- min(A + 1L, 9L)
+    k_up <- paste(A_next, w, rho, sep = "_")
+    next_state_up[s] <- state_map[k_up]
+  }
+  
+  # Simulate panel
+  panel_list <- vector("list", N_facilities)
+  
+  for (fac in 1:N_facilities) {
+    current_state <- sample(1:n_states, 1)
+    fac_obs <- list()
+    obs_idx <- 1
+    
+    for (t in 1:T_periods) {
+      # Draw action
+      action_probs <- P_equilibrium[current_state, ]
+      action <- sample(1:2, 1, prob = action_probs)
+      
+      # Record observation
+      fac_obs[[obs_idx]] <- data.table(
+        facility_id = fac,
+        period = t,
+        state_idx = current_state,
+        action = action
+      )
+      obs_idx <- obs_idx + 1
+      
+      # Transition
+      if (action == 2) {
+        # Close: exit simulation for this facility
+        break
+      } else {
+        # Maintain: stochastic aging
+        curr_age <- states$A[current_state]
+        p_up <- age_probs$p_up[curr_age]
+        
+        if (runif(1) < p_up) {
+          current_state <- next_state_up[current_state]
+        } else {
+          current_state <- next_state_stay[current_state]
+        }
+      }
+    }
+    
+    panel_list[[fac]] <- rbindlist(fac_obs)
+  }
+  
+  panel_data <- rbindlist(panel_list)
+  
+  # Aggregate counts
+  counts_dt <- panel_data[, .N, by = .(state_idx, action)]
+  counts_matrix <- matrix(0, n_states, 2)
+  
+  for (i in 1:nrow(counts_dt)) {
+    counts_matrix[counts_dt$state_idx[i], counts_dt$action[i]] <- counts_dt$N[i]
+  }
+  
+  counts_vec <- as.vector(counts_matrix)
+  
+  # Diagnostics
+  cat(sprintf("Generated Model B data: %d facilities, %d observations\n",
+              N_facilities, nrow(panel_data)))
+  cat(sprintf("  Close rate: %.1f%%\n", 100 * mean(panel_data$action == 2)))
+  cat(sprintf("  True parameters: kappa = %.2f, gamma = %.3f\n",
+              kappa_true, gamma_true))
+  
+  return(list(
+    counts_vec = counts_vec,
+    counts_matrix = counts_matrix,
+    states = states,
+    premiums = premiums,
+    hazards = hazards,
+    losses = losses,
+    transitions = transitions,
+    panel_data = panel_data,
+    P_true = P_equilibrium,
+    V_true = eq$V,
+    theta_true = theta_true,
+    cache = cache,
+    config = config
+  ))
+}
+
+# ==============================================================================
+# SECTION 11: VALIDATION TEST
+# ==============================================================================
+
+#' Validation Test for Model B Estimator
+#'
+#' @param N_facilities Number of facilities for test data
+#' @param T_periods Number of periods
+#' @param kappa_true True kappa parameter
+#' @param gamma_true True gamma parameter
+#' @param seed Random seed
+#' @return List with data and estimation results
+test_model_b_estimation <- function(N_facilities = 500,
+                                     T_periods = 50,
+                                     kappa_true = 75,
+                                     gamma_true = -1.2,
+                                     seed = 12345) {
+  
+  cat("\n")
+  cat("==============================================================\n")
+  cat("           MODEL B VALIDATION TEST\n")
+  cat("==============================================================\n\n")
+  
+  # Generate data
+  cat("Step 1: Generating synthetic data...\n")
+  data <- generate_model_b_data(
+    N_facilities = N_facilities,
+    T_periods = T_periods,
+    kappa_true = kappa_true,
+    gamma_true = gamma_true,
+    seed = seed
+  )
+  
+  cat(sprintf("  Sample: %d observations from %d facilities\n\n",
+              nrow(data$panel_data), N_facilities))
+  
+  # Estimate
+  cat("Step 2: Running NPL estimation...\n")
+  config <- create_estimation_config_model_b()
+  
+  est <- npl_estimator_model_b(
+    counts_vec = data$counts_matrix,
+    states = data$states,
+    premiums = data$premiums,
+    hazards = data$hazards,
+    losses = data$losses,
+    transitions = data$transitions,
+    config = config,
+    theta_init = c(kappa = 50, gamma = -0.5),  # Intentionally away from truth
+    verbose = TRUE
+  )
+  
+  # Results
+  cat("\n")
+  cat("==============================================================\n")
+  cat("                    RESULTS\n")
+  cat("==============================================================\n")
+  
+  cat("\nParameter Recovery:\n")
+  cat(sprintf("  kappa:  True = %7.2f  |  Est = %7.2f  |  Error = %+6.2f (%.1f%%)\n",
+              kappa_true, est$theta_hat["kappa"],
+              est$theta_hat["kappa"] - kappa_true,
+              100 * (est$theta_hat["kappa"] - kappa_true) / kappa_true))
+  cat(sprintf("  gamma:  True = %7.3f  |  Est = %7.3f  |  Error = %+6.3f (%.1f%%)\n",
+              gamma_true, est$theta_hat["gamma"],
+              est$theta_hat["gamma"] - gamma_true,
+              100 * (est$theta_hat["gamma"] - gamma_true) / abs(gamma_true)))
+  
+  # CCP comparison
+  ccp_max_diff <- max(abs(est$P_hat - data$P_true))
+  ccp_mean_diff <- mean(abs(est$P_hat - data$P_true))
+  
+  cat(sprintf("\nCCP Recovery:\n"))
+  cat(sprintf("  Max |P_hat - P_true|:  %.6f\n", ccp_max_diff))
+  cat(sprintf("  Mean |P_hat - P_true|: %.6f\n", ccp_mean_diff))
+  
+  cat(sprintf("\nConvergence:\n"))
+  cat(sprintf("  Converged: %s\n", ifelse(est$converged, "YES", "NO")))
+  cat(sprintf("  Iterations: %d\n", est$n_iterations))
+  cat(sprintf("  Final LL: %.2f\n", est$log_likelihood))
+  
+  cat("\n==============================================================\n\n")
+  
+  invisible(list(data = data, estimates = est))
+}
+
+# ==============================================================================
+# SECTION 12: DIAGNOSTIC FUNCTIONS
+# ==============================================================================
+
+#' Compute Identification Diagnostics for Model B
+#'
+#' @param data Output from generate_model_b_data()
+#' @param theta_grid Grid of parameter values to evaluate
+#' @return List with likelihood surface and gradient information
+diagnose_identification_model_b <- function(data, 
+                                             kappa_grid = seq(50, 100, by = 5),
+                                             gamma_grid = seq(-2, -0.5, by = 0.1)) {
+  
+  config <- data$config
+  cache <- data$cache
+  
+  # Compute equilibrium CCPs at true parameters for likelihood evaluation
+  P_true <- data$P_true
+  
+  # Likelihood surface
+  ll_surface <- matrix(NA, length(kappa_grid), length(gamma_grid))
+  rownames(ll_surface) <- kappa_grid
+  colnames(ll_surface) <- gamma_grid
+  
+  for (i in seq_along(kappa_grid)) {
+    for (j in seq_along(gamma_grid)) {
+      theta_test <- c(kappa = kappa_grid[i], gamma = gamma_grid[j])
+      ll_surface[i, j] <- -npl_likelihood_model_b(theta_test, P_true, cache, 
+                                                   config, data$counts_matrix)
+    }
+  }
+  
+  # Find maximum
+  max_idx <- which(ll_surface == max(ll_surface), arr.ind = TRUE)
+  kappa_max <- kappa_grid[max_idx[1]]
+  gamma_max <- gamma_grid[max_idx[2]]
+  
+  cat("Identification Diagnostics:\n")
+  cat(sprintf("  True parameters: kappa = %.2f, gamma = %.3f\n",
+              data$theta_true["kappa"], data$theta_true["gamma"]))
+  cat(sprintf("  Grid maximum:    kappa = %.2f, gamma = %.3f\n",
+              kappa_max, gamma_max))
+  
+  return(list(
+    ll_surface = ll_surface,
+    kappa_grid = kappa_grid,
+    gamma_grid = gamma_grid,
+    kappa_max = kappa_max,
+    gamma_max = gamma_max
+  ))
+}
+
+#' NPL Estimator Model B with Relaxation (Damping) - FULLY COMPATIBLE
+#' @param alpha Damping factor (0.0 = no update, 1.0 = standard NPL). 
+#'              Recommended: 0.3 to 0.7 for oscillating models.
+npl_estimator_model_b_fast <- function(counts_vec, states, premiums, hazards, 
+                                       losses, transitions, config, 
+                                       theta_init = NULL, P_init = NULL, 
+                                       alpha = 0.5, verbose = TRUE) {
+  
+  if (verbose) cat("\n=== NPL ESTIMATOR B (DAMPENED alpha=", alpha, ") ===\n", sep="")
+  
+  # 1. Setup Cache (Same as before)
+  cache <- create_estimation_cache_model_b(states, premiums, hazards, losses, transitions, config)
+  n_states <- cache$n_states 
+  
+  # 2. Init Parameters
+  if (is.null(theta_init)) theta_init <- c(kappa = 6.0, gamma = -1.0)
+  theta_curr <- theta_init
+  
+  # 3. Init CCPs (Reuse existing helper)
+  if (!is.null(P_init)) {
+    P <- P_init 
+  } else {
+    P <- compute_empirical_ccps_model_b(counts_vec, n_states, config$eps_prob)
+  }
+  
+  # 4. Storage
+  theta_path <- matrix(NA, config$max_npl_iter, 2)
+  ll_path <- numeric(config$max_npl_iter)
+  
+  # 5. Main Loop
+  for (iter in 1:config$max_npl_iter) {
+    theta_old <- theta_curr
+    theta_path[iter, ] <- theta_curr
+    
+    # A. Maximization (Inner Loop)
+    # Reduced maxit to 100 for speed (standard NPL practice)
+    opt <- tryCatch({
+      optim(
+        par = theta_curr,
+        fn = npl_likelihood_model_b,
+        P_fixed = P, cache = cache, config = config, counts_vec = counts_vec,
+        method = "L-BFGS-B",
+        lower = c(config$kappa_bounds[1], config$gamma_bounds[1]),
+        upper = c(config$kappa_bounds[2], config$gamma_bounds[2]),
+        control = list(maxit = 100, factr = 1e8) 
+      )
+    }, error = function(e) list(par = theta_curr, value = NA, convergence = 99))
+    
+    theta_curr <- opt$par
+    ll_path[iter] <- if(!is.na(opt$value)) -opt$value else NA
+    
+    # B. Policy Update
+    U <- calculate_flow_utilities_model_b(theta_curr, cache)
+    V <- invert_value_function_model_b(P, U, config)
+    P_new_pure <- compute_ccps_model_b(U, V, cache, config)
+    
+    # C. DAMPING (The Speedup)
+    # P_next = alpha * P_new + (1-alpha) * P_old
+    P_next <- (alpha * P_new_pure) + ((1 - alpha) * P)
+    
+    # D. Convergence Check
+    theta_diff <- max(abs(theta_curr - theta_old))
+    P_diff <- max(abs(P_next - P))
+    
+    if (verbose && iter %% 10 == 0) {
+      cat(sprintf("  Iter %4d: k=%6.3f g=%6.3f | dTheta=%.1e dP=%.1e | LL=%.1f\n",
+                  iter, theta_curr[1], theta_curr[2], theta_diff, P_diff, ll_path[iter]))
+    }
+    
+    P <- P_next
+    
+    if (theta_diff < config$tol_theta && P_diff < config$tol_P) {
+      if (verbose) cat(sprintf("  *** CONVERGED at iter %d ***\n", iter))
+      return(list(
+        theta_hat = theta_curr, 
+        P_hat = P, 
+        V_hat = V,
+        converged = TRUE, 
+        n_iterations = iter, 
+        log_likelihood = ll_path[iter], 
+        theta_path = theta_path[1:iter,], 
+        ll_path = ll_path[1:iter],
+        cache = cache,   # ADDED: Critical for diagnostic functions
+        config = config  # ADDED: Critical for diagnostic functions
+      ))
+    }
+  }
+  
+  warning("NPL did not converge.")
+  return(list(
+    theta_hat = theta_curr, 
+    P_hat = P, 
+    converged = FALSE,
+    cache = cache,
+    config = config
+  ))
+}
+
+
+cat("\n✓ model_b_estimator.R loaded\n")
+cat("  Key functions:\n")
+cat("    - create_estimation_config_model_b()\n")
+cat("    - npl_estimator_model_b()\n")
+cat("    - generate_model_b_data()\n")
+cat("    - test_model_b_estimation()\n\n")
+
 cat("\n✓ improved_estimator_FINAL.r loaded\n")
+
+

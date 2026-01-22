@@ -173,361 +173,148 @@ with strict welfare ordering $W^{SOC} > W^{R} > W^{S} > W^{F}$ where $W^{SOC}$ d
 
 ### Numerical Illustration {#sec-toy-numerical}
 
-
 ```{r toy-model-setup}
-# ==============================================================================
-# TOY MODEL SETUP: GLOBAL PARAMETERS & SOLVER (UPDATED)
-# ==============================================================================
+# Parameters
+R <- 5000         # Monthly revenue
+c_U <- 2000       # Retrofit cost
+k <- 500          # Scrap cost
+beta <- 0.96      # Monthly discount factor
+L <- 10000        # Cleanup cost (Private internalization target)
+lambda <- 0.15    # Private insurance loading factor
 
-library(data.table)
-library(ggplot2)
-library(knitr)
-library(kableExtra)
+# Risk functions
+theta_z <- 1.0    # Type-specific risk multiplier
+ell <- function(a) 0.001 + 0.0008*a  # Age effect on leak probability
+y_sw <- function(a) theta_z * ell(a)
+y_dw <- function(a) 0.15 * y_sw(0)   # DW reduces risk by 85%
 
-# 1. CORE PARAMETERS
-R_annual <- 100000      # Annual revenue
-v_scrap  <- 700000      # POSITIVE Scrap Value (Land Value - Cleanup Cost)
-beta     <- 0.95        # Discount factor
-L        <- 200000      # Private cleanup cost
-
-# RETROFIT COST
-c_U <- 700000
-
-# 2. RISK FUNCTIONS
-y_sw <- function(a, z_mult = 1.0) {
-  base <- 0.002
-  convex <- 0.00001 * (a ^ 2.5)
-  return((base + 0.0003 * a + convex) * z_mult)
-}
-
-y_dw <- function(a, z_mult = 1.0) {
-  return(0.05 * y_sw(0, z_mult)) 
-}
-
-# 3. REGIMES
+# Define regimes
 regimes <- list(
-  F = list(name = "Flat-Fee Pooling", color = "#984EA3",
-           p_func = function(a, y) 2000, 
-           D = 0.1 * L),
-  S = list(name = "Self-Insurance", color = "#4DAF4A",
-           p_func = function(a, y) 0,    
-           D = L),
-  R = list(name = "Risk-Rated Private", color = "#377EB8",
-           p_func = function(a, y) (1 + 0.75) * y * L, 
-           D = 0.25 * L),
-  SOC = list(name = "Social Optimum", color = "#E41A1C",
-             p_func = function(a, y) 0,  
-             D = function(a) L + 2.2 * L * (1 + 0.03 * a))
+  F = list(
+    name = "Flat-Fee Pooling",
+    p_func = function(a, y) 80,  # Flat $80/month premium
+    D = 0.1 * L                   # 10% deductible
+  ),
+  S = list(
+    name = "Self-Insurance",
+    p_func = function(a, y) 0,   # No premium
+    D = L                         # Facility pays Cleanup (L) but not Health (H)
+  ),
+  R = list(
+    name = "Risk-Rated Private",
+    p_func = function(a, y) (1 + lambda) * y * L,
+    D = 0.25 * L                  # 25% deductible
+  ),
+  SOC = list(
+    name = "Social Optimum",
+    p_func = function(a, y) 0,
+    # SOC Internalizes Cleanup (L) + External Health Damages (H(a))
+    # We calibrate H(a) approx equal to L, so S/R internalize ~50% of total
+    D = function(a) L + (L * (1 + 0.02 * a))
+  )
 )
 
-# 4. GENERAL SOLVER
-solve_regime <- function(regname, params, c_U, z = 1.0) {
-  Amax <- 90
+# Solver function
+solve_regime <- function(regname, params) {
+  Amax <- 90      # EXTENDED time horizon to 90 years
   ages <- 0:Amax
   n <- length(ages)
-  
-  # Precompute vectors
-  ysw_vec <- sapply(ages, function(a) y_sw(a, z))
-  ydw_vec <- sapply(ages, function(a) y_dw(a, z))
-  
-  # Precompute premiums/deductibles
-  pvec <- if(regname %in% c("F", "SOC")) rep(params$p_func(0,0), n) else sapply(ages, function(a) params$p_func(a, ysw_vec[a+1]))
-  p_dw0 <- params$p_func(0, ydw_vec[1])
-  D_vec <- if(is.function(params$D)) sapply(ages, params$D) else rep(params$D, n)
-  
-  # Initialize Value Vectors
+
+  # Compute risk profiles
+  ysw <- sapply(ages, y_sw)
+  ydw <- sapply(ages, y_dw)
+
+  # Premium vectors
+  if (regname == "SOC") {
+    pvec <- rep(0, n)
+    p_dw0 <- 0
+  } else {
+    pvec <- sapply(ages, function(a) params$p_func(a, ysw[a+1]))
+    p_dw0 <- params$p_func(0, ydw[1])
+  }
+
+  # Deductible/Damage Vector
+  if (is.function(params$D)) {
+    D_vec <- sapply(ages, params$D)
+  } else {
+    D_vec <- rep(params$D, n)
+  }
+
+  # Initialize value arrays
   W_SW <- numeric(n + 1); W_DW <- numeric(n + 1)
-  V_cont <- numeric(n + 1) # NEW: Store purely the continuation value
-  
-  W_SW[n + 1] <- v_scrap; W_DW[n + 1] <- v_scrap
-  V_cont[n + 1] <- -Inf # Terminal state has no continuation
-  
+  W_SW[n+1] <- -k; W_DW[n+1] <- -k
+
+  # Backward recursion
   for (ia in seq(n, 1)) {
     a <- ia - 1
-    # Double Wall Value
-    cont_DW <- R_annual - params$p_func(a, ydw_vec[ia]) - ydw_vec[ia]*D_vec[ia] + beta*W_DW[ia+1]
-    W_DW[ia] <- max(cont_DW, v_scrap)
-    
-    # Single Wall Value
-    cont_SW <- R_annual - pvec[ia] - ysw_vec[ia]*D_vec[ia] + beta*W_SW[ia+1]
-    upg_SW  <- R_annual - p_dw0 - ydw_vec[1]*D_vec[1] - c_U + beta*W_DW[2]
-    
-    # Store the RAW continuation value (before max operator)
-    V_cont[ia] <- cont_SW
-    
-    W_SW[ia] <- max(cont_SW, upg_SW, v_scrap)
+    # Double Wall
+    cont_DW <- R - params$p_func(a, ydw[ia]) - ydw[ia] * D_vec[ia] + beta * W_DW[ia+1]
+    W_DW[ia] <- max(cont_DW, -k)
+    # Single Wall
+    cont_SW <- R - pvec[ia] - ysw[ia] * D_vec[ia] + beta * W_SW[ia+1]
+    upg_SW  <- R - p_dw0 - ydw[1] * D_vec[1] - c_U + beta * W_DW[2]
+    W_SW[ia] <- max(cont_SW, upg_SW, -k)
   }
-  
-  # Calculate Benefit B(a)
-  B <- numeric(n)
+
+  # Compute benefits
+  B <- numeric(n); MB <- numeric(n)
   for (ia in seq_len(n)) {
-    val_upgrade  <- R_annual - p_dw0 - ydw_vec[1]*D_vec[1] + beta*W_DW[2]
-    val_continue <- R_annual - pvec[ia] - ysw_vec[ia]*D_vec[ia] + beta*W_SW[ia+1]
-    B[ia] <- val_upgrade - val_continue
+    B[ia]  <- (pvec[ia] - p_dw0) + (ysw[ia] * D_vec[ia] - ydw[1] * D_vec[1]) + beta * (W_DW[2] - W_SW[ia+1])
+    MB[ia] <- B[ia] - c_U
   }
-  
-  # Optimal Stopping Calculation
-  exit_idx <- which(W_SW <= v_scrap + 1.0)
-  a_exit <- if(length(exit_idx) > 0) (exit_idx[1] - 1) else Amax
-  
-  # Upgrade Threshold
-  upg_idx <- which(B >= c_U)
-  a_star <- if(length(upg_idx) > 0) (upg_idx[1] - 1) else NA
-  
-  return(list(
-    name=params$name, 
-    age=ages, 
-    B=B, 
-    a_star=a_star, 
-    a_exit=a_exit, 
-    W_SW=W_SW[1:n],
-    V_cont=V_cont[1:n], # Exporting the new metric
-    color=params$color
-  ))
+
+  thr_idx <- which(MB >= 0)
+  a_star <- if (length(thr_idx) > 0) (thr_idx[1] - 1) else NA
+
+  list(name = params$name, regname = regname, ages = ages, B = B, a_star = a_star)
 }
 
-# 5. GENERATE DATA
-results <- lapply(names(regimes), function(r) solve_regime(r, regimes[[r]], c_U, z=1.0))
+# Run solver and combine
+results <- lapply(names(regimes), function(r) solve_regime(r, regimes[[r]]))
 names(results) <- names(regimes)
 
-# Create Summary Tables
 DT <- rbindlist(lapply(results, function(res) {
-  data.table(regime=res$name, age=res$age, B=res$B, a_star=res$a_star, color=res$color)
-}))
+  data.table(regime = res$name, age = res$ages, B = res$B, a_star = res$a_star)
+}), use.names = TRUE, fill = TRUE)
 
 summary_table <- data.table(
   regime = names(regimes),
-  nice_name = sapply(results, `[[`, "name"),
+  nice_name = sapply(results, `[[`, "name"), 
   a_star = sapply(results, `[[`, "a_star")
 )
-
-
-
 ```
 
 ```{r fig-toy-benefit}
 #| fig-cap: "Equivalent Benefit of Upgrading Across Insurance Regimes"
-#| fig-width: 8
+#| fig-width: 7
 #| fig-height: 4.5
 
-# ==============================================================================
-# FIGURE GENERATION (Refactored for Labels & Matching Colors)
-# ==============================================================================
+plot_dt <- DT[!is.na(B) & age <= 40]
+plot_dt[, regime := factor(regime, levels = unique(regime))]
 
-# 1. Prepare Main Plot Data (Extend to x=50 for line labels)
-plot_dt <- DT[!is.na(B) & age <= 50]
-plot_dt[, regime := factor(regime, 
-                           levels = c("Social Optimum", "Risk-Rated Private",
-                                      "Self-Insurance", "Flat-Fee Pooling"))]
-
-# 2. Prepare Point Labels (Intersections)
-# Define fancy labels mapping
-label_map <- c(
-  "Social Optimum" = "a[SOC]^'*'",
-  "Risk-Rated Private" = "a[R]^'*'",
-  "Self-Insurance" = "a[S]^'*'",
-  "Flat-Fee Pooling" = "a[F]^'*'"
-)
-
-crossing_dt <- summary_table[!is.na(a_star), .(
-  regime = nice_name,
-  age = a_star,
-  B = c_U
-)]
-crossing_dt[, label_expr := label_map[regime]]
-
-# 3. Prepare Line Labels (End of curves at x=50)
-line_labels_dt <- plot_dt[age == 50, .(
-  age = 50,
-  B = B,
-  regime = regime
-)]
-
-# 4. Generate Plot
-p <- ggplot(plot_dt, aes(x = age, y = B, color = regime)) +
-  
-  # Reference Line (Retrofit Cost)
-  geom_hline(yintercept = c_U, linetype = "longdash", 
-             color = "grey40", linewidth = 0.5) +
-  
-  # Drop Lines (Subtle vertical dotted lines)
-  geom_segment(data = crossing_dt,
-               aes(x = age, xend = age, y = -Inf, yend = B),
-               linetype = "dotted", linewidth = 0.5, alpha = 0.5) +
-  
-  # Main Curves
+ggplot(plot_dt, aes(x = age, y = B, color = regime)) +
   geom_line(linewidth = 1.2) +
-  
-  # Intersection Points (Shape 19 ensures solid color match)
-  geom_point(data = crossing_dt, size = 3, shape = 19) +
-  
-  # Point Labels (Parsed expressions for subscripts)
-  geom_text(data = crossing_dt,
-            aes(label = label_expr),
-            parse = TRUE,
-            vjust = -0.8, hjust = 1.2, 
-            size = 4, fontface = "bold", show.legend = FALSE) +
-  
-  # Line Labels at x=50
-  geom_text(data = line_labels_dt,
-            aes(label = regime),
-            hjust = 0, nudge_x = 0.5, 
-            size = 3.5, fontface = "plain") +
-  
-  # Retrofit Cost Annotation
-  annotate("text", x = 50, y = c_U * 1.08, 
-           label = "Retrofit Cost = $700k", 
-           hjust = 0, size = 3, color = "grey40", fontface = "italic") +
-  
-  # Scales
-  scale_y_continuous(labels = scales::dollar_format(scale = 1e-3, suffix = "k"),
-                     limits = c(0, max(plot_dt$B) * 1.05),
-                     expand = c(0, 0)) +
-  scale_x_continuous(limits = c(0, 62), # Extra room for right-side labels
-                     breaks = seq(0, 50, by = 10),
-                     expand = c(0, 0)) +
-  
-  # Colors (Set1 Palette)
-  scale_color_brewer(palette = "Set1") +
-  
-  # Labels
+  geom_hline(yintercept = c_U, linetype = "dashed", color = "black", linewidth = 0.8) +
+  annotate("text", x = 5, y = c_U + 200, 
+           label = paste0("Retrofit cost = $", format(c_U, big.mark = ",")), 
+           size = 3, color = "black") +
   labs(
-    x = "Tank Age (Years)",
-    y = "Net Benefit of Upgrading ($000s)"
+    x = "Tank age (years)",
+    y = "Equivalent benefit of upgrading (dollars)",
+    color = "Insurance Regime"
   ) +
-  
-  # Theme
-  theme_classic(base_size = 11) +
+  scale_color_manual(
+    values = c("Flat-Fee Pooling" = "#E41A1C", 
+               "Self-Insurance" = "#377EB8",
+               "Risk-Rated Private" = "#4DAF4A",
+               "Social Optimum" = "#984EA3")
+  ) +
   theme(
-    legend.position = "none", # Removed legend as requested
-    axis.line = element_line(color = "black", linewidth = 0.5),
-    panel.grid.major.y = element_line(color = "grey90", linewidth = 0.3),
-    plot.margin = margin(10, 50, 10, 10) # Right margin for labels
-  )
-
-print(p)
-
-```
-
-
-\newpage
-
-```{r fig-toy-dwl}
-#| fig-cap: "Equivalent Benefit of Upgrading Across Insurance Regimes"
-#| fig-width: 8
-#| fig-height: 11
-library(ggplot2)
-library(data.table)
-library(patchwork) # Essential for combining panels
-library(scales)
-
-# ==============================================================================
-# DATA PREPARATION (Reusing your existing DT and summary_table)
-# ==============================================================================
-
-# Ensure factors are set for plotting order
-DT[, regime := factor(regime, 
-                      levels = c("Social Optimum", "Risk-Rated Private",
-                                 "Self-Insurance", "Flat-Fee Pooling"))]
-
-# Extract key thresholds for shading logic
-a_soc <- summary_table[regime == "SOC", a_star] # ~6
-a_rb  <- summary_table[regime == "R", a_star]   # ~18
-a_ff  <- summary_table[regime == "F", a_star]   # ~42
-
-# Create specific datasets for the shading areas in Panel B
-# This isolates the "Social Optimum" curve to calculate welfare loss
-soc_curve <- DT[regime == "Social Optimum" & age <= 50]
-
-# Area 1: Loss incurred even under Risk-Based (Delay from SOC -> RB)
-shade_rb <- soc_curve[age >= a_soc & age <= a_rb]
-
-# Area 2: ADDITIONAL Loss incurred by Flat-Fee (Delay from RB -> FF)
-shade_ff <- soc_curve[age >= a_rb & age <= a_ff]
-
-# ==============================================================================
-# PANEL A: INCENTIVE STRUCTURE (Your Original Graph, slightly streamlined)
-# ==============================================================================
-
-# We remove the x-axis label here since it will be shared at the bottom
-p1 <- ggplot(plot_dt, aes(x = age, y = B, color = regime)) +
-  geom_hline(yintercept = c_U, linetype = "longdash", color = "grey40", linewidth = 0.5) +
-  geom_line(linewidth = 1.2) +
-  geom_point(data = crossing_dt, size = 3, shape = 19) +
-  
-  # Add labels for thresholds
-  geom_text(data = crossing_dt, aes(label = label_expr), parse = TRUE,
-            vjust = -0.8, hjust = 1.2, size = 3.5, fontface = "bold", show.legend = FALSE) +
-  
-  scale_y_continuous(labels = dollar_format(scale = 1e-3, suffix = "k"),
-                     limits = c(0, max(plot_dt$B) * 1.05), expand = c(0, 0)) +
-  scale_x_continuous(limits = c(0, 50), breaks = seq(0, 50, by = 10), expand = c(0, 0)) +
-  scale_color_brewer(palette = "Set1") +
-  theme_classic(base_size = 11) +
-  labs(
-    title = "A. Private Retrofit Incentives vs. Social Optimum",
-    y = "Net Benefit of Upgrading",
-    x = NULL 
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold")
   ) +
-  theme(legend.position = c(0.2, 0.75), legend.title = element_blank(),
-        legend.background = element_blank())
-
-# ==============================================================================
-# PANEL B: WELFARE ANALYSIS (The New "Inefficiency" Graph)
-# ==============================================================================
-
-p2 <- ggplot(soc_curve, aes(x = age, y = B)) +
-  # Reference Cost Line
-  geom_hline(yintercept = c_U, linetype = "longdash", color = "grey40", linewidth = 0.5) +
-  
-  # --- SHADING THE INEFFICIENCY ---
-  # 1. The DWL inherent to Risk-Based Pricing (The delay from 6 to 18)
-  geom_ribbon(data = shade_rb, aes(ymin = c_U, ymax = B), 
-              fill = "#377EB8", alpha = 0.3) + # Blueish tint (matching RB color)
-  
-  # 2. The EXTRA DWL caused by Flat-Fee (The delay from 18 to 42)
-  geom_ribbon(data = shade_ff, aes(ymin = c_U, ymax = B), 
-              fill = "#E41A1C", alpha = 0.3) + # Red tint (matching FF color)
-  
-  # The Social Optimum Curve
-  geom_line(color = "#984EA3", linewidth = 1.5) + # Purple (Social Opt color)
-  
-  # Annotations for the Areas
-  annotate("text", x = (a_soc + a_rb)/2, y = c_U + 200000, 
-           label = "DWL\n(Risk-Based)", size = 3, fontface = "italic", color = "#377EB8") +
-  
-  annotate("text", x = (a_rb + a_ff)/2, y = c_U + 600000, 
-           label = "Additional Welfare Loss\nfrom Flat-Fee Regime", 
-           size = 3.5, fontface = "bold", color = "#E41A1C") +
-  
-  # Vertical markers for the timeline
-  geom_vline(xintercept = c(a_soc, a_rb, a_ff), linetype = "dotted", alpha = 0.5) +
-  
-  scale_y_continuous(labels = dollar_format(scale = 1e-3, suffix = "k"),
-                     limits = c(0, max(plot_dt$B) * 1.05), expand = c(0, 0)) +
-  scale_x_continuous(limits = c(0, 50), breaks = seq(0, 50, by = 10), expand = c(0, 0)) +
-  
-  theme_classic(base_size = 11) +
-  labs(
-    title = "B. Social Cost of Delayed Retrofit (Deadweight Loss)",
-    subtitle = "Shaded areas represent foregone social value due to delayed action",
-    y = "Social Benefit of Upgrading",
-    x = "Tank Age (Years)"
-  )
-
-# ==============================================================================
-# COMBINE PLOTS
-# ==============================================================================
-
-combined_plot <- p1 / p2 + 
-  plot_layout(heights = c(1, 1))
-
-print(combined_plot)
-
+  guides(color = guide_legend(nrow = 2))
 ```
-
-\newpage
-
 
 ```{r tab-toy-thresholds}
 #| tbl-cap: "Optimal Upgrade Ages by Insurance Regime"
@@ -544,155 +331,7 @@ kable(
   kable_styling(latex_options = c("HOLD_position"))
 ```
 
-**Interpretation:** @fig-toy-benefit shows the equivalent benefit curves $B(a)$ for all regimes. The vertical distance between each curve and the dashed retrofit cost line represents the net benefit of upgrading at each age. Risk-rated insurance (**blue**) creates the largest private benefits at younger ages, inducing retrofit at `r summary_table[regime == "R", a_star]` years. Self-insurance (**green**) yields intermediate timing at `r summary_table[regime == "S", a_star]` years. Flat-fee pooling (**purple**) delays retrofit until `r summary_table[regime == "F", a_star]` years due to minimal private internalization. The social optimum (**red**) occurs even earlier at `r summary_table[regime == "SOC", a_star]` years, reflecting external damages not captured by private contracts.
-
-
-
-\newpage
-
-### Chunk 2: Figure 3 (The Exit Wedge)
-This visualizes the "Extensive Margin" tension. The shaded region highlights high-risk tanks that *should* exit but stay active under Flat-Fee.
-
-
-```{r fig-toy-exit}
-#| fig-cap: "The 'Zombie Tank' Wedge: Private Incentives vs. Social DWL"
-#| fig-width: 8
-#| fig-height: 9
-
-library(patchwork)
-
-# 1. Get Exit Thresholds
-exit_SOC <- results$SOC$a_exit
-exit_R   <- results$R$a_exit
-exit_F   <- results$F$a_exit
-
-# 2. Extract Data (Up to age 75)
-dt_all <- rbind(
-  data.table(age = results$F$age, V_cont = results$F$V_cont, regime = "Flat-Fee Pooling"),
-  data.table(age = results$R$age, V_cont = results$R$V_cont, regime = "Risk-Rated Private"),
-  data.table(age = results$SOC$age, V_cont = results$SOC$V_cont, regime = "Social Optimum")
-)
-dt_all[, regime := factor(regime, levels = c("Social Optimum", "Risk-Rated Private", "Flat-Fee Pooling"))]
-
-# 3. Intersection Points
-points_dt <- data.table(
-  age = c(exit_SOC, exit_R, exit_F),
-  V_cont = v_scrap,
-  regime = factor(c("Social Optimum", "Risk-Rated Private", "Flat-Fee Pooling"), 
-                  levels = c("Social Optimum", "Risk-Rated Private", "Flat-Fee Pooling")),
-  label = c("a[SOC]^'\u2021'", "a[R]^'\u2021'", "a[F]^'\u2021'")
-)
-
-# 4. End-of-Line Labels (for x = 75)
-line_labels <- dt_all[age == 75]
-
-# 5. DWL Areas
-dt_soc <- dt_all[regime == "Social Optimum"]
-dwl_blue <- dt_soc[age >= exit_SOC & age <= exit_R]
-dwl_red  <- dt_soc[age >= exit_R & age <= exit_F]
-
-# --- PANEL A ---
-p1 <- ggplot() +
-  geom_hline(yintercept = v_scrap, linetype = "longdash", color = "grey40") +
-  geom_ribbon(data = dt_all[regime == "Flat-Fee Pooling" & age >= exit_R & age <= exit_F],
-              aes(x = age, ymin = v_scrap, ymax = V_cont),
-              fill = "grey60", alpha = 0.2) +
-  geom_line(data = dt_all[age <= 75], 
-            aes(x = age, y = V_cont, color = regime), linewidth = 1.2) +
-  geom_point(data = points_dt, aes(x = age, y = V_cont, color = regime), size = 3) +
-  geom_text(data = points_dt, aes(x = age, y = V_cont, label = label),
-            parse = TRUE, vjust = -1, fontface = "bold", size = 3.5) +
-  geom_text(data = line_labels, aes(x = age + 1, y = V_cont, label = regime, color = regime),
-            hjust = 0, fontface = "bold", size = 3.5) +
-  geom_segment(data = points_dt, aes(x = age, xend = age, y = -Inf, yend = V_cont),
-               linetype = "dotted", alpha = 0.5) +
-  annotate("text", x = 5, y = v_scrap - 50000, label = "Scrap Value", 
-           hjust = 0, fontface = "italic", size = 3, color = "grey40") +
-  
-  scale_y_continuous(labels = scales::dollar_format(scale = 1e-3, suffix = "k")) +
-  scale_x_continuous(limits = c(0, 90), breaks = seq(0, 80, 10), expand = c(0,0)) +
-  scale_color_brewer(palette = "Set1") +
-  labs(title = "A. Exit Incentives: Social Optimum vs. Private Reality",
-       y = "Continuation Value", x = NULL, color = NULL) +
-  theme_classic(base_size = 11) + theme(legend.position = "none")
-
-# --- PANEL B ---
-p2 <- ggplot(dt_soc[age <= 75], aes(x = age, y = V_cont)) +
-  geom_hline(yintercept = v_scrap, linetype = "longdash", color = "grey40") +
-  geom_ribbon(data = dwl_blue, aes(ymin = V_cont, ymax = v_scrap),
-              fill = "#377EB8", alpha = 0.3) +
-  geom_ribbon(data = dwl_red, aes(ymin = V_cont, ymax = v_scrap),
-              fill = "#E41A1C", alpha = 0.3) +
-  geom_line(color = "#E41A1C", linewidth = 1.5) +
-  geom_vline(xintercept = c(exit_SOC, exit_R, exit_F), linetype = "dotted", alpha = 0.5) +
-  annotate("text", x = (exit_SOC + exit_R)/2, y = v_scrap + 100000, 
-           label = "DWL\n(Risk-Rated)", size = 3, color = "#377EB8") +
-  annotate("text", x = (exit_R + exit_F)/2, y = v_scrap + 100000, 
-           label = "Social Cost of\nZombie Tanks", size = 3, fontface = "bold", color = "#E41A1C") +
-  
-  scale_y_continuous(labels = scales::dollar_format(scale = 1e-3, suffix = "k")) +
-  scale_x_continuous(limits = c(0, 90), breaks = seq(0, 80, 10), expand = c(0,0)) +
-  labs(title = "B. Social Value: The Cost of Delayed Exit",
-       y = "Social Continuation Value", x = "Tank Age (Years)") +
-  theme_classic(base_size = 11)
-
-print(p1 / p2)
-```
-
-\newpage
-
-
-### Chunk 3: Figure 4 (Adverse Selection Map)
-This visualizes the "Selection Channel" by showing how the policy sorts firms of different types ($z$).
-
-
-```{r fig-toy-sorting}
-#| fig-cap: "The Selection Channel: Optimal Exit Age by Firm Risk Type"
-#| fig-width: 8
-#| fig-height: 5
-
-# 1. Run Loop to Generate Sorting Data (Varying z)
-z_grid <- seq(0.5, 3.0, length.out = 50)
-sorting_list <- list()
-
-for (z in z_grid) {
-  s_F   <- solve_regime("F", regimes$F, c_U, z)
-  s_R   <- solve_regime("R", regimes$R, c_U, z)
-  s_SOC <- solve_regime("SOC", regimes$SOC, c_U, z)
-  
-  sorting_list[[length(sorting_list)+1]] <- data.table(z=z, regime="Flat-Fee Pooling", a_exit=s_F$a_exit)
-  sorting_list[[length(sorting_list)+1]] <- data.table(z=z, regime="Risk-Rated Private", a_exit=s_R$a_exit)
-  sorting_list[[length(sorting_list)+1]] <- data.table(z=z, regime="Social Optimum", a_exit=s_SOC$a_exit)
-}
-
-dt_sorting <- rbindlist(sorting_list)
-# Cap visualization at 75 years
-dt_sorting[a_exit >= 80, a_exit := 80] 
-
-# Set factor order
-dt_sorting[, regime := factor(regime, levels = c("Social Optimum", "Risk-Rated Private", "Flat-Fee Pooling"))]
-
-# 2. Plot
-ggplot(dt_sorting, aes(x = z, y = a_exit, color = regime)) +
-  geom_step(linewidth = 1.2) +
-  
-  # Colors: Red (Social), Blue (Risk), Purple (Flat)
-  scale_color_manual(values = c("Social Optimum"="#E41A1C", 
-                                "Risk-Rated Private"="#377EB8", 
-                                "Flat-Fee Pooling"="#984EA3")) +
-  
-  scale_x_continuous(name = "Firm Risk Type (z)\n(1.0 = Average Firm, >1.0 = High Risk)",
-                     breaks = seq(0.5, 3.0, 0.5)) +
-  scale_y_continuous(name = "Optimal Exit Age (Years)", limits = c(0, 82)) +
-  
-  labs(subtitle = "Adverse Selection: Flat-Fee retains high-risk firms indefinitely.\nSocial Optimum requires risky firms to exit immediately.") +
-  
-  theme_classic(base_size = 12) +
-  theme(legend.position = "top", legend.title = element_blank())
-```
-
-
-\newpage
+**Interpretation:** @fig-toy-benefit shows the equivalent benefit curves $B(a)$ for all regimes. The vertical distance between each curve and the dashed retrofit cost line represents the net benefit of upgrading at each age. Risk-rated insurance (green) creates the largest benefits at younger ages, inducing retrofit at `r summary_table[regime == "R", a_star]` years. Self-insurance (blue) yields intermediate timing at `r summary_table[regime == "S", a_star]` years. Flat-fee pooling (red) delays retrofit until `r summary_table[regime == "F", a_star]` years due to minimal private internalization. The social optimum (purple) occurs even earlier at `r summary_table[regime == "SOC", a_star]` years, reflecting external damages not captured by private contracts.
 
 ## Testable Hypotheses {#sec-toy-hypotheses}
 
