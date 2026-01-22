@@ -147,8 +147,8 @@ if (!"event_date" %in% names(facility_data)) {
   }
 }
 
-# Create install_year
-facility_data[, install_year := panel_year - floor(avg_tank_age)]
+# # Create install_year
+# facility_data[, install_year := panel_year - floor(avg_tank_age)]
 
 # reg_vintage: Regulatory vintage (3 categories)
 facility_data[, reg_vintage := fcase(
@@ -179,6 +179,7 @@ if (!"wall_type" %in% names(facility_data) || all(is.na(facility_data$wall_type)
 }
 
 # Treatment group labels
+facility_data[, post_1999 := 1*(panel_year >= 1999)]
 facility_data[, treatment_group := ifelse(texas_treated, "Texas", "Control")]
 facility_data[, period := ifelse(post_1999, "Post-1999", "Pre-1999")]
 
