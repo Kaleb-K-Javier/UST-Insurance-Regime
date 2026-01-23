@@ -2322,4 +2322,86 @@ cat("    - test_model_b_estimation()\n\n")
 
 cat("\n✓ improved_estimator_FINAL.r loaded\n")
 
+# ==============================================================================
+# DAMPED NPL ESTIMATOR (Add to improved_estimator_OPTIMIZED.r)
+# ==============================================================================
+# Purpose: Solves NPL fixed point with relaxation to prevent oscillations.
+#          P_{t+1} = alpha * P_{new} + (1 - alpha) * P_{t}
+# Params:
+#   alpha: Step size (0 to 1). 
+#          1.0 = Standard NPL (Fast, unstable)
+#          0.5 = Damped (Stable, slower)
+# ==============================================================================
 
+npl_estimator_damped <- function(counts_vec, states, premiums, hazards, losses, 
+                                 transitions, config, theta_init, alpha=0.5, verbose=TRUE) {
+  
+  # 1. Build Cache
+  cache <- create_estimation_cache_model_b(states, premiums, hazards, losses, transitions, config)
+  n_states <- cache$n_states
+  
+  # 2. Init P (Empirical)
+  P <- compute_empirical_ccps_model_b(counts_vec, n_states, config$eps_prob)
+  theta_curr <- theta_init
+  
+  # History
+  theta_path <- matrix(NA, nrow=config$max_npl_iter, ncol=length(theta_init))
+  
+  for (iter in 1:config$max_npl_iter) {
+    theta_old <- theta_curr
+    
+    # 3. Maximization (M-Step)
+    # Using L-BFGS-B with wide bounds to prevent runaway parameters
+    opt <- optim(par = theta_curr, fn = npl_likelihood_model_b,
+                 P_fixed = P, cache = cache, config = config, counts_vec = counts_vec,
+                 method = "L-BFGS-B", 
+                 lower = c(0, -10, 0),   # Kappa>0, Price>-10, Risk>0
+                 upper = c(100, 10, 10), # Upper bounds
+                 control = list(maxit = 100))
+    
+    theta_curr <- opt$par
+    names(theta_curr) <- names(theta_init)
+    theta_path[iter, ] <- theta_curr
+    
+    # 4. Policy Update (With Damping)
+    U <- calculate_flow_utilities_model_b(theta_curr, cache)
+    V <- invert_value_function_model_b(P, U, config)
+    P_new_pure <- compute_ccps_model_b(U, V, cache, config)
+    
+    # DAMPING: Mix new policy with old policy
+    P_next <- (alpha * P_new_pure) + ((1 - alpha) * P)
+    
+    # 5. Convergence Check
+    theta_diff <- max(abs(theta_curr - theta_old))
+    P_diff <- max(abs(P_next - P))
+    
+    if (verbose && iter %% 5 == 0) {
+      cat(sprintf("  Iter %3d: k=%5.2f gP=%5.2f gR=%5.2f | dTh=%.1e dP=%.1e | LL=%.1f\n",
+                  iter, theta_curr[1], theta_curr[2], theta_curr[3], theta_diff, P_diff, -opt$value))
+    }
+    
+    P <- P_next
+    
+    if (theta_diff < config$tol_theta && P_diff < config$tol_P) {
+      if (verbose) cat(sprintf("  *** CONVERGED at iter %d ***\n", iter))
+      return(list(
+        theta_hat = theta_curr, 
+        P = P, 
+        V = V, 
+        converged = TRUE,
+        theta_path = theta_path[1:iter,],
+        cache = cache
+      ))
+    }
+  }
+  
+  if (verbose) cat("  *** MAX ITERATIONS REACHED ***\n")
+  return(list(
+    theta_hat = theta_curr, 
+    P = P, 
+    V = V, 
+    converged = FALSE,
+    theta_path = theta_path,
+    cache = cache
+  ))
+}

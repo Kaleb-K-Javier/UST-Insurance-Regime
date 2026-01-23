@@ -1,9 +1,9 @@
 # ==============================================================================
-# 00_Generate_Believable_Data.R (WIDE GRID)
+# 00_Generate_Believable_Data.R (WIDE GRID + FIXES)
 # ==============================================================================
 # PURPOSE: 
 #   1. Define Scaled Environment (1 unit = $10,000)
-#   2. CALIBRATE parameters with a WIDE GRID (Positive Gamma Price allowed).
+#   2. CALIBRATE parameters with a WIDE GRID to find realistic exit rates (~12%)
 #   3. Generate full dataset using those calibrated parameters.
 # ==============================================================================
 
@@ -11,6 +11,7 @@ library(data.table)
 library(Matrix)
 library(here)
 
+# Assumes you have updated this file with npl_estimator_damped
 source(here("Code", "Helpers", "improved_estimator_OPTIMIZED.r"))
 
 # PATHS
@@ -60,7 +61,7 @@ build_cache <- function() {
   list(
     n_states = n,           
     states = states, premiums = premiums, hazards = hazards, losses = losses,
-    hazard_loss = hazards * losses, # CRITICAL FIX
+    hazard_loss = hazards * losses, # CRITICAL FIX for Model B
     F_maintain = T_mat, F_exit = Diagonal(n),
     config = config, transitions = list(maintain = T_mat, exit = Diagonal(n))
   )
@@ -75,9 +76,6 @@ find_calibrated_parameters <- function() {
   cache <- build_cache()
   
   # --- UPDATED GRID ---
-  # Kappa: $10k to $100k
-  # Price: -2.0 to +2.0 (User Requested)
-  # Risk:  0.0 to 1.6 (User Requested 0 start)
   grid <- expand.grid(
     kappa = seq(1.0, 10.0, by = 0.5),       
     gamma_price = seq(-2.0, 2.0, by = 0.5), 
@@ -89,7 +87,6 @@ find_calibrated_parameters <- function() {
   best_theta <- NULL
   best_diff <- Inf
   
-  # Progress bar
   pb <- txtProgressBar(min = 0, max = nrow(grid), style = 3)
   
   for(i in 1:nrow(grid)) {
@@ -101,7 +98,7 @@ find_calibrated_parameters <- function() {
       gamma_risk = grid$gamma_risk[i]
     )
     
-    # Solve Equilibrium
+    # Solve Equilibrium (Try/Catch for stability)
     eq <- tryCatch({
       solve_equilibrium_policy_model_b(theta_try, cache, cache$config)
     }, error = function(e) list(converged=FALSE))
@@ -167,7 +164,7 @@ generate_final_data <- function() {
       leak <- as.integer(runif(1) < cache$hazards[s_idx])
       cost <- if(leak) rlnorm(1, log(cache$losses[s_idx]), 0.5) else NA
       
-      # Store (RAW DOLLARS for realism)
+      # Store (RAW DOLLARS for realism, we will scale in estimation)
       hist_list[[t]] <- data.table(
         facility_id = i, year = 1990 + t,
         age_start = (a-1)*5, wall_type = w, regime = r,
