@@ -1373,7 +1373,7 @@ suppressPackageStartupMessages({
 #'   - κ ∈ [-500, 500]: closure value in revenue units (negative = net cost)
 #'   - γ price ∈ [-20, 5]: premium preference (γ=-1 is dollar-for-dollar)
 #'   - γ risk ∈ [0, 10]: risk prefeences (γ=-1 is full risk internalized)
-create_estimation_config_model_b <- function(beta = 0.9957, sigma2 = 0.3, npl_iter = 600) {
+create_estimation_config_model_b <- function(beta = 0.9957, sigma2 = 0.3, npl_iter = 5000) {
   list(
     beta = beta,
     sigma2 = sigma2,
@@ -1387,8 +1387,8 @@ create_estimation_config_model_b <- function(beta = 0.9957, sigma2 = 0.3, npl_it
     min_log_val = 1e-12,
     
     # --- UPDATED BOUNDS ---
-    kappa_bounds = c(-500, 500),
-    gamma_price_bounds = c(-20, 5),   # Price sensitivity (Expect negative)
+    kappa_bounds = c(-999999, 9999999),
+    gamma_price_bounds = c(-20, 20),   # Price sensitivity (Expect negative)
     gamma_risk_bounds  = c(0, 10),    # Risk internalization (Expect positive ~1.0)
     # ----------------------
     
@@ -1861,45 +1861,52 @@ solve_equilibrium_policy_model_b <- function(theta, cache, config,
 # SECTION 10: DATA GENERATION
 # ==============================================================================
 
-#' Generate Synthetic Panel Data for Model B
-#'
-#' @param N_facilities Number of facilities
-#' @param T_periods Maximum time periods
-#' @param kappa_true True closure value parameter (can be negative)
-#' @param gamma_true True premium preference parameter
-#' @param seed Random seed
-#' @return List with counts, states, auxiliary functions, panel data, true params
-#'
-#' @details
-#' State space: 36 states (9 age bins × 2 wall × 2 regime)
-#' Age bins: 5-year bins from [0-5) to [45+], where bin 9 is absorbing
-generate_model_b_data <- function(N_facilities = 1000,
-                                   T_periods = 50,
-                                   kappa_true = 75,
-                                   gamma_true = -1.2,
-                                   seed = 2025) {
+
+# ==============================================================================
+# 2. OVERRIDES: DATA GENERATOR FOR ANNUAL TRANSITIONS
+# ==============================================================================
+
+generate_model_b_data_annual <- function(N_facilities = 1000,
+                                         T_periods = 50,  # 50 Years
+                                         kappa_true = 6.25, # ~6.25 years of profit
+                                         gamma_price_true = -1.2, # Price Sensitivity
+                                         gamma_risk_true = 1.0,   # Risk Internalization
+                                         seed = 2025,
+                                         P_manual = NULL) { # <--- NEW ARGUMENT for Calibration
   
   set.seed(seed)
   
-  # Exogenous parameters (calibrated)
+  # ----------------------------------------------------------------------------
+  # A. Exogenous Parameters (Annual Rates)
+  # ----------------------------------------------------------------------------
   params <- list(
-    h0 = 0.02, h_single = 0.09, h_age = 0.008,
-    ell0 = 1.0, ell_age = 0.08,
-    p_FF_annual = 0.08, p0_RB_annual = 0.03,
-    p_single_RB_annual = 0.1, p_age_RB_annual = 0.0055
-  )
+    # INCREASED HAZARDS (Annual probabilities of leak/failure)
+    h0 = 0.12,          # Base 12% annual failure risk
+    h_single = 0.05,    # Extra risk for single wall
+    h_age = 0.005,      # Risk increase per age bin
+    
+    # LOSS SEVERITY (Conditional on failure)
+    ell0 = 1.0,         # Base loss size
+    ell_age = 0.05,     
+    
+    # INCREASED PREMIUMS (Annual insurance cost)
+    p_FF_annual = 0.20,        # Base cost higher
+    p0_RB_annual = 0.10,       # Base for Risk-Based
+    p_single_RB_annual = 0.10, # Penalty for single wall
+    p_age_RB_annual = 0.02     # Penalty per age bin
+  )  
   
-  # Age transitions for 9 bins (5-year bins, bin 9 is absorbing for age)
-  # p_up[i] = probability of aging from bin i to bin i+1
-  # Bin 9 (45+) is absorbing: p_up[9] = 0, p_stay[9] = 1
-  age_probs <- list(
-    p_stay = c(0.985, 0.982, 0.978, 0.974, 0.970, 0.965, 0.960, 0.955, 1.00),
-    p_up   = c(0.015, 0.018, 0.022, 0.026, 0.030, 0.035, 0.040, 0.045, 0.00)
+  # ----------------------------------------------------------------------------
+  # B. Annual Transition Probabilities
+  # ----------------------------------------------------------------------------
+  age_probs_annual <- list(
+    p_up   = c(0.18, 0.19, 0.20, 0.21, 0.22, 0.23, 0.24, 0.25, 0.00)
   )
+  age_probs_annual$p_stay <- 1.0 - age_probs_annual$p_up
   
-
-  # Create state space (36 states: 9 age bins × 2 wall × 2 regime)
-  # Age bins: 1=[0-5), 2=[5-10), ..., 8=[35-40), 9=[45+] (absorbing for age)
+  # ----------------------------------------------------------------------------
+  # C. State Space Construction
+  # ----------------------------------------------------------------------------
   states <- CJ(
     A = 1:9,
     w = factor(c("single", "double"), levels = c("single", "double")),
@@ -1909,68 +1916,74 @@ generate_model_b_data <- function(N_facilities = 1000,
   states[, state_idx := .I]
   setkey(states, state_idx)
   
-  n_states <- nrow(states)  # = 36
+  n_states <- nrow(states)
   
-  # Compute auxiliary functions
-  # NOTE: For 5-year bins, A=1 means [0-5), A=9 means [45+]
-  # Map age bin to representative age for calculations: bin_midpoint = (A-1)*5 + 2.5
-  # Or use bin index directly if params are calibrated for bins
-  
+  # ----------------------------------------------------------------------------
+  # D. Auxiliary Variables (Flow Utility Inputs)
+  # ----------------------------------------------------------------------------
   premiums <- params$p_FF_annual + 
-              ifelse(states$rho == "RB", params$p0_RB_annual, 0) +
-              ifelse(states$w == "single", params$p_single_RB_annual, 0) +
-              (states$A - 1) * params$p_age_RB_annual
+    ifelse(states$rho == "RB", params$p0_RB_annual, 0) +
+    ifelse(states$w == "single", params$p_single_RB_annual, 0) +
+    (states$A - 1) * params$p_age_RB_annual
   
   hazards <- pmin(pmax(params$h0 + 
-                        (states$w == "single") * params$h_single + 
-                        params$h_age * states$A, 0.001), 0.50)
+                         (states$w == "single") * params$h_single + 
+                         params$h_age * states$A, 0.001), 0.60) # Cap at 60%
   
   losses <- pmax(params$ell0 + params$ell_age * states$A, 0.1)
   
-  # Build transition matrices for 9 age bins
+  # ----------------------------------------------------------------------------
+  # E. Transition Matrices (Annual)
+  # ----------------------------------------------------------------------------
   state_map <- setNames(states$state_idx, 
                         paste(states$A, states$w, states$rho, sep = "_"))
   
   F_maintain <- Matrix(0, n_states, n_states, sparse = TRUE)
+  
   for (i in 1:n_states) {
     A_i <- states$A[i]
     if (A_i < 9) {
-      # Can stay or age up
       k_s <- paste(A_i, states$w[i], states$rho[i], sep = "_")
       k_u <- paste(A_i + 1, states$w[i], states$rho[i], sep = "_")
-      F_maintain[i, state_map[k_s]] <- age_probs$p_stay[A_i]
-      F_maintain[i, state_map[k_u]] <- age_probs$p_up[A_i]
+      F_maintain[i, state_map[k_s]] <- age_probs_annual$p_stay[A_i]
+      F_maintain[i, state_map[k_u]] <- age_probs_annual$p_up[A_i]
     } else {
-      # Age bin 9 (45+) is absorbing for age dimension
+      # Absorbing age state
       F_maintain[i, i] <- 1.0
     }
   }
   
   transitions <- list(
     maintain = F_maintain,
-    exit = Diagonal(n_states)  # Identity (absorbing)
+    exit = Diagonal(n_states)
   )
   
-  # Configuration
-  config <- create_estimation_config_model_b()
+  # ----------------------------------------------------------------------------
+  # F. Solve & Simulate
+  # ----------------------------------------------------------------------------
+  config <- create_estimation_config_model_b(beta = 0.95, sigma2 = 1) 
+  cache <- create_estimation_cache_model_b(states, premiums, hazards, losses, transitions, config)
   
-  # Create cache
-  cache <- create_estimation_cache_model_b(states, premiums, hazards, losses,
-                                            transitions, config)
+  theta_true <- c(kappa = kappa_true, 
+                  gamma_price = gamma_price_true, 
+                  gamma_risk = gamma_risk_true)
   
-  # Solve equilibrium
-  theta_true <- c(kappa = kappa_true, gamma = gamma_true)
-  eq <- solve_equilibrium_policy_model_b(theta_true, cache, config)
-  P_equilibrium <- eq$P
-  
-  if (!eq$converged) {
-    warning("Equilibrium policy did not converge")
+  # --- CRITICAL FIX: Use manual policy if provided (prevents re-solving crash) ---
+  if (!is.null(P_manual)) {
+    P_equilibrium <- P_manual
+    # Compute V for consistency (optional)
+    U <- calculate_flow_utilities_model_b(theta_true, cache)
+    V_equilibrium <- invert_value_function_model_b(P_equilibrium, U, config)
+  } else {
+    # Standard: Solve internally
+    eq <- solve_equilibrium_policy_model_b(theta_true, cache, config)
+    if (!eq$converged) warning("Equilibrium policy did not converge")
+    P_equilibrium <- eq$P
+    V_equilibrium <- eq$V
   }
   
-  # Build transition maps for simulation
-  state_map <- setNames(states$state_idx, 
-                        paste(states$A, states$w, states$rho, sep = "_"))
-  
+  # Simulate Panel
+  # Pre-calculate transition destinations for speed
   next_state_stay <- integer(n_states)
   next_state_up <- integer(n_states)
   
@@ -1978,48 +1991,43 @@ generate_model_b_data <- function(N_facilities = 1000,
     A <- states$A[s]
     w <- states$w[s]
     rho <- states$rho[s]
-    
-    # Stay transition (same state)
-    k_stay <- paste(A, w, rho, sep = "_")
-    next_state_stay[s] <- state_map[k_stay]
-    
-    # Age up transition (capped at 9 = 45+ bin)
-    A_next <- min(A + 1L, 9L)
-    k_up <- paste(A_next, w, rho, sep = "_")
-    next_state_up[s] <- state_map[k_up]
+    next_state_stay[s] <- state_map[paste(A, w, rho, sep = "_")]
+    next_state_up[s]   <- state_map[paste(min(A + 1L, 9L), w, rho, sep = "_")]
   }
   
-  # Simulate panel
+  # Vectorized Simulation Loop
   panel_list <- vector("list", N_facilities)
   
   for (fac in 1:N_facilities) {
+    # Random initial state
     current_state <- sample(1:n_states, 1)
-    fac_obs <- list()
-    obs_idx <- 1
+    
+    # Pre-allocate facility vectors
+    fac_states <- integer(T_periods)
+    fac_actions <- integer(T_periods)
+    active <- TRUE
     
     for (t in 1:T_periods) {
-      # Draw action
-      action_probs <- P_equilibrium[current_state, ]
-      action <- sample(1:2, 1, prob = action_probs)
+      if (!active) break
       
-      # Record observation
-      fac_obs[[obs_idx]] <- data.table(
-        facility_id = fac,
-        period = t,
-        state_idx = current_state,
-        action = action
-      )
-      obs_idx <- obs_idx + 1
+      # Decision
+      prob_maintain <- P_equilibrium[current_state, "maintain"]
       
-      # Transition
+      # --- ROBUSTNESS FIX: Handle NA probabilities ---
+      if (is.na(prob_maintain)) {
+        prob_maintain <- 1.0 # Default to maintain if solver failed for this state
+      }
+      
+      action <- if (runif(1) < prob_maintain) 1L else 2L # 1=Maintain, 2=Close
+      
+      fac_states[t] <- current_state
+      fac_actions[t] <- action
+      
       if (action == 2) {
-        # Close: exit simulation for this facility
-        break
+        active <- FALSE
       } else {
-        # Maintain: stochastic aging
-        curr_age <- states$A[current_state]
-        p_up <- age_probs$p_up[curr_age]
-        
+        # Annual Transition: Age up or Stay
+        p_up <- age_probs_annual$p_up[states$A[current_state]]
         if (runif(1) < p_up) {
           current_state <- next_state_up[current_state]
         } else {
@@ -2028,30 +2036,31 @@ generate_model_b_data <- function(N_facilities = 1000,
       }
     }
     
-    panel_list[[fac]] <- rbindlist(fac_obs)
+    # Trim to actual observed periods
+    n_obs <- which(fac_actions == 0)[1] - 1
+    if (is.na(n_obs)) n_obs <- T_periods
+    
+    if (n_obs > 0) {
+      panel_list[[fac]] <- data.table(
+        facility_id = fac,
+        period = 1:n_obs,
+        state_idx = fac_states[1:n_obs],
+        action = fac_actions[1:n_obs]
+      )
+    }
   }
   
   panel_data <- rbindlist(panel_list)
   
-  # Aggregate counts
+  # Create Counts Matrix
   counts_dt <- panel_data[, .N, by = .(state_idx, action)]
   counts_matrix <- matrix(0, n_states, 2)
-  
   for (i in 1:nrow(counts_dt)) {
     counts_matrix[counts_dt$state_idx[i], counts_dt$action[i]] <- counts_dt$N[i]
   }
   
-  counts_vec <- as.vector(counts_matrix)
-  
-  # Diagnostics
-  cat(sprintf("Generated Model B data: %d facilities, %d observations\n",
-              N_facilities, nrow(panel_data)))
-  cat(sprintf("  Close rate: %.1f%%\n", 100 * mean(panel_data$action == 2)))
-  cat(sprintf("  True parameters: kappa = %.2f, gamma = %.3f\n",
-              kappa_true, gamma_true))
-  
   return(list(
-    counts_vec = counts_vec,
+    counts_vec = as.vector(counts_matrix),
     counts_matrix = counts_matrix,
     states = states,
     premiums = premiums,
@@ -2060,12 +2069,12 @@ generate_model_b_data <- function(N_facilities = 1000,
     transitions = transitions,
     panel_data = panel_data,
     P_true = P_equilibrium,
-    V_true = eq$V,
     theta_true = theta_true,
     cache = cache,
     config = config
   ))
 }
+
 
 # ==============================================================================
 # SECTION 11: VALIDATION TEST

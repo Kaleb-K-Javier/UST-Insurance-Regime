@@ -671,12 +671,7 @@ generate_diagnostic_report <- function(results, fig_dir = FIG_DIR, tab_dir = TAB
 # ==============================================================================
  # K=  22 GP=-1.0 GR=0.6 -> Exit:  15.2% 
 # 1. Run Surface Scan (K vs Gamma_Price slice)
-plot_model_b_surface(
-  fig_dir = FIG_DIR, 
-  kappa_true = 22, 
-  gamma_price_true = -1,
-  gamma_risk_true = 0.6
-)
+plot_model_b_surface_3param(kappa_true = 22.0, gp_true = -1.0, gr_true = 0.6)
 
 # 2. Run Production Monte Carlo
 mc_results <- run_model_b_mc(

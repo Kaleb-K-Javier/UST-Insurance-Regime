@@ -186,7 +186,7 @@ library(kableExtra)
 
 # 1. CORE PARAMETERS
 R_annual <- 100000      # Annual revenue
-v_scrap  <- 700000      # POSITIVE Scrap Value (Land Value - Cleanup Cost)
+v_scrap  <- 400000      # POSITIVE Scrap Value (Land Value - Cleanup Cost)
 beta     <- 0.95        # Discount factor
 L        <- 200000      # Private cleanup cost
 
@@ -220,9 +220,9 @@ regimes <- list(
              D = function(a) L + 2.2 * L * (1 + 0.03 * a))
 )
 
-# 4. GENERAL SOLVER
+# 4. GENERAL SOLVER (Horizon Extended to 100)
 solve_regime <- function(regname, params, c_U, z = 1.0) {
-  Amax <- 90
+  Amax <- 100  # <--- CHANGED: Simulating to 100 to avoid boundary bias
   ages <- 0:Amax
   n <- length(ages)
   
@@ -237,24 +237,20 @@ solve_regime <- function(regname, params, c_U, z = 1.0) {
   
   # Initialize Value Vectors
   W_SW <- numeric(n + 1); W_DW <- numeric(n + 1)
-  V_cont <- numeric(n + 1) # NEW: Store purely the continuation value
+  V_cont <- numeric(n + 1) 
   
   W_SW[n + 1] <- v_scrap; W_DW[n + 1] <- v_scrap
-  V_cont[n + 1] <- -Inf # Terminal state has no continuation
+  V_cont[n + 1] <- -Inf 
   
   for (ia in seq(n, 1)) {
     a <- ia - 1
-    # Double Wall Value
     cont_DW <- R_annual - params$p_func(a, ydw_vec[ia]) - ydw_vec[ia]*D_vec[ia] + beta*W_DW[ia+1]
     W_DW[ia] <- max(cont_DW, v_scrap)
     
-    # Single Wall Value
     cont_SW <- R_annual - pvec[ia] - ysw_vec[ia]*D_vec[ia] + beta*W_SW[ia+1]
     upg_SW  <- R_annual - p_dw0 - ydw_vec[1]*D_vec[1] - c_U + beta*W_DW[2]
     
-    # Store the RAW continuation value (before max operator)
     V_cont[ia] <- cont_SW
-    
     W_SW[ia] <- max(cont_SW, upg_SW, v_scrap)
   }
   
@@ -266,7 +262,7 @@ solve_regime <- function(regname, params, c_U, z = 1.0) {
     B[ia] <- val_upgrade - val_continue
   }
   
-  # Optimal Stopping Calculation
+  # Optimal Stopping
   exit_idx <- which(W_SW <= v_scrap + 1.0)
   a_exit <- if(length(exit_idx) > 0) (exit_idx[1] - 1) else Amax
   
@@ -281,7 +277,7 @@ solve_regime <- function(regname, params, c_U, z = 1.0) {
     a_star=a_star, 
     a_exit=a_exit, 
     W_SW=W_SW[1:n],
-    V_cont=V_cont[1:n], # Exporting the new metric
+    V_cont=V_cont[1:n],
     color=params$color
   ))
 }
@@ -300,9 +296,6 @@ summary_table <- data.table(
   nice_name = sapply(results, `[[`, "name"),
   a_star = sapply(results, `[[`, "a_star")
 )
-
-
-
 ```
 
 ```{r fig-toy-benefit}
@@ -566,75 +559,114 @@ exit_SOC <- results$SOC$a_exit
 exit_R   <- results$R$a_exit
 exit_F   <- results$F$a_exit
 
-# 2. Extract Data (Up to age 75)
+# 2. Extract Data (Plotting up to 75)
+plot_max <- 75
 dt_all <- rbind(
-  data.table(age = results$F$age, V_cont = results$F$V_cont, regime = "Flat-Fee Pooling"),
-  data.table(age = results$R$age, V_cont = results$R$V_cont, regime = "Risk-Rated Private"),
+  data.table(age = results$F$age, V_cont = results$F$V_cont, regime = "Flat-Fee"),
+  data.table(age = results$R$age, V_cont = results$R$V_cont, regime = "Risk-Rated"),
   data.table(age = results$SOC$age, V_cont = results$SOC$V_cont, regime = "Social Optimum")
 )
-dt_all[, regime := factor(regime, levels = c("Social Optimum", "Risk-Rated Private", "Flat-Fee Pooling"))]
 
-# 3. Intersection Points
+# Set Factor Levels (Red, Blue, Purple order)
+dt_all[, regime := factor(regime, levels = c("Social Optimum", "Risk-Rated", "Flat-Fee"))]
+
+# 3. Intersection Points (SHORT NAMES)
 points_dt <- data.table(
   age = c(exit_SOC, exit_R, exit_F),
   V_cont = v_scrap,
-  regime = factor(c("Social Optimum", "Risk-Rated Private", "Flat-Fee Pooling"), 
-                  levels = c("Social Optimum", "Risk-Rated Private", "Flat-Fee Pooling")),
+  regime = factor(c("Social Optimum", "Risk-Rated", "Flat-Fee"), 
+                  levels = c("Social Optimum", "Risk-Rated", "Flat-Fee")),
   label = c("a[SOC]^'\u2021'", "a[R]^'\u2021'", "a[F]^'\u2021'")
 )
+points_dt <- points_dt[age <= plot_max]
 
-# 4. End-of-Line Labels (for x = 75)
-line_labels <- dt_all[age == 75]
+# 4. Smart Line Labels
+line_labels <- dt_all[age == plot_max]
+
+# If Flat-Fee exit is > plot_max, modify the label
+if(exit_F > plot_max) {
+  line_labels[regime == "Flat-Fee", regime := paste0("Flat-Fee\n(Exits at ", exit_F, ")")]
+}
 
 # 5. DWL Areas
 dt_soc <- dt_all[regime == "Social Optimum"]
-dwl_blue <- dt_soc[age >= exit_SOC & age <= exit_R]
-dwl_red  <- dt_soc[age >= exit_R & age <= exit_F]
+soc_label <- dt_soc[age == plot_max]
+wedge_end <- min(exit_F, plot_max)
 
-# --- PANEL A ---
+dwl_blue <- dt_soc[age >= exit_SOC & age <= exit_R]
+dwl_red  <- dt_soc[age >= exit_R & age <= wedge_end]
+
+# --- COMMON THEME ---
+common_x <- scale_x_continuous(limits = c(0, 90), breaks = seq(0, 70, 10), expand = c(0,0))
+common_theme <- theme_classic(base_size = 11) + 
+  theme(legend.position = "none", plot.margin = margin(r = 10, l = 5))
+
+# Manual Colors (Red, Blue, Purple)
+regime_colors <- c("Social Optimum" = "#E41A1C", 
+                   "Risk-Rated"     = "#377EB8", 
+                   "Flat-Fee"       = "#984EA3")
+
+# --- PANEL A: INCENTIVES ---
 p1 <- ggplot() +
   geom_hline(yintercept = v_scrap, linetype = "longdash", color = "grey40") +
-  geom_ribbon(data = dt_all[regime == "Flat-Fee Pooling" & age >= exit_R & age <= exit_F],
+  # Wedge Shading
+  geom_ribbon(data = dt_all[regime == "Flat-Fee" & age >= exit_R & age <= wedge_end],
               aes(x = age, ymin = v_scrap, ymax = V_cont),
               fill = "grey60", alpha = 0.2) +
-  geom_line(data = dt_all[age <= 75], 
+  # Curves
+  geom_line(data = dt_all[age <= plot_max], 
             aes(x = age, y = V_cont, color = regime), linewidth = 1.2) +
+  # Intersections & Labels
   geom_point(data = points_dt, aes(x = age, y = V_cont, color = regime), size = 3) +
   geom_text(data = points_dt, aes(x = age, y = V_cont, label = label),
             parse = TRUE, vjust = -1, fontface = "bold", size = 3.5) +
+  
+  # --- LINE LABELS (Shortened) ---
   geom_text(data = line_labels, aes(x = age + 1, y = V_cont, label = regime, color = regime),
-            hjust = 0, fontface = "bold", size = 3.5) +
+            hjust = 0, fontface = "bold", size = 3.5, lineheight = 0.8) +
+            
+  # Drop Lines
   geom_segment(data = points_dt, aes(x = age, xend = age, y = -Inf, yend = V_cont),
                linetype = "dotted", alpha = 0.5) +
+  
   annotate("text", x = 5, y = v_scrap - 50000, label = "Scrap Value", 
            hjust = 0, fontface = "italic", size = 3, color = "grey40") +
   
   scale_y_continuous(labels = scales::dollar_format(scale = 1e-3, suffix = "k")) +
-  scale_x_continuous(limits = c(0, 90), breaks = seq(0, 80, 10), expand = c(0,0)) +
-  scale_color_brewer(palette = "Set1") +
+  common_x +
+  scale_color_manual(values = regime_colors) +
   labs(title = "A. Exit Incentives: Social Optimum vs. Private Reality",
-       y = "Continuation Value", x = NULL, color = NULL) +
-  theme_classic(base_size = 11) + theme(legend.position = "none")
+       y = "Continuation Value", x = NULL) +
+  common_theme
 
-# --- PANEL B ---
-p2 <- ggplot(dt_soc[age <= 75], aes(x = age, y = V_cont)) +
+# --- PANEL B: SOCIAL DWL ---
+p2 <- ggplot(dt_soc[age <= plot_max], aes(x = age, y = V_cont)) +
   geom_hline(yintercept = v_scrap, linetype = "longdash", color = "grey40") +
+  # DWL Shading
   geom_ribbon(data = dwl_blue, aes(ymin = V_cont, ymax = v_scrap),
               fill = "#377EB8", alpha = 0.3) +
   geom_ribbon(data = dwl_red, aes(ymin = V_cont, ymax = v_scrap),
               fill = "#E41A1C", alpha = 0.3) +
   geom_line(color = "#E41A1C", linewidth = 1.5) +
-  geom_vline(xintercept = c(exit_SOC, exit_R, exit_F), linetype = "dotted", alpha = 0.5) +
+  
+  # --- LINE LABEL (Shortened) ---
+  geom_text(data = soc_label, aes(x = age + 1, y = V_cont, label = regime),
+            hjust = 0, fontface = "bold", size = 3.5, color = "#E41A1C") +
+  
+  # Drop Lines (Aligned)
+  geom_vline(xintercept = c(exit_SOC, exit_R), linetype = "dotted", alpha = 0.5) +
+  {if(exit_F <= plot_max) geom_vline(xintercept = exit_F, linetype = "dotted", alpha = 0.5)} +
+  
   annotate("text", x = (exit_SOC + exit_R)/2, y = v_scrap + 100000, 
            label = "DWL\n(Risk-Rated)", size = 3, color = "#377EB8") +
-  annotate("text", x = (exit_R + exit_F)/2, y = v_scrap + 100000, 
+  annotate("text", x = (exit_R + min(exit_F, plot_max))/2, y = v_scrap + 100000, 
            label = "Social Cost of\nZombie Tanks", size = 3, fontface = "bold", color = "#E41A1C") +
   
   scale_y_continuous(labels = scales::dollar_format(scale = 1e-3, suffix = "k")) +
-  scale_x_continuous(limits = c(0, 90), breaks = seq(0, 80, 10), expand = c(0,0)) +
+  common_x +
   labs(title = "B. Social Value: The Cost of Delayed Exit",
        y = "Social Continuation Value", x = "Tank Age (Years)") +
-  theme_classic(base_size = 11)
+  common_theme
 
 print(p1 / p2)
 ```
@@ -651,7 +683,7 @@ This visualizes the "Selection Channel" by showing how the policy sorts firms of
 #| fig-width: 8
 #| fig-height: 5
 
-# 1. Run Loop to Generate Sorting Data (Varying z)
+# 1. Generate Sorting Data
 z_grid <- seq(0.5, 3.0, length.out = 50)
 sorting_list <- list()
 
@@ -666,29 +698,40 @@ for (z in z_grid) {
 }
 
 dt_sorting <- rbindlist(sorting_list)
-# Cap visualization at 75 years
 dt_sorting[a_exit >= 80, a_exit := 80] 
-
-# Set factor order
 dt_sorting[, regime := factor(regime, levels = c("Social Optimum", "Risk-Rated Private", "Flat-Fee Pooling"))]
 
-# 2. Plot
+# 2. Labeling Data (End of lines)
+label_dt <- dt_sorting[z == max(z)]
+
+# 3. Plot
 ggplot(dt_sorting, aes(x = z, y = a_exit, color = regime)) +
   geom_step(linewidth = 1.2) +
   
-  # Colors: Red (Social), Blue (Risk), Purple (Flat)
+  # Direct Labels
+  geom_text(data = label_dt, aes(x = z + 0.05, label = regime), 
+            hjust = 0, fontface = "bold", size = 3.5) +
+  
+  # Explanatory Annotations
+  annotate("text", x = 1.5, y = 75, 
+           label = "Insensitive to Risk:\nLow deductible masks\ncost signal", 
+           color = "#984EA3", size = 3, fontface = "italic") +
+  
+  annotate("text", x = 1.0, y = 15, 
+           label = "Efficient Sorting:\nRisky firms exit early", 
+           color = "#377EB8", size = 3, fontface = "italic") +
+
   scale_color_manual(values = c("Social Optimum"="#E41A1C", 
                                 "Risk-Rated Private"="#377EB8", 
                                 "Flat-Fee Pooling"="#984EA3")) +
   
-  scale_x_continuous(name = "Firm Risk Type (z)\n(1.0 = Average Firm, >1.0 = High Risk)",
-                     breaks = seq(0.5, 3.0, 0.5)) +
-  scale_y_continuous(name = "Optimal Exit Age (Years)", limits = c(0, 82)) +
-  
-  labs(subtitle = "Adverse Selection: Flat-Fee retains high-risk firms indefinitely.\nSocial Optimum requires risky firms to exit immediately.") +
+  scale_x_continuous(name = "Firm Risk Type (z) [Higher = Riskier]",
+                     breaks = seq(0.5, 3.0, 0.5), limits = c(0.5, 3.6)) +
+  scale_y_continuous(name = "Optimal Exit Age (Years)", limits = c(0, 85)) +
   
   theme_classic(base_size = 12) +
-  theme(legend.position = "top", legend.title = element_blank())
+  theme(legend.position = "none", # Removed legend
+        panel.grid.major.y = element_line(color = "grey92"))
 ```
 
 
