@@ -85,14 +85,14 @@ log_step("SECTION 1: Loading and Harmonizing Data...", 0)
 
 # --- 1.1 LOAD RAW DATA ---
 # Texas Tank Months
-tx_tank_months <- fread(get_data_path("Outputs", "texas_ust_facility_month_panel.csv"))
+tx_tank_months <- fread(here("Data",'Processed', "texas_ust_facility_month_panel.csv"))
 tx_tank_months <- tx_tank_months[, .(FACILITY_ID, UST_ID, YEAR, MONTH, CAPACITY, 
                                      month_date, install_date, end_date, 
                                      single_walled, double_walled, 
                                      is_gasoline, is_diesel, is_oil_kerosene, is_jet_fuel, is_other)]
 
 # EPA Tank Panel - FIX: Include Fuel Columns
-tank_panel_epa <- fread(here("Data", "Raw_do_not_write", "state_databases", 
+tank_panel_epa <- fread(here("Data", "Raw", 
                              "EPA_Region_6_and_EPA_states_tank_panel.csv"),
                         colClasses = c(facility_id = "character", tank_id = "character"))
 # Select columns explicitly including fuel types
@@ -100,25 +100,26 @@ epa_cols <- c("facility_id", "tank_id", "state", "tank_installed_date", "tank_cl
               "capacity", "single_walled", "double_walled", 
               "is_gasoline", "is_diesel", "is_oil_kerosene", "is_jet_fuel", "is_other",
               "county_name", "county_geoid")
+
 existing_epa_cols <- intersect(names(tank_panel_epa), epa_cols)
 tank_panel_epa <- tank_panel_epa[, ..existing_epa_cols]
 
 # LUST Data
 lust_epa <- fread(here("Data", "Processed", "all_lust_data.csv"), colClasses = c(facility_id = "character"))
-TX_LUST_SD <- fread(get_data_path("TX_LUST.csv"))
+TX_LUST_SD <- fread(here("Data","Raw","TX_LUST.csv"))
 TX_LUST_SD[, `:=`(facility_id = clean_id_vectorized(facility_id), 
                   LUST_id = trimws(as.character(LUST_id)),
                   report_date = parse_tx_lust_date(report_date),
                   nfa_date = parse_tx_lust_date(nfa_date))]
 
 # FR Data (Texas) - Pre-load
-fa_monthly <- readRDS(get_data_path("Outputs", "panel_merge_staging", "fa_monthly.rds"))
+fa_monthly <- fread(here("Data","Raw", "fa_monthly.csv"))
 setDT(fa_monthly)
-zurich_2012_lookup <- readRDS(get_data_path("Outputs", "panel_merge_staging", "zurich_2012_lookup.rds"))
+zurich_2012_lookup <- fread(here("Data","Raw", "zurich_2012_lookup.csv"))
 setDT(zurich_2012_lookup)
 
 # Texas Facility Raw (for County) - FIX: Actually load this
-tx_fac_raw <- fread(get_data_path("Outputs", "raw_pst_fac.csv"))
+tx_fac_raw <- fread(here("Data","Raw", "raw_pst_fac.csv"))
 tx_fac_raw <- tx_fac_raw[, .(FACILITY_ID, SITE_COUNTY)] 
 
 # --- 1.2 RENAME COLUMNS ---
