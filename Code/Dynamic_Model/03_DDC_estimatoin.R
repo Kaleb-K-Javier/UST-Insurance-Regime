@@ -109,7 +109,7 @@ for(s in 1:36) {
 # ==============================================================================
 cat("\n[4/4] Running Damped NPL Estimator...\n")
 
-config <- create_estimation_config_model_b(beta = 0.95, sigma2 = 1, npl_iter = 200)
+config <- create_estimation_config_model_b(beta = 0.95, sigma2 = 1, npl_iter = 5000)
 
 # Init: Start near Calibration Winner to avoid local optima
 theta_init <- c(kappa = 18.0, gamma_price = -1.7, gamma_risk = 1.2)
