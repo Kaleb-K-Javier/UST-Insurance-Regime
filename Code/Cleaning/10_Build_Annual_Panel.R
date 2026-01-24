@@ -118,79 +118,467 @@ fa_monthly <- fa_monthly[, .SD, .SDcols = intersect(c("FACILITY_ID","YEAR","MONT
 zurich_2012_lookup <- fread(here("Data", "Raw", "zurich_2012_lookup.csv"))
 zurich_2012_lookup <- zurich_2012_lookup[, .SD, .SDcols = intersect(c("FACILITY_ID","had_zurich_2012"), names(zurich_2012_lookup))]
 
-# --- 1.2-1.3 RENAME COLUMNS ---
-log_step("1.2-1.3 Renaming and standardizing columns...", 0)
+#==============================================================================
+# 1.2 CREATE SYSTEMATIC COLUMN MAPPING STRUCTURES
+#==============================================================================
+log_step("\n1.2 Creating systematic harmonization mappings...", 0)
+mapping_start <- Sys.time()
 
+#------------------------------------------------------------------------------
+# 1.2.1 TANK PANEL MAPPINGS (Texas → Common schema)
+#------------------------------------------------------------------------------
+log_step("Defining tank panel variable mappings...", 1)
+
+# Texas tank-months → Common schema
+tx_tank_months_mapping <- c(
+  # Identifiers
+  "FACILITY_ID" = "facility_id",
+  "UST_ID" = "tank_id",
+  
+  # Time variables
+  "YEAR" = "panel_year",
+  "MONTH" = "panel_month",
+  "month_date" = "date",
+  
+  # Tank dates (will create standardized versions)
+  "install_date" = "tank_installed_date_raw",
+  "end_date" = "tank_closed_date_raw",
+  
+  # Tank characteristics
+  "CAPACITY" = "capacity",
+  "single_walled" = "single_walled",
+  "double_walled" = "double_walled",
+  
+  # Fuel type indicators
+  "is_gasoline" = "is_gasoline",
+  "is_diesel" = "is_diesel",
+  "is_oil_kerosene" = "is_oil_kerosene",
+  "is_jet_fuel" = "is_jet_fuel",
+  "is_other" = "is_other"
+)
+
+# EPA tank panel → Common schema (already mostly standardized)
+epa_tank_panel_mapping <- c(
+  # Identifiers (no change needed)
+  "facility_id" = "facility_id",
+  "tank_id" = "tank_id",
+  "state" = "state",
+  
+  # Tank dates (standardize naming)
+  "tank_installed_date" = "tank_installed_date_raw",
+  "tank_closed_date" = "tank_closed_date_raw",
+  
+  # Tank characteristics (no change needed)
+  "capacity" = "capacity",
+  "single_walled" = "single_walled",
+  "double_walled" = "double_walled",
+  
+  # Fuel type indicators (no change needed)
+  "is_gasoline" = "is_gasoline",
+  "is_diesel" = "is_diesel",
+  "is_oil_kerosene" = "is_oil_kerosene",
+  "is_jet_fuel" = "is_jet_fuel",
+  "is_other" = "is_other",
+  
+  # Geographic info
+  "county_name" = "county_name",
+  "county_geoid" = "county_geoid"
+)
+
+log_step("✓ Tank panel mappings created", 2)
+
+#------------------------------------------------------------------------------
+# 1.2.2 LUST DATA MAPPINGS (Texas → Common schema)
+#------------------------------------------------------------------------------
+log_step("Defining LUST data variable mappings...", 1)
+
+# Texas LUST → Common schema
+tx_lust_mapping <- c(
+  "facility_id" = "facility_id",  # Already clean_id applied in load
+  "LUST_id" = "lust_id",
+  "report_date" = "report_date",
+  "nfa_date" = "nfa_date"
+)
+
+# EPA LUST → Common schema (already standardized)
+epa_lust_mapping <- c(
+  "facility_id" = "facility_id",
+  "state" = "state",
+  "report_date" = "report_date",
+  "nfa_date" = "nfa_date"
+)
+
+log_step("✓ LUST data mappings created", 2)
+
+#------------------------------------------------------------------------------
+# 1.2.3 AUXILIARY DATA MAPPINGS (Texas-specific)
+#------------------------------------------------------------------------------
+log_step("Defining auxiliary data variable mappings...", 1)
+
+# Texas facility raw data → Common schema
+tx_facility_mapping <- c(
+  "FACILITY_ID" = "facility_id",
+  "SITE_COUNTY" = "county_raw"
+)
+
+# FR monthly data → Common schema
+fa_monthly_mapping <- c(
+  "FACILITY_ID" = "facility_id",
+  "YEAR" = "panel_year",
+  "MONTH" = "panel_month",
+  "DETAIL_TYPE" = "DETAIL_TYPE",    # Keep uppercase for FR-specific vars
+  "CATEGORY" = "CATEGORY",
+  "ISSUER_NAME" = "ISSUER_NAME"
+)
+
+# Zurich 2012 lookup → Common schema
+zurich_2012_mapping <- c(
+  "FACILITY_ID" = "facility_id",
+  "had_zurich_2012" = "had_zurich_2012"
+)
+
+log_step("✓ Auxiliary data mappings created", 2)
+
+#------------------------------------------------------------------------------
+# 1.2.4 DEFINE VARIABLE TYPE SPECIFICATIONS
+#------------------------------------------------------------------------------
+log_step("Defining variable type specifications...", 1)
+
+# Variables that should be character
+character_vars <- c("facility_id", "tank_id", "state", "county_name", "county_geoid")
+
+# Variables that should be integer
+integer_vars <- c("panel_year", "panel_month", "single_walled", "double_walled",
+                  "is_gasoline", "is_diesel", "is_oil_kerosene", "is_jet_fuel", "is_other")
+
+# Variables that should be numeric
+numeric_vars <- c("capacity")
+
+# Date variables (raw lifecycle dates)
+raw_date_vars <- c("tank_installed_date_raw", "tank_closed_date_raw")
+
+# Date variables (panel-bounded dates - will be created)
+panel_date_vars <- c("tank_panel_start_date", "tank_panel_end_date")
+
+log_step("✓ Variable type specifications created", 2)
+
+log_step(sprintf("✓ All mappings created in %.1f seconds", 
+                difftime(Sys.time(), mapping_start, units="secs")), 1)
+
+#==============================================================================
+# 1.3 APPLY COLUMN RENAMING TO ALL DATASETS
+#==============================================================================
+log_step("\n1.3 Applying systematic column renaming...", 0)
+rename_start <- Sys.time()
+
+#------------------------------------------------------------------------------
+# 1.3.1 RENAME TEXAS TANK PANEL COLUMNS
+#------------------------------------------------------------------------------
+log_step("Renaming Texas tank panel columns...", 1)
+
+# Robust renaming: Only rename columns that exist in the mapping AND the data
+rename_cols_tx <- intersect(names(tx_tank_months_mapping), names(tx_tank_months))
 setnames(tx_tank_months, 
-         old = c("FACILITY_ID", "UST_ID", "YEAR", "MONTH", "month_date", "install_date", "end_date", "CAPACITY"),
-         new = c("facility_id", "tank_id", "panel_year", "panel_month", "date", "tank_installed_date_raw", "tank_closed_date_raw", "capacity"),
-         skip_absent = TRUE)
+         old = rename_cols_tx, 
+         new = unname(tx_tank_months_mapping[rename_cols_tx]))
+
+log_step(sprintf("Renamed %d columns.", length(rename_cols_tx)), 2)
+log_step(sprintf("Columns renamed: %s", paste(rename_cols_tx, collapse=", ")), 3)
+
+
+# Add state column (constant for Texas)
 tx_tank_months[, state := "Texas"]
 
-setnames(tank_panel_epa, old = c("tank_installed_date", "tank_closed_date"),
-         new = c("tank_installed_date_raw", "tank_closed_date_raw"), skip_absent = TRUE)
+log_step(sprintf("✓ Texas tank panel: %s rows", 
+                format(nrow(tx_tank_months), big.mark=",")), 2)
 
-setnames(TX_LUST_SD, "LUST_id", "lust_id", skip_absent = TRUE)
+#------------------------------------------------------------------------------
+# 1.3.2 RENAME EPA TANK PANEL COLUMNS
+#------------------------------------------------------------------------------
+log_step("Renaming EPA tank panel columns...", 1)
+
+# Robust renaming
+rename_cols_epa <- intersect(names(epa_tank_panel_mapping), names(tank_panel_epa))
+setnames(tank_panel_epa, 
+         old = rename_cols_epa, 
+         new = unname(epa_tank_panel_mapping[rename_cols_epa]))
+
+log_step(sprintf("Renamed %d columns.", length(rename_cols_epa)), 2)
+log_step(sprintf("Columns renamed: %s", paste(rename_cols_epa, collapse=", ")), 3)
+
+log_step(sprintf("✓ EPA tank panel: %s rows", 
+                format(nrow(tank_panel_epa), big.mark=",")), 2)
+
+#------------------------------------------------------------------------------
+# 1.3.3 RENAME LUST DATA COLUMNS
+#------------------------------------------------------------------------------
+log_step("Renaming LUST data columns...", 1)
+
+# Robust renaming for TX LUST
+rename_cols_lust <- intersect(names(tx_lust_mapping), names(TX_LUST_SD))
+setnames(TX_LUST_SD,
+         old = rename_cols_lust,
+         new = unname(tx_lust_mapping[rename_cols_lust]))
+         
+# Add state column (constant for Texas)
 TX_LUST_SD[, state := "Texas"]
 
-setnames(tx_fac_raw, c("FACILITY_ID", "SITE_COUNTY"), c("facility_id", "county_raw"), skip_absent = TRUE)
-setnames(fa_monthly, c("FACILITY_ID", "YEAR", "MONTH"), c("facility_id", "panel_year", "panel_month"), skip_absent = TRUE)
-setnames(zurich_2012_lookup, "FACILITY_ID", "facility_id", skip_absent = TRUE)
+log_step(sprintf("✓ Texas LUST: %s rows", 
+                format(nrow(TX_LUST_SD), big.mark=",")), 2)
 
-# --- 1.4 STANDARDIZE IDs ---
-log_step("1.4 Standardizing IDs and creating panel_id...", 0)
+# EPA LUST (already standardized)
+log_step(sprintf("✓ EPA LUST: %s rows (already standard)", 
+                format(nrow(lust_epa), big.mark=",")), 2)
 
-tx_tank_months[, `:=`(facility_id = clean_id(facility_id), tank_id = clean_id(tank_id))]
-tank_panel_epa[, `:=`(facility_id = clean_id(facility_id), tank_id = clean_id(tank_id), state = trimws(state))]
-lust_epa[, `:=`(facility_id = clean_id(facility_id), state = trimws(state))]
-tx_fac_raw[, facility_id := clean_id(facility_id)]
-fa_monthly[, facility_id := clean_id(facility_id)]
-zurich_2012_lookup[, facility_id := clean_id(facility_id)]
+#------------------------------------------------------------------------------
+# 1.3.4 RENAME AUXILIARY DATA COLUMNS
+#------------------------------------------------------------------------------
+log_step("Renaming auxiliary data columns...", 1)
 
-# Create panel_id
+# Texas facility raw
+rename_cols_fac <- intersect(names(tx_facility_mapping), names(tx_fac_raw))
+setnames(tx_fac_raw, 
+         old = rename_cols_fac, 
+         new = unname(tx_facility_mapping[rename_cols_fac]))
+log_step(sprintf("✓ TX facility raw: %s rows", format(nrow(tx_fac_raw), big.mark=",")), 2)
+
+# FA monthly
+rename_cols_fa <- intersect(names(fa_monthly_mapping), names(fa_monthly))
+setnames(fa_monthly, 
+         old = rename_cols_fa, 
+         new = unname(fa_monthly_mapping[rename_cols_fa]))
+log_step(sprintf("✓ FA monthly: %s rows", format(nrow(fa_monthly), big.mark=",")), 2)
+
+# Zurich lookup
+rename_cols_zur <- intersect(names(zurich_2012_mapping), names(zurich_2012_lookup))
+setnames(zurich_2012_lookup, 
+         old = rename_cols_zur, 
+         new = unname(zurich_2012_mapping[rename_cols_zur]))
+log_step(sprintf("✓ Zurich lookup: %s rows", format(nrow(zurich_2012_lookup), big.mark=",")), 2)
+
+log_step(sprintf("✓ All column renaming completed in %.1f seconds", 
+                difftime(Sys.time(), rename_start, units="secs")), 1)
+
+#==============================================================================
+# 1.4 STANDARDIZE ID COLUMNS (OPTIMIZED)
+#==============================================================================
+log_step("\n1.4 Standardizing ID columns...", 0)
+id_start <- Sys.time()
+
+# Optimized clean_id that works on vectors
+clean_id_vectorized <- function(x) {
+  toupper(trimws(x))  # Remove as.character conversion overhead
+}
+
+# Texas tank panel - Standardize IDs by reference (efficient)
+tx_tank_months[, `:=`(
+  facility_id = clean_id_vectorized(facility_id),
+  tank_id = clean_id_vectorized(tank_id)
+)]
+log_step("✓ Texas tank panel IDs standardized", 1)
+
+# EPA tank panel - Standardize IDs by reference
+tank_panel_epa[, `:=`(
+  facility_id = clean_id_vectorized(facility_id),
+  tank_id = clean_id_vectorized(tank_id),
+  state = trimws(state)  # Already character
+)]
+log_step("✓ EPA tank panel IDs standardized", 1)
+
+# LUST data (smaller datasets, still use by-reference)
+lust_epa[, `:=`(
+  facility_id = clean_id_vectorized(facility_id),
+  state = trimws(state)
+)]
+log_step("✓ EPA LUST IDs standardized", 1)
+
+# TX_LUST_SD facility_id was already cleaned during load
+log_step("✓ Texas LUST IDs standardized (during load)", 1)
+
+# Auxiliary data - Standardize IDs by reference
+tx_fac_raw[, facility_id := clean_id_vectorized(facility_id)]
+fa_monthly[, facility_id := clean_id_vectorized(facility_id)]
+zurich_2012_lookup[, facility_id := clean_id_vectorized(facility_id)]
+log_step("✓ Auxiliary data IDs standardized", 1)
+
+log_step(sprintf("✓ ID standardization completed in %.1f seconds", 
+                difftime(Sys.time(), id_start, units="secs")), 1)
+
+#==============================================================================
+# 1.4.1 CREATE COMPOSITE KEY (panel_id) AND SET KEYS [AUDIT ADDITION]
+#==============================================================================
+log_step("\n1.4.1 Creating composite 'panel_id' and setting keys...", 0)
+key_start <- Sys.time()
+
+# --- AUDIT FIX: Create a standardized composite key (facility_id + state) ---
+# This is recommended in the audit [QUICK_REFERENCE_CHECKLIST.md, Priority 5]
+# and matches the variable you create in downstream scripts [06_DiD_results_9_12.R]
+
+# Define key columns for performance
+panel_id_key <- c("facility_id", "state")
+tank_key <- c("facility_id", "state", "tank_id")
+panel_id_tank_key <- c("panel_id", "tank_id")
+
+# --- Tank Datasets (Tank-level) ---
+log_step("Applying panel_id to tank-level datasets...", 1)
 tx_tank_months[, panel_id := paste(facility_id, state, sep = "_")]
+setkeyv(tx_tank_months, c(panel_id_tank_key, "date")) # Key for time-series joins
+log_step(sprintf("  ✓ tx_tank_months: %s unique panel_ids", 
+                uniqueN(tx_tank_months$panel_id)), 2)
+
 tank_panel_epa[, panel_id := paste(facility_id, state, sep = "_")]
+setkeyv(tank_panel_epa, panel_id_tank_key)
+log_step(sprintf("  ✓ tank_panel_epa: %s unique panel_ids", 
+                uniqueN(tank_panel_epa$panel_id)), 2)
+
+# --- LUST Datasets (Facility-level) ---
+log_step("Applying panel_id to facility-level datasets...", 1)
 lust_epa[, panel_id := paste(facility_id, state, sep = "_")]
+setkeyv(lust_epa, c('panel_id', "report_date"))
+log_step(sprintf("  ✓ lust_epa: %s unique panel_ids", 
+                uniqueN(lust_epa$panel_id)), 2)
+
 TX_LUST_SD[, panel_id := paste(facility_id, state, sep = "_")]
-tx_fac_raw[, panel_id := paste(facility_id, "Texas", sep = "_")]
-fa_monthly[, panel_id := paste(facility_id, "Texas", sep = "_")]
-zurich_2012_lookup[, panel_id := paste(facility_id, "Texas", sep = "_")]
+setkeyv(TX_LUST_SD, c('panel_id', "report_date"))
+log_step(sprintf("  ✓ TX_LUST_SD: %s unique panel_ids", 
+                uniqueN(TX_LUST_SD$panel_id)), 2)
 
-# Set keys
-setkeyv(tx_tank_months, c("panel_id", "tank_id", "date"))
-setkeyv(tank_panel_epa, c("panel_id", "tank_id"))
-setkeyv(lust_epa, c("panel_id", "report_date"))
-setkeyv(TX_LUST_SD, c("panel_id", "report_date"))
-setkeyv(fa_monthly, c("panel_id", "panel_year", "panel_month"))
+# --- Auxiliary Datasets (Facility-level) ---
+tx_fac_raw[, panel_id := paste(facility_id, "Texas", sep = "_")] # State is implicit
+setkeyv(tx_fac_raw, 'panel_id')
+log_step(sprintf("  ✓ tx_fac_raw: %s unique panel_ids", 
+                uniqueN(tx_fac_raw$panel_id)), 2)
 
-# --- 1.5 COERCE DATES (CRITICAL - MUST BE BEFORE fcase) ---
-log_step("1.5 Coercing dates to Date class (CRITICAL)...", 0)
+fa_monthly[, panel_id := paste(facility_id, "Texas", sep = "_")] # State is implicit
+setkeyv(fa_monthly, c('panel_id', "panel_year", "panel_month"))
+log_step(sprintf("  ✓ fa_monthly: %s unique panel_ids", 
+                uniqueN(fa_monthly$panel_id)), 2)
 
-tx_tank_months[, `:=`(tank_installed_date_raw = coerce_date(tank_installed_date_raw),
-                      tank_closed_date_raw = coerce_date(tank_closed_date_raw))]
-tank_panel_epa[, `:=`(tank_installed_date_raw = coerce_date(tank_installed_date_raw),
-                      tank_closed_date_raw = coerce_date(tank_closed_date_raw))]
+zurich_2012_lookup[, panel_id := paste(facility_id, "Texas", sep = "_")] # State is implicit
+setkeyv(zurich_2012_lookup, 'panel_id')
+log_step(sprintf("  ✓ zurich_2012_lookup: %s unique panel_ids", 
+                uniqueN(zurich_2012_lookup$panel_id)), 2)
+
+log_step(sprintf("✓ panel_id created and keys set in %.1f seconds", 
+                difftime(Sys.time(), key_start, units="secs")), 1)
+
+
+
+
+
+#==============================================================================
+# 1.5 PROCESS AND CLEAN DATE VARIABLES (TANK LIFECYCLE DATES)
+#==============================================================================
+log_step("\n1.5 Processing tank lifecycle date variables...", 0)
+date_start <- Sys.time()
+
+# This section is critical for creating two sets of dates:
+# 1. `_raw` dates: The original, unaltered dates from the source data.
+#    These are preserved for accurate age calculations.
+# 2. `_panel_` dates: The dates bounded by the 1970-2025 panel window.
+#    These are used to construct the panel backbone.
+# This dual-date approach is praised by the audit (Finding 5.1).
+
+#------------------------------------------------------------------------------
+# 1.5.1 COERCE DATES TO STANDARD FORMAT
+#------------------------------------------------------------------------------
+log_step("Coercing dates to standard 'Date' class...", 1)
+
+# Ensure all date columns (which may be IDate, char, etc.) are
+# converted to the standard R Date class for safe comparison.
+# This prevents join failures due to mismatched date types.
+
+# Texas tank panel - raw lifecycle dates
+tx_tank_months[, `:=`(
+  tank_installed_date_raw = coerce_date(tank_installed_date_raw),
+  tank_closed_date_raw = coerce_date(tank_closed_date_raw)
+)]
+
+# EPA tank panel - raw lifecycle dates
+tank_panel_epa[, `:=`(
+  tank_installed_date_raw = coerce_date(tank_installed_date_raw),
+  tank_closed_date_raw = coerce_date(tank_closed_date_raw)
+)]
+
+# LUST data
 lust_epa[, report_date := coerce_date(report_date)]
 TX_LUST_SD[, report_date := coerce_date(report_date)]
 
-# Flag bad install dates
-tx_tank_months[, bad_install_date := as.integer(is.na(tank_installed_date_raw) | 
-                                                  year(tank_installed_date_raw) < 1900 | year(tank_installed_date_raw) > 2025)]
-tank_panel_epa[, bad_install_date := as.integer(is.na(tank_installed_date_raw) | 
-                                                  year(tank_installed_date_raw) < 1900 | year(tank_installed_date_raw) > 2025)]
-tx_tank_months[bad_install_date == 1, tank_installed_date_raw := as.Date("9999-09-01")]
-tank_panel_epa[bad_install_date == 1, tank_installed_date_raw := as.Date("9999-09-01")]
+log_step("✓ All key date columns coerced to 'Date' class", 2)
 
-log_step(sprintf("TX bad install dates: %s (%.1f%%)", format(sum(tx_tank_months$bad_install_date), big.mark=","),
-                 100 * mean(tx_tank_months$bad_install_date)), 1)
-log_step(sprintf("EPA bad install dates: %s (%.1f%%)", format(sum(tank_panel_epa$bad_install_date), big.mark=","),
-                 100 * mean(tank_panel_epa$bad_install_date)), 1)
+#------------------------------------------------------------------------------
+# 1.5.2 IDENTIFY AND FLAG BAD INSTALLATION DATES
+#------------------------------------------------------------------------------
+log_step("Identifying bad installation dates...", 1)
 
-# Clean corrupted closure dates
-tx_tank_months[!is.na(tank_closed_date_raw) & (year(tank_closed_date_raw) < 1900 | year(tank_closed_date_raw) > 2030),
-               tank_closed_date_raw := NA_Date_]
-tank_panel_epa[!is.na(tank_closed_date_raw) & (year(tank_closed_date_raw) < 1900 | year(tank_closed_date_raw) > 2030),
-               tank_closed_date_raw := NA_Date_]
+# Bad install dates (NA, or nonsensical years) are critical to remove,
+# as they make age calculation impossible.
+# We flag them and set them to a "sentinel value" (9999-09-01) for later removal.
+
+# Texas tank panel
+tx_tank_months[, bad_install_date := as.integer(
+  is.na(tank_installed_date_raw) | 
+  year(tank_installed_date_raw) < 1900 | 
+  year(tank_installed_date_raw) > 2025
+)]
+n_bad_tx <- sum(tx_tank_months$bad_install_date)
+tx_tank_months[bad_install_date == 1, 
+               tank_installed_date_raw := as.Date("9999-09-01")]
+
+# EPA tank panel
+tank_panel_epa[, bad_install_date := as.integer(
+  is.na(tank_installed_date_raw) | 
+  year(tank_installed_date_raw) < 1900 | 
+  year(tank_installed_date_raw) > 2025
+)]
+n_bad_epa <- sum(tank_panel_epa$bad_install_date)
+tank_panel_epa[bad_install_date == 1, 
+               tank_installed_date_raw := as.Date("9999-09-01")]
+
+log_step(sprintf("TX: %s tanks flagged with bad install dates (%.1f%%)", 
+                format(n_bad_tx, big.mark=","),
+                100 * n_bad_tx / nrow(tx_tank_months)), 2)
+log_step(sprintf("EPA: %s tanks flagged with bad install dates (%.1f%%)", 
+                format(n_bad_epa, big.mark=","),
+                100 * n_bad_epa / nrow(tank_panel_epa)), 2)
+log_step("✓ Bad installation dates flagged and set to 9999-09-01", 2)
+
+#------------------------------------------------------------------------------
+# 1.5.3 CLEAN CLOSURE DATES (OPTIONAL, CAN BE MISSING)
+#------------------------------------------------------------------------------
+log_step("Cleaning corrupted closure dates...", 1)
+# Closure dates can be legitimately NA (tank is still active).
+# We only clean dates that are present but nonsensical (e.g., year 1800).
+
+# Texas tank panel
+tx_tank_months[, bad_closure_date := as.integer(
+  !is.na(tank_closed_date_raw) & (
+    year(tank_closed_date_raw) < 1900 | 
+    year(tank_closed_date_raw) > 2030
+  )
+)]
+n_bad_close_tx <- sum(tx_tank_months$bad_closure_date)
+if (n_bad_close_tx > 0) {
+  log_step(sprintf("TX: %s tanks with corrupted closure dates (set to NA)", 
+                  format(n_bad_close_tx, big.mark=",")), 2)
+  tx_tank_months[bad_closure_date == 1, tank_closed_date_raw := NA_Date_]
+}
+
+# EPA tank panel
+tank_panel_epa[, bad_closure_date := as.integer(
+  !is.na(tank_closed_date_raw) & (
+    year(tank_closed_date_raw) < 1900 | 
+    year(tank_closed_date_raw) > 2030
+  )
+)]
+n_bad_close_epa <- sum(tank_panel_epa$bad_closure_date)
+if (n_bad_close_epa > 0) {
+  log_step(sprintf("EPA: %s tanks with corrupted closure dates (set to NA)", 
+                  format(n_bad_close_epa, big.mark=",")), 2)
+  tank_panel_epa[bad_closure_date == 1, tank_closed_date_raw := NA_Date_]
+}
+
+log_step("✓ Corrupted (non-NA) closure dates cleaned", 2)
 
 #==============================================================================
 # 1.6 CREATE PANEL-BOUNDED DATE VARIABLES (1970-2025)
@@ -296,35 +684,318 @@ if (n_invalid_range_tx > 0 || n_invalid_range_epa > 0) {
 log_step(sprintf("✓ Panel date creation completed in %.1f seconds", 
                 difftime(Sys.time(), panel_date_start, units="secs")), 1)
 
-# --- 1.7 FINAL DATE TYPE STANDARDIZATION ---
-log_step("1.7 Final date type standardization...", 0)
-tx_tank_months[, `:=`(date = as.Date(date), tank_installed_date_raw = as.Date(tank_installed_date_raw),
-                      tank_closed_date_raw = as.Date(tank_closed_date_raw), 
-                      tank_panel_start_date = as.Date(tank_panel_start_date),
-                      tank_panel_end_date = as.Date(tank_panel_end_date))]
-tank_panel_epa[, `:=`(tank_installed_date_raw = as.Date(tank_installed_date_raw),
-                      tank_closed_date_raw = as.Date(tank_closed_date_raw),
-                      tank_panel_start_date = as.Date(tank_panel_start_date),
-                      tank_panel_end_date = as.Date(tank_panel_end_date))]
-lust_epa[, `:=`(report_date = as.Date(report_date), nfa_date = as.Date(nfa_date))]
-TX_LUST_SD[, `:=`(report_date = as.Date(report_date), nfa_date = as.Date(nfa_date))]
+#==============================================================================
+# 1.7 COMPREHENSIVE DATE TYPE STANDARDIZATION (Was 1.9)
+#==============================================================================
+# This section (mislabeled 1.9) is a final check to ensure all date columns
+# are standard 'Date' class, not 'IDate', to prevent merge/join failures.
+log_step("\n1.7 Ensuring all date columns are standard 'Date' class (not IDate)...", 0)
+date_convert_start <- Sys.time()
 
-# --- 1.8-1.9 REMOVE BAD FACILITIES ---
-log_step("1.8-1.9 Removing facilities with bad dates...", 0)
-bad_panel_ids <- unique(c(tx_tank_months[bad_install_date == 1, panel_id],
-                          tank_panel_epa[bad_install_date == 1, panel_id]))
+# Convert all tank panel dates to Date class
+tx_tank_months[, `:=`(
+  date = as.Date(date),
+  tank_installed_date_raw = as.Date(tank_installed_date_raw),
+  tank_closed_date_raw = as.Date(tank_closed_date_raw),
+  tank_panel_start_date = as.Date(tank_panel_start_date),
+  tank_panel_end_date = as.Date(tank_panel_end_date)
+)]
 
-if (length(bad_panel_ids) > 0) {
+tank_panel_epa[, `:=`(
+  tank_installed_date_raw = as.Date(tank_installed_date_raw),
+  tank_closed_date_raw = as.Date(tank_closed_date_raw),
+  tank_panel_start_date = as.Date(tank_panel_start_date),
+  tank_panel_end_date = as.Date(tank_panel_end_date)
+)]
+
+# Convert LUST dates to Date class
+lust_epa[, `:=`(
+  report_date = as.Date(report_date),
+  nfa_date = as.Date(nfa_date)
+)]
+
+TX_LUST_SD[, `:=`(
+  report_date = as.Date(report_date),
+  nfa_date = as.Date(nfa_date)
+)]
+
+cat(sprintf("✓ Date type standardization completed in %.1f seconds\n\n", 
+            difftime(Sys.time(), date_convert_start, units="secs")))
+
+#==============================================================================
+# 1.8 SUMMARIZE DATE VARIABLE CREATION (Was 1.7)
+#==============================================================================
+log_step("\n1.8 Date variable summary...", 0)
+
+# This summary shows the impact of the date cleaning and bounding.
+# `install_range` shows the true historical range (e.g., "1950-01-01 to 2024-01-01")
+# `panel_range` shows the bounded range (e.g., "1970-01-01 to 2025-12-31")
+
+log_step("Texas tank panel date summary:", 1)
+tx_date_summary <- tx_tank_months[, .(
+  n_bad_install = sum(bad_install_date),
+  n_not_closed = sum(is.na(tank_closed_date_raw)),
+  n_closed = sum(!is.na(tank_closed_date_raw)),
+  install_range = sprintf("%s to %s", 
+                         min(tank_installed_date_raw[tank_installed_date_raw != as.Date("9999-09-01")], na.rm=TRUE),
+                         max(tank_installed_date_raw[tank_installed_date_raw != as.Date("9999-09-01")], na.rm=TRUE)),
+  panel_range = sprintf("%s to %s",
+                       min(tank_panel_start_date, na.rm=TRUE),
+                       max(tank_panel_end_date, na.rm=TRUE))
+)]
+
+log_step(sprintf("  Bad install dates: %s", format(tx_date_summary$n_bad_install, big.mark=",")), 2)
+log_step(sprintf("  Tanks not closed: %s (%.1f%%)", 
+                format(tx_date_summary$n_not_closed, big.mark=","), 2))
+log_step(sprintf("  Install date range (valid): %s", tx_date_summary$install_range), 2)
+log_step(sprintf("  Panel date range: %s", tx_date_summary$panel_range), 2)
+
+log_step("EPA tank panel date summary:", 1)
+epa_date_summary <- tank_panel_epa[, .(
+  n_bad_install = sum(bad_install_date),
+  n_not_closed = sum(is.na(tank_closed_date_raw)),
+  n_closed = sum(!is.na(tank_closed_date_raw)),
+  install_range = sprintf("%s to %s", 
+                         min(tank_installed_date_raw[tank_installed_date_raw != as.Date("9999-09-01")], na.rm=TRUE),
+                         max(tank_installed_date_raw[tank_installed_date_raw != as.Date("9999-09-01")], na.rm=TRUE)),
+  panel_range = sprintf("%s to %s",
+                       min(tank_panel_start_date, na.rm=TRUE),
+                       max(tank_panel_end_date, na.rm=TRUE))
+)]
+
+log_step(sprintf("  Bad install dates: %s", format(epa_date_summary$n_bad_install, big.mark=",")), 2)
+log_step(sprintf("  Tanks not closed: %s (%.1f%%)", 
+                format(epa_date_summary$n_not_closed, big.mark=","), 2))
+log_step(sprintf("  Install date range (valid): %s", epa_date_summary$install_range), 2)
+log_step(sprintf("  Panel date range: %s", epa_date_summary$panel_range), 2)
+
+log_step(sprintf("\n✓ Date processing completed in %.1f seconds", 
+                difftime(Sys.time(), date_start, units="secs")), 1)
+
+
+
+#==============================================================================
+# 1.9 IDENTIFY AND REMOVE FACILITIES WITH INVALID DATES (Was 1.8)
+#==============================================================================
+log_step("\n1.9 Identifying facilities to exclude due to date issues...", 0)
+exclude_start <- Sys.time()
+
+# This is a critical cleaning step. We remove any *facility* that has
+# even one *tank* with a bad installation date. This is an aggressive but
+# clean approach, ensuring no facilities with imputed/sentinel ages
+# contaminate the final analysis.
+
+#------------------------------------------------------------------------------
+# 1.9.1: IDENTIFY PROBLEM TANKS (TANK-LEVEL INVENTORY)
+#------------------------------------------------------------------------------
+log_step("Identifying problem tanks with bad install dates...", 1)
+
+# Texas problem tanks - get full tank inventory
+bad_tanks_tx <- tx_tank_months[
+  bad_install_date == 1,  # Only tanks with bad install dates
+  .(
+    facility_id,
+    state,
+    tank_id,
+    panel_id,
+    install_year = year(tank_installed_date_raw),
+    tank_installed_date_raw,
+    tank_closed_date_raw,
+    capacity,
+    single_walled,
+    double_walled,
+    is_gasoline,
+    is_diesel,
+    is_oil_kerosene,
+    is_jet_fuel,
+    is_other
+  )]
+
+# Get unique tanks (collapse tank-months to tank level)
+bad_tanks_tx <- unique(bad_tanks_tx, by = c("panel_id", "tank_id"))
+
+# EPA problem tanks - get full tank inventory
+bad_tanks_epa <- tank_panel_epa[
+  bad_install_date == 1,
+  .(
+    facility_id,
+    state,
+    tank_id,
+    panel_id,
+    install_year = year(tank_installed_date_raw),
+    tank_installed_date_raw,
+    tank_closed_date_raw,
+    capacity,
+    single_walled,
+    double_walled,
+    is_gasoline,
+    is_diesel,
+    is_oil_kerosene,
+    is_jet_fuel,
+    is_other
+  )]
+
+# Combine all problem tanks
+bad_tanks_all <- rbindlist(list(bad_tanks_tx, bad_tanks_epa), use.names = TRUE, fill = TRUE)
+
+# Remove duplicates
+bad_tanks_all <- unique(bad_tanks_all, by = c("panel_id", "tank_id"))
+
+if (nrow(bad_tanks_all) > 0) {
+  # Save tank-level inventory for review
+  output_path_tanks <- get_data_path("Outputs", "excluded_tanks_bad_dates.csv")
+  fwrite(bad_tanks_all, output_path_tanks)
+  
+  log_step(sprintf("⚠ Identified %s tanks with invalid install dates", 
+                  format(nrow(bad_tanks_all), big.mark=",")), 2)
+  log_step(sprintf("  Saved tank inventory to: %s", output_path_tanks), 2)
+  
+  #---------------------------------------------------------------------------
+  # 1.9.2: IDENTIFY AFFECTED FACILITIES
+  #---------------------------------------------------------------------------
+  log_step("Identifying affected facilities...", 1)
+  
+  bad_facilities <- unique(bad_tanks_all[, .(panel_id, facility_id, state)])
+  n_bad_facilities <- nrow(bad_facilities)
+  
+  log_step(sprintf("  Facilities to remove: %s", 
+                  format(n_bad_facilities, big.mark=",")), 2)
+  
+  # Calculate facility counts by state BEFORE removal
+  state_facility_counts_before <- rbindlist(list(
+    tx_tank_months[, .(state = "Texas", n_facilities = uniqueN(panel_id))],
+    tank_panel_epa[, .(n_facilities = uniqueN(panel_id)), by = state]
+  ))
+  
+  # Calculate how many facilities we're removing per state
+  removal_summary <- bad_facilities[, .N, by = state]
+  setnames(removal_summary, "N", "n_removed")
+  
+  # Merge with before counts
+  setkey(state_facility_counts_before, state)
+  setkey(removal_summary, state)
+  removal_summary <- removal_summary[state_facility_counts_before, on = .(state)]
+  removal_summary[is.na(n_removed), n_removed := 0]
+  
+  # Calculate percentages
+  removal_summary[, `:=`(
+    pct_removed = 100 * n_removed / n_facilities,
+    n_kept = n_facilities - n_removed
+  )]
+  
+  # Sort by percent removed (descending)
+  setorder(removal_summary, -pct_removed)
+  
+  #---------------------------------------------------------------------------
+  # 1.9.3: DISPLAY STATE-BY-STATE REMOVAL STATISTICS
+  #---------------------------------------------------------------------------
+  log_step("\n  Facility removal by state:", 2)
+  log_step("  ┌────────────────────┬──────────┬──────────┬──────────┬──────────┐", 2)
+  log_step("  │ State              │ Before   │ Removed  │ Kept     │ % Drop   │", 2)
+  log_step("  ├────────────────────┼──────────┼──────────┼──────────┼──────────┤", 2)
+  
+  for (i in seq_len(nrow(removal_summary))) {
+    state_name <- sprintf("%-18s", removal_summary$state[i])
+    before <- sprintf("%8s", format(removal_summary$n_facilities[i], big.mark=","))
+    removed <- sprintf("%8s", format(removal_summary$n_removed[i], big.mark=","))
+    kept <- sprintf("%8s", format(removal_summary$n_kept[i], big.mark=","))
+    pct <- sprintf("%7.2f%%", removal_summary$pct_removed[i])
+    
+    log_step(sprintf("  │ %s │ %s │ %s │ %s │ %s │", 
+                    state_name, before, removed, kept, pct), 2)
+  }
+  
+  log_step("  └────────────────────┴──────────┴──────────┴──────────┴──────────┘", 2)
+  
+  # Overall summary
+  total_before <- sum(removal_summary$n_facilities)
+  total_removed <- sum(removal_summary$n_removed)
+  total_kept <- sum(removal_summary$n_kept)
+  total_pct <- 100 * total_removed / total_before
+  
+  log_step("", 2)
+  log_step(sprintf("  TOTAL ACROSS ALL STATES:"), 2)
+  log_step(sprintf("    Before:  %s facilities", format(total_before, big.mark=",")), 2)
+  log_step(sprintf("    Removed: %s facilities (%.2f%%)", 
+                  format(total_removed, big.mark=","), total_pct), 2)
+  log_step(sprintf("    Kept:    %s facilities", format(total_kept, big.mark=",")), 2)
+  
+  # Save facility-level summary
+  output_path_facs <- get_data_path("Outputs", "excluded_facilities_bad_dates.csv")
+  fwrite(bad_facilities, output_path_facs)
+  log_step(sprintf("  Saved facility list to: %s", output_path_facs), 2)
+  
+  #---------------------------------------------------------------------------
+  # 1.9.4: REMOVE BAD FACILITIES FROM DATASETS
+  #---------------------------------------------------------------------------
+  log_step("\nRemoving facilities from datasets...", 1)
+  
+  # Create removal keys (facility-level, not tank-level)
+  # We can now use the panel_id we created in 1.4.1
+  bad_panel_ids <- bad_facilities$panel_id
+  
   tx_before <- uniqueN(tx_tank_months$panel_id)
+  tx_rows_before <- nrow(tx_tank_months)
   epa_before <- uniqueN(tank_panel_epa$panel_id)
+  epa_rows_before <- nrow(tank_panel_epa)
+  
+  # Remove from Texas data (all rows for bad facilities)
+  # This is now much faster because panel_id is a key
   tx_tank_months <- tx_tank_months[!panel_id %in% bad_panel_ids]
+  
+  # Remove from EPA data (all rows for bad facilities)
   tank_panel_epa <- tank_panel_epa[!panel_id %in% bad_panel_ids]
-  log_step(sprintf("Removed %d facilities (TX: %d→%d, EPA: %d→%d)", length(bad_panel_ids),
-                   tx_before, uniqueN(tx_tank_months$panel_id), 
-                   epa_before, uniqueN(tank_panel_epa$panel_id)), 1)
+  
+  tx_after_fac <- uniqueN(tx_tank_months$panel_id)
+  epa_after_fac <- uniqueN(tank_panel_epa$panel_id)
+  
+  log_step(sprintf("  Texas:"), 2)
+  log_step(sprintf("    Facilities removed: %s → %s (-%s)", 
+                  format(tx_before, big.mark=","),
+                  format(tx_after_fac, big.mark=","),
+                  format(tx_before - tx_after_fac, big.mark=",")), 3)
+  log_step(sprintf("    Tank-month rows removed: %s → %s (-%s)", 
+                  format(tx_rows_before, big.mark=","),
+                  format(nrow(tx_tank_months), big.mark=","),
+                  format(tx_rows_before - nrow(tx_tank_months), big.mark=",")), 3)
+  
+  log_step(sprintf("  EPA (non-Texas):"), 2)
+  log_step(sprintf("    Facilities removed: %s → %s (-%s)", 
+                  format(epa_before, big.mark=","),
+                  format(epa_after_fac, big.mark=","),
+                  format(epa_before - epa_after_fac, big.mark=",")), 3)
+  log_step(sprintf("    Tank rows removed: %s → %s (-%s)", 
+                  format(epa_rows_before, big.mark=","),
+                  format(nrow(tank_panel_epa), big.mark=","),
+                  format(epa_rows_before - nrow(tank_panel_epa), big.mark=",")), 3)
+  
+} else {
+  log_step("✓ No facilities require exclusion due to bad install dates", 1)
 }
 
-cat(sprintf("✓ Section 1 complete in %.1f seconds\n\n", difftime(Sys.time(), section_start, units="secs")))
+log_step(sprintf("\n✓ Date validation and facility removal completed in %.1f seconds", 
+                difftime(Sys.time(), exclude_start, units="secs")), 1)
+
+
+#==============================================================================
+# SECTION 1 COMPLETE
+#==============================================================================
+cat("\n========================================\n")
+cat("SECTION 1 COMPLETE\n")
+cat(sprintf("Total time: %.1f seconds\n", 
+           difftime(Sys.time(), section_start, units="secs")))
+cat("========================================\n\n")
+
+cat("✓ Harmonized datasets ready for Section 2:\n")
+cat("  - tx_tank_months (CLEANED)\n")
+cat("  - tank_panel_epa (CLEANED)\n")
+cat("  - lust_epa\n")
+cat("  - TX_LUST_SD\n")
+cat("  - tx_fac_raw\n")
+cat("  - fa_monthly\n")
+cat("  - zurich_2012_lookup\n\n")
+
+
 
 #==============================================================================
 # SECTION 2: CREATE UNIFIED TANK PANEL
