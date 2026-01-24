@@ -583,3 +583,178 @@ cat("              POLICY COMPARISON (vs Baseline)\n")
 cat("==============================================================\n")
 print(policy_comparison)
 
+
+# ==============================================================================
+# APPENDIX: ADVANCED MECHANISM PLOTS (Append to end of 03_Welfare.R)
+# ==============================================================================
+# PURPOSE: Generate graduate-level mechanism figures for the proposal.
+# 1. Welfare Wedge (Visualizing the externality)
+# 2. Moral Hazard (Visualizing the identification strategy)
+# 3. Fleet Survival (Visualizing the dynamic clean-up)
+# ==============================================================================
+
+cat("\n[Appendix] Generating Advanced Mechanism Figures...\n")
+
+# --- SAFETY CHECK: LOAD DATA IF MISSING ---
+if (!exists("est_result")) est_result <- readRDS(file.path(RESULTS_DIR, "Model_B_Estimates.rds"))
+# We specifically need the primitives file which contains the "True" physics
+if (!exists("primitives")) primitives <- readRDS(file.path(RESULTS_DIR, "Estimated_Primitives.rds"))
+
+theta_hat <- est_result$theta_hat
+# Use config from estimation, but ensure n_actions is set
+config <- est_result$config
+if(is.null(config$n_actions)) config$n_actions <- 2
+
+# ==============================================================================
+# 1. ROBUST POLICY SOLVER (Rebuilds Cache to prevent Dimension Errors)
+# ==============================================================================
+solve_policy_robust <- function(theta_in, primitives, config) {
+  
+  # A. Rebuild Cache Locally
+  # This guarantees matrices are 36x36 and match the vectors
+  cache_local <- create_estimation_cache_model_b(
+    states = primitives$states,
+    premiums = primitives$premiums,
+    hazards = primitives$hazards,
+    losses = primitives$losses,
+    transitions = primitives$transitions, # MUST exist in primitives file
+    config = config
+  )
+  
+  # B. Calculate Flow Utilities
+  U_in <- calculate_flow_utilities_model_b(theta_in, cache_local)
+  
+  # C. Iterate Bellman (Fixed Point)
+  n_states <- nrow(primitives$states)
+  P_iter <- matrix(0.1, n_states, 2); colnames(P_iter) <- c("maintain", "close")
+  
+  for(i in 1:1000) {
+    V_iter <- invert_value_function_model_b(P_iter, U_in, config)
+    P_new  <- compute_ccps_model_b(U_in, V_iter, cache_local, config)
+    
+    diff <- max(abs(P_new - P_iter))
+    if(diff < 1e-9) break
+    P_iter <- P_new
+  }
+  return(P_iter)
+}
+
+# ==============================================================================
+# FIGURE A: THE WELFARE WEDGE (Externality)
+# ==============================================================================
+cat("  Generating Figure A: Welfare Wedge...\n")
+
+# 1. Solve Basline (Private) Policy
+P_private <- solve_policy_robust(theta_hat, primitives, config)
+
+# 2. Solve Social Optimum Policy
+# Social Planner feels 2x the risk (Externalities internalized)
+theta_social <- theta_hat
+theta_social["gamma_risk"] <- theta_hat["gamma_risk"] * 2.0 
+P_social <- solve_policy_robust(theta_social, primitives, config)
+
+# 3. Extract Data for Single-Walled, Risk-Based (The sensitive group)
+states <- primitives$states
+target_idx <- which(states$w == "single" & states$rho == "RB")
+
+df_wedge <- rbind(
+  data.table(Age = states$A[target_idx], Prob = P_private[target_idx, "close"], Type = "Private (Baseline)"),
+  data.table(Age = states$A[target_idx], Prob = P_social[target_idx, "close"],  Type = "Social Optimum")
+)
+df_wedge[, Age_Years := (Age - 1) * 5 + 2.5] # Midpoint years
+
+# 4. Plot
+g_wedge <- ggplot(df_wedge, aes(x = Age_Years, y = Prob, color = Type, linetype = Type)) +
+  geom_line(linewidth = 1.2) +
+  # Highlight the wedge area
+  geom_ribbon(data = dcast(df_wedge, Age_Years ~ Type, value.var = "Prob"),
+              aes(x = Age_Years, ymin = `Private (Baseline)`, ymax = `Social Optimum`, 
+                  y = NULL, color = NULL, linetype = NULL), 
+              fill = "red", alpha = 0.1) +
+  scale_color_manual(values = c("blue", "red")) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 0.5)) +
+  labs(title = "The Welfare Wedge: Uninternalized Leak Risk",
+       subtitle = "Gap between Private and Socially Optimal Exit (Single-Walled Tanks)",
+       x = "Tank Age (Years)", y = "Annual Probability of Closure") +
+  theme_minimal(base_size = 14) + theme(legend.position = "bottom")
+
+ggsave(file.path(RESULTS_DIR, "Mech_Fig1_Welfare_Wedge.png"), g_wedge, width = 8, height = 6)
+
+# ==============================================================================
+# FIGURE B: MORAL HAZARD (Identification)
+# ==============================================================================
+cat("  Generating Figure B: Moral Hazard...\n")
+
+# Compare Exit Rates in Flat Fee vs. Risk-Based regimes using Private Policy
+idx_RB <- which(states$w == "single" & states$rho == "RB")
+idx_FF <- which(states$w == "single" & states$rho == "FF")
+
+df_moral <- rbind(
+  data.table(Age = states$A[idx_RB], Prob = P_private[idx_RB, "close"], Regime = "Risk-Based (Texas)"),
+  data.table(Age = states$A[idx_FF], Prob = P_private[idx_FF, "close"], Regime = "Flat Fee (Florida)")
+)
+df_moral[, Age_Years := (Age - 1) * 5 + 2.5]
+
+g_moral <- ggplot(df_moral, aes(x = Age_Years, y = Prob, color = Regime)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("orange", "darkblue")) +
+  labs(title = "Evidence of Moral Hazard",
+       subtitle = "Flat fees depress exit incentives for old, risky tanks compared to Risk-Based pricing",
+       x = "Tank Age (Years)", y = "Annual Probability of Closure") +
+  theme_minimal(base_size = 14) + theme(legend.position = "bottom")
+
+ggsave(file.path(RESULTS_DIR, "Mech_Fig2_Moral_Hazard.png"), g_moral, width = 8, height = 6)
+
+# ==============================================================================
+# FIGURE C: FLEET SURVIVAL (Dynamic Simulation)
+# ==============================================================================
+cat("  Generating Figure C: Fleet Survival...\n")
+
+# 1. Define Cohort Simulation Function
+simulate_survival <- function(P_input, steps=20) {
+  survivors <- numeric(steps)
+  share <- 1.0
+  # Start with a cohort of 15-year-old tanks (Age Bin 4)
+  curr_age_idx <- 4 
+  
+  for(t in 1:steps) {
+    # Get closure prob for current state (Single, RB)
+    # Cap age index at 9 (absorbing state)
+    eff_age <- min(curr_age_idx, 9)
+    s_idx <- which(states$A == eff_age & states$w == "single" & states$rho == "RB")
+    
+    p_close <- P_input[s_idx, "close"]
+    share <- share * (1 - p_close)
+    survivors[t] <- share
+    
+    # Deterministic Aging: Move to next bin every 5 years
+    if(t %% 5 == 0) curr_age_idx <- curr_age_idx + 1
+  }
+  return(survivors)
+}
+
+# 2. Solve Subsidy Policy (Increase Kappa by 20%)
+theta_sub <- theta_hat
+theta_sub["kappa"] <- theta_hat["kappa"] * 1.20
+P_subsidy <- solve_policy_robust(theta_sub, primitives, config)
+
+# 3. Run Simulations
+df_surv <- data.table(
+  Year = rep(1:20, 3),
+  Survival = c(simulate_survival(P_private), simulate_survival(P_subsidy), simulate_survival(P_social)),
+  Policy = rep(c("Baseline", "Closure Subsidy", "Social Optimum"), each=20)
+)
+
+g_surv <- ggplot(df_surv, aes(x = Year, y = Survival, color = Policy)) +
+  geom_line(linewidth = 1.2) +
+  scale_color_manual(values = c("black", "purple", "red")) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+  labs(title = "Fleet Cleansing Dynamics (Single-Walled Cohort)",
+       subtitle = "Survival rate of high-risk tanks (Age 15 start) over next 20 years",
+       x = "Years from Today", y = "% of Fleet Remaining") +
+  theme_minimal(base_size = 14) + theme(legend.position = "bottom")
+
+ggsave(file.path(RESULTS_DIR, "Mech_Fig3_Fleet_Survival.png"), g_surv, width = 8, height = 6)
+
+cat("SUCCESS: All advanced figures generated and saved.\n")
