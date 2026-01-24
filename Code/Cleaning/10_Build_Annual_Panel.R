@@ -1189,6 +1189,7 @@ log_step("✓ Saved tank_panel_unified.rds", 1)
 
 cat(sprintf("✓ Section 2 complete in %.1f seconds\n\n", difftime(Sys.time(), start_time, units="secs")))
 
+
 #==============================================================================
 # SECTION 3: CREATE FACILITY-MONTH BACKBONE
 #==============================================================================
@@ -1463,6 +1464,8 @@ cat(sprintf("  Time elapsed: %.1f seconds\n\n",
 rm(tank_composition, age_summary, wall_summary)
 invisible(gc())
 
+
+
 #==============================================================================
 # SECTION 5: MERGE MONTHLY EVENTS (OPTIMIZED)
 #==============================================================================
@@ -1513,6 +1516,14 @@ monthly[, `:=`(
 fa_monthly[, date := NULL]  # Prevent date.x/date.y issue
 monthly <- fa_monthly[monthly, on = .(panel_id, panel_year, panel_month)]
 monthly <- zurich_2012_lookup[monthly, on = .(panel_id)]
+
+# --- SURGICAL ADDITION: Save Intermediate Monthly Panel ---
+# Required for Granularity Analysis (Seasonality, Bunching) in 01_Master_Descriptives.R
+log_step("Saving intermediate monthly panel for granular analysis...", 0)
+output_monthly <- here("Data", "Processed", "facility_leak_behavior_monthly_intermediate.rds")
+saveRDS(monthly, output_monthly)
+log_step(sprintf("✓ Saved Monthly RDS: %s", output_monthly), 1)
+
 
 #==============================================================================
 # SECTION 6: ANNUAL AGGREGATION
@@ -1573,9 +1584,9 @@ annual <- monthly[, .(
     if(length(tbl)>0) names(which.max(tbl)) else NA_character_
   },
   
-  had_zurich_2012 = max(had_zurich_2012, na.rm=TRUE),
-  dropped_by_zurich = max(dropped_by_zurich, na.rm=TRUE)
-  
+# Removed redundant dropped_by_zurich
+  # Safe aggregation for had_zurich_2012 to avoid -Inf warning
+  had_zurich_2012 = if(all(is.na(had_zurich_2012))) 0L else max(had_zurich_2012, na.rm=TRUE)  
 ), by = .(panel_id, panel_year)]
 
 # 6.3 Merge Stocks
@@ -1593,6 +1604,8 @@ annual[, `:=`(
   capacity_decreased = as.integer(capacity_change_year < 0),
   is_motor_fuel = as.integer(has_gasoline_year == 1 | has_diesel_year == 1)
 )]
+
+
 
 #==============================================================================
 # SECTION 7: ROBUST LEAK CLASSIFICATION (4 SPECS)

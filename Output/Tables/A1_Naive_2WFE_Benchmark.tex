@@ -4,21 +4,21 @@
    \centering
    \begin{tabular}{lccc}
       \tabularnewline \midrule \midrule
-      Dependent Variables:                  & leak\_incident    & exit\_flag       & replacement\_event\\   
-                                            & LUST              & Exit             & Retrofit \\   
-      Model:                                & (1)               & (2)              & (3)\\  
+      Dependent Variables: & y\_lust           & y\_exit          & y\_retro\\   
+                           & LUST              & Exit             & Retrofit \\   
+      Model:               & (1)               & (2)              & (3)\\  
       \midrule
       \emph{Variables}\\
-      texas\_treated $\times$ post\_1999    & -0.000868$^{***}$ & 0.002318$^{***}$ & $5.88\times 10^{-5}$\\    
-                                            & (0.000128)        & (0.000371)       & ($9.82\times 10^{-5}$)\\    
+      did\_term            & -0.004651$^{***}$ & 0.022699$^{***}$ & 0.000248\\   
+                           & (0.001268)        & (0.003987)       & (0.000936)\\   
       \midrule
       \emph{Fixed-effects}\\
-      panel\_id                             & Yes               & Yes              & Yes\\  
-      year\_month                           & Yes               & Yes              & Yes\\  
+      panel\_id            & Yes               & Yes              & Yes\\  
+      panel\_year          & Yes               & Yes              & Yes\\  
       \midrule
       \emph{Fit statistics}\\
-      Observations                          & 47,915,244        & 47,915,244       & 47,915,244\\  
-      R$^2$                                 & 0.00630           & 0.01990          & 0.03976\\  
+      Observations         & 6,034,224         & 6,034,224        & 6,034,224\\  
+      R$^2$                & 0.05673           & 0.11469          & 0.07016\\  
       \midrule \midrule
       \multicolumn{4}{l}{\emph{Clustered (state) standard-errors in parentheses}}\\
       \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
