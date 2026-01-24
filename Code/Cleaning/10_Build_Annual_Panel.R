@@ -35,6 +35,7 @@ suppressPackageStartupMessages({
   library(here)
   library(zoo)
   library(stringr)
+  library(tidyverse)
 })
 
 setDTthreads(14)
@@ -117,6 +118,8 @@ fa_monthly <- fread(here("Data", "Raw", "fa_monthly.csv"))
 fa_monthly <- fa_monthly[, .SD, .SDcols = intersect(c("FACILITY_ID","YEAR","MONTH","DETAIL_TYPE","CATEGORY","ISSUER_NAME"), names(fa_monthly))]
 zurich_2012_lookup <- fread(here("Data", "Raw", "zurich_2012_lookup.csv"))
 zurich_2012_lookup <- zurich_2012_lookup[, .SD, .SDcols = intersect(c("FACILITY_ID","had_zurich_2012"), names(zurich_2012_lookup))]
+
+
 
 #==============================================================================
 # 1.2 CREATE SYSTEMATIC COLUMN MAPPING STRUCTURES
