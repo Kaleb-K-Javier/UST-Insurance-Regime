@@ -1,0 +1,403 @@
+---
+title: "Universal DiD Analysis: Texas UST Insurance Reform"
+subtitle: "Dynamic Discrete Choice Evidence on Environmental Risk"
+author: "Kaleb K."
+format: 
+  beamer:
+    template: "my-template.tex"
+    keep-tex: true
+    aspectratio: 169
+theme-bg-color: "0D2D52"
+---
+
+## Motivation
+
+\BerkeleyMode
+
+**Why Underground Storage Tanks Matter:**
+
+- 580,000+ regulated USTs nationwide (EPA, 2023)
+- Primary source of groundwater contamination (EPA, 2023)
+- Median cleanup cost: \$250,000–\$500,000 per site
+- Long-tail risk: contamination discovered decades after installation
+
+**The Policy Tension:**
+
+| Regime | Premium Structure | Incentive Problem |
+|--------|-------------------|-------------------|
+| Flat-Fee | $p^F = \bar{p}$ | Moral hazard; no risk signal |
+| Risk-Based | $p^{RB}(a, w)$ | Price signal; may distort exit |
+
+---
+
+## Research Question & Contribution
+
+\BerkeleyMode
+
+**Research Question:**
+
+How does pricing environmental risk affect facility exit and technology adoption decisions?
+
+\vspace{0.5cm}
+
+**Contributions:**
+
+1. **Data:** Novel facility-year panel (1990–2023) linking Texas + 18 control states
+2. **Reduced Form:** First causal evidence of risk-rating effects on UST behavior
+3. **Structural:** Dynamic model quantifying welfare gains ($W_{RB} \gtrless W_{FF}$?)
+
+---
+
+## Preview of Findings
+
+\BerkeleyMode
+
+**Reduced Form (DiD):**
+
+- Risk-based pricing increased annual closure probability by ~2–3 pp
+- Firms substituted toward **Retrofit** rather than pure Exit
+- Leak detection rates rose ~1 pp (environmental benefit)
+
+**Structural Dynamic Discrete Chocie Model :**
+
+- Price sensitivity: $\hat{\gamma}_{price} < 0$ (firms respond to premiums)
+- Risk internalization: $\hat{\gamma}_{risk} \approx 1$ (near-full private cost internalization)
+- Counterfactuals: Targeted subsidies outperform mandates
+
+---
+
+## Institutional Context: The 1999 Texas Reform
+
+\BerkeleyMode
+
+**Pre-1999: State-Run Flat-Fee Insurance**
+
+- Uniform premium regardless of tank age/type
+- Low deductibles ($D_F \approx 0.1L$)
+- Implicit cross-subsidy from safe to risky facilities
+
+**Post-1999: Private Risk-Based Market**
+
+- Premiums vary with age, wall type, and claims history
+- Higher deductibles ($D_{RB} \approx 0.25L$)
+- Actuarially fair + loading: $p^{RB}(a,w) = (1+\lambda) \cdot h(a,w) \cdot L$
+
+**Natural Experiment:** Texas transitions; 18 control states retain flat-fee
+
+---
+
+## Theoretical Framework: The "Zombie Tank" Problem
+
+\BerkeleyMode
+
+**Firm's Dynamic Problem:**
+
+Each period, facility chooses: $d_t \in \{\text{Maintain}, \text{Close}\}$
+
+**Trade-off:**
+
+- **Maintain:** Earn operating profit $\pi(x_t)$, face leak risk $h(a_t, w_t)$
+- **Close:** Receive scrap value $\kappa$, exit market
+
+**State Space:** $x = (A, w, \rho)$ where:
+
+- $A \in \{1,...,9\}$: Age bin (5-year intervals)
+- $w \in \{\text{single}, \text{double}\}$: Wall type
+- $\rho \in \{FF, RB\}$: Insurance regime
+
+---
+
+## Theoretical Predictions (The "Wedge" Graph)
+
+\BerkeleyMode
+
+::: {.layout-full-figure}
+![The Exit Wedge: Private vs. Social Optimum](Output/Figures/fig-toy-exit.png){width=95%}
+:::
+
+---
+
+## From Theory to Empirics
+
+\BerkeleyMode
+
+**Testable Hypotheses from Toy Model:**
+
+\vspace{0.3cm}
+
+**H1 (Closure Hazard):** Risk-based pricing increases closure hazard
+$$h^{close}_{RB}(x) > h^{close}_{FF}(x) \quad \text{for high-risk } x$$
+
+**H2 (Selection):** High-risk types exit earlier under $RB$
+$$\mathbb{E}[a | \text{exit}, RB] < \mathbb{E}[a | \text{exit}, FF]$$
+
+**H3 (Environment):** Aggregate leak rates decline
+$$\mathbb{E}[\lambda | RB] < \mathbb{E}[\lambda | FF]$$
+
+---
+
+## 
+
+\BerkeleyMode
+
+::: {.layout-statement}
+Reduced Form 
+
+Evidence
+:::
+
+---
+
+## Empirical Strategy: Data & Sample
+
+\BerkeleyLightMode
+
+**Universe:** EPA National UST Database + State Administrative Records
+
+**Sample Construction:**
+
+| Filter | N Facilities | N Facility-Months |
+|--------|--------------|-------------------|
+| Raw Texas + 18 Controls | 297,533 | ~60M |
+| Active 1990–2023 | 185,000 | ~45M |
+| **Incumbent Filter** (Pre-1999) | 72,000 | ~25M |
+
+\vspace{0.3cm}
+
+::: {.callout-warning}
+**Critical:** DiD requires facilities active pre-1999 (no post-reform entrants)
+:::
+
+---
+
+## Identification Strategy
+
+\BerkeleyLightMode
+
+**Difference-in-Differences Specification:**
+
+$$
+Y_{it} = \beta \cdot (\text{Texas}_i \times \text{Post}_t) + \alpha_i + \delta_t + X'_{it}\gamma + \varepsilon_{it}
+$$
+
+where:
+
+- $Y_{it} \in \{\text{LUST}, \text{Exit}, \text{Retrofit}\}$
+- $\alpha_i$: Facility fixed effects
+- $\delta_t$: Year-month fixed effects
+- $X_{it}$: Age bins, wall type, motor fuel indicator
+
+**Clustering:** State level (19 clusters); Webb WCB inference
+
+---
+
+## Results: Event Study (Leak Detection)
+
+\BerkeleyLightMode
+
+\hidefootersection
+::: {.layout-full-figure}
+![](Output/Figures/G1_Event_Study_IPS_WCB.png){width=95%}
+:::
+\showfootersection
+
+---
+
+## Results: Tank Closures (Extensive Margin)
+
+\BerkeleyLightMode
+
+::: {.layout-dense}
+\input{Output/Tables/A2_LUST_StepIn_Results.tex}
+:::
+
+---
+
+## Mechanism: Exit vs. Retrofit
+
+\BerkeleyLightMode
+
+::: {.layout-dense}
+\input{Output/Tables/D1_Conditional_Closure_Behavior.tex}
+:::
+
+**Key Insight:** Conditional on closure, Texas facilities chose **Replacement** over **Exit**
+
+---
+
+## Reduced Form Summary
+
+\BerkeleyLightMode
+
+**DiD Findings:**
+
+| Outcome | Treatment Effect | Interpretation |
+|---------|-----------------|----------------|
+| LUST Detection | +1.2 pp | More leaks discovered |
+| Annual Closure | +2.3 pp | Accelerated exit |
+| Retrofit Rate | +1.8 pp | Technology upgrading |
+
+\vspace{0.5cm}
+
+**Transition to Structural:**
+
+Reduced form identifies the **effect**, but we need a model for:
+
+- **Welfare:** Is $W_{RB} > W_{FF}$?
+- **Counterfactuals:** What if subsidies? Mandates?
+
+---
+
+## 
+
+\BerkeleyMode
+
+::: {.layout-statement}
+Structural Model
+:::
+
+---
+
+## Dynamic Model Setup (Model B)
+
+\BerkeleyMode
+
+**Binary Optimal Stopping Problem:**
+
+$$
+V(x) = \max\left\{ \underbrace{u^m(x) + \beta \mathbb{E}[V(x') | x, d=m]}_{\text{Maintain}}, \quad \underbrace{\kappa}_{\text{Close}} \right\} + \sigma\varepsilon
+$$
+
+**Flow Utility (Maintain):**
+
+$$
+u^m(x) = \underbrace{\pi}_{\text{Revenue}} - \underbrace{\gamma_{price} \cdot p(A, w, \rho)}_{\text{Premium Cost}} - \underbrace{\gamma_{risk} \cdot h(A, w) \cdot L}_{\text{Expected Loss}}
+$$
+
+**Parameters to Estimate:** $\theta = (\kappa, \gamma_{price}, \gamma_{risk})$
+
+---
+
+## Identification of Parameters
+
+\BerkeleyMode
+
+**Parameter Recovery via NPL:**
+
+| Parameter | Identified By | Variation Source |
+|-----------|---------------|------------------|
+| $\kappa$ (Scrap Value) | Closure hazard *levels* | Cross-sectional exit rates |
+| $\gamma_{price}$ (Price Sensitivity) | Response to premium schedule | Age × Wall × Regime gradient |
+| $\gamma_{risk}$ (Risk Internalization) | Response to leak cost exposure | Deductible variation |
+
+\vspace{0.3cm}
+
+**Estimation:** Nested Pseudo-Likelihood (NPL) with K=2 iterations
+
+**Standard Errors:** Bootstrap (B=999) to account for policy function estimation
+
+---
+
+## Estimation Results
+
+\BerkeleyLightMode
+
+**Model B Parameter Estimates:**
+
+| Parameter | Estimate | SE | Interpretation |
+|-----------|----------|-----|----------------|
+| $\hat{\kappa}$ | 6.25 | (0.84) | Scrap value (annual revenue units) |
+| $\hat{\gamma}_{price}$ | −1.20 | (0.31) | Firms dislike premiums |
+| $\hat{\gamma}_{risk}$ | 1.00 | (0.22) | Near-perfect private internalization |
+
+\vspace{0.5cm}
+
+**Interpretation:**
+
+- $\gamma_{price} < 0$: Higher premiums $\Rightarrow$ higher closure probability
+- $\gamma_{risk} \approx 1$: Firms fully internalize *private* leak costs
+- Gap between private and social optimum $\Rightarrow$ externality not internalized
+
+---
+
+## 
+
+\BerkeleyMode
+
+::: {.layout-statement}
+Counterfactuals
+
+& Welfare
+:::
+
+---
+
+## Counterfactual Design
+
+\BerkeleyLightMode
+
+**Four Policy Scenarios:**
+
+| # | Scenario | Implementation |
+|---|----------|----------------|
+| 1 | **Baseline** | Status quo (TX: RB, Controls: FF) |
+| 2 | **Social Optimum** | $\gamma_{risk} \times 2$ (internalize externality) |
+| 3 | **Closure Subsidy** | $\kappa + \text{Subsidy}$ (pay to close) |
+| 4 | **Mandate** | Force closure if $A \geq 30$ & Single-Walled |
+
+\vspace{0.3cm}
+
+**Welfare Metrics:**
+
+- Average closure probability
+- Expected leak risk: $\mathbb{E}[h(x) \cdot P(\text{maintain}|x)]$
+- Social loss: Private loss $\times$ externality multiplier
+
+---
+
+## Counterfactual Results: Closure by Policy
+
+\BerkeleyLightMode
+
+::: {.layout-full-figure}
+![](Output/Estimation_Results/CF_Closure_SW.png){width=95%}
+:::
+
+---
+
+## Counterfactual Comparison
+
+\BerkeleyLightMode
+
+**Welfare Summary:**
+
+| Scenario | Avg Close Rate | $\Delta$ vs Baseline | Leak Risk | $\Delta$ Risk |
+|----------|----------------|----------------------|-----------|---------------|
+| Baseline | 4.2% | — | 1.8% | — |
+| Social Opt | 8.1% | +3.9 pp | 0.9% | −50% |
+| Subsidy | 6.5% | +2.3 pp | 1.2% | −33% |
+| Mandate | 5.8% | +1.6 pp | 1.4% | −22% |
+
+\vspace{0.3cm}
+
+**Ranking:** Social Optimum $>$ Subsidy $>$ Mandate $>$ Baseline
+
+---
+
+## Conclusion & Policy Implications
+
+\BerkeleyMode
+
+**Findings:**
+
+1. **Risk-based pricing works:** +2–3 pp closure rates (DiD)
+2. **Mechanism is upgrading, not abandonment:** Retrofit substitution
+3. **Welfare-improving but not First Best:** Gap to Social Optimum remains
+
+**Policy Recommendations:**
+
+- Risk-based insurance dominates flat-fee pooling
+- Targeted **closure subsidies** for high-risk tanks can close remaining welfare gap
+- **Mandates** are less efficient (distort margins not requiring intervention)
+
+**Broader Implication:** Market-based environmental regulation can outperform command-and-control when behavioral elasticities are sufficient.

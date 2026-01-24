@@ -1,17 +1,21 @@
 # ==============================================================================
-# 00_Generate_Believable_Data.R (WIDE GRID + FIXES)
+# 00b_fake_data_for_proposal.R (FIXED - MONTE CARLO PARAMS)
 # ==============================================================================
 # PURPOSE: 
-#   1. Define Scaled Environment (1 unit = $10,000)
-#   2. CALIBRATE parameters with a WIDE GRID to find realistic exit rates (~12%)
-#   3. Generate full dataset using those calibrated parameters.
+#   1. Generate synthetic data using the SUCCESSFUL Monte Carlo parameters:
+#      - Kappa (Scrap) = 22.0
+#      - Gamma Price   = -1.0
+#      - Gamma Risk    = 0.6
+#   2. Use the exact primitives (high hazards/losses) from the MC test
+#      to ensure the data is identified and non-degenerate.
+#   3. Output 'annual_facility_panel.csv' for estimation.
 # ==============================================================================
 
 library(data.table)
 library(Matrix)
 library(here)
 
-# Assumes you have updated this file with npl_estimator_damped
+# Load estimator helpers
 source(here("Code", "Helpers", "improved_estimator_OPTIMIZED.r"))
 
 # PATHS
@@ -21,131 +25,137 @@ if (!dir.exists(DATA_DIR)) dir.create(DATA_DIR, recursive = TRUE)
 if (!dir.exists(RESULTS_DIR)) dir.create(RESULTS_DIR, recursive = TRUE)
 
 # ==============================================================================
-# 1. SETUP: SCALED PRIMITIVES
+# 1. SETUP: PRIMITIVES FROM SUCCESSFUL MONTE CARLO
 # ==============================================================================
+# Scale Factor: 1 unit = $10,000 (implied by ell0=1.0 ~ $10k)
 SCALE <- 10000 
 
-# Base Economic Primitives (Scaled)
+# Primitives from 03_Model_B_Binary_test.R (The "Working" Set)
 params <- list(
-  h0 = 0.02, h_single = 0.03, h_age = 0.002,   
-  ell0 = 50000 / SCALE, 
-  ell_age = 5000 / SCALE, 
-  p_FF = 500 / SCALE,
-  p_RB_base = 1200 / SCALE,
-  p_age = 100 / SCALE
+  # Annual Probabilities of leak/failure
+  h0 = 0.12,          # Base 12% risk
+  h_single = 0.05,    # +5% for single wall
+  h_age = 0.005,      # +0.5% per age bin
+  
+  # Loss Severity (Model Units: 1.0 = $10,000)
+  ell0 = 1.0,         
+  ell_age = 0.05,     
+  
+  # Annual Premiums (Model Units)
+  p_FF_annual = 0.20,        # $2,000
+  p0_RB_annual = 0.10,       # $1,000 base
+  p_single_RB_annual = 0.10, # +$1,000 for single wall
+  p_age_RB_annual = 0.02     # +$200 per age bin
 )
 
-# Cache Builder
-build_cache <- function() {
+# Transition Probabilities (Stochastic Aging from MC)
+age_probs <- list(
+  p_up = c(0.18, 0.19, 0.20, 0.21, 0.22, 0.23, 0.24, 0.25, 0.00)
+)
+age_probs$p_stay <- 1.0 - age_probs$p_up
+
+# ==============================================================================
+# 2. TRUE PARAMETERS (MONTE CARLO TARGETS)
+# ==============================================================================
+theta_true <- c(
+  kappa = 22.0,       # High scrap value required for this environment
+  gamma_price = -1.0, # Standard price sensitivity
+  gamma_risk = 0.6    # Partial internalization (60%)
+)
+
+cat("\n==============================================================\n")
+cat(" GENERATING DATA: MONTE CARLO SPECIFICATION\n")
+cat("==============================================================\n")
+cat(sprintf("Target Parameters:\n  Kappa: %.2f\n  Gamma Price: %.2f\n  Gamma Risk: %.2f\n", 
+            theta_true["kappa"], theta_true["gamma_price"], theta_true["gamma_risk"]))
+
+# ==============================================================================
+# 3. BUILD CACHE & SOLVE EQUILIBRIUM
+# ==============================================================================
+build_cache_and_solve <- function() {
+  
+  # 1. State Space
   states <- CJ(A = 1:9, w = factor(c("single", "double")), rho = factor(c("FF", "RB")))
-  states[, state_idx := .I]; setkey(states, state_idx)
+  states[, state_idx := .I]
+  setkey(states, state_idx)
   n <- nrow(states)
   
-  premiums <- params$p_FF + 
-    ifelse(states$rho == "RB", params$p_RB_base - params$p_FF, 0) + 
-    ifelse(states$rho == "RB", (states$A - 1) * params$p_age, 0)
+  # 2. Exogenous Vectors
+  premiums <- params$p_FF_annual + 
+    ifelse(states$rho == "RB", params$p0_RB_annual, 0) +
+    ifelse(states$w == "single", params$p_single_RB_annual, 0) +
+    (states$A - 1) * params$p_age_RB_annual
   
-  hazards <- pmin(params$h0 + (states$w == "single")*params$h_single + params$h_age*states$A, 0.40)
-  losses <- params$ell0 + params$ell_age * states$A
+  hazards <- pmin(pmax(params$h0 + 
+                         (states$w == "single") * params$h_single + 
+                         params$h_age * states$A, 0.001), 0.60)
   
-  T_mat <- Matrix(0, n, n, sparse = TRUE)
+  losses <- pmax(params$ell0 + params$ell_age * states$A, 0.1)
+  
+  # 3. Transitions (Probabilistic Aging)
+  state_map <- setNames(states$state_idx, paste(states$A, states$w, states$rho, sep="_"))
+  F_maintain <- Matrix(0, n, n, sparse = TRUE)
+  
   for (i in 1:n) {
-    if (states$A[i] < 9) {
-      next_s <- which(states$A == states$A[i] + 1 & states$w == states$w[i] & states$rho == states$rho[i])
-      T_mat[i, next_s] <- 1.0
-    } else { T_mat[i, i] <- 1.0 }
-  }
-  
-  config <- create_estimation_config_model_b(beta = 0.95, sigma2 = 1)
-  
-  list(
-    n_states = n,           
-    states = states, premiums = premiums, hazards = hazards, losses = losses,
-    hazard_loss = hazards * losses, # CRITICAL FIX for Model B
-    F_maintain = T_mat, F_exit = Diagonal(n),
-    config = config, transitions = list(maintain = T_mat, exit = Diagonal(n))
-  )
-}
-
-# ==============================================================================
-# 2. CALIBRATION LOOP (WIDE GRID)
-# ==============================================================================
-find_calibrated_parameters <- function() {
-  cat("\n[1/3] Calibrating Parameters (Wide Grid)...\n")
-  
-  cache <- build_cache()
-  
-  # --- UPDATED GRID ---
-  grid <- expand.grid(
-    kappa = seq(1.0, 10.0, by = 0.5),       
-    gamma_price = seq(-2.0, 2.0, by = 0.5), 
-    gamma_risk = seq(0.0, 1.6, by = 0.2)    
-  )
-  
-  cat(sprintf("      Scanning %d parameter combinations...\n", nrow(grid)))
-  
-  best_theta <- NULL
-  best_diff <- Inf
-  
-  pb <- txtProgressBar(min = 0, max = nrow(grid), style = 3)
-  
-  for(i in 1:nrow(grid)) {
-    setTxtProgressBar(pb, i)
-    
-    theta_try <- c(
-      kappa = grid$kappa[i], 
-      gamma_price = grid$gamma_price[i], 
-      gamma_risk = grid$gamma_risk[i]
-    )
-    
-    # Solve Equilibrium (Try/Catch for stability)
-    eq <- tryCatch({
-      solve_equilibrium_policy_model_b(theta_try, cache, cache$config)
-    }, error = function(e) list(converged=FALSE))
-    
-    if(eq$converged) {
-      # Target ~0.5% annual closure (corresponds to ~15% lifetime)
-      avg_exit <- mean(eq$P[,2])
-      dist <- abs(avg_exit - 0.005) 
+    A_i <- states$A[i]
+    if (A_i < 9) {
+      k_stay <- paste(A_i, states$w[i], states$rho[i], sep = "_")
+      k_up   <- paste(A_i + 1, states$w[i], states$rho[i], sep = "_")
       
-      if(dist < best_diff) {
-        best_diff <- dist
-        best_theta <- theta_try
-      }
+      F_maintain[i, state_map[k_stay]] <- age_probs$p_stay[A_i]
+      F_maintain[i, state_map[k_up]]   <- age_probs$p_up[A_i]
+    } else {
+      F_maintain[i, i] <- 1.0 # Absorbing
     }
   }
-  close(pb)
   
-  if(is.null(best_theta)) stop("Calibration failed to find valid parameters.")
+  transitions <- list(maintain = F_maintain, exit = Diagonal(n))
   
-  cat(sprintf("\n>>> WINNER (Diff=%.5f):\n", best_diff))
-  print(best_theta)
-  return(best_theta)
+  # 4. Config & Solve
+  config <- create_estimation_config_model_b(beta = 0.95, sigma2 = 1.0)
+  cache <- create_estimation_cache_model_b(states, premiums, hazards, losses, transitions, config)
+  
+  eq <- solve_equilibrium_policy_model_b(theta_true, cache, config)
+  
+  return(list(cache = cache, eq = eq, states = states, transitions = transitions))
 }
 
+setup <- build_cache_and_solve()
+P_opt <- setup$eq$P
+cache <- setup$cache
+states <- setup$states
+
+# Diagnostic
+avg_exit <- sum(P_opt[,"close"] * (1/nrow(states))) # Crude average
+cat(sprintf("Average Model Exit Probability: %.2f%%\n", avg_exit * 100))
+
 # ==============================================================================
-# 3. GENERATION
+# 4. SIMULATE PANEL DATA
 # ==============================================================================
-generate_final_data <- function() {
+generate_panel <- function(N_fac = 3000, T_per = 50) {
   
-  # 1. Run Calibration
-  theta_star <- find_calibrated_parameters()
+  cat(sprintf("\nSimulating %d Facilities over %d Years...\n", N_fac, T_per))
   
-  # 2. Build Cache & Solve Final Policy
-  cat("\n[2/3] Solving Final Equilibrium...\n")
-  cache <- build_cache()
-  eq <- solve_equilibrium_policy_model_b(theta_star, cache, cache$config)
-  P_opt <- eq$P
+  # Next state lookups for speed
+  n_states <- nrow(states)
+  state_map <- setNames(states$state_idx, paste(states$A, states$w, states$rho, sep="_"))
+  next_stay <- integer(n_states)
+  next_up   <- integer(n_states)
   
-  # 3. Simulate Full Panel
-  cat("\n[3/3] Simulating Panel (N=2500, T=40)...\n")
-  N_fac <- 2500; T_per <- 40
+  for(i in 1:n_states) {
+    k_stay <- paste(states$A[i], states$w[i], states$rho[i], sep="_")
+    k_up   <- paste(min(states$A[i]+1, 9), states$w[i], states$rho[i], sep="_")
+    next_stay[i] <- state_map[k_stay]
+    next_up[i]   <- state_map[k_up]
+  }
+  
   panel_list <- vector("list", N_fac)
   
   for (i in 1:N_fac) {
-    w <- sample(c("single", "double"), 1, prob=c(0.6, 0.4))
-    r <- sample(c("FF", "RB"), 1, prob=c(0.5, 0.5))
-    a <- sample(1:4, 1) # Start young
+    # Initial: 50/50 split on wall/regime, young age
+    w <- sample(c("single", "double"), 1)
+    r <- sample(c("FF", "RB"), 1)
+    current_state <- state_map[paste(sample(1:3,1), w, r, sep="_")]
     
     active <- TRUE
     hist_list <- vector("list", T_per)
@@ -153,46 +163,78 @@ generate_final_data <- function() {
     for (t in 1:T_per) {
       if (!active) break
       
-      # State Index
-      s_idx <- which(cache$states$A == a & cache$states$w == w & cache$states$rho == r)
+      # 1. Decision
+      prob_close <- P_opt[current_state, "close"]
+      action <- if(runif(1) < prob_close) 2L else 1L
       
-      # Action
-      prob_close <- P_opt[s_idx, 2]
-      act <- if(runif(1) < prob_close) 2L else 1L
+      # 2. Outcomes (Leak & Cost)
+      is_leaked <- 0L
+      cleanup_cost <- 0.0
       
-      # Outcome
-      leak <- as.integer(runif(1) < cache$hazards[s_idx])
-      cost <- if(leak) rlnorm(1, log(cache$losses[s_idx]), 0.5) else NA
+      if (action == 1L) {
+        if(runif(1) < cache$hazards[current_state]) {
+          is_leaked <- 1L
+          # Generate cost in RAW DOLLARS (Model unit * SCALE)
+          mu_cost <- cache$losses[current_state] * SCALE
+          cleanup_cost <- rlnorm(1, meanlog = log(mu_cost), sdlog = 0.5)
+        }
+      }
       
-      # Store (RAW DOLLARS for realism, we will scale in estimation)
+      # 3. Record
+      s_row <- states[current_state]
       hist_list[[t]] <- data.table(
-        facility_id = i, year = 1990 + t,
-        age_start = (a-1)*5, wall_type = w, regime = r,
-        action_idx = act,
-        leaked_annual = leak,
-        total_cleanup_cost = cost * SCALE, 
-        premium_annual = cache$premiums[s_idx] * SCALE
+        facility_id = i,
+        year = 1990 + t,
+        age_start = (s_row$A-1)*5, # Approx years
+        wall_type = s_row$w,
+        regime = s_row$rho,
+        action_idx = action,
+        action = ifelse(action==1, "maintain", "exit"),
+        leaked_annual = is_leaked,
+        total_cleanup_cost = cleanup_cost,
+        premium_annual = cache$premiums[current_state] * SCALE # Raw Dollars
       )
       
-      if (act == 2) active <- FALSE else a <- min(a + 1, 9)
+      # 4. Transition
+      if (action == 2L) {
+        active <- FALSE
+      } else {
+        # Stochastic Aging
+        p_up_val <- age_probs$p_up[s_row$A]
+        if(runif(1) < p_up_val) {
+          current_state <- next_up[current_state]
+        } else {
+          current_state <- next_stay[current_state]
+        }
+      }
     }
     panel_list[[i]] <- rbindlist(hist_list)
   }
   
-  dt <- rbindlist(panel_list)
-  
-  # Stats
-  exit_rate <- mean(dt[, .(closed = max(action_idx==2)), by=facility_id]$closed)
-  cat(sprintf("\nFinal Stats:\n  Total Obs: %d\n  Unique Facilities: %d\n  Lifetime Exit Rate: %.1f%%\n", 
-              nrow(dt), length(unique(dt$facility_id)), exit_rate*100))
-  
-  # SAVE
-  fwrite(dt, file.path(DATA_DIR, "annual_facility_panel.csv"))
-  saveRDS(list(theta = theta_star, scale = SCALE, params = params), 
-          file.path(RESULTS_DIR, "true_parameters.rds"))
-  
-  cat(sprintf("\nSaved to %s\n", DATA_DIR))
+  return(rbindlist(panel_list))
 }
 
-# RUN EVERYTHING
-generate_final_data()
+final_df <- generate_panel(N_fac = 10000)
+
+# ==============================================================================
+# 5. SAVE OUTPUTS
+# ==============================================================================
+cat(sprintf("\nFinal Dataset: %d rows, %.1f%% exit rate\n", 
+            nrow(final_df), 
+            100 * mean(final_df[, .(exit=max(action_idx==2)), by=facility_id]$exit)))
+
+fwrite(final_df, file.path(DATA_DIR, "annual_facility_panel.csv"))
+
+# Save Primitives for Welfare Script (Critical for consistency)
+saveRDS(list(
+  states = states,
+  hazards = cache$hazards,
+  losses = cache$losses,
+  premiums = cache$premiums,
+  transitions = setup$transitions, # Save PROBABILISTIC transitions
+  scale = SCALE,
+  theta_true = theta_true,
+  params = params
+), file.path(RESULTS_DIR, "Estimated_Primitives.rds"))
+
+cat(sprintf("\nDONE: Data and primitives saved to %s\n", DATA_DIR))
