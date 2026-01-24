@@ -114,8 +114,33 @@ log_step(sprintf("TX LUST: %s rows", format(nrow(TX_LUST_SD), big.mark=",")), 1)
 
 # Auxiliary data
 tx_fac_raw <- fread(here("Data", "Raw", "raw_pst_fac.csv"))[, .(FACILITY_ID, SITE_COUNTY)]
+
+# -- DYNAMIC FA_MONTHLY LOAD (SURGICAL UPDATE) --
+# We must detect ALL issuer columns and pre-existing dummies dynamically.
 fa_monthly <- fread(here("Data", "Raw", "fa_monthly.csv"))
-fa_monthly <- fa_monthly[, .SD, .SDcols = intersect(c("FACILITY_ID","YEAR","MONTH","DETAIL_TYPE","CATEGORY","ISSUER_NAME"), names(fa_monthly))]
+
+# Define base columns to ALWAYS keep
+fa_base_cols <- c("FACILITY_ID", "YEAR", "MONTH", "DETAIL_TYPE", "CATEGORY", 
+                  "uses_private", "uses_self", "fr_covered", 
+                  "transition_month", "multiple_contracts", "dropped_by_zurich") 
+
+# Dynamically identify variable groups
+fa_issuer_cols <- grep("^ISSUER_NAME", names(fa_monthly), value = TRUE)
+fa_cat_dummies <- grep("^CATEGORY_", names(fa_monthly), value = TRUE)
+fa_det_dummies <- grep("^DETAIL_TYPE_", names(fa_monthly), value = TRUE)
+fa_cover_vars  <- grep("^COVER_", names(fa_monthly), value = TRUE)
+
+# Combine and subset
+fa_keep <- unique(c(fa_base_cols, fa_issuer_cols, fa_cat_dummies, fa_det_dummies, fa_cover_vars))
+fa_keep <- intersect(fa_keep, names(fa_monthly)) # Safety check
+fa_monthly <- fa_monthly[, .SD, .SDcols = fa_keep]
+
+log_step(sprintf("FA monthly: %s rows (with %d issuer cols, %d dummies)", 
+                 format(nrow(fa_monthly), big.mark=","), 
+                 length(fa_issuer_cols), 
+                 length(c(fa_cat_dummies, fa_det_dummies))), 1)
+
+
 zurich_2012_lookup <- fread(here("Data", "Raw", "zurich_2012_lookup.csv"))
 zurich_2012_lookup <- zurich_2012_lookup[, .SD, .SDcols = intersect(c("FACILITY_ID","had_zurich_2012"), names(zurich_2012_lookup))]
 
@@ -1519,7 +1544,18 @@ monthly[, `:=`(
 fa_monthly[, date := NULL]  # Prevent date.x/date.y issue
 monthly <- fa_monthly[monthly, on = .(panel_id, panel_year, panel_month)]
 monthly <- zurich_2012_lookup[monthly, on = .(panel_id)]
-
+# --- CRITICAL: Create dropped_by_zurich Variable ---
+# Logic: Texas facility had Zurich in 2012 baseline, now in post-2012 period with no coverage
+log_step("Creating 'dropped_by_zurich' treatment variable...", 0)
+monthly[state == "Texas", dropped_by_zurich := as.integer(
+  had_zurich_2012 == 1 & 
+  panel_year >= 2012 & 
+  is.na(CATEGORY)
+)]
+# Fill NAs with 0 (non-Texas or pre-2012 or never had Zurich)
+monthly[is.na(dropped_by_zurich), dropped_by_zurich := 0L]
+log_step(sprintf("  Facilities affected: %d unique panel_ids", 
+                 uniqueN(monthly[dropped_by_zurich == 1]$panel_id)), 1)
 # --- SURGICAL ADDITION: Save Intermediate Monthly Panel ---
 # Required for Granularity Analysis (Seasonality, Bunching) in 01_Master_Descriptives.R
 log_step("Saving intermediate monthly panel for granular analysis...", 0)
@@ -1625,13 +1661,14 @@ if(nrow(closures_exact) > 0 && nrow(leaks_exact) > 0) {
   pairs <- leaks_exact[closures_exact, on = .(panel_id), allow.cartesian=TRUE]
   pairs[, diff := as.numeric(report_date - closure_date)]
   
-  pairs[, `:=`(
+pairs[, `:=`(
     is_rev_prim = diff >= 0 & diff <= 60, is_kno_prim = diff < -180, is_ind_prim = diff >= -180 & diff < 0,
     is_rev_nar = diff >= 0 & diff <= 30, is_kno_nar = diff < -365,
     is_rev_wid = diff >= 0 & diff <= 90, is_kno_wid = diff < -90,
+    # Added Regulatory Spec:
     is_rev_reg = diff >= 0 & diff <= 45, is_kno_reg = diff < -180
   )]
-  
+
   closure_flags <- pairs[, .(
     has_rev_prim = any(is_rev_prim), has_kno_prim = any(is_kno_prim), has_ind_prim = any(is_ind_prim),
     has_rev_nar = any(is_rev_nar), has_kno_nar = any(is_kno_nar),
@@ -1641,16 +1678,19 @@ if(nrow(closures_exact) > 0 && nrow(leaks_exact) > 0) {
   
   closure_flags[, panel_year := year(closure_date)]
   
-  annual_flags <- closure_flags[, .(
+annual_flags <- closure_flags[, .(
     tank_closure_revealed = as.integer(any(has_rev_prim)),
     tank_closure_known_leak = as.integer(any(has_kno_prim)),
     tank_closure_indeterminate = as.integer(any(has_ind_prim)),
     tank_closure_revealed_narrow = as.integer(any(has_rev_nar)),
     tank_closure_known_leak_narrow = as.integer(any(has_kno_nar)),
     tank_closure_revealed_wide = as.integer(any(has_rev_wid)),
-    tank_closure_known_leak_wide = as.integer(any(has_kno_wid))
+    tank_closure_known_leak_wide = as.integer(any(has_kno_wid)),
+    # Added Regulatory Spec:
+    tank_closure_revealed_reg = as.integer(any(has_rev_reg)),
+    tank_closure_known_leak_reg = as.integer(any(has_kno_reg))
   ), by = .(panel_id, panel_year)]
-  
+
   annual <- merge(annual, annual_flags, by = c("panel_id", "panel_year"), all.x=TRUE)
   cols_to_fill <- grep("tank_closure_", names(annual), value=TRUE)
   for(col in cols_to_fill) annual[is.na(get(col)), (col) := 0]
@@ -1800,3 +1840,85 @@ cat("\n========================================\n")
 cat("PROCESSING COMPLETE\n")
 cat(sprintf("Total Runtime: %.1f minutes\n", difftime(Sys.time(), script_start_time, units="mins")))
 cat("========================================\n")
+
+#==============================================================================
+# DATA DICTIONARY GENERATION
+#==============================================================================
+log_step("Generating Data Dictionary...", 0)
+
+data_dict <- data.table(
+  variable_name = c(
+    "panel_id", "facility_id", "state", "panel_year", "county_name", "county_geoid",
+    "active_tanks_dec", "total_capacity_dec", "avg_tank_age_dec", "min_tank_age", "max_tank_age",
+    "single_tanks_dec", "double_tanks_dec", "has_single_walled_dec", "has_double_walled_dec",
+    "active_tanks_mean", "total_capacity_mean", "avg_tank_age_mean",
+    "n_leaks", "leak_year", "n_closures", "closure_year", "n_installs", 
+    "n_retrofits", "retrofit_year", "n_single_to_double", "single_to_double_year",
+    "capacity_installed_year", "capacity_closed_year", "double_walled_installed_year",
+    "capacity_change_year", "net_tank_change", "capacity_increased", "capacity_decreased",
+    "tank_closure_revealed", "tank_closure_known_leak", "tank_closure_indeterminate", "tank_closure_clean",
+    "tank_closure_revealed_narrow", "tank_closure_known_leak_narrow",
+    "tank_closure_revealed_wide", "tank_closure_known_leak_wide",
+    "tank_closure_revealed_reg", "tank_closure_known_leak_reg",
+    "lust_within_90d_of_closure", "leak_found_by_closure", "leak_not_found_by_exit",
+    "first_observed", "last_year_id", "years_since_entry", "exit_flag", "pulse_exit",
+    "ever_leaked", "ever_closed", "ever_exited", "cumulative_leaks", "cumulative_closures", "cumulative_retrofits",
+    "has_previous_leak", "has_previous_closure", "event_first_leak", "event_first_closure", "year_of_first_leak", "years_since_first_leak",
+    "exit_no_leak", "exit_with_leak", "retrofit_no_exit", "exit_no_retrofit", "both_exit_retrofit",
+    "fr_coverage_share", "share_private", "share_state_fund", "share_self",
+    "n_gap_months", "any_gap", "n_transitions", "any_transition", "modal_detail_type",
+    "had_zurich_2012", "dropped_by_zurich",
+    "post_1999", "texas_treated", "treated_state_flag", "treated", "treatment_year", 
+    "treatment_group", "rel_year",
+    "cohort", "is_incumbent", "age_bins", "install_year", "pre1998_install", "reg_vintage", "wall_type",
+    "has_gasoline_year", "has_diesel_year", "is_motor_fuel",
+    "active_tanks", "total_capacity", "avg_tank_age", "single_tanks", "double_tanks", "has_single_walled", "has_double_walled"
+  ),
+  category = c(rep("Identifier", 6), rep("Stock (EOY)", 9), rep("Stock (Annual Mean)", 3),
+    rep("Flow (Annual)", 12), rep("YoY Change", 4),
+    rep("Leak Class (Primary)", 4), rep("Leak Class (Narrow)", 2), rep("Leak Class (Wide)", 2), rep("Leak Class (Regulatory)", 2),
+    rep("Leak Class (Alias)", 3), rep("Duration", 5), rep("Cumulative", 3), rep("Cumulative", 3), rep("Lagged", 2), rep("Event Timing", 4),
+    rep("Exit Type", 5), rep("FR Coverage", 9), rep("FR Treatment", 2),
+    rep("Policy", 7), rep("Cohort", 2), rep("Vintage", 5), rep("Fuel Type", 3), rep("Stock (Alias)", 7)
+  ),
+  description = c(
+    "Composite key", "Facility ID", "State", "Year", "County", "FIPS",
+    "Active tanks (Dec)", "Capacity (Dec)", "Avg Age (Dec)", "Min Age", "Max Age",
+    "Single tanks (Dec)", "Double tanks (Dec)", "Has single (Dec)", "Has double (Dec)",
+    "Mean active tanks", "Mean capacity", "Mean age",
+    "Leak count", "Leak dummy", "Closure count", "Closure dummy", "Install count",
+    "Retrofit count", "Retrofit dummy", "Upgrade count", "Upgrade dummy",
+    "Installed capacity", "Closed capacity", "DW installed count",
+    "Capacity change", "Net tank change", "Cap Increase dummy", "Cap Decrease dummy",
+    "Revealed (0-60d)", "Known (>180d)", "Indeterminate", "Clean closure",
+    "Revealed (0-30d)", "Known (>365d)", "Revealed (0-90d)", "Known (>90d)",
+    "Revealed (0-45d)", "Known (>180d - Reg)",
+    "Alias Wide", "Alias Primary", "Exit clean",
+    "First year", "Last year", "Tenure", "Exit dummy", "Exit pulse",
+    "Ever leaked", "Ever closed", "Ever exited", "Cum leaks", "Cum closures", "Cum retrofits",
+    "Prev leak", "Prev closure", "First leak event", "First closure event", "First leak year", "Yrs since first leak",
+    "Clean exit", "Dirty exit", "Retrofit no exit", "Exit no retrofit", "Exit+Retrofit",
+    "FR share", "Private share", "State fund share", "Self share",
+    "Gap months", "Any gap", "Transitions", "Any transition", "Modal type",
+    "Zurich 2012 baseline", "Dropped by Zurich (Treatment)",
+    "Post-1999", "Texas dummy", "Treated state", "Treated dummy", "Reform year",
+    "Treatment group", "Relative year",
+    "Cohort", "Incumbent dummy", "Age bin", "Install year", "Pre-1998", "Vintage", "Wall type",
+    "Gasoline", "Diesel", "Motor fuel",
+    "Alias Active", "Alias Cap", "Alias Age", "Alias Single", "Alias Double", "Alias Has Single", "Alias Has Double"
+  ),
+  type = c(rep("character", 6), rep("numeric", 5), rep("integer", 4), rep("numeric", 3),
+    rep("integer", 12), rep("numeric", 2), rep("integer", 2),
+    rep("integer", 13), rep("integer", 17), rep("integer", 5),
+    rep("numeric", 4), rep("integer", 4), "character", "integer", "integer",
+    rep("integer", 5), "character", "integer", "character", "integer", "factor", "integer", "integer", "character", "character",
+    rep("integer", 3), rep("numeric", 7)
+  ),
+  notes = c(rep("ID", 6), rep("Stock", 12), rep("Flow", 12), rep("Change", 4),
+    rep("Leak", 13), rep("Survival", 17), rep("Exit", 5),
+    rep("FR", 11), rep("Policy", 7), rep("Vintage", 7), rep("Fuel", 3), rep("Alias", 7)
+  )
+)
+
+fwrite(data_dict, here("Data", "Processed", "facility_leak_behavior_annual_data_dictionary.csv"))
+cat("✓ Data dictionary saved\n")
