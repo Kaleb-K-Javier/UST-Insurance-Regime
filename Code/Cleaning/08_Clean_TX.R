@@ -18,6 +18,10 @@ library(tidycensus) # Added for ACS data
 library(zoo) # FIX: Added for na.locf
 library(tidyverse)
 
+# Ensure target directory exists for Harmonized files
+tx_output_dir <- here("Data", "Raw", "state_databases", "Texas")
+if (!dir.exists(tx_output_dir)) dir.create(tx_output_dir, recursive = TRUE)
+
 # ── Server Configuration ─────────────────────────────────────────────────────
 do_merge   <- FALSE          # set FALSE if you only want the staging artefacts
 onserver   <- TRUE          # your existing flag
@@ -1775,6 +1779,62 @@ uniqueN(panel$FACILITY_ID) # Check how many unique facility IDs we have in the p
 
 
 message("Section 5 complete: UST processing finished with ", nrow(ust), " tanks")
+# -----------------------------------------------------------------------------
+# HARMONIZATION STEP: Create and Save TX_Harmonized_UST_tanks.csv
+# -----------------------------------------------------------------------------
+message("Creating Harmonized UST Tank dataset...")
+
+# 1. Merge Facility Name and County from 'fac' (loaded in Section 1)
+# Ensure fac is keyed or we use explicit 'by'
+ust_harmonized <- merge(
+  ust, 
+  fac[, .(FACILITY_ID, FACILITY_NAME, SITE_COUNTY)], 
+  by = "FACILITY_ID", 
+  all.x = TRUE
+)
+
+# 2. Consolidate Wall Types
+# Combine missing_walled and unknown_walled into a single unknown flag
+ust_harmonized[, unknown_walled := pmax(unknown_walled, missing_walled, na.rm = TRUE)]
+
+# 3. Select and Standardize Columns
+TX_Harmonized_UST_tanks <- ust_harmonized[, .(
+  facility_id = as.character(FACILITY_ID),
+  facility_name = stringr::str_to_title(trimws(gsub("[^[:alnum:] ]", "", FACILITY_NAME))),
+  tank_id = as.character(TANK_ID),
+  state = "TX",
+  
+  # Dates: Use the raw parsed dates from Section 5
+  tank_installed_date = INSTALL_DATE,
+  
+  # Logic: If status indicates closure (calculated in Section 5 via is_closed_removed), use STATUS_DATE
+  tank_closed_date = fifelse(is_closed_removed, STATUS_DATE, as.Date(NA)),
+  
+  # Status: Keep the raw Texas status string as requested
+  tank_status = STATUS,
+  
+  capacity = CAPACITY,
+  
+  # Wall Types (Binary)
+  single_walled = as.integer(single_walled),
+  double_walled = as.integer(double_walled),
+  unknown_walled = as.integer(unknown_walled),
+  
+  # Substances (Binary) - calculated in Section 5B
+  is_gasoline = as.integer(is_gasoline),
+  is_diesel = as.integer(is_diesel),
+  is_oil_kerosene = as.integer(is_oil_kerosene),
+  is_jet_fuel = as.integer(is_jet_fuel),
+  is_other = as.integer(is_other),
+  
+  # Location
+  county_name = stringr::str_to_title(trimws(SITE_COUNTY))
+)]
+
+# 4. Save to State Database Folder
+fwrite(TX_Harmonized_UST_tanks, file.path(tx_output_dir, "TX_Harmonized_UST_tanks.csv"))
+message("Saved TX_Harmonized_UST_tanks.csv")
+
 
 # ── Section 6: Monthly UST aggregations ─────────────────────────────────────
 # Purpose: build full FACILITY×month grid (`panel_months`), non-equi join tanks to months,
@@ -2195,22 +2255,46 @@ message("Processing LUST data for staging...")
 TX_LUST_SD <- if(onserver) {
   fread(get_data_path("TX_LUST.csv"))
 } else {
-  fread("C:/Users/kaleb/Box/UST-Insurance/Data/Raw_do_not_write/state_databases/Texas/TX_LUST.csv")
+  # Fallback to local raw path if not on server
+  fread(here("Data", "Raw_do_not_write", "state_databases", "Texas", "TX_LUST.csv"))
 }
+
 
 if ("facility_id" %in% names(TX_LUST_SD)) setnames(TX_LUST_SD, "facility_id", "FACILITY_ID")
 TX_LUST_SD <- clean_id_column(TX_LUST_SD, "FACILITY_ID")
 
+# Parse Dates
 TX_LUST_SD[, `:=`(
   report_date = dmy(report_date),
   nfa_date = dmy(nfa_date)
-)][
+)]
+# -----------------------------------------------------------------------------
+# HARMONIZATION STEP: Create and Save TX_Harmonized_LUST.csv
+# -----------------------------------------------------------------------------
+
+
+message("Creating Harmonized LUST dataset...")
+TX_Harmonized_LUST <- TX_LUST_SD[, .(
+  facility_id = as.character(FACILITY_ID),
+  lust_id = as.character(LUST_id),
+  report_date = as.Date(report_date),
+  nfa_date = as.Date(nfa_date),
+  state = "TX"
+)]
+
+
+# Continue with Panel specific filtering...
+TX_LUST_SD <- TX_LUST_SD[
   !is.na(report_date) &
   report_date >= as.Date("1990-01-01") &
   report_date <= as.Date("2026-12-31") &
   FACILITY_ID %in% facilities_active_1990$FACILITY_ID
 ]
 message("LUST records filtered to ", nrow(TX_LUST_SD), " relevant records")
+
+fwrite(TX_Harmonized_LUST, file.path(tx_output_dir, "TX_Harmonized_LUST.csv"))
+message("Saved TX_Harmonized_LUST.csv")
+
 
 expand_lust_optimized <- function(lust_dt) {
   lust_dt[!is.na(report_date), {
