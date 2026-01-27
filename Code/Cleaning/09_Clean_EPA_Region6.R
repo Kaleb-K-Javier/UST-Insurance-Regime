@@ -9,7 +9,23 @@ library(here)
 first_run = FALSE
 #first_run = TRUE
 #load packags ----
-source(here('Code','00_global_packages.R'))
+library(tidyverse)
+library(data.table)
+library(here)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(fixest)
+library(ggpubr)
+library(gghighlight)
+library(did)
+library(fastDummies)
+library(fplot)
+library(ggrepel)
+library(patchwork)
+library(DRDID)
 
 
 
@@ -388,12 +404,13 @@ glimpse(state_UST_tanks_LUST)
   print(state_counts)
   cat("\nNumber of closed tanks in", state_name, ":", num_closed_tanks, "\n")
 
-  state_UST_tanks_SD = state_UST_tanks_LUST %>% 
-    select(facility_id, tank_id, tank_installed_date, tank_closed_date, 
+state_UST_tanks_SD = state_UST_tanks_LUST %>% 
+    select(facility_id, tank_id, tank_installed_date, tank_closed_date, tank_status, # <--- Added tank_status
            leak_after_closure, leak_before_NFA_before_closure, leak_before_NFA_after_closure, no_leak,
            is_gasoline, is_diesel, is_oil_kerosene, is_jet_fuel, is_other,
-           single_walled, double_walled, unknown_walled, missing_walled, capacity,county_name) %>% 
-    group_by(facility_id, tank_id, tank_installed_date, tank_closed_date,county_name) %>% 
+           single_walled, double_walled, unknown_walled, missing_walled, capacity, county_name) %>% 
+    group_by(facility_id, tank_id, tank_installed_date, tank_closed_date, tank_status, county_name) %>% # <--- Added tank_status
+    
     summarize(
       leak_after_closure = sum(leak_after_closure, na.rm = TRUE),
       leak_before_NFA_before_closure = sum(leak_before_NFA_before_closure, na.rm = TRUE),

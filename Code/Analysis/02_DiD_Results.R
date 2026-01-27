@@ -97,9 +97,9 @@ cat("====================================================================\n\n")
 cat("\n--- Loading Data ---\n")
 
 # --- LOAD ANNUAL DATA ---
-DATA_PATH <- here("Data", "Processed", "facility_leak_behavior_annual.rds")
+DATA_PATH <- here("Data", "Processed", "facility_leak_behavior_annual.csv")
 if (!file.exists(DATA_PATH)) stop("Data not found. Run 10_Build_Annual_Panel.R first.")
-annual_data <- readRDS(DATA_PATH)
+annual_data <- fread(DATA_PATH)
 
 # --- APPLY CONSTRAINTS ---
 # Filter 1: Window (1990-2015 captures pre-trend and long-run post)
@@ -130,10 +130,10 @@ annual_data[, `:=`(
 # Motor Fuel Subsample
 mf_data <- annual_data[is_motor_fuel == 1]# Final sample summary
 cat(sprintf("\nFinal Analysis Sample:\n"))
-cat(sprintf("  Total: %s facility-months\n", format(nrow(filtered_data), big.mark = ",")))
-cat(sprintf("  Texas: %s\n", format(sum(filtered_data$texas_treated), big.mark = ",")))
-cat(sprintf("  Control: %s\n", format(sum(!filtered_data$texas_treated), big.mark = ",")))
-cat(sprintf("  Unique facilities: %s\n", format(uniqueN(filtered_data$panel_id), big.mark = ",")))
+cat(sprintf("  Total: %s facility-months\n", format(nrow(annual_data), big.mark = ",")))
+cat(sprintf("  Texas: %s\n", format(sum(annual_data$texas_treated), big.mark = ",")))
+cat(sprintf("  Control: %s\n", format(sum(!annual_data$texas_treated), big.mark = ",")))
+cat(sprintf("  Unique facilities: %s\n", format(uniqueN(annual_data$panel_id), big.mark = ",")))
 
 #==============================================================================
 # PART A: BENCHMARKS (NAIVE 2WFE)
@@ -154,21 +154,20 @@ ref_event_date <- as.Date("1998-12-01")
 #------------------------------------------------------------------------------
 cat("--- A.1: Naive DiD on Levels (Motor Fuel Only) ---\n")
 
-mf_data <- filtered_data[is_motor_fuel == TRUE]
 cat(sprintf("Motor fuel sample: %s facility-months\n", format(nrow(mf_data), big.mark = ",")))
 # --- NAIVE 2WFE BENCHMARKS ---
 did_lust_naive <- feols(y_lust ~ did_term | panel_id + panel_year,
-                        data = mf_data, cluster = "state", lean = TRUE)
+                        data = mf_data, cluster = "state", lean = FALSE)
 
 did_exit_naive <- feols(y_exit ~ did_term | panel_id + panel_year,
-                        data = mf_data, cluster = "state", lean = TRUE)
+                        data = mf_data, cluster = "state", lean = FALSE)
 
 did_retro_naive <- feols(y_retro ~ did_term | panel_id + panel_year,
-                         data = mf_data, cluster = "state", lean = TRUE)
+                         data = mf_data, cluster = "state", lean = FALSE)
 
 # Save table using new helper
 save_standard_did_table(
-  models = list(did_lust_naive, did_exit_naive, did_retrofit_naive),
+  models = list(did_lust_naive, did_exit_naive, did_retro_naive),
   headers = c("LUST", "Exit", "Retrofit"),
   base_name = "A1_Naive_2WFE_Benchmark",
   title = "Naive 2WFE DiD (Biased Benchmark, Motor Fuel Only)",
@@ -186,54 +185,63 @@ save_standard_did_table(
 #------------------------------------------------------------------------------
 cat("\n--- A.2: Step-In Controls with Motor Fuel Heterogeneity ---\n")
 
+# Note: Using 'annual_data' (full sample) to allow comparison between
+# Motor Fuel vs. Non-Motor Fuel via interaction.
+
 # A.2.1: Pooled (Benchmark)
+# Simple DiD on the full annual sample
 did_lust_a21 <- feols(
-  leak_incident ~ texas_treated * post_1999 | panel_id + year_month,
-  data = filtered_data,
+  y_lust ~ texas_treated * post_1999 | panel_id + panel_year,
+  data = annual_data,
   cluster = "state",
-  lean = TRUE,
-  mem.clean = TRUE
+  lean = F,
+  mem.clean = FALSE
 )
 
 # A.2.2: Baseline Triple Interaction
+# Adds (Treat x Post x Is_Motor_Fuel) to test if effect is driven by gas stations
 did_lust_a22 <- feols(
-  leak_incident ~ texas_treated * post_1999 * is_motor_fuel | panel_id + year_month,
-  data = filtered_data,
+  y_lust ~ texas_treated * post_1999 * is_motor_fuel | panel_id + panel_year,
+  data = annual_data,
   cluster = "state",
-  lean = TRUE,
-  mem.clean = TRUE
+  lean = FALSE,
+  mem.clean = FALSE
 )
 
 # A.2.3: + Age Bins
+# Controls for tank age profile (older tanks leak more)
 did_lust_a23 <- feols(
-  leak_incident ~ texas_treated * post_1999 * is_motor_fuel + age_bins | panel_id + year_month,
-  data = filtered_data,
+  y_lust ~ texas_treated * post_1999 * is_motor_fuel + age_bins | panel_id + panel_year,
+  data = annual_data,
   cluster = "state",
-  lean = TRUE,
-  mem.clean = TRUE
+  lean = FALSE,
+  mem.clean = FALSE
 )
 
 # A.2.4: + EPA Deadline Controls
+# Controls for the 1998 upgrade deadline effects (pre-1998 tanks behave differently)
 did_lust_a24 <- feols(
-  leak_incident ~ texas_treated * post_1999 * is_motor_fuel + age_bins + pre1998_install * post_1999 | 
-    panel_id + year_month,
-  data = filtered_data,
+  y_lust ~ texas_treated * post_1999 * is_motor_fuel + age_bins + pre1998_install * post_1999 | 
+    panel_id + panel_year,
+  data = annual_data,
   cluster = "state",
-  lean = TRUE,
-  mem.clean = TRUE
+  lean = FALSE,
+  mem.clean = FALSE
 )
 
 # A.2.5: + Regulatory Vintage
+# Controls for specific regulatory cohorts (Pre-RCRA, Transition, Post-Deadline)
 did_lust_a25 <- feols(
-  leak_incident ~ texas_treated * post_1999 * is_motor_fuel + age_bins + reg_vintage | 
-    panel_id + year_month,
-  data = filtered_data,
+  y_lust ~ texas_treated * post_1999 * is_motor_fuel + age_bins + reg_vintage | 
+    panel_id + panel_year,
+  data = annual_data,
   cluster = "state",
-  lean = TRUE,
-  mem.clean = TRUE
+  lean = FALSE,
+  mem.clean = FALSE
 )
 
-# Save triple interaction table using new helper
+# Save triple interaction table
+# Note: interact_term is now "texas_treated:post_1999:is_motor_fuel" (no TRUE suffix)
 save_triple_did_table(
   pooled_model = did_lust_a21,
   triple_models = list(did_lust_a22, did_lust_a23, did_lust_a24, did_lust_a25),
@@ -241,12 +249,14 @@ save_triple_did_table(
   base_name = "A2_LUST_StepIn_Results",
   title = "LUST DiD: Step-In Controls with MF Heterogeneity",
   base_term = "texas_treated:post_1999",
-  interact_term = "texas_treated:post_1999:is_motor_fuelTRUE",
+  interact_term = "texas_treated:post_1999:is_motor_fuel", 
   cluster_var = "state",
   use_bootstrap = USE_BOOTSTRAP,
   n_reps = N_BOOTSTRAP,
   digits = 6
 )
+
+
 #==============================================================================
 # PART B: SURVIVAL & SELECTION CORRECTIONS (IPS)
 #==============================================================================
@@ -335,30 +345,30 @@ cat(sprintf("IPS weights: median = %.3f, range = [%.3f, %.3f]\n",
 cat("\n--- B.3: IPS-Weighted Event Studies (Annual Optimized) ---\n")
 
 # Reduce threads to safe level for memory
-setFixest_nthreads(2)
+setFixest_nthreads(14)
 
 # LUST Event Study
 es_lust_ips <- feols(
   # Outcome: y_lust (Annual binary), Ref Year: 1998
-  y_lust ~ i(panel_year, texas_treated, ref = 1998, sparse = TRUE) | 
+  y_lust ~ i(panel_year, texas_treated, ref = 1998) | 
            panel_id + panel_year,
   data = mf_data,
   weights = ~ips_weight,
   cluster = "state",
-  lean = TRUE,
-  mem.clean = TRUE
+  lean = FALSE,
+  mem.clean = FALSE
 )
 
 # Exit Event Study
 es_exit_ips <- feols(
   # Outcome: y_exit (Annual binary), Ref Year: 1998
-  y_exit ~ i(panel_year, texas_treated, ref = 1998, sparse = TRUE) | 
+  y_exit ~ i(panel_year, texas_treated, ref = 1998) | 
            panel_id + panel_year,
   data = mf_data,
   weights = ~ips_weight,
   cluster = "state",
-  lean = TRUE,
-  mem.clean = TRUE
+  lean = FALSE,
+  mem.clean = FALSE
 )
 
 cat("Yearly IPS-weighted event studies estimated (Sparse Mode).\n")
@@ -374,148 +384,156 @@ cat("====================================================================\n")
 
 epsilon <- 1e-8
 
+#==============================================================================
+# PART C: DEANER & KU (2024) HAZARD ANALYSIS (STATE-LEVEL)
+#==============================================================================
+
+cat("\n")
+cat("====================================================================\n")
+cat("PART C: Deaner & Ku (2024) Hazard DiD (State-Level Aggregation)\n")
+cat("====================================================================\n")
+
+epsilon <- 1e-8
+
 #------------------------------------------------------------------------------
-# --- C.1: Define Annual Hazard Aggregation Function ---
-compute_annual_hazard <- function(dt, outcome_col, group_vars = c("texas_treated", "panel_year")) {
-  # 1. Aggregate to (Group x Year) cells
+# --- C.1: Define Annual Hazard Aggregation Function (State-Level) ---
+compute_annual_hazard <- function(dt, outcome_col, group_vars = c("state", "panel_year")) {
+  # 1. Aggregate to (State x Year) cells
+  # We preserve 'texas_treated' (constant within state)
   agg <- dt[, .(
     cum_rate = mean(get(outcome_col), na.rm = TRUE),
-    n = .N
+    n = .N,
+    texas_treated = max(texas_treated)
   ), by = group_vars]
   
-  # 2. Sort and index
+  # 2. Sort
   setorderv(agg, group_vars)
+  
+  # 3. Determine Entity Grouping (State vs State+Fuel)
+  #    Everything in group_vars EXCEPT 'panel_year' defines the unit
+  entity_vars <- setdiff(group_vars, "panel_year")
+  
+  # 4. Calculate Base Rate (First period for each state)
   agg[, `:=`(
     time_idx = 1:.N,
     base_rate = first(cum_rate)
-  ), by = "texas_treated"]
+  ), by = entity_vars]
   
-  # 3. Deaner & Ku Transformation: H_bar
-  # (1 / t-1) * log( (1 - base) / (1 - current) )
+  # 5. Deaner & Ku Transformation: H_bar
+  #    (1 / t-1) * log( (1 - base) / (1 - current) )
   epsilon <- 1e-8
   agg[, H_bar := ifelse(time_idx > 1, 
                         (1 / (time_idx - 1)) * log((1 - base_rate + epsilon) / (1 - cum_rate + epsilon)), 
                         0)]
   
-  # 4. Define Post Flag for Regression
+  # 6. Define Post Flag
   agg[, post := as.integer(panel_year >= 1999)]
   
-  # Return only t > 1 (cannot define hazard for t=1)
+  # Return only t > 1
   return(agg[time_idx > 1])
 }
 
-# --- C.2: Execute Deaner & Ku Regressions (LUST, Exit, Retrofit) ---
+# --- C.2: Execute State-Level Regressions (LUST, Exit, Retrofit) ---
 
-# 1. Compute Annual Hazards
-# Note: Ensure 'compute_annual_hazard' creates 'post' (as binary 1999+) inside the function
+# 1. Compute State-Level Hazards
 hazard_lust <- compute_annual_hazard(mf_data, "y_lust")
 hazard_exit <- compute_annual_hazard(mf_data, "y_exit")
 hazard_retrofit <- compute_annual_hazard(mf_data, "y_retro")
 
-cat("Time-average hazards calculated (Main Sample)\n")
+cat("State-level hazards calculated (N=19 states)\n")
 
-# 2. Estimate Models
-did_dk_lust <- lm(H_bar ~ texas_treated * post, data = hazard_lust, weights = n)
-did_dk_exit <- lm(H_bar ~ texas_treated * post, data = hazard_exit, weights = n)
-did_dk_retrofit <- lm(H_bar ~ texas_treated * post, data = hazard_retrofit, weights = n)
+# 2. Estimate 2WFE Models (Cluster = State)
+#    Fixed Effects: State + Year
+#    Interaction: texas_treated:post
+did_dk_lust <- feols(H_bar ~ texas_treated:post | state + panel_year, 
+                     data = hazard_lust,  cluster = "state")
 
-# 3. Compile Results Table
-dk_results <- data.table(
-  Outcome = c("LUST", "Exit", "Retrofit"),
-  Coefficient = c(
-    coef(did_dk_lust)["texas_treated:post"],
-    coef(did_dk_exit)["texas_treated:post"],
-    coef(did_dk_retrofit)["texas_treated:post"]
-  ),
-  SE = c(
-    summary(did_dk_lust)$coefficients["texas_treated:post", "Std. Error"],
-    summary(did_dk_exit)$coefficients["texas_treated:post", "Std. Error"],
-    summary(did_dk_retrofit)$coefficients["texas_treated:post", "Std. Error"]
-  ),
-  N_Cells = c(
-    nrow(hazard_lust[time_idx > 1]),
-    nrow(hazard_exit[time_idx > 1]),
-    nrow(hazard_retrofit[time_idx > 1])
-  )
+did_dk_exit <- feols(H_bar ~ texas_treated:post | state + panel_year, 
+                     data = hazard_exit,  cluster = "state")
+
+did_dk_retrofit <- feols(H_bar ~ texas_treated:post | state + panel_year, 
+                         data = hazard_retrofit,  cluster = "state")
+
+# 3. Helper to Extract Results
+get_dk_stats <- function(model, label, n_obs) {
+  co <- coef(model)["texas_treated:post"]
+  se <- se(model)["texas_treated:post"]
+  t_stat <- co / se
+  p_val <- pvalue(model)["texas_treated:post"]
+  return(data.table(
+    Outcome = label,
+    Coefficient = co,
+    SE = se,
+    N_Cells = n_obs,
+    t_stat = t_stat,
+    p_val = p_val,
+    CI_Lower = co - 1.96 * se,
+    CI_Upper = co + 1.96 * se
+  ))
+}
+
+dk_results <- rbind(
+  get_dk_stats(did_dk_lust, "LUST", nrow(hazard_lust)),
+  get_dk_stats(did_dk_exit, "Exit", nrow(hazard_exit)),
+  get_dk_stats(did_dk_retrofit, "Retrofit", nrow(hazard_retrofit))
 )
 
-# 4. Calculate Stats & Confidence Intervals
-dk_results[, `:=`(
-  t_stat = Coefficient / SE,
-  p_val = 2 * pt(-abs(Coefficient / SE), df = N_Cells - 4),
-  CI_Lower = Coefficient - 1.96 * SE,
-  CI_Upper = Coefficient + 1.96 * SE
-)]
-
-# 5. Save Results
+# 4. Save Results
 save_simple_csv_table(
   results_dt = dk_results,
   base_name = "C2_DeanerKu_Hazard_DiD",
-  title = "Deaner & Ku (2024) Time-Average Hazard DiD (Annual)",
-  models = list(did_dk_lust, did_dk_exit, did_dk_retrofit),
-  treatment_var = "texas_treated:post",
-  cluster_var = "state",
-  use_bootstrap = USE_BOOTSTRAP,
-  n_reps = N_BOOTSTRAP
+  title = "Deaner & Ku Hazard DiD (State FE + Clustered SE)",
+  use_bootstrap = FALSE
 )
 
-
 #------------------------------------------------------------------------------
-# C.3: Stratified by is_motor_fuel
+# C.3: Stratified by is_motor_fuel (State Level)
 #------------------------------------------------------------------------------
 cat("\n--- C.3: Deaner & Ku Stratified by Motor Fuel ---\n")
 
-# Use 'annual_data' (full sample) to compare Motor Fuel vs. Others
+# Aggregate by State x Year x FuelType
 hazard_lust_all <- compute_annual_hazard(
   annual_data,
   "y_lust",
-  group_vars = c("texas_treated", "panel_year", "is_motor_fuel")
+  group_vars = c("state", "panel_year", "is_motor_fuel")
 )
 
 hazard_exit_all <- compute_annual_hazard(
   annual_data,
   "y_exit",
-  group_vars = c("texas_treated", "panel_year", "is_motor_fuel")
+  group_vars = c("state", "panel_year", "is_motor_fuel")
 )
 
-did_dk_lust_strat <- lm(
-  H_bar ~ texas_treated * post * is_motor_fuel,
-  data = hazard_lust_all[time_idx > 1],
-  weights = n
-)
+# Triple Interaction Model
+# We interact the DiD term (texas_treated:post) with is_motor_fuel
+did_dk_lust_strat <- feols(H_bar ~ texas_treated:post*is_motor_fuel | state + panel_year, 
+                           data = hazard_lust_all[time_idx > 1], 
+                           weights = ~n, cluster = "state")
 
-did_dk_exit_strat <- lm(
-  H_bar ~ texas_treated * post * is_motor_fuel,
-  data = hazard_exit_all[time_idx > 1],
-  weights = n
-)
+did_dk_exit_strat <- feols(H_bar ~ texas_treated:post*is_motor_fuel | state + panel_year, 
+                           data = hazard_exit_all[time_idx > 1], 
+                           weights = ~n, cluster = "state")
 
 dk_strat_results <- data.table(
   Outcome = c("LUST", "Exit"),
-  Main_Effect = c(
+  # The 'Main Effect' here is the baseline interaction (non-motor fuel if 0/1)
+  # But with 3-way interaction syntax, interpretation depends on factor setup.
+  # We extract the specific terms:
+  Main_Interaction = c(
     coef(did_dk_lust_strat)["texas_treated:post"],
     coef(did_dk_exit_strat)["texas_treated:post"]
+  ),
+  Triple_Interaction = c(
+    coef(did_dk_lust_strat)["texas_treated:post:is_motor_fuel"],
+    coef(did_dk_exit_strat)["texas_treated:post:is_motor_fuel"]
   )
 )
-
-# Get triple interaction (Auto-detect name)
-triple_names <- c("texas_treated:post:is_motor_fuel", 
-                  "texas_treated:post:is_motor_fuelTRUE")
-
-for (tn in triple_names) {
-  if (tn %in% names(coef(did_dk_lust_strat))) {
-    dk_strat_results[, Triple_Interaction := c(
-      coef(did_dk_lust_strat)[tn],
-      coef(did_dk_exit_strat)[tn]
-    )]
-    break
-  }
-}
 
 save_simple_csv_table(
   results_dt = dk_strat_results,
   base_name = "C3_DeanerKu_MotorFuel_Stratified",
-  title = "Deaner & Ku Stratified by Motor Fuel"
+  title = "Deaner & Ku Stratified (State FE + Clustered SE)",
+  use_bootstrap = FALSE
 )
 
 #------------------------------------------------------------------------------
@@ -523,54 +541,34 @@ save_simple_csv_table(
 #------------------------------------------------------------------------------
 cat("\n--- C.4: Deaner & Ku Stratified by Age Bins ---\n")
 
-# Use 'mf_data' (Motor Fuel only) for age stratification
+# Aggregate by State x Year x AgeBin
 hazard_lust_age <- compute_annual_hazard(
   mf_data[!is.na(age_bins)],
   "y_lust",
-  group_vars = c("texas_treated", "panel_year", "age_bins")
+  group_vars = c("state", "panel_year", "age_bins")
 )
 
-hazard_exit_age <- compute_annual_hazard(
-  mf_data[!is.na(age_bins)],
-  "y_exit",
-  group_vars = c("texas_treated", "panel_year", "age_bins")
-)
+# Interaction Model
+did_dk_lust_age <- feols(H_bar ~ texas_treated*post*age_bins | state + panel_year, 
+                         data = hazard_lust_age[time_idx > 1], 
+                         weights = ~n, cluster = "state")
 
-did_dk_lust_age <- lm(
-  H_bar ~ texas_treated * post * age_bins,
-  data = hazard_lust_age[time_idx > 1],
-  weights = n
-)
-
-did_dk_exit_age <- lm(
-  H_bar ~ texas_treated * post * age_bins,
-  data = hazard_exit_age[time_idx > 1],
-  weights = n
-)
+# Extract interactions
+coefs <- coef(did_dk_lust_age)
+age_terms <- grep("texas_treated:post:age_bins", names(coefs), value = TRUE)
 
 dk_age_results <- data.table(
-  Outcome = c("LUST", "Exit"),
-  Main_Effect = c(
-    coef(did_dk_lust_age)["texas_treated:post"],
-    coef(did_dk_exit_age)["texas_treated:post"]
-  )
+  Term = age_terms,
+  Coefficient = coefs[age_terms],
+  SE = se(did_dk_lust_age)[age_terms],
+  t_stat = coefs[age_terms] / se(did_dk_lust_age)[age_terms]
 )
-
-# Capture Age Interactions
-age_bin_interactions <- grep("texas_treated:post:age_bins", 
-                             names(coef(did_dk_lust_age)), value = TRUE)
-
-if (length(age_bin_interactions) > 0) {
-  cat("\nAge Bin x Treatment Interactions (LUST):\n")
-  for (abi in age_bin_interactions) {
-    cat(sprintf("  %s: %.6f\n", abi, coef(did_dk_lust_age)[abi]))
-  }
-}
 
 save_simple_csv_table(
   results_dt = dk_age_results,
   base_name = "C4_DeanerKu_AgeBin_Stratified",
-  title = "Deaner & Ku Stratified by Age Bins"
+  title = "Deaner & Ku Age Stratified (State FE + Clustered SE)",
+  use_bootstrap = FALSE
 )
 
 #------------------------------------------------------------------------------
@@ -578,41 +576,77 @@ save_simple_csv_table(
 #------------------------------------------------------------------------------
 cat("\n--- C.5: Vintage-Based Hazard Analysis ---\n")
 
-# Aggregating annual rates by vintage
+# Use State-Level aggregation for Vintage analysis as well
 vintage_agg <- mf_data[, .(
   leak_rate = mean(y_lust, na.rm = TRUE),
   exit_rate = mean(y_exit, na.rm = TRUE),
-  retrofit_rate = mean(y_retro, na.rm = TRUE),
   n_obs = .N,
-  n_facilities = uniqueN(panel_id)
-), by = .(texas_treated, post, reg_vintage)]
+  texas_treated = max(texas_treated),
+  post = as.integer(panel_year >= 1999)
+), by = .(state, reg_vintage,panel_year)] # State x Post x Vintage
 
-# Weighted Regressions
-did_vintage_lust <- lm(leak_rate ~ texas_treated * post + reg_vintage,
-                       data = vintage_agg,
-                       weights = n_obs)
+# Weighted Regressions with Cluster State
+did_vintage_lust_0 <- feols(leak_rate ~ texas_treated*post+reg_vintage | state + panel_year,
+                          data = vintage_agg, weights = ~n_obs, cluster = "state")
 
-did_vintage_exit <- lm(exit_rate ~ texas_treated * post + reg_vintage,
-                       data = vintage_agg,
-                       weights = n_obs)
+did_vintage_lust <- feols(leak_rate ~ texas_treated*post*reg_vintage | state + panel_year,
+                          data = vintage_agg, weights = ~n_obs, cluster = "state")
+
+did_vintage_exit_0 <- feols(exit_rate ~ texas_treated*post + reg_vintage | state + panel_year,
+                          data = vintage_agg, weights = ~n_obs, cluster = "state")
+
+
+did_vintage_exit <- feols(exit_rate ~ texas_treated*post*reg_vintage | state + panel_year,
+                          data = vintage_agg, weights = ~n_obs, cluster = "state")
 
 vintage_results <- data.table(
   Outcome = c("LUST", "Exit"),
-  Coefficient = c(
-    coef(did_vintage_lust)["texas_treated:post"],
-    coef(did_vintage_exit)["texas_treated:post"]
-  ),
-  SE = c(
-    summary(did_vintage_lust)$coefficients["texas_treated:post", "Std. Error"],
-    summary(did_vintage_exit)$coefficients["texas_treated:post", "Std. Error"]
+  # Extracting primary post-deadline interaction as example
+  Coef_PostDeadline = c(
+    coef(did_vintage_lust)["texas_treated:post:reg_vintagePost-Deadline"],
+    coef(did_vintage_exit)["texas_treated:post:reg_vintagePost-Deadline"]
   )
 )
 
 save_simple_csv_table(
   results_dt = vintage_results,
   base_name = "C5_Vintage_Hazard_DiD",
-  title = "Vintage-Based Hazard Analysis"
+  title = "Vintage-Based Hazard Analysis (State FE)",
+  use_bootstrap = FALSE
 )
+
+#------------------------------------------------------------------------------
+# C.6: Dynamic Deaner & Ku Event Studies (Fixest Implementation)
+#------------------------------------------------------------------------------
+cat("\n--- C.6: Estimating Dynamic DK Event Studies (Fixest) ---\n")
+
+estimate_dk_es_fixest <- function(df, outcome_name) {
+  # Dynamic Model: H_bar ~ Texas x Year | State + Year
+  es_model <- feols(
+    H_bar ~ i(panel_year, texas_treated, ref = 1998) | state + panel_year,
+    data = df,
+    weights = ~n,
+    cluster = "state"
+  )
+  
+  tidy_res <- broom::tidy(es_model, conf.int = TRUE)
+  tidy_res <- data.table(tidy_res)
+  tidy_res[, year := as.numeric(gsub("[^0-9]", "", term))]
+  tidy_res[, Outcome := outcome_name]
+  
+  ref_row <- data.table(
+    term = "Ref", estimate = 0, std.error = 0, statistic = 0, 
+    p.value = 1, conf.low = 0, conf.high = 0, year = 1998, Outcome = outcome_name
+  )
+  return(rbind(tidy_res, ref_row))
+}
+
+# Run using State-Level Hazard Data
+dk_es_lust_data <- estimate_dk_es_fixest(hazard_lust, "LUST")
+dk_es_exit_data <- estimate_dk_es_fixest(hazard_exit, "Exit")
+dk_es_retro_data <- estimate_dk_es_fixest(hazard_retrofit, "Retrofit")
+
+cat("Dynamic Deaner & Ku models estimated via fixest (Clustered by State).\n")
 
 rm(vintage_agg)
 invisible(gc())
@@ -785,25 +819,25 @@ closure_years[, neither := as.integer(y_exit == 0 & y_retro == 0)]
 did_exit_no_retrofit <- feols(
   exit_no_retrofit ~ did_term + age_bins + has_single_walled_dec + 
     active_tanks_dec + total_capacity_dec | panel_id + panel_year,
-  data = closure_years, cluster = "state", lean = TRUE
+  data = closure_years, cluster = "state", lean = FALSE
 )
 
 did_retrofit_no_exit <- feols(
   retrofit_no_exit ~ did_term + age_bins + has_single_walled_dec + 
     active_tanks_dec + total_capacity_dec | panel_id + panel_year,
-  data = closure_years, cluster = "state", lean = TRUE
+  data = closure_years, cluster = "state", lean = FALSE
 )
 
 did_both <- feols(
   both_exit_retrofit ~ did_term + age_bins + has_single_walled_dec + 
     active_tanks_dec + total_capacity_dec | panel_id + panel_year,
-  data = closure_years, cluster = "state", lean = TRUE
+  data = closure_years, cluster = "state", lean = FALSE
 )
 
 did_neither <- feols(
   neither ~ did_term + age_bins + has_single_walled_dec + 
     active_tanks_dec + total_capacity_dec | panel_id + panel_year,
-  data = closure_years, cluster = "state", lean = TRUE
+  data = closure_years, cluster = "state", lean = FALSE
 )
 
 save_standard_did_table(
@@ -837,12 +871,12 @@ cat("\n--- D.2: Mechanism Decomposition (Exit-No-LUST) ---\n")
 
 did_exit_no_lust <- feols(
   exit_no_leak ~ did_term | panel_id + panel_year,
-  data = mf_data, cluster = "state", lean = TRUE
+  data = mf_data, cluster = "state", lean = FALSE
 )
 
 did_exit_with_lust <- feols(
   exit_with_leak ~ did_term | panel_id + panel_year,
-  data = mf_data, cluster = "state", lean = TRUE
+  data = mf_data, cluster = "state", lean = FALSE
 )
 
 save_standard_did_table(
@@ -893,13 +927,13 @@ cat("\n--- D.3: LUST Detection Mechanism ---\n")
 did_lust_closure_detect <- feols(
   leak_found_by_closure ~ did_term + age_bins + has_single_walled_dec |
     panel_id + panel_year,
-  data = mf_data, cluster = "state", lean = TRUE
+  data = mf_data, cluster = "state", lean = FALSE
 )
 
 did_lust_operational <- feols(
   leak_not_found_by_exit ~ did_term + age_bins + has_single_walled_dec |
     panel_id + panel_year,
-  data = mf_data, cluster = "state", lean = TRUE
+  data = mf_data, cluster = "state", lean = FALSE
 )
 
 save_standard_did_table(
@@ -921,13 +955,13 @@ cat("\n--- D.4: LUST Detection Robustness (Narrow vs Wide) ---\n")
 did_lust_narrow <- feols(
   tank_closure_revealed_narrow ~ did_term + age_bins + has_single_walled_dec |
     panel_id + panel_year,
-  data = mf_data, cluster = "state", lean = TRUE
+  data = mf_data, cluster = "state", lean = FALSE
 )
 
 did_lust_wide <- feols(
   tank_closure_revealed_wide ~ did_term + age_bins + has_single_walled_dec |
     panel_id + panel_year,
-  data = mf_data, cluster = "state", lean = TRUE
+  data = mf_data, cluster = "state", lean = FALSE
 )
 
 save_standard_did_table(
@@ -980,35 +1014,35 @@ retrofit_years[, `:=`(
 did_dw_upgrade <- feols(
   retrofit_is_double_wall ~ did_term + age_bins + has_single_walled_dec +
     active_tanks_dec | panel_id + panel_year,
-  data = retrofit_years, cluster = "state", lean = TRUE
+  data = retrofit_years, cluster = "state", lean = FALSE
 )
 
 # 2. Capacity Magnitude Change (Continuous)
 did_capacity_change <- feols(
   capacity_change_year ~ did_term + age_bins + has_single_walled_dec +
     active_tanks_dec | panel_id + panel_year,
-  data = retrofit_years, cluster = "state", lean = TRUE
+  data = retrofit_years, cluster = "state", lean = FALSE
 )
 
 # 3. Probability of Upsizing
 did_upsize <- feols(
   is_upsize ~ did_term + age_bins + has_single_walled_dec +
     active_tanks_dec | panel_id + panel_year,
-  data = retrofit_years, cluster = "state", lean = TRUE
+  data = retrofit_years, cluster = "state", lean = FALSE
 )
 
 # 4. Probability of Downsizing
 did_downsize <- feols(
   is_downsize ~ did_term + age_bins + has_single_walled_dec +
     active_tanks_dec | panel_id + panel_year,
-  data = retrofit_years, cluster = "state", lean = TRUE
+  data = retrofit_years, cluster = "state", lean = FALSE
 )
 
 # 5. Net Tank Count Change
 did_net_tank_change <- feols(
   net_tank_change ~ did_term + age_bins + has_single_walled_dec +
     active_tanks_dec | panel_id + panel_year,
-  data = retrofit_years, cluster = "state", lean = TRUE
+  data = retrofit_years, cluster = "state", lean = FALSE
 )
 
 save_standard_did_table(
@@ -1029,17 +1063,17 @@ cat("\n--- E.2: Age Bin x Policy Interactions (HTE) ---\n")
 
 did_exit_age_hte <- feols(
   y_exit ~ did_term * age_bins | panel_id + panel_year,
-  data = mf_data, cluster = "state", lean = TRUE
+  data = mf_data, cluster = "state", lean = FALSE
 )
 
 did_retrofit_age_hte <- feols(
   y_retro ~ did_term * age_bins | panel_id + panel_year,
-  data = mf_data, cluster = "state", lean = TRUE
+  data = mf_data, cluster = "state", lean = FALSE
 )
 
 did_lust_age_hte <- feols(
   y_lust ~ did_term * age_bins | panel_id + panel_year,
-  data = mf_data, cluster = "state", lean = TRUE
+  data = mf_data, cluster = "state", lean = FALSE
 )
 
 # Extract Coefficients for Plotting/Saving
@@ -1079,12 +1113,12 @@ gradient_sample <- mf_data[wall_type == "Single-Walled" & post_1999 == 1]
 
 pooled_test_exit <- feols(
   y_exit ~ texas_treated * age_bins | panel_year,
-  data = gradient_sample, cluster = "state", lean = TRUE
+  data = gradient_sample, cluster = "state", lean = FALSE
 )
 
 pooled_test_retro <- feols(
   y_retro ~ texas_treated * age_bins | panel_year,
-  data = gradient_sample, cluster = "state", lean = TRUE
+  data = gradient_sample, cluster = "state", lean = FALSE
 )
 
 cat("\nJoint F-test for age bin x treatment interactions:\n")
@@ -1420,6 +1454,207 @@ retrofit_coef_plot <- ggplot(retrofit_coefs, aes(x = outcome, y = estimate)) +
 ggsave(file.path(OUTPUT_FIGURES, "G4_Retrofit_Coefficient_Plot.png"),
        retrofit_coef_plot, width = 8, height = 6, dpi = 300, bg = "white")
 cat("Saved: G4_Retrofit_Coefficient_Plot.png\n")
+
+
+#==============================================================================
+# PART H: STANDARD SURVIVAL DID (COX PROPORTIONAL HAZARDS)
+#==============================================================================
+
+cat("\n")
+cat("====================================================================\n")
+cat("PART H: Standard Survival DiD (Time-to-Event Analysis)\n")
+cat("====================================================================\n")
+
+#------------------------------------------------------------------------------
+# H.1: Survival Data Preparation (Risk Sets)
+#------------------------------------------------------------------------------
+cat("\n--- H.1: Defining Risk Sets (Time-to-First-Event) ---\n")
+
+# Filter 1: Incumbents only (as requested) & Motor Fuel (Standard sample)
+# Filter 2: Remove observations AFTER the first event (Risk set definition)
+# Note: In counting process format, subjects leave the risk set after the event.
+
+# --- Risk Set for First Leak ---
+# Keep observation if: It is the year of the first leak OR no leak has occurred yet.
+cox_lust_data <- mf_data[
+  cohort == "Incumbent" & 
+  (has_previous_leak == 0) # Exclude years after the first leak occurred
+]
+
+# --- Risk Set for First Closure ---
+# Keep observation if: It is the year of first closure OR no closure has occurred yet.
+cox_exit_data <- mf_data[
+  cohort == "Incumbent" & 
+  (has_previous_closure == 0)
+]
+
+cat(sprintf("Survival Analysis Samples (Incumbents):\n"))
+cat(sprintf("  Time-to-First-Leak N: %s (Events: %s)\n", 
+            format(nrow(cox_lust_data), big.mark=","),
+            format(sum(cox_lust_data$event_first_leak), big.mark=",")))
+cat(sprintf("  Time-to-First-Exit N: %s (Events: %s)\n", 
+            format(nrow(cox_exit_data), big.mark=","),
+            format(sum(cox_exit_data$event_first_closure), big.mark=",")))
+
+#------------------------------------------------------------------------------
+# H.2: Main Cox DiD Estimates
+#------------------------------------------------------------------------------
+cat("\n--- H.2: Estimating Cox DiD Models ---\n")
+
+# Model Specification:
+# Surv(Start, Stop, Event) ~ Treatment + Post + Treatment:Post + Strata(State)
+# We use panel_year as time. Start = year-1, Stop = year.
+# Standard errors clustered by State.
+
+# 1. Time-to-First-Leak
+cox_did_lust <- coxph(
+  Surv(panel_year - 1, panel_year, event_first_leak) ~ 
+    texas_treated * post_1999 + age_bins + has_single_walled_dec + 
+    total_capacity_dec + strata(state), # Stratified baseline hazard by state
+  data = cox_lust_data,
+  cluster = state
+)
+
+# 2. Time-to-First-Closure
+cox_did_exit <- coxph(
+  Surv(panel_year - 1, panel_year, event_first_closure) ~ 
+    texas_treated * post_1999 + age_bins + has_single_walled_dec + 
+    total_capacity_dec + strata(state),
+  data = cox_exit_data,
+  cluster = state
+)
+
+# Extract Results
+get_cox_res <- function(model, label) {
+  res <- broom::tidy(model, exponentiate = FALSE, conf.int = TRUE)
+  res <- data.table(res)
+  target <- res[term == "texas_treated:post_1999"]
+  data.table(
+    Outcome = label,
+    Coef = target$estimate,
+    HR = exp(target$estimate), # Hazard Ratio
+    SE = target$std.error,
+    P_Val = target$p.value,
+    CI_Lower_HR = exp(target$conf.low),
+    CI_Upper_HR = exp(target$conf.high)
+  )
+}
+
+cox_main_results <- rbind(
+  get_cox_res(cox_did_lust, "Time-to-First-Leak"),
+  get_cox_res(cox_did_exit, "Time-to-First-Closure")
+)
+
+save_simple_csv_table(
+  results_dt = cox_main_results,
+  base_name = "H2_Cox_Survival_DiD_Main",
+  title = "Cox Proportional Hazards DiD (Stratified by State)",
+  notes = c("Sample: Incumbent Motor Fuel Facilities.",
+            "Controls: Age Bins, Wall Type, Capacity.",
+            "HR > 1 indicates increased hazard (faster time to event).")
+)
+
+#------------------------------------------------------------------------------
+# H.3: Dynamic Survival Event Study (Parallel Trends Test)
+#------------------------------------------------------------------------------
+cat("\n--- H.3: Estimating Dynamic Cox Models (Event Study) ---\n")
+
+# To verify parallel trends in hazards, we interact Treatment with Year dummies.
+# If Pre-Treatment coefficients are ~0 (HR ~ 1), hazards were parallel.
+
+estimate_cox_es <- function(dt, event_col, outcome_name) {
+  
+  # Ensure event column is numeric for Surv()
+  dt[, event_num := get(event_col)]
+  
+  # create factor for year, setting 1998 as reference
+  dt[, year_fac := factor(panel_year)]
+  dt[, year_fac := relevel(year_fac, ref = "1998")]
+  
+  # Formula: Interaction of Texas with every year
+  # Note: Main effect of 'year' is absorbed by the baseline hazard (counting process)
+  # Main effect of 'texas' is absorbed if we stratify, OR we can estimate it.
+  # Here we include texas_treated + texas_treated:year_fac
+  
+  fmla <- as.formula(paste0(
+    "Surv(panel_year - 1, panel_year, event_num) ~ ",
+    "texas_treated * year_fac + strata(state) + cluster(state)"
+  ))
+  
+  fit <- coxph(fmla, data = dt)
+  
+  # Extract Coefficients
+  tidy_res <- broom::tidy(fit, conf.int = TRUE)
+  dt_res <- data.table(tidy_res)
+  
+  # Filter for interactions (format: "texas_treated:year_fac1995")
+  dt_res <- dt_res[grepl("texas_treated:year_fac", term)]
+  
+  # Extract Year
+  dt_res[, year := as.numeric(gsub("texas_treated:year_fac", "", term))]
+  dt_res[, Outcome := outcome_name]
+  
+  # Add Reference Year
+  ref_row <- data.table(
+    term = "Ref", estimate = 0, std.error = 0, statistic = 0, 
+    p.value = 1, conf.low = 0, conf.high = 0, year = 1998, Outcome = outcome_name
+  )
+  
+  return(rbind(dt_res, ref_row))
+}
+
+# Run Event Studies
+# Warning: This can be computationally intensive. 
+# We subset years to relevant window to ensure convergence/speed if needed.
+# (Here we use the full 1990-2015 window filtered in Part 2)
+
+cat("  Estimating dynamic Cox for LUST...\n")
+cox_es_lust <- estimate_cox_es(cox_lust_data, "event_first_leak", "First Leak")
+
+cat("  Estimating dynamic Cox for Exit...\n")
+cox_es_exit <- estimate_cox_es(cox_exit_data, "event_first_closure", "First Closure")
+
+#------------------------------------------------------------------------------
+# H.4: Visualization (Cox Event Study)
+#------------------------------------------------------------------------------
+cat("\n--- H.4: Plotting Survival Event Studies ---\n")
+
+cox_plot_data <- rbind(cox_es_lust, cox_es_exit)
+
+# Filter for readable window (e.g. 1990-2010) to avoid noisy tails
+cox_plot_data <- cox_plot_data[year >= 1990 & year <= 2010]
+
+surv_es_plot <- ggplot(cox_plot_data, aes(x = year, y = estimate, color = Outcome)) +
+  # Reference Lines
+  geom_vline(xintercept = 1998.5, linetype = "dashed", color = "gray30") +
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.3) +
+  
+  # Confidence Intervals
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = Outcome), alpha = 0.15, color = NA) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.5) +
+  
+  # Colors
+  scale_color_manual(values = c("First Leak" = "#D55E00", "First Closure" = "#0072B2")) +
+  scale_fill_manual(values = c("First Leak" = "#D55E00", "First Closure" = "#0072B2")) +
+  
+  facet_wrap(~Outcome, scales = "free_y", ncol = 1) +
+  
+  labs(
+    title = "Survival DiD Event Study (Cox Proportional Hazards)",
+    subtitle = "Log-Hazard Ratio (Texas vs Control) over Time",
+    x = "Year",
+    y = "Log-Hazard Difference",
+    caption = "Reference Year: 1998. \nInterpretation: 0 implies parallel hazards. >0 implies higher hazard in Texas relative to controls."
+  ) +
+  theme_pub() +
+  theme(legend.position = "none")
+
+ggsave(file.path(OUTPUT_FIGURES, "H4_Survival_DiD_EventStudy.png"),
+       surv_es_plot, width = 10, height = 8, dpi = 300, bg = "white")
+
+cat("Saved: H4_Survival_DiD_EventStudy.png\n")
+
 
 #==============================================================================
 # FINAL SUMMARY

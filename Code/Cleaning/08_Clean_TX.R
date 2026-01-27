@@ -1802,12 +1802,12 @@ corr_cols <- c("CORR_TANK_CP", "CORR_PIPE_CP", "CORR_TANK_VARIANCE", "CORR_PIPE_
 
 # 3. Pre-filter UST data to only relevant columns and date ranges
 ust_cols_for_join <- c(
-  "FACILITY_ID", "UST_ID", "install_date", "end_date", "CAPACITY","STATUS",
+  "FACILITY_ID", "UST_ID", "install_date", "end_date", "CAPACITY", "STATUS", "STATUS_DATE", 
   "single_walled", "double_walled", "missing_walled", "unknown_walled",
   "is_steel_tank", "is_fiberglass_tank", "is_composite_tank", "is_concrete_tank", 
   "is_jacketed_tank", "is_coated_tank", "is_unknown_material_tank",
   "is_gasoline", "is_diesel", "is_oil_kerosene", "is_jet_fuel", "is_other",
-  "has_interstitial_det", "has_electronic_det", "has_manual_stat_det", "has_any_det",'is_closed_removed',
+  "has_interstitial_det", "has_electronic_det", "has_manual_stat_det", "has_any_det", 'is_closed_removed',
   detect_cols, corr_cols
 )
 
@@ -1878,7 +1878,7 @@ active_tank_months <- ust_filtered[panel_months,
   .(
     x.FACILITY_ID, x.UST_ID,
     i.YEAR, i.MONTH, i.month_date,
-    x.install_date, x.end_date,
+    x.install_date, x.end_date,x.STATUS_DATE,
     x.CAPACITY,
 
     x.single_walled, x.double_walled, x.missing_walled, x.unknown_walled,
@@ -1905,6 +1905,7 @@ active_tank_months <- ust_filtered[panel_months,
 old_names <- grep("^(x\\.|i\\.)", names(active_tank_months), value = TRUE)
 new_names <- sub("^(?:x\\.|i\\.)", "", old_names)
 setnames(active_tank_months, old = old_names, new = new_names)
+setnames(active_tank_months, "STATUS_DATE", "tank_closed_date_raw")
 ## A.  Facilities derived from the raw / filtered tank table
 fac_from_ust  <- unique(ust_filtered$FACILITY_ID)
 

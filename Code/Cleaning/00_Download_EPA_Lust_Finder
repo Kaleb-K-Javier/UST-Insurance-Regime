@@ -1,0 +1,218 @@
+###############################################################################
+# 00_pull_epa_ust_finder_api.R
+# Purpose: Download EPA UST Finder data via ArcGIS REST API.
+#          ROBUST SEQUENTIAL VERSION (High Visibility & Crash Proof)
+# Source:  EPA UST Finder (Item ID: 88d551abd342485582c5ca4aac6ac0d6)
+###############################################################################
+
+library(httr)
+library(jsonlite)
+library(data.table)
+library(here)
+
+# 1. Setup --------------------------------------------------------------------
+ITEM_ID     <- "88d551abd342485582c5ca4aac6ac0d6"
+CHUNK_SIZE  <- 2000  # Safe size for EPA server
+
+# Paths
+raw_dir  <- here("Data", "Raw")
+if (!dir.exists(raw_dir)) dir.create(raw_dir, recursive = TRUE)
+
+# 2. Helper Functions ---------------------------------------------------------
+
+get_service_url <- function(item_id) {
+  message("Locating Service URL...")
+  url <- paste0("https://www.arcgis.com/sharing/rest/content/items/", item_id, "?f=json")
+  resp <- tryCatch(GET(url), error = function(e) stop("Connection failed"))
+  
+  if (status_code(resp) != 200) stop("Failed to query ArcGIS Online.")
+  meta <- fromJSON(content(resp, "text", encoding = "UTF-8"))
+  if (is.null(meta$url)) stop("No Service URL found.")
+  return(meta$url)
+}
+
+download_layer_sequential <- function(service_url, layer_id, layer_name) {
+  safe_name <- gsub("[^A-Za-z0-9]", "_", layer_name)
+  file_path <- file.path(raw_dir, paste0(safe_name, ".csv"))
+  
+  message(sprintf("\nProcessing '%s'...", layer_name))
+  
+  # A. Get Total Count
+  count_url <- paste0(service_url, "/", layer_id, "/query?where=1=1&returnCountOnly=true&f=json")
+  count_res <- fromJSON(content(GET(count_url), "text", encoding = "UTF-8"))
+  total_records <- count_res$count
+  
+  if (is.null(total_records) || total_records == 0) {
+    message("  - Skipped (0 records).")
+    return(NULL)
+  }
+  
+  # B. Check for Resume
+  offset <- 0
+  if (file.exists(file_path)) {
+    # Fast row count
+    existing_rows <- tryCatch({
+      if (file.size(file_path) < 100) 0 else nrow(fread(file_path, select = 1L))
+    }, error = function(e) 0)
+    
+    if (existing_rows >= total_records) {
+      message(sprintf("  ✓ Already complete (%s records). Skipping.", format(existing_rows, big.mark=",")))
+      return(NULL)
+    }
+    offset <- existing_rows
+    message(sprintf("  - Resuming from record %s / %s", format(offset, big.mark=","), format(total_records, big.mark=",")))
+  } else {
+    message(sprintf("  - Starting download (%s records)", format(total_records, big.mark=",")))
+  }
+  
+  # C. Download Loop
+  while (offset < total_records) {
+    # Progress Bar
+    cat(sprintf("\r    Fetching %s / %s (%.1f%%)", 
+                format(offset, big.mark=","), 
+                format(total_records, big.mark=","), 
+                100 * offset / total_records))
+    
+    # Retry Logic
+    success <- FALSE
+    attempt <- 1
+    
+    while(attempt <= 5 && !success) {
+      tryCatch({
+        query_url <- paste0(service_url, "/", layer_id, "/query")
+        res <- GET(query_url, query = list(
+          where = "1=1", outFields = "*", f = "json",
+          resultOffset = offset, resultRecordCount = CHUNK_SIZE
+        ), timeout(60))
+        
+        if (status_code(res) == 200) {
+          data_chunk <- fromJSON(content(res, "text", encoding = "UTF-8"))
+          
+          if (!is.null(data_chunk$features$attributes)) {
+            dt <- as.data.table(data_chunk$features$attributes)
+            
+            # Geometry
+            if (!is.null(data_chunk$features$geometry)) {
+              geom <- data_chunk$features$geometry
+              if ("x" %in% names(geom)) dt$Longitude <- geom$x
+              if ("y" %in% names(geom)) dt$Latitude <- geom$y
+            }
+            
+            # WRITE IMMEDIATELY (Appends to file)
+            # If offset=0 and file doesn't exist, write with header. Else append.
+            write_mode <- if (offset == 0 && !file.exists(file_path)) "w" else "a"
+            append_flag <- if (offset == 0 && !file.exists(file_path)) FALSE else TRUE
+            
+            fwrite(dt, file_path, append = append_flag)
+            success <- TRUE
+          } else {
+            success <- TRUE # End of data
+          }
+        }
+      }, error = function(e) {
+        Sys.sleep(2) # Brief pause on error
+      })
+      attempt <- attempt + 1
+    }
+    
+    if (!success) stop("Failed to fetch chunk. Check internet.")
+    offset <- offset + CHUNK_SIZE
+  }
+  
+  cat("\n  ✓ Finished.\n")
+}
+
+# 3. Execution ----------------------------------------------------------------
+tryCatch({
+  service_url <- get_service_url(ITEM_ID)
+  layers_json <- fromJSON(content(GET(paste0(service_url, "?f=json")), "text", encoding = "UTF-8"))
+  all_items <- rbindlist(list(layers_json$layers, layers_json$tables), fill = TRUE)
+  
+  if (nrow(all_items) > 0) {
+    for (i in 1:nrow(all_items)) {
+      name <- all_items$name[i]
+      if (grepl("Facilit|Release|UST", name, ignore.case = TRUE)) {
+        download_layer_sequential(service_url, all_items$id[i], name)
+      }
+    }
+  }
+  message("\nAll downloads complete.")
+}, error = function(e) {
+  message("\nCRITICAL ERROR: ", e$message)
+})
+
+
+# =============================================================================
+# 5. POST-PROCESS: Extract & Save Schema (Data Dictionary) - CORRECTED
+# =============================================================================
+message("\nStep 5: Extracting Schema Metadata...")
+
+tryCatch({
+  schema_list <- list()
+  
+  # Ensure we have the list of layers to process
+  if (!exists("all_items") || nrow(all_items) == 0) {
+    # Fallback: Regenerate all_items if missing from environment
+    service_url <- get_service_url(ITEM_ID)
+    layers_json <- fromJSON(content(GET(paste0(service_url, "?f=json")), "text", encoding = "UTF-8"))
+    all_items <- rbindlist(list(layers_json$layers, layers_json$tables), fill = TRUE)
+  }
+
+  for (i in 1:nrow(all_items)) {
+    # Use distinct variable names to avoid data.table collisions
+    current_layer_id   <- all_items$id[i]
+    current_layer_name <- all_items$name[i]
+    
+    if (grepl("Facilit|Release|UST", current_layer_name, ignore.case = TRUE)) {
+      
+      # Fetch Layer Metadata
+      layer_meta_url <- paste0(service_url, "/", current_layer_id, "?f=json")
+      res <- GET(layer_meta_url)
+      
+      if (status_code(res) == 200) {
+        meta_json <- fromJSON(content(res, "text", encoding = "UTF-8"))
+        
+        if (!is.null(meta_json$fields)) {
+          dt_fields <- as.data.table(meta_json$fields)
+          
+          # Force assignment of the loop variable, not the column 'name'
+          # We use '..variable' syntax or explicit assignment to avoid ambiguity
+          dt_fields[, `:=`(
+            Source_Layer = current_layer_name,  # The fix: Unique variable name
+            Source_ID    = current_layer_id,
+            Description  = meta_json$description %||% NA_character_
+          )]
+          
+          # Select useful columns
+          # Note: 'name' here refers to the Column Name in the database
+          cols_keep <- intersect(names(dt_fields), 
+                               c("Source_Layer", "Source_ID", "name", "type", "alias", "length", "domain"))
+          
+          schema_list[[length(schema_list) + 1]] <- dt_fields[, ..cols_keep]
+        }
+      }
+    }
+  }
+  
+  # Combine and Save
+  if (length(schema_list) > 0) {
+    full_dictionary <- rbindlist(schema_list, fill = TRUE)
+    
+    # Rename 'name' to 'Field_Name' to avoid future confusion
+    setnames(full_dictionary, "name", "Field_Name")
+    
+    # Clean up types
+    full_dictionary[, type := gsub("esriFieldType", "", type)]
+    
+    dict_path <- file.path(raw_dir, "EPA_UST_Finder_Data_Dictionary.csv")
+    fwrite(full_dictionary, dict_path)
+    message(sprintf("  ✓ Schema saved to: %s", dict_path))
+    print(head(full_dictionary)) # Preview to verify fix
+  } else {
+    message("  Warning: No schema information found.")
+  }
+
+}, error = function(e) {
+  message("  Error extracting schema: ", e$message)
+})
+

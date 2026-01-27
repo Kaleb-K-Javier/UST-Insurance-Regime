@@ -90,6 +90,11 @@ How does pricing environmental risk affect facility exit and technology adoption
 
 \BerkeleyMode
 
+
+<!-- wrete the utilites set up the idea as the thought experiment a single firm, with the same revenue ...
+Under an optimal stoppin gmodel where they are tradin goff contiutaion vs close how does diffent liabilty contracts change their decisonis?
+wirte the decion rule simply
+wirte general ultliy funtion then putt like some simple note aobut how we parmeterized the simple exmpale for the following graphs. note we ried to not have edge cases  and note not real data  -->
 **Firm's Dynamic Problem:**
 
 Each period, facility chooses: $d_t \in \{\text{Maintain}, \text{Close}\}$
@@ -107,7 +112,13 @@ Each period, facility chooses: $d_t \in \{\text{Maintain}, \text{Close}\}$
 
 ---
 
-## Theoretical Predictions (The "Wedge" Graph)
+## Decision Rule and Utility Function
+
+- stuff
+
+---
+
+## Fig 1 SOC and Expliantion
 
 \BerkeleyMode
 
@@ -117,6 +128,41 @@ Each period, facility chooses: $d_t \in \{\text{Maintain}, \text{Close}\}$
 
 ---
 
+## Fig 1 SOC vs risk based value garph (rb in blue)
+
+\BerkeleyMode
+
+::: {.layout-full-figure}
+![The Exit Wedge: Private vs. Social Optimum](Output/Figures/fig-toy-exit.png){width=95%}
+:::
+
+---
+
+## Fig 1 SOC vs flat-fee (FF in purple)
+
+\BerkeleyMode
+
+::: {.layout-full-figure}
+![The Exit Wedge: Private vs. Social Optimum](Output/Figures/fig-toy-exit.png){width=95%}
+:::
+
+---
+
+## What about the pollution externality?
+
+Insittiohllnly note clear how this will work.
+LUSTs are discoved in two ways
+
+- A) Major accidents ( car crashes into tank, natural disaster, driver drives away from dispenser etc)
+- B) routine inspections, LEak deteciton monitoerionte etc
+- C) Tank Closure Processes 
+
+Texas could have more LUSTS because the private market incentives both A and B to discover more leaks relative to flat fee control markets.  
+
+Inturen, in total texas could have copositianlly less leak risk because more tanks are closed earlier.
+
+
+
 ## From Theory to Empirics
 
 \BerkeleyMode
@@ -124,6 +170,9 @@ Each period, facility chooses: $d_t \in \{\text{Maintain}, \text{Close}\}$
 **Testable Hypotheses from Toy Model:**
 
 \vspace{0.3cm}
+
+**H0 (Age Profile):** Risk-based pricing skews age distribution
+$$f_{RB}(A) < f_{FF}(A) \quad \text{for high-risk } A$$
 
 **H1 (Closure Hazard):** Risk-based pricing increases closure hazard
 $$h^{close}_{RB}(x) > h^{close}_{FF}(x) \quad \text{for high-risk } x$$
@@ -133,6 +182,8 @@ $$\mathbb{E}[a | \text{exit}, RB] < \mathbb{E}[a | \text{exit}, FF]$$
 
 **H3 (Environment):** Aggregate leak rates decline
 $$\mathbb{E}[\lambda | RB] < \mathbb{E}[\lambda | FF]$$
+
+
 
 ---
 

@@ -139,7 +139,7 @@ load_start <- Sys.time()
 # Load Texas tank-months (facility-tank-month level)
 # This is the primary source for Texas tank characteristics and activity
 log_step("Loading Texas tank-months (facility-tank-month)...", 1)
-tx_tank_months <- fread(get_data_path("Outputs", "texas_ust_facility_month_panel.csv"))
+tx_tank_months <- fread(here("Data","Processed", "texas_ust_facility_month_panel.csv"))
 # install_date  & end_date  ---> is type IDate (based on context)
 
 # Define raw column names to select
@@ -164,7 +164,7 @@ log_step(sprintf("Columns: %s",
 # This is the primary source for all non-Texas states
 log_step("Loading EPA tank panel (facility-tank)...", 1)
 tank_panel_epa <- fread(
-  here("Data", "Raw_do_not_write", "state_databases", 
+  here("Data", "Raw",  
        "EPA_Region_6_and_EPA_states_tank_panel.csv"),
   colClasses = c(facility_id = "character", tank_id = "character")
 )
@@ -204,7 +204,7 @@ log_step(sprintf("Loaded: %s rows, %d columns",
 # Load Texas LUST data (facility-incident level)
 # This is the leak data for Texas
 log_step("Loading Texas LUST data (facility-incident)...", 1)
-TX_LUST_SD <- fread(get_data_path("TX_LUST.csv"))
+TX_LUST_SD <- fread(here('Data',"Raw","TX_LUST.csv"))
 
 # Clean TX LUST data immediately upon load
 TX_LUST_SD[, `:=`(
@@ -224,7 +224,7 @@ log_step(sprintf("Loaded: %s rows, %d columns (and cleaned)",
 # This file is used in Section 2 to map facility_id to a county name for TX facilities
 log_step("Loading Texas facility raw data (for county lookup)...", 1)
 tx_fac_raw <- fread(
-  get_data_path("Outputs", "raw_pst_fac.csv"))
+  here("Data",'Raw', "raw_pst_fac.csv"))
 #  FACILITY_ID SITE_COUNTY
 #           <int>      <char>
 
@@ -274,6 +274,7 @@ log_step(sprintf("Loaded: %s rows, %d columns",
 
 log_step(sprintf("✓ All data loaded in %.1f seconds", 
                 difftime(Sys.time(), load_start, units="secs")), 1)
+
 
 #==============================================================================
 # 1.2 CREATE SYSTEMATIC COLUMN MAPPING STRUCTURES
