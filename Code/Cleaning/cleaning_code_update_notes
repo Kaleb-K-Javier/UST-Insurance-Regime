@@ -1,0 +1,53 @@
+here is the  schemea with notes on the full set of tank data we need.
+
++-------------------------+---------------------+-----------+
+
+| Old Variable Name       | New Variable Name   | Data Type |
+
++-------------------------+---------------------+-----------+
+
+| facility_id             | facility_id         | String    |
+
+| tank_id                 | tank_id             | String    |
+
+| state                   | state               | String    |
+
+| tank_installed_date_raw | tank_installed_date | Date      |
+
+| tank_closed_date_raw    | tank_closed_date    | Date      |
+
+| capacity                | capacity            | Numeric   |
+
+| tank_status             | tank_status         | String    | <- each state dataset builds this and its unique to each state. We need to carry this forward.
+
+| single_walled           | single_walled       | Boolean   |
+
+| double_walled           | double_walled       | Boolean   |
+
+| unknown_walled           | unknown_walled     | Boolean   |  <- if the wall type is missing its unknown_walled we should consolidate missing and unknown
+
+| is_gasoline             | is_gasoline         | Boolean   |
+
+| is_diesel               | is_diesel           | Boolean   |
+
+| is_oil_kerosene         | is_oil_kerosene     | Boolean   |
+
+| is_jet_fuel             | is_jet_fuel         | Boolean   |
+
+| is_other                | is_other            | Boolean   |
+
+| county_name             | county_name         | String    | <- if the script load has thiss lets keep it, clean the names a bit. If the cleaning code does not have it still create the variable just put NA for now.
+
+| facility_name            | facility_name        | String    |
+
++-------------------------+---------------------+-----------+
+For the LUST data we need: facility_id, lust_id, report_date, nfa_date and add the state variables to this becuase in the panel the panel id is a combo of facility_id and state.
+
+3)For the file names lets add {STATE_ABBR}_Harmonized_UST_tanks.csv to the names
+{STATE_ABBR}_Harmonized_LUST.csv.
+
+4) lets ignore the fips join we will do this later. Each script handesl the weird dates across all the files so leave how it deals withit as is, but we need to make sure we clean the dates to be in the same form for all final saved files so we can bind them to gether cleanly.   The wall classifieres are the same thing leave as is.
+
+6)Yes we need to standardize all those into one tank_status = "Open/Closed" variable. Those code handlings are all unique to the states system but the end variable should map those to our standardized maps.
+
+7) we dont need this if the data has county_name or county in the data already lets bring it in otherwise, make a county variable and make it just NA for the observations. Als,o I forgot in the pa but we want the facility name to be added to the data set too, but we need to make sure we clean and standardize it remove all weird characters etc for easy processing and use in R

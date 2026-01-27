@@ -356,7 +356,7 @@ Improtant adding of texas specific FR data.
 this data has within year changes because of  how contracts are just done. Need to be careful to identify and keep eveent- orddering variabls 
 since these are contract-months dataset we need to summaize how the facililty contract motnhs changed over the year or didnt.
 
-we probably want to calculate the share of the year a firm
+we  want to calculate the share of the year a firm
   multiple_contracts = 0L,
   fr_covered = FALSE,
   uses_private = 0L,
@@ -368,8 +368,7 @@ we probably want to calculate the share of the year a firm
 
 Then these two are 1/0 variables for the year identifhing them being treated by this insurance dropping event.
   had_zurich_2012 = 0L,
-  dropped_by_zurich = 0L,
-These are character strings where we also wnat to know the share of the year they are under each category,issueer  and detail type.
+These are character strings where we also wnat to know the share of the year or the number of contract monhts in a year(whatever is fastest/easiest) they are under each category,issueer  and detail type.
   DETAIL_TYPE = NA_character_,
   CATEGORY = NA_character_,
   ISSUER_NAME = NA_character_,
