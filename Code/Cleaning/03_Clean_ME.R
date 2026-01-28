@@ -3,10 +3,25 @@
 # Define the county variable name in the raw data
 COUNTYVARIABLE <- "county"
 
-library(here)
 first_run = TRUE
-#load packages ----
-source(here('Code','00_global_packages.R'))
+# load packages ----
+library(tidyverse)
+library(data.table)
+library(here)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(fixest)
+library(ggpubr)
+library(gghighlight)
+library(did)
+library(fastDummies)
+library(fplot)
+library(ggrepel)
+library(patchwork)
+library(DRDID)
 
 # Function to standardize county names
 standardize_county_name <- function(county_name) {

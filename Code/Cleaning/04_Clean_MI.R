@@ -3,10 +3,27 @@
 # Define the county variable name in the raw data
 COUNTYVARIABLE <- "county_name"
 
-library(here)
 first_run = TRUE
-#load packages ----
-source(here('Code','00_global_packages.R'))
+# load packages ----
+library(tidyverse)
+library(data.table)
+library(here)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(fixest)
+library(ggpubr)
+library(gghighlight)
+library(did)
+library(fastDummies)
+library(fplot)
+library(ggrepel)
+library(patchwork)
+library(DRDID)
+
+# Additional package required for Michigan input formats
 library(readxl)
 
 # Function to standardize county names

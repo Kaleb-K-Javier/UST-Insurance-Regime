@@ -3,15 +3,28 @@
 # Define the county variable name in the raw data
 COUNTYVARIABLE <- "CountyCAPS"
 
-library(here)
 # load packages ----
-source(here('Code', '00_global_packages.R'))
 library(tidyverse)
-library(DBI)
-library(odbc)
 library(data.table)
 library(here)
-library(stringr)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(fixest)
+library(ggpubr)
+library(gghighlight)
+library(did)
+library(fastDummies)
+library(fplot)
+library(ggrepel)
+library(patchwork)
+library(DRDID)
+
+# Additional packages required for Arkansas input formats
+library(DBI)
+library(odbc)
 
 # Establish database connection
 # Updated path to Data/Raw/state_databases
