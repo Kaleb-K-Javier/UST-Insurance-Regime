@@ -191,13 +191,10 @@ compute_ccps_standard <- function(U, V, cache, config) {
   EV_m <- as.numeric(cache$F_maintain %*% V)
   EV_r <- as.numeric(cache$F_retrofit %*% V)
   
-  # FIXED: Subtract one-time retrofit cost here
-  theta_phi <- # Need to pass theta to this function
-  
 v_mat <- cbind(
   U[, "maintain"] + beta * EV_m,
   U[, "exit"],
-  U[, "retrofit"] + beta * EV_r  # No extra subtraction needed
+  U[, "retrofit"] + beta * EV_r
 )
   
   v_mat[!cache$feasibility] <- -1e20
@@ -1451,6 +1448,13 @@ create_estimation_cache_model_b <- function(states, premiums, hazards, losses,
 #'   - γ: dimensionless premium multiplier (γ=-1 is dollar-for-dollar)
 calculate_flow_utilities_model_b <- function(theta, cache, profit_mult = 1.0) {
   
+ # Validate theta has required names
+ if (!all(c("kappa", "gamma_price", "gamma_risk") %in% names(theta))) {
+    stop("theta must be named vector with: kappa, gamma_price, gamma_risk")
+  }
+  
+
+
   # theta is now vector of length 3
   kappa       <- theta["kappa"]
   gamma_price <- theta["gamma_price"]
@@ -1607,10 +1611,9 @@ npl_likelihood_model_b <- function(theta, P_fixed, cache, config, counts_vec,
                                     profit_mult = 1.0) {
   
   # Ensure named parameters
-  if (is.null(names(theta))) {
-    names(theta) <- c("kappa", "gamma")
-  }
-  
+if (is.null(names(theta))) {
+    names(theta) <- c("kappa", "gamma_price", "gamma_risk")
+}
   # Step 1: Flow utilities given theta
   U <- calculate_flow_utilities_model_b(theta, cache, profit_mult)
   
@@ -1742,6 +1745,13 @@ npl_estimator_model_b <- function(counts_vec,
     names(theta_curr) <- c("kappa", "gamma_price", "gamma_risk")
     ll_path[npl_iter] <- -opt$value
     
+# Add after this line:
+if (npl_iter > 1 && ll_path[npl_iter] < ll_path[npl_iter - 1] - 1e-6) {
+  if (verbose) warning(sprintf("  LL decreased at iter %d: %.2f -> %.2f", 
+                                npl_iter, ll_path[npl_iter-1], ll_path[npl_iter]))
+}
+
+
     # Step 2: Update CCPs given new theta
     U <- calculate_flow_utilities_model_b(theta_curr, cache)
     V <- invert_value_function_model_b(P, U, config)

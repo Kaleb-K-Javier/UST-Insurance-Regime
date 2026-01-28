@@ -31,7 +31,7 @@ staging_root <- here("Data", "Intermediate", "Texas")
 stage_dir  <- file.path(staging_root, "panel_merge_staging")
 lust_dir   <- file.path(staging_root, "lust_merge_staging")
 cens_dir   <- file.path(staging_root, "census_merge_staging")
-output_figures <- here("Outputs", "figures") # General outputs
+output_figures <- here("Output", "Figures") # General outputs (repo uses top-level Output/)
 
 # Create directories
 dir.create(stage_dir, recursive = TRUE, showWarnings = FALSE)
@@ -43,7 +43,21 @@ dir.create(output_figures, recursive = TRUE, showWarnings = FALSE)
 # This ensures existing calls like get_data_path("Outputs") still work 
 # but point to the correct project root location
 get_data_path <- function(...) {
-  here("Data", ...)
+  parts <- c(...)
+  if (length(parts) == 0) return(here("Data"))
+
+  # Normalize first path element so legacy code works:
+  # - get_data_path("Raw", ...)       -> Data/Raw/...
+  # - get_data_path("Processed", ...) -> Data/Processed/...
+  # - get_data_path("Output(s)", ...) -> Output/...
+  root <- as.character(parts[[1]])
+  rest <- if (length(parts) > 1) parts[-1] else character()
+
+  if (root %in% c("Output", "Outputs")) return(here("Output", rest))
+  if (root == "Data")                  return(here(parts))
+
+  # Default: everything else lives under Data/
+  here("Data", parts)
 }
 
 # ── Server Configuration ─────────────────────────────────────────────────────
@@ -84,6 +98,7 @@ quick_write <- function(dt, dir_path, nm) {
 # Create output directories
 dir.create(get_data_path("Output"), showWarnings = FALSE, recursive = TRUE)
 dir.create(get_data_path("Output", "Figures"), showWarnings = FALSE, recursive = TRUE)
+dir.create(get_data_path("Processed"), showWarnings = FALSE, recursive = TRUE)
 
 
 
@@ -833,7 +848,7 @@ fa_monthly_contract[, is_zurich := grepl(
   toupper(trimws(ISSUER_NAME)),
   ignore.case = TRUE
 )]
-  fwrite(fa_monthly_contract, file.path('C:\\Users\\kalebkja\\UST\\Data', paste0('fa_monthly_contracts', ".csv")))
+fwrite(fa_monthly_contract, get_data_path("Processed", "fa_monthly_contracts.csv"))
 
 
 zurich_2012_lookup <- fa_monthly_contract[
@@ -842,8 +857,8 @@ zurich_2012_lookup <- fa_monthly_contract[
   by = FACILITY_ID]
 
 zurich_2012_lookup <- unique(zurich_2012_lookup, by = "FACILITY_ID")
-  fwrite(zurich_2012_lookup, file.path('C:\\Users\\kalebkja\\UST\\Data', paste0('zurich_2012_lookup', ".csv")))
-  fwrite(fa_monthly, file.path('C:\\Users\\kalebkja\\UST\\Data', paste0('fa_monthly', ".csv")))
+fwrite(zurich_2012_lookup, get_data_path("Processed", "zurich_2012_lookup.csv"))
+fwrite(fa_monthly, get_data_path("Processed", "fa_monthly.csv"))
 
 # Sanity check
 stopifnot(anyDuplicated(fa_monthly[, .(FACILITY_ID, YEAR, MONTH)]) == 0)
@@ -2264,12 +2279,7 @@ message("Cleaned pre-merge objects from memory.")
 message("Processing LUST data for staging...")
 
 # Load and preprocess LUST data efficiently
-TX_LUST_SD <- if(onserver) {
-  fread(get_data_path('Raw','state_databases','Texas',"TX_LUST.csv"))
-} else {
-  # Fallback to local raw path if not on server
-  fread(here("Data", "Raw_do_not_write", "state_databases", "Texas", "TX_LUST.csv"))
-}
+TX_LUST_SD <- fread(get_data_path("Raw", "state_databases", "Texas", "TX_LUST.csv"))
 
 
 if ("facility_id" %in% names(TX_LUST_SD)) setnames(TX_LUST_SD, "facility_id", "FACILITY_ID")
