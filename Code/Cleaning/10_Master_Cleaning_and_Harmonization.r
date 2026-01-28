@@ -14,7 +14,7 @@ library(fs) # Excellent for file system handling
 # 0. Configuration -------------------------------------------------------------
 
 # Set to TRUE to re-run all cleaning scripts. Set to FALSE to just aggregate existing outputs.
-RUN_CLEANING_SCRIPTS <- FALSE 
+RUN_CLEANING_SCRIPTS <- TRUE 
 
 # Directories
 raw_db_dir <- here("Data", "Raw", "state_databases")
@@ -29,7 +29,7 @@ if (RUN_CLEANING_SCRIPTS) {
   
   scripts <- c(
     "01_Clean_AR.R", "02_Clean_LA.R", "03_Clean_ME.R", "04_Clean_MI.R",
-    "05_Clean_NJ.R", "06_Clean_NM.R", "07_Clean_OK.R", "08_Clean_TX.R",
+    "05_Clean_NJ.R", "06_Clean_NM.R", "07_Clean_OK.R", #"08_Clean_TX.R",
     "09_Clean_EPA_States.R"
   )
   

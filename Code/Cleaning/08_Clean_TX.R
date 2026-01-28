@@ -7,33 +7,60 @@
 # Purpose: load core libraries, threads & I/O helpers, path utility, and ID-cleaning functions.
 # Why: ensures consistent environment, parallelism & reliable file paths across server/local.
 # End product: `clean_id_column()`, `get_data_path()`, and global options ready for subsequent sections.
-
 rm(list = ls())
 library(data.table)
 library(lubridate)
 library(maps)
-library(stringr) # Added for str_extract
-library(parallel) # For detectCores()
-library(tidycensus) # Added for ACS data
-library(zoo) # FIX: Added for na.locf
+library(stringr)
+library(parallel) 
+library(tidycensus) 
+library(zoo) 
 library(tidyverse)
+library(here) 
 
-# Ensure target directory exists for Harmonized files
+# ── Path Configuration ───────────────────────────────────────────────────────
+
+# 1. Output for Harmonized files (Where final UST/LUST CSVs go)
 tx_output_dir <- here("Data", "Raw", "state_databases", "Texas")
 if (!dir.exists(tx_output_dir)) dir.create(tx_output_dir, recursive = TRUE)
+
+# 2. Staging Directories for Panel Merge (Where intermediate .rds/.csv files go)
+# We place these in Data/Intermediate/Texas to keep the Raw folder clean
+staging_root <- here("Data", "Intermediate", "Texas")
+
+stage_dir  <- file.path(staging_root, "panel_merge_staging")
+lust_dir   <- file.path(staging_root, "lust_merge_staging")
+cens_dir   <- file.path(staging_root, "census_merge_staging")
+output_figures <- here("Outputs", "figures") # General outputs
+
+# Create directories
+dir.create(stage_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(lust_dir,  recursive = TRUE, showWarnings = FALSE)
+dir.create(cens_dir,  recursive = TRUE, showWarnings = FALSE)
+dir.create(output_figures, recursive = TRUE, showWarnings = FALSE)
+
+# ── Helper for Legacy Calls ──────────────────────────────────────────────────
+# This ensures existing calls like get_data_path("Outputs") still work 
+# but point to the correct project root location
+get_data_path <- function(...) {
+  here("Data", ...)
+}
 
 # ── Server Configuration ─────────────────────────────────────────────────────
 do_merge   <- FALSE          # set FALSE if you only want the staging artefacts
 onserver   <- TRUE          # your existing flag
+
 # Set data.table threads based on environment
 if (onserver) {
-  setDTthreads(detectCores() -2)  # Use half of available cores on server
+  setDTthreads(detectCores() - 2)  # Use available cores minus 2
 } else {
   setDTthreads(4)  # Use 4 threads for local development
 }
 message("data.table is using ", getDTthreads(), " threads.")
 
-# Helper function to ensure consistent ID cleaning for all merge operations
+# ── Helper Functions ─────────────────────────────────────────────────────────
+
+# Helper to ensure consistent ID cleaning
 clean_id_column <- function(dt, col_name) {
   if (col_name %in% names(dt)) {
     dt[, (col_name) := trimws(as.character(get(col_name)))]
@@ -41,27 +68,10 @@ clean_id_column <- function(dt, col_name) {
   dt
 }
 
-# ── Flexible Path Function ───────────────────────────────────────────────────
-get_data_path <- function(...) {
-  # FIX: Use environment variable for root, with a fallback for portability
-  root <- Sys.getenv("UST_DATA_ROOT",
-                     unset = file.path(Sys.getenv("HOME"), "UST", "Data"))
-  file.path(root, ...)
-}
-
-data_root  <- get_data_path # convenience wrapper you already defined
-
-stage_dir  <- file.path(data_root("Outputs"), "panel_merge_staging")
-lust_dir   <- file.path(data_root("Outputs"), "lust_merge_staging")
-cens_dir   <- file.path(data_root("Outputs"), "census_merge_staging")
-
-dir.create(stage_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(lust_dir , recursive = TRUE, showWarnings = FALSE)
-dir.create(cens_dir , recursive = TRUE, showWarnings = FALSE)
-
+# Helper for fast writing
 quick_write <- function(dt, dir_path, nm) {
-  fwrite(dt, file.path(dir_path, paste0(nm, ".csv")))     # fast text :contentReference[oaicite:0]{index=0}
-  saveRDS(dt, file.path(dir_path, paste0(nm, ".rds")))     # compact binary :contentReference[oaicite:1]{index=1}
+  fwrite(dt, file.path(dir_path, paste0(nm, ".csv")))     
+  saveRDS(dt, file.path(dir_path, paste0(nm, ".rds")))     
   invisible(NULL)
 }
 
@@ -72,8 +82,8 @@ quick_write <- function(dt, dir_path, nm) {
 # ───────────────────────────────────────────────────────────────────────────────
 
 # Create output directories
-dir.create(get_data_path("Outputs"), showWarnings = FALSE, recursive = TRUE)
-dir.create(get_data_path("Outputs", "figures"), showWarnings = FALSE, recursive = TRUE)
+dir.create(get_data_path("Output"), showWarnings = FALSE, recursive = TRUE)
+dir.create(get_data_path("Output", "Figures"), showWarnings = FALSE, recursive = TRUE)
 
 
 
@@ -2246,6 +2256,8 @@ rm(fac, fa, self_cert, ust, ust_compartments, texas_compartment_classified, texa
 gc(verbose = FALSE)
 message("Cleaned pre-merge objects from memory.")
 
+
+
 ###############################################################################
 # 7.2 LUST PROCESSING & STAGING
 ###############################################################################
@@ -2253,7 +2265,7 @@ message("Processing LUST data for staging...")
 
 # Load and preprocess LUST data efficiently
 TX_LUST_SD <- if(onserver) {
-  fread(get_data_path("TX_LUST.csv"))
+  fread(get_data_path('Raw','state_databases','Texas',"TX_LUST.csv"))
 } else {
   # Fallback to local raw path if not on server
   fread(here("Data", "Raw_do_not_write", "state_databases", "Texas", "TX_LUST.csv"))
