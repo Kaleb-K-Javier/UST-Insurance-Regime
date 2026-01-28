@@ -6,7 +6,7 @@
 # ── Section 0: Setup ──────────────────────────────────────────────────────────
 # Purpose: load core libraries, threads & I/O helpers, path utility, and ID-cleaning functions.
 # Why: ensures consistent environment, parallelism & reliable file paths across server/local.
-# End product: `clean_id_column()`, `get_data_path()`, and global options ready for subsequent sections.
+# End product: `clean_id_column()` and consistent `here()`-based paths ready for subsequent sections.
 rm(list = ls())
 library(data.table)
 library(lubridate)
@@ -31,34 +31,13 @@ staging_root <- here("Data", "Intermediate", "Texas")
 stage_dir  <- file.path(staging_root, "panel_merge_staging")
 lust_dir   <- file.path(staging_root, "lust_merge_staging")
 cens_dir   <- file.path(staging_root, "census_merge_staging")
-output_figures <- here("Output", "Figures") # General outputs (repo uses top-level Output/)
+output_figures <- here("Output", "Figures") # Figures/tables only (NO data files)
 
 # Create directories
 dir.create(stage_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(lust_dir,  recursive = TRUE, showWarnings = FALSE)
 dir.create(cens_dir,  recursive = TRUE, showWarnings = FALSE)
 dir.create(output_figures, recursive = TRUE, showWarnings = FALSE)
-
-# ── Helper for Legacy Calls ──────────────────────────────────────────────────
-# This ensures existing calls like get_data_path("Outputs") still work 
-# but point to the correct project root location
-get_data_path <- function(...) {
-  parts <- c(...)
-  if (length(parts) == 0) return(here("Data"))
-
-  # Normalize first path element so legacy code works:
-  # - get_data_path("Raw", ...)       -> Data/Raw/...
-  # - get_data_path("Processed", ...) -> Data/Processed/...
-  # - get_data_path("Output(s)", ...) -> Output/...
-  root <- as.character(parts[[1]])
-  rest <- if (length(parts) > 1) parts[-1] else character()
-
-  if (root %in% c("Output", "Outputs")) return(here("Output", rest))
-  if (root == "Data")                  return(here(parts))
-
-  # Default: everything else lives under Data/
-  here("Data", parts)
-}
 
 # ── Server Configuration ─────────────────────────────────────────────────────
 do_merge   <- FALSE          # set FALSE if you only want the staging artefacts
@@ -96,9 +75,10 @@ quick_write <- function(dt, dir_path, nm) {
 # ───────────────────────────────────────────────────────────────────────────────
 
 # Create output directories
-dir.create(get_data_path("Output"), showWarnings = FALSE, recursive = TRUE)
-dir.create(get_data_path("Output", "Figures"), showWarnings = FALSE, recursive = TRUE)
-dir.create(get_data_path("Processed"), showWarnings = FALSE, recursive = TRUE)
+dir.create(here("Output", "Figures"), showWarnings = FALSE, recursive = TRUE)
+dir.create(here("Output", "Tables"),  showWarnings = FALSE, recursive = TRUE)
+dir.create(here("Data", "Raw"),       showWarnings = FALSE, recursive = TRUE)
+dir.create(here("Data", "Processed"), showWarnings = FALSE, recursive = TRUE)
 
 
 
@@ -547,9 +527,9 @@ fac <- load_and_process_data(
   paste0(base, "/pst_fac.txt"), fac_widths, fac_names
 )
 
-# Persist raw load
-saveRDS(fac, file = get_data_path("Outputs", "raw_pst_fac.rds"))
-fwrite(fac, file = get_data_path("Outputs", "raw_pst_fac.csv"), row.names = FALSE)
+# Persist raw load (under Data/Raw/state_databases/Texas)
+saveRDS(fac, file = here("Data", "Raw", "state_databases", "Texas", "raw_pst_fac.rds"))
+fwrite(fac, file = here("Data", "Raw", "state_databases", "Texas", "raw_pst_fac.csv"), row.names = FALSE)
 # Clean key and flag blanks
 fac <- clean_id_column(fac, "FACILITY_ID")
 
@@ -674,7 +654,7 @@ fa[, FP_CORR_MET     := FP_CORR_MET     == "Y"]
 fa[, TP_FA_MET       := TP_FA_MET       == "Y"]
 fa[, PROOF_OF_FA     := PROOF_OF_FA     == "Y"]
 
-saveRDS(fa, file = get_data_path("Outputs","raw_pst_fin_assur.rds"))
+saveRDS(fa, file = here("Data", "Raw", "state_databases", "Texas", "raw_pst_fin_assur.rds"))
 fa = clean_merge_keys(fa, "FACILITY_ID")
 
 # Process coverage amounts and dates
@@ -848,7 +828,7 @@ fa_monthly_contract[, is_zurich := grepl(
   toupper(trimws(ISSUER_NAME)),
   ignore.case = TRUE
 )]
-fwrite(fa_monthly_contract, get_data_path("Processed", "fa_monthly_contracts.csv"))
+fwrite(fa_monthly_contract, here("Data", "Processed", "fa_monthly_contracts.csv"))
 
 
 zurich_2012_lookup <- fa_monthly_contract[
@@ -857,8 +837,8 @@ zurich_2012_lookup <- fa_monthly_contract[
   by = FACILITY_ID]
 
 zurich_2012_lookup <- unique(zurich_2012_lookup, by = "FACILITY_ID")
-fwrite(zurich_2012_lookup, get_data_path("Processed", "zurich_2012_lookup.csv"))
-fwrite(fa_monthly, get_data_path("Processed", "fa_monthly.csv"))
+fwrite(zurich_2012_lookup, here("Data", "Processed", "zurich_2012_lookup.csv"))
+fwrite(fa_monthly, here("Data", "Processed", "fa_monthly.csv"))
 
 # Sanity check
 stopifnot(anyDuplicated(fa_monthly[, .(FACILITY_ID, YEAR, MONTH)]) == 0)
@@ -879,8 +859,8 @@ setnames(fa_processed,
          c("FORM_DATE", "MECH_TYPE_OTHR", "MULTI_MECH", "POLICY_NUM",
            "USE_PRIVATE", "USE_SELF"), skip_absent = TRUE)
 
-fwrite(fa_processed, get_data_path("Outputs", "texas_fr_processed.csv"))
-saveRDS(fa_processed, get_data_path("Outputs", "texas_fr_processed.rds"))
+fwrite(fa_processed, here("Data", "Processed", "texas_fr_processed.csv"))
+saveRDS(fa_processed, here("Data", "Processed", "texas_fr_processed.rds"))
 
 setkey(fa_monthly, FACILITY_ID, YEAR, MONTH)
 
@@ -1196,7 +1176,7 @@ sc_names  <- c(
 
 self_cert <- load_and_process_data(
   paste0(base,"/pst_self_cert.txt"), sc_widths, sc_names)
-saveRDS(self_cert, file = get_data_path("Outputs","raw_pst_self_cert.rds"))
+saveRDS(self_cert, file = here("Data", "Raw", "state_databases", "Texas", "raw_pst_self_cert.rds"))
 clean_merge_keys(self_cert, "FACILITY_ID_PAD")
 self_cert[, `:=`(
   FACILITY_ID = trimws(substr(FACILITY_ID_PAD,1,6)),
@@ -1534,7 +1514,7 @@ all_cols <- c("FACILITY_ID", "AI", "FACILITY_NAME", names(fac)[grepl("SITE_", na
 facility_data_for_record_request = fac[FACILITY_ID %in% facilities_active_1990$FACILITY_ID, 
                                       ..all_cols]                                        
 fwrite(facility_data_for_record_request, 
-       get_data_path("Outputs", "texas_facility_data_for_record_request.csv"))                                        
+       here("Data", "Processed", "texas_facility_data_for_record_request.csv"))                                        
 
 
 validateion_data <- bind_rows(
@@ -1779,8 +1759,8 @@ sum(ust$is_diesel, na.rm = TRUE)
 
 
 # Save processed UST data
-saveRDS(ust, file = get_data_path("Outputs", "raw_pst_ust.rds"))
-fwrite(ust, file = get_data_path("Outputs", "raw_pst_ust.csv"), row.names = FALSE)
+saveRDS(ust, file = here("Data", "Raw", "state_databases", "Texas", "raw_pst_ust.rds"))
+fwrite(ust, file = here("Data", "Raw", "state_databases", "Texas", "raw_pst_ust.csv"), row.names = FALSE)
 setkey(ust,FACILITY_ID, UST_ID)
 
 # 1. Create panel_months grid
@@ -2030,7 +2010,7 @@ validateion_data <- bind_rows(
    res05)
 
 #save the ust-faciliyt-monthly panel
-fwrite(active_tank_months, file = get_data_path("Outputs", "texas_ust_facility_month_panel.csv"))
+fwrite(active_tank_months, file = here("Data", "Processed", "texas_ust_facility_month_panel.csv"))
 
 
 sum(active_tank_months$is_gasoline, na.rm = TRUE) # Check how many gasoline tanks we have
@@ -2201,7 +2181,7 @@ for(col in c("is_facility_entry_event","is_facility_exit_event")){
 
 message("  → Done: ust_monthly now has closed_tank_count, inventory-closure & entry/exit flags.")
 # Save for debugging
-fwrite(ust_monthly, get_data_path("Outputs", "texas_facility_monthly_ust_aggregations_optimized.csv"))
+fwrite(ust_monthly, here("Data", "Processed", "texas_facility_monthly_ust_aggregations_optimized.csv"))
 
 uniqueN(ust_monthly$FACILITY_ID) # Check how many unique facility IDs we have in the monthly panel
 
@@ -2234,7 +2214,7 @@ message("Processing Section 7: Staging intermediate data...")
 ###############################################################################
 # 7.1 QUICK-STAGE ALL PRE-MERGE TABLES TO DISK
 ###############################################################################
-stage_dir <- get_data_path("Outputs", "panel_merge_staging")
+stage_dir <- here("Data", "Intermediate", "Texas", "panel_merge_staging")
 if (!dir.exists(stage_dir)) dir.create(stage_dir, recursive = TRUE)
 
 fac_info <- fac[ , .(
@@ -2279,7 +2259,7 @@ message("Cleaned pre-merge objects from memory.")
 message("Processing LUST data for staging...")
 
 # Load and preprocess LUST data efficiently
-TX_LUST_SD <- fread(get_data_path("Raw", "state_databases", "Texas", "TX_LUST.csv"))
+TX_LUST_SD <- fread(here("Data", "Raw", "state_databases", "Texas", "TX_LUST.csv"))
 
 
 if ("facility_id" %in% names(TX_LUST_SD)) setnames(TX_LUST_SD, "facility_id", "FACILITY_ID")
@@ -2354,7 +2334,7 @@ facility_lust_summary <- TX_LUST_SD[, .(
 ), by = FACILITY_ID]
 
 # QUICK-STAGE LUST TABLES TO DISK
-lust_stage_dir <- get_data_path("Outputs", "lust_merge_staging")
+lust_stage_dir <- here("Data", "Intermediate", "Texas", "lust_merge_staging")
 if (!dir.exists(lust_stage_dir)) dir.create(lust_stage_dir, recursive = TRUE)
 
 lust_to_stage <- list(
@@ -2474,7 +2454,7 @@ units_map <- rbind(units_map,data.table(variable = "median_hh_income_real_2023",
 ###############################################################################
 
 # QUICK-STAGE CENSUS TABLES TO DISK
-census_stage_dir <- get_data_path("Outputs", "census_merge_staging")
+census_stage_dir <- here("Data", "Intermediate", "Texas", "census_merge_staging")
 if (!dir.exists(census_stage_dir)) dir.create(census_stage_dir, recursive = TRUE)
 
 census_to_stage <- list(
@@ -2508,9 +2488,9 @@ if (do_merge) {
 
   # --- 1. Load staged data required for the panel build ---
   message("Loading staged data from disk...")
-  panel_stage_dir <- get_data_path("Outputs", "panel_merge_staging")
-  lust_stage_dir <- get_data_path("Outputs", "lust_merge_staging")
-  census_stage_dir <- get_data_path("Outputs", "census_merge_staging")
+  panel_stage_dir <- here("Data", "Intermediate", "Texas", "panel_merge_staging")
+  lust_stage_dir <- here("Data", "Intermediate", "Texas", "lust_merge_staging")
+  census_stage_dir <- here("Data", "Intermediate", "Texas", "census_merge_staging")
 
   panel                 <- readRDS(file.path(panel_stage_dir, "panel.rds"))
   fa_monthly            <- readRDS(file.path(panel_stage_dir, "fa_monthly.rds"))
@@ -2618,12 +2598,12 @@ if (do_merge) {
   message("Unique facilities: ", uniqueN(panel$FACILITY_ID))
 
   message("Saving final panel data...")
-  fwrite(panel, get_data_path("Outputs", "texas_fr_panel.csv"))
-  saveRDS(panel, get_data_path("Outputs", "texas_fr_panel.rds"))
+  fwrite(panel, here("Data", "Processed", "texas_fr_panel.csv"))
+  saveRDS(panel, here("Data", "Processed", "texas_fr_panel.rds"))
   if (requireNamespace("fst", quietly = TRUE)) {
-    fst::write_fst(panel, get_data_path("Outputs", "texas_fr_panel.fst"))
+    fst::write_fst(panel, here("Data", "Processed", "texas_fr_panel.fst"))
   }
-  message("Panel data saved to ", get_data_path("Outputs"))
+  message("Panel data saved to ", here("Data", "Processed"))
 
 } else {
   message("\n--- Staging Complete. Skipping full merge (do_merge = FALSE) ---")
@@ -3823,8 +3803,8 @@ column_dictionary_dt <- data.table(
 # }
 
 # Save the dictionary
-fwrite(column_dictionary_dt, get_data_path("Outputs", "texas_fr_panel_column_dictionary.csv"))
-message("Column dictionary saved to ", get_data_path("Outputs", "texas_fr_panel_column_dictionary.csv"))
+fwrite(column_dictionary_dt, here("Data", "Processed", "texas_fr_panel_column_dictionary.csv"))
+message("Column dictionary saved to ", here("Data", "Processed", "texas_fr_panel_column_dictionary.csv"))
 
 # Final check: ensure all columns in the panel are in the dictionary (optional, for development)
 # missing_from_dict <- setdiff(names(panel), column_dictionary_dt$column_name)
