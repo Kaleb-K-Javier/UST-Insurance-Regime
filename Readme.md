@@ -178,3 +178,125 @@ Our primary outcome measures use four robustness specifications to classify tank
 - **Dual-Date System**: Raw dates preserved for age calculation; panel-bounded dates for backbone
 - **Treatment Variables**: Multiple DiD specifications (Texas 1999, 8-state staggered adoption)
 - **Exit Definition**: Facility last observed before 2025 (right-censoring at panel end) -->
+
+
+================================================================================
+          MASTER DATA RECOVERY DIRECTORY (DIRECT LINKS & INSTRUCTIONS)
+================================================================================
+
+[ STATE: ILLINOIS (IL) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Wall Type & 100% Missing LUST NFA Dates
+DATA TYPE | UST (Inventory/Wall Type)
+URL       | https://webapps.sfm.illinois.gov/ustsearch/
+ACTION    | Do NOT use the search fields. Look for "Download Data" or "Export" 
+            link in the footer/sidebar to get the full facility export.
+--------------------------------------------------------------------------------
+DATA TYPE | LUST (Leaks/Dates)
+URL       | https://epa.illinois.gov/topics/cleanup-programs/lust.html
+ACTION    | Download "Leaking UST Database" (Access/Excel) or "LUST Incident 
+            Report". Note: This is a different agency (IEPA) than the UST list.
+
+[ STATE: GEORGIA (GA) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Closure Dates & 100% Missing LUST NFA Dates
+DATA TYPE | LUST & UST (Combined Utility)
+URL       | https://epd.georgia.gov/ust-data-and-reporting
+ACTION    | Download "Corrective Action Projects and Cleanups" (Excel).
+            * This file is CRITICAL for closure dates.
+            * Also grab "UST Public Record Report" for inventory cross-check.
+
+[ STATE: INDIANA (IN) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Capacity, Wall Type, and Closure Dates
+DATA TYPE | UST (Inventory)
+URL       | https://www.in.gov/idem/tanks/resources/data-and-reports/
+FILE      | "Underground Storage Tanks Public Record Summary" (XLSX)
+--------------------------------------------------------------------------------
+DATA TYPE | LUST (Leaks)
+URL       | https://www.in.gov/idem/tanks/resources/data-and-reports/
+FILE      | "LUST Report [XLSX]" (Contains full priority & date history)
+
+[ STATE: MISSOURI (MO) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Closure Dates & 100% Missing LUST NFA Dates
+DATA TYPE | UST & LUST (Full Database)
+URL       | https://dnr.mo.gov/waste-recycling/sites-regulated-facilities/underground-storage-tanks-database
+FILE      | "Underground Storage Tank Summary Database" (Zipped .accdb)
+NOTE      | This is a Microsoft Access dump. It contains everything.
+
+[ STATE: NEW YORK (NY) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Wall Type, Closure Dates, and LUST NFA Dates
+DATA TYPE | UST (Inventory/Wall Type)
+URL       | https://data.ny.gov/Energy-Environment/Bulk-Storage-Facilities-in-New-York-State/pteg-c78n
+ACTION    | Click "Export" -> "CSV". Key Column: "Tank Type"
+--------------------------------------------------------------------------------
+DATA TYPE | LUST (Leaks/Dates)
+URL       | https://data.ny.gov/Energy-Environment/Spill-Incidents/u44d-k5fk
+ACTION    | Click "Export" -> "CSV". Key Column: "Spill Date"
+
+[ STATE: MISSISSIPPI (MS) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing LUST NFA (No Further Action) Dates
+DATA TYPE | UST & LUST
+URL       | https://www.mdeq.ms.gov/water/groundwater-assessment-and-remediation/underground-storage-tanks/musterweb/
+FILE      | "ZipFile with CSV files for UST Info and Leaking UST Info"
+
+[ STATE: SOUTH CAROLINA (SC) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing LUST NFA (No Further Action) Dates
+DATA TYPE | UST (Registry)
+URL       | https://apps.des.sc.gov/USTRegistry/
+ACTION    | Look for small "Download Registry" link (often Excel/CSV).
+--------------------------------------------------------------------------------
+DATA TYPE | LUST (Releases)
+URL       | https://des.sc.gov/about-des/data-reports
+ACTION    | Look for "Leaking UST List" or "Registry of Releases".
+
+[ STATE: WYOMING (WY) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Wall Type & 100% Missing Closure Dates
+DATA TYPE | UST (Inventory)
+URL       | https://deq.wyoming.gov/shwd/storage-tank/
+FILE      | "STP Regulated Storage Tank List" (Excel)
+--------------------------------------------------------------------------------
+DATA TYPE | LUST (Remediation)
+URL       | https://deq.wyoming.gov/shwd/storage-tank/remediation/
+FILE      | "Contaminated Site List"
+
+[ STATE: VERMONT (VT) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Wall Type & 100% Missing LUST NFA Dates
+DATA TYPE | UST & LUST (Data Dump)
+URL       | https://anrweb.vt.gov/dec/ert/DataDump.aspx
+ACTION    | 1. Select "UST Tanks" -> Download
+            2. Select "Hazardous Sites" -> Download (for LUST dates)
+
+[ STATE: NEBRASKA (NE) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Wall Type, Closure Dates, & LUST NFA Dates
+DATA TYPE | UST & LUST
+URL       | https://sfm.nebraska.gov/fuels-safety/lists-publications
+FILES     | 1. "UST Regulated Tanks" (Excel)
+            2. "Public Record Underground Storage Tank Summary"
+
+[ STATE: NEVADA (NV) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Closure Dates & High Missing Capacity
+DATA TYPE | LUST (Cleanup Cases)
+URL       | https://nevadaenvironmentalactivities.ndep.nv.gov/
+ACTION    | Click "Download a List of Active and Closed Cleanup Cases"
+--------------------------------------------------------------------------------
+DATA TYPE | UST (Inventory)
+URL       | https://ndep.nv.gov/land/underground-storage-tanks/ust-system-testing
+ACTION    | Email NDEP (ust@ndep.nv.gov) if "Facility List" is not visible.
+
+[ STATE: NEW HAMPSHIRE (NH) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Wall Type & 100% Missing Closure Dates
+DATA TYPE | UST & LUST
+URL       | https://www.des.nh.gov/onestop-navigation
+ACTION    | Use "OneStop Data Mapper" to export layers.
+BACKUP    | Email EMD@des.nh.gov requesting "Master UST/LUST Excel List".
+            (They are responsive and this is often faster than scraping).

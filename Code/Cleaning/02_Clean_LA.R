@@ -207,6 +207,8 @@ LA_UST_tanks <- LA_tanks_raw %>%
     tank_capacity, install_date, tank_substance_code,
     current_status_code, current_status_desc, current_status_start_date,
     initial_cp_upgrade_date, # ADDED: Critical for Single Wall ID
+    x_coord_standard_value, # ADDED: Longitude
+    y_coord_standard_value, # ADDED: Latitude
     starts_with("mct_") 
   ) %>%
   rename(
@@ -218,12 +220,16 @@ LA_UST_tanks <- LA_tanks_raw %>%
     substance = tank_substance_code,
     status_code = current_status_code,
     status_desc = current_status_desc,
-    tank_status_date = current_status_start_date
+    tank_status_date = current_status_start_date,
+    longitude = x_coord_standard_value, # Harmonized Name
+    latitude = y_coord_standard_value   # Harmonized Name
   ) %>%
   as.data.table()
 
 # Clean Capacity
 LA_UST_tanks[, capacity := as.numeric(gsub("[^0-9.]", "", tank_capacity))]
+LA_UST_tanks[, latitude := as.numeric(latitude)]   # Clean Text to Number
+LA_UST_tanks[, longitude := as.numeric(longitude)] # Clean Text to Number
 
 # Clean Dates (Safe Parse handles Excel Serials + Strings)
 LA_UST_tanks[, tank_installed_date := safe_parse_date(tank_installed_date)]
@@ -239,6 +245,8 @@ LA_UST_tanks[, tank_status := case_when(
   TRUE ~ NA_character_
 )]
 LA_UST_tanks <- LA_UST_tanks[tank_status != "Temporary"]
+
+
 
 # Determine Closure Date
 LA_UST_tanks[, tank_closed_date := NA_Date_]
@@ -298,7 +306,9 @@ LA_UST_tanks_SD <- LA_UST_tanks_LUST[, .(
   is_jet_fuel = max(is_jet_fuel, na.rm=T),
   is_other = max(is_other, na.rm=T),
   
-  capacity = mean(capacity, na.rm=T)
+  capacity = mean(capacity, na.rm=T),
+  latitude = first(latitude, na_rm=TRUE),   # ADDED
+  longitude = first(longitude, na_rm=TRUE)  # ADDED
 ), by = .(facility_id, tank_id, tank_installed_date, tank_closed_date, county_name)]
 
 # Geography: Standardize and Merge FIPS
@@ -321,7 +331,8 @@ required_columns <- c(
   "facility_id", "facility_name", "tank_id", "state", "tank_installed_date", "tank_closed_date", "tank_status",
   "leak_after_closure", "leak_before_NFA_before_closure", "leak_before_NFA_after_closure", "no_leak",
   "capacity", "single_walled", "double_walled", "unknown_walled",
-  "is_gasoline", "is_diesel", "is_oil_kerosene", "is_jet_fuel", "is_other", "county_name", "county_fips"
+  "is_gasoline", "is_diesel", "is_oil_kerosene", "is_jet_fuel", "is_other", "county_name", "county_fips",
+  "latitude", "longitude" # ADDED
 )
 cols_to_keep <- intersect(names(LA_UST_tanks_SD), required_columns)
 LA_UST_tanks_SD <- LA_UST_tanks_SD[, ..cols_to_keep]

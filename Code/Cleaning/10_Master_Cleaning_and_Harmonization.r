@@ -14,7 +14,7 @@ library(fs) # Excellent for file system handling
 # 0. Configuration -------------------------------------------------------------
 
 # Set to TRUE to re-run all cleaning scripts. Set to FALSE to just aggregate existing outputs.
-RUN_CLEANING_SCRIPTS <- TRUE 
+RUN_CLEANING_SCRIPTS <- FALSE 
 
 # Directories
 raw_db_dir <- here("Data", "Raw", "state_databases")
@@ -56,11 +56,17 @@ if (RUN_CLEANING_SCRIPTS) {
 
 custom_states_abbr <- c("AR", "LA", "ME", "MI", "NJ", "NM", "OK", "TX")
 
+
+
 # 3. Master UST Tank Aggregation -----------------------------------------------
 
 message("\n=== Building Master UST Tank Dataset ===")
-# --- A. Process "Custom 8" States (Add Lat/Long Placeholders) ---
+# --- A. Process "Custom 8" States (Add Lat/Long) ---
 custom_tanks_list <- list()
+
+# Define states that ALREADY have Lat/Long in their local files
+# We will SKIP the EPA GIS merge for these.
+states_with_local_gis <- c("NM", "LA", "ME", "NJ", "OK")
 
 for (abbr in custom_states_abbr) {
   # Find the tank file
@@ -69,12 +75,33 @@ for (abbr in custom_states_abbr) {
   if (length(tank_file) == 1) {
     dt <- fread(tank_file, colClasses = c("facility_id" = "character", "tank_id" = "character"))
     
-    # Initialize Lat/Long as NA 
-    # NOTE: GIS merge disabled pending ID harmonization
+    # Initialize Lat/Long as NA if missing
     if (!"latitude" %in% names(dt)) dt[, latitude := NA_real_]
     if (!"longitude" %in% names(dt)) dt[, longitude := NA_real_]
     
-    message(paste0("  Processed ", abbr, " (Lat/Long set to NA pending ID match fix)"))
+    # Check if we need to merge EPA GIS data
+    if (abbr %in% states_with_local_gis) {
+      message(paste0("  Processed ", abbr, " (Using LOCAL GIS data - Skip EPA Merge)"))
+      
+    } else {
+      # For AR, TX, MI (and others not in exclusion list), try to merge EPA data
+      gis_file <- dir_ls(raw_db_dir, recurse = TRUE, glob = paste0("*", abbr, "_Harmonized_latlong.csv"))
+      
+      if (length(gis_file) == 1) {
+        message(paste0("  Merging EPA GIS data for: ", abbr))
+        gis_dt <- fread(gis_file, colClasses = c("facility_id" = "character"))
+        
+        # Perform Update Join
+        # This overwrites NA lat/longs with EPA data where matches exist
+        dt[gis_dt, `:=`(latitude = i.latitude, longitude = i.longitude), on = "facility_id"]
+        
+        # Match stat
+        matches <- sum(!is.na(dt$latitude))
+        message(paste0("    -> Filled GIS for ", matches, " facilities"))
+      } else {
+        message(paste0("  No EPA GIS file found for ", abbr, ". Keeping Lat/Long as NA."))
+      }
+    }
     
     custom_tanks_list[[abbr]] <- dt
   } else {
