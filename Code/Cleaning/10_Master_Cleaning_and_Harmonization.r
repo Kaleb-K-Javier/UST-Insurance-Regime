@@ -59,8 +59,7 @@ custom_states_abbr <- c("AR", "LA", "ME", "MI", "NJ", "NM", "OK", "TX")
 # 3. Master UST Tank Aggregation -----------------------------------------------
 
 message("\n=== Building Master UST Tank Dataset ===")
-
-# --- A. Process "Custom 8" States (Add Lat/Long) ---
+# --- A. Process "Custom 8" States (Add Lat/Long Placeholders) ---
 custom_tanks_list <- list()
 
 for (abbr in custom_states_abbr) {
@@ -70,34 +69,19 @@ for (abbr in custom_states_abbr) {
   if (length(tank_file) == 1) {
     dt <- fread(tank_file, colClasses = c("facility_id" = "character", "tank_id" = "character"))
     
-    # Initialize Lat/Long as NA (Requirement 1)
+    # Initialize Lat/Long as NA 
+    # NOTE: GIS merge disabled pending ID harmonization
     if (!"latitude" %in% names(dt)) dt[, latitude := NA_real_]
     if (!"longitude" %in% names(dt)) dt[, longitude := NA_real_]
     
-    # Attempt to merge EPA Lat/Long from Script 09 output (Requirement 2)
-    gis_file <- dir_ls(raw_db_dir, recurse = TRUE, glob = paste0("*", abbr, "_Harmonized_latlong.csv"))
-    
-    if (length(gis_file) == 1) {
-      message(paste0("  Merging GIS data for: ", abbr))
-      gis_dt <- fread(gis_file, colClasses = c("facility_id" = "character"))
-      
-      # Diagnostic: Check ID overlap
-      common_ids <- intersect(dt$facility_id, gis_dt$facility_id)
-      pct_match <- round(length(common_ids) / uniqueN(dt$facility_id) * 100, 1)
-      message(paste0("    -> ID Match Rate: ", pct_match, "% of state facilities found in EPA GIS data"))
-      
-      # Perform Update Join
-      # We use update join syntax to overwrite the NA columns we just made
-      dt[gis_dt, `:=`(latitude = i.latitude, longitude = i.longitude), on = "facility_id"]
-    } else {
-      message(paste0("  No separate GIS file found for ", abbr, ". Keeping Lat/Long as NA."))
-    }
+    message(paste0("  Processed ", abbr, " (Lat/Long set to NA pending ID match fix)"))
     
     custom_tanks_list[[abbr]] <- dt
   } else {
     warning(paste0("Missing or multiple tank files for ", abbr))
   }
 }
+
 
 # --- B. Process "Standard EPA" States ---
 # Find all files ending in _Harmonized_UST_tanks.csv
