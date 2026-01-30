@@ -179,10 +179,48 @@ Our primary outcome measures use four robustness specifications to classify tank
 - **Treatment Variables**: Multiple DiD specifications (Texas 1999, 8-state staggered adoption)
 - **Exit Definition**: Facility last observed before 2025 (right-censoring at panel end) -->
 
+----------------------------------------------------------------
+
 
 ================================================================================
           MASTER DATA RECOVERY DIRECTORY (DIRECT LINKS & INSTRUCTIONS)
 ================================================================================
+
+[ STATE: CALIFORNIA (CA) ] ---> askined state for data you cant link LUSTs to sites??
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Closure Dates (All tanks listed as "Open").
+DATA TYPE | UST & LUST (GeoTracker)
+URL       | https://geotracker.waterboards.ca.gov/data_download/
+ACTION    | 1. Download "GeoTracker Cleanup Sites" (LUST) for closure dates.
+            2. Download "Permitted UST" file for inventory.
+            * Note: GeoTracker is the "gold standard" for CA data.
+
+[ STATE: COLORADO (CO) ] --> big portion of very early tanks that are closed have no closure date in raw.
+[Done: Yes]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Closure Dates.
+DATA TYPE | UST & LUST (OPS Dashboard)
+URL       | https://ops.colorado.gov/Petroleum/DataDocuments
+ACTION    | 1. Download "Regulated Storage Tanks in Colorado" (Inventory).
+            2. Download "Active and Closed OPS Petroleum Release Events" (LUST).
+            * These files are often hidden under "Data & Documents" -> "Spreadsheets".
+
+[ STATE: UTAH (UT) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 100% Missing Closure Dates.
+DATA TYPE | UST & LUST (DERR)
+URL       | https://deq.utah.gov/environmental-response-and-remediation/ust-compliance
+ACTION    | Look for "UST and LUST Lists" or "Interactive Map Data Download".
+            * UT DEQ often requires a "GRAMA" request if the direct CSV is down,
+            but the "Easy Records Search" usually allows exports.
+
+[ STATE: SOUTH DAKOTA (SD) ]
+--------------------------------------------------------------------------------
+REASON    | Fixes 86% Missing Dates.
+DATA TYPE | UST & LUST (DANR)
+URL       | https://danr.sd.gov/Agriculture/Inspection/StorageTanks/default.aspx
+ACTION    | 1. Use "Tanks and Spills Map" -> Export Data.
+            2. Download "Database of Reported Releases" for event dates.
 
 [ STATE: ILLINOIS (IL) ]
 --------------------------------------------------------------------------------
@@ -206,7 +244,7 @@ ACTION    | Download "Corrective Action Projects and Cleanups" (Excel).
             * This file is CRITICAL for closure dates.
             * Also grab "UST Public Record Report" for inventory cross-check.
 
-[ STATE: INDIANA (IN) ]
+[ STATE: INDIANA (IN) ] --- Have to do a record request their database has it but cant get it publicly.
 --------------------------------------------------------------------------------
 REASON    | Fixes 100% Missing Capacity, Wall Type, and Closure Dates
 DATA TYPE | UST (Inventory)
@@ -300,3 +338,107 @@ URL       | https://www.des.nh.gov/onestop-navigation
 ACTION    | Use "OneStop Data Mapper" to export layers.
 BACKUP    | Email EMD@des.nh.gov requesting "Master UST/LUST Excel List".
             (They are responsive and this is often faster than scraping).
+-----------------------------------------------------------------------------
+
+================================================================================
+                        DEWEY DATA INVENTORY & UST STRATEGY
+                            Target: Berkeley PhD Access
+================================================================================
+
+[1] DATASET INVENTORY
+    Verified available via Berkeley "Academic Full" Tier
+
+--------------------------------------------------------------------------------
+DATASET NAME          PROVIDER       DATE RANGE          KEY UTILITY
+--------------------------------------------------------------------------------
+Places (Core)         SafeGraph      07/2019 - Present   Facility Classification
+                                                         (Brand, NAICS, Open/Close)
+
+Monthly Patterns      SafeGraph      01/2018 - Present* Demand Proxy (Vol)
+(or Advan Patterns)                                      (Visits, Dwell Time)
+
+Spend Patterns        SafeGraph      01/2020 - Present   Revenue Proxy
+                                                         (Trans. Size, Raw Spend)
+
+Nationwide Parcels    Regrid         Current Snapshot    Ownership Classification
+                                     (Updated Monthly)   (Public vs. Private)
+--------------------------------------------------------------------------------
+*Note: "Advan Weekly Patterns Plus" is the active successor to SafeGraph Patterns 
+ on Dewey, with backfilled data to 2019. It is preferred for longitudinal work.
+
+
+[2] UST CLASSIFICATION MATRIX
+    How to map your 5 Target Groups using these datasets
+
+--------------------------------------------------------------------------------
+GROUP 1: RETAIL BRANDED GAS
+--------------------------------------------------------------------------------
+Dataset:    SafeGraph Places
+Filter:     NAICS_CODE starts with '447' (Gas Stations)
+Logic:      BRANDS is NOT NULL (e.g., "Chevron", "Shell")
+Linking:    Spatial Join (UST Lat/Long -> SafeGraph Geometry)
+
+--------------------------------------------------------------------------------
+GROUP 2: RETAIL NON-BRANDED GAS
+--------------------------------------------------------------------------------
+Dataset:    SafeGraph Places
+Filter:     NAICS_CODE starts with '447'
+Logic:      BRANDS is NULL
+Warning:    Verify 'location_name' doesn't contain brand strings to avoid
+            false negatives.
+
+--------------------------------------------------------------------------------
+GROUP 3: PRIVATE COMPANY (NON-RETAIL)
+--------------------------------------------------------------------------------
+Dataset:    SafeGraph Places
+Filter:     NAICS_CODE is NOT '447'
+            Look for: '48-49' (Transportation/Warehousing)
+                      '23'    (Construction)
+                      '42'    (Wholesale Trade)
+Logic:      These are fleet yards, rental centers, or logistics hubs.
+Note:       Spend Data (Consumer Cards) will be NULL here. Do not use it.
+
+--------------------------------------------------------------------------------
+GROUP 4: PUBLICLY OWNED
+--------------------------------------------------------------------------------
+Dataset:    Regrid Parcels (California Partition Only)
+Filter:     OWNER column
+Logic:      Text Search for Keywords:
+            "CITY OF", "COUNTY", "STATE OF", "SCHOOL DIST", "USA", "FED"
+Linking:    Spatial Point-in-Polygon (UST Lat/Long -> Regrid Parcel Shape)
+
+--------------------------------------------------------------------------------
+GROUP 5: TRIBAL
+--------------------------------------------------------------------------------
+Dataset:    ** EXTERNAL SOURCE ** (Not in Dewey)
+Source:     Bureau of Indian Affairs (BIA) LAR Shapefile
+URL:        https://www.bia.gov/bia/gis
+Linking:    Spatial Point-in-Polygon (UST Lat/Long -> Tribal Boundary)
+Reasoning:  Tribal sovereignty is a legal status, not a business attribute.
+            POI data is unreliable for this legal distinction.
+
+
+[3] DEMAND & REVENUE ESTIMATION STRATEGY
+    Proxies for "Sales Totals" (which do not exist as absolute values)
+
+--------------------------------------------------------------------------------
+METRIC A: PHYSICAL DEMAND (Gallons Proxy)
+--------------------------------------------------------------------------------
+Source:     SafeGraph/Advan Monthly Patterns
+Variable:   `raw_visit_counts`
+Constraint: Filter for `dwell_time` < 20 mins (Refueling behavior)
+Math:       Station_Visits / Market_Total_Visits = Market_Share_Index
+
+--------------------------------------------------------------------------------
+METRIC B: REVENUE INTENSITY (Dollars Proxy)
+--------------------------------------------------------------------------------
+Source:     SafeGraph Spend
+Variable:   `raw_total_spend`
+Variable:   `median_spend_per_transaction`
+Warning:    This is PANEL data (sample of credit cards), not a ledger.
+            It captures Convenience Store (C-Store) spending mixed with Fuel.
+            Use it to compare Station A vs. Station B, not to calculate tax.
+
+================================================================================
+END OF SPEC
+================================================================================

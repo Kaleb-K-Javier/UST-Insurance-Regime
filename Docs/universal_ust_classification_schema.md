@@ -1,7 +1,7 @@
 # Universal Underground Storage Tank (UST) Classification Schema
 ## A Federal Framework with State-Specific Implementation Guide
 
-**Version:** 2.0  
+**Version:** 2.1  
 **Created:** January 2026  
 **Purpose:** Standardized classification of underground storage tanks as Single-Walled, Secondary Contained, or Unknown across all U.S. jurisdictions
 
@@ -21,11 +21,13 @@
 
 ### PART II: STATE-SPECIFIC IMPLEMENTATION
 9. [Louisiana Implementation](#louisiana-implementation)
+10. [Alabama Implementation](#alabama-implementation)
+11. [Tennessee Implementation](#tennessee-implementation)
 
 ### PART III: IMPLEMENTATION GUIDE
-10. [Template for Other States](#template-for-other-states)
-11. [Data Quality Guidelines](#data-quality-guidelines)
-12. [Validation Framework](#validation-framework)
+12. [Template for Other States](#template-for-other-states)
+13. [Data Quality Guidelines](#data-quality-guidelines)
+14. [Validation Framework](#validation-framework)
 
 ### APPENDICES
 A. [Complete Federal Citations](#appendix-a-complete-federal-citations)  
@@ -1693,6 +1695,747 @@ cleaned_data <- alabama_data %>%
 **Regulatory authority:** ADEM Admin. Code r. 335-6-15 (Revised December 15, 2024)  
 **Federal authority:** 40 CFR Part 280
 
+---
+
+## Tennessee Implementation
+
+### Overview
+
+Tennessee has implemented UST regulations that are **more stringent** than federal requirements, particularly regarding the secondary containment mandate date. Tennessee required secondary containment for all new tanks, piping, and motor fuel dispensers nearly a decade before the federal requirement.
+
+**Implementing Agency:** Tennessee Department of Environment and Conservation (TDEC), Division of Underground Storage Tanks  
+**State Program Approval Status:** Approved State Program (SPA)  
+**Original SPA Approval:** November 17, 1998 (effective January 15, 1999)  
+**2015 Revisions Approval:** September 9, 2021 (86 FR 50470-50477)  
+**Effective Date:** November 8, 2021  
+**URL:** https://www.tn.gov/environment/ust.html
+
+### Tennessee Regulatory Framework
+
+#### State Statutes
+**Tennessee Petroleum Underground Storage Tank Act of 1988**
+- Tenn. Code Ann. §§ 68-215-101 to 68-215-204 (2018)
+
+#### State Regulations
+**Tennessee Compiled Rules and Regulations (Tenn. Comp. R. & Regs.) Chapter 0400-18-01**  
+**Full Citation:** Underground Storage Tank Program  
+**URL:** https://publications.tnsosfiles.com/rules/0400/0400-18/0400-18.htm
+
+**Key Sections:**
+- **0400-18-01-.01** - Program Scope, Definitions and Proprietary Information
+- **0400-18-01-.02** - UST Systems: Installation and Operation
+- **0400-18-01-.03** - UST Systems: Installation Certification
+- **0400-18-01-.04** - Release Detection
+- **0400-18-01-.07** - Out-of-Service UST Systems and Closure
+- **0400-18-01-.16** - Operator Training
+
+### Tennessee-Specific Requirements
+
+#### 1. Secondary Containment Requirement - EARLIER THAN FEDERAL
+
+**Tenn. Comp. R. & Regs. 0400-18-01-.02(1)(c):**
+> "All tanks, pressurized piping, suction piping that does not meet the requirements of subparts (2)(b)2.(i) through (iii) of Rule 0400-18-01-.04, and/or motor fuel dispensers installed on or after July 24, 2007, shall be secondarily contained in accordance with paragraph (2) of this rule."
+
+**Critical Distinction:**
+- **Tennessee Requirement:** July 24, 2007
+- **Federal Requirement:** April 11, 2016
+- **Difference:** Tennessee mandate is **8 years, 8 months** earlier than federal
+
+**Components Required (Tenn. Comp. R. & Regs. 0400-18-01-.02(2)):**
+1. **Tanks:** Double-walled with interstitial monitoring
+2. **Pressurized Piping:** Double-walled with interstitial monitoring
+3. **Suction Piping:** Secondary containment if not meeting safe suction criteria
+4. **Motor Fuel Dispensers:** Under-dispenser containment
+
+#### 2. Replacement Trigger
+
+**Tenn. Comp. R. & Regs. 0400-18-01-.02(3):**
+> "Tank owners and/or operators replacing any tanks, piping and/or motor fuel dispensers on or after July 24, 2007, shall comply with the following: (a) Tank owners and/or operators replacing any tanks, piping and/or motor fuel dispensers shall install secondary containment and interstitial monitoring..."
+
+**Comparison to Federal:**
+- Both Tennessee and federal require secondary containment for replacements
+- Tennessee trigger date is July 24, 2007; federal is April 11, 2016
+- Tennessee is **more restrictive** due to earlier effective date
+
+#### 3. Repair Definition
+
+**Tenn. Comp. R. & Regs. 0400-18-01-.01 - "Repair" definition:**
+> "In the context of replacement of piping on or after July 24, 2007, restoration of a portion of piping in lieu of replacement of an entire piping run authorized by the division in writing"
+
+This provides a mechanism for partial piping repairs that do not trigger the full secondary containment requirement, but requires Division approval.
+
+#### 4. Regional Fee Billing Cycles
+
+Tennessee has different annual tank fee billing cycles by region:
+- **East Tennessee:** July 1 through June 30
+- **Middle Tennessee:** October 1 through September 30
+- **West Tennessee:** January 1 through December 31
+
+This is relevant for understanding when facilities may update registration information.
+
+### Tennessee-Specific Timeline
+
+| Date | Tennessee Requirement | Citation | Federal Equivalent |
+|------|----------------------|----------|-------------------|
+| **1988** | Tennessee Petroleum Underground Storage Tank Act enacted | Tenn. Code Ann. § 68-215-101 et seq. | RCRA Subtitle I (1984) |
+| **January 15, 1999** | Original State Program Approval effective | 64 FR 28927 | SPA granted |
+| **July 24, 2007** | Secondary containment required for all new/replaced tanks, piping, and dispensers | Tenn. Comp. R. & Regs. 0400-18-01-.02(1)(c) | Not required until April 11, 2016 (8.7 years later) |
+| **August 8, 2012** | Operator training certification deadline | Tenn. Comp. R. & Regs. 0400-18-01-.16 | October 13, 2018 |
+| **November 8, 2021** | Federal approval of Tennessee's 2015 UST regulation revisions | 86 FR 50470 | State program re-approval |
+
+### Tennessee Data Structure
+
+Based on the TDEC database diagnostic, the following field structure is observed:
+
+#### Primary Data Fields
+
+| Tennessee Field | Universal Concept | Data Type | Classification Role |
+|----------------|-------------------|-----------|---------------------|
+| `date_tank_installed` | Installation Date | Excel serial (numeric) | Primary date-based classification |
+| `tank_construction` | Material Construction Type | Character | Primary material-based classification |
+| `category_of_construction` | Wall Type Category | Character | Explicit single/double-wall indicator |
+| `status` | Tank Status | Character | Filter for active vs. closed tanks |
+| `compartment_id` | Tank/Compartment Identifier | Character | Unique unit identifier |
+| `facility_id_ust` | Facility Identifier | Character | Facility-level grouping |
+
+#### Tank Construction Field Distribution
+
+**Frequency Distribution (N=60,282 compartments):**
+
+| `tank_construction` Value | Count | Percentage | Classification |
+|--------------------------|-------|------------|----------------|
+| Steel | 35,684 | 59.2% | Single-Walled |
+| Fiberglass Reinforced Plastic | 8,400 | 13.9% | Date-Dependent |
+| Cathodically Protected Steel-StiP3 | 6,935 | 11.5% | Single-Walled |
+| Composite - Steel w/FRP | 6,012 | 10.0% | Secondary Contained |
+| Tank Construction Material Other or Unknown | 2,637 | 4.4% | Unknown |
+| Polyethylene Tank Jacket | 485 | 0.8% | Secondary Contained |
+| Concrete | 128 | 0.2% | Unknown |
+| NA | 1 | <0.1% | Unknown |
+
+#### Category of Construction Field Distribution
+
+**Frequency Distribution (N=60,282 compartments):**
+
+| `category_of_construction` Value | Count | Percentage |
+|----------------------------------|-------|------------|
+| NA (NULL) | 53,215 | 88.3% |
+| Single Wall | 3,905 | 6.5% |
+| Double Wall | 3,162 | 5.2% |
+
+**Key Observation:** 88.3% of records have no explicit wall-type designation, requiring classification via `tank_construction` field and installation date.
+
+### Tennessee Classification Algorithm
+
+```
+START TENNESSEE CLASSIFICATION
+
+1. TENNESSEE SECONDARY CONTAINMENT DATE
+
+   IF installation_date >= July 24, 2007 (Excel: 39287):
+      RETURN "Secondary Contained" (Very High Confidence)
+      REASON: Tenn. Comp. R. & Regs. 0400-18-01-.02(1)(c) requires secondary containment
+      CITATION: Tenn. Comp. R. & Regs. 0400-18-01-.02(1)(c)
+
+2. EXPLICIT CATEGORY OF CONSTRUCTION
+
+   ELSE IF category_of_construction = "Double Wall":
+      RETURN "Secondary Contained" (Very High Confidence)
+      REASON: Explicitly marked as double-walled in state database
+      
+   ELSE IF category_of_construction = "Single Wall":
+      RETURN "Single-Walled" (Very High Confidence)
+      REASON: Explicitly marked as single-walled in state database
+
+3. SECONDARY CONTAINED TANK CONSTRUCTION TYPES
+
+   ELSE IF tank_construction = "Composite - Steel w/FRP":
+      RETURN "Secondary Contained" (High Confidence)
+      REASON: Composite construction is inherently double-walled
+      
+   ELSE IF tank_construction = "Polyethylene Tank Jacket":
+      RETURN "Secondary Contained" (High Confidence)
+      REASON: Tank jacket provides secondary containment barrier
+
+4. FIBERGLASS/PLASTIC (DATE-DEPENDENT)
+
+   ELSE IF tank_construction = "Fiberglass Reinforced Plastic":
+      IF installation_date >= January 1, 1990 (Excel: 32874):
+         RETURN "Secondary Contained" (Medium-High Confidence)
+         REASON: Industry standard post-1990 is double-wall FRP
+      ELSE IF installation_date < January 1, 1990:
+         RETURN "Unknown" (Low Confidence)
+         REASON: Mix of single and double-wall FRP before 1990
+      ELSE IF installation_date IS NULL:
+         RETURN "Unknown" (Low Confidence)
+         REASON: Cannot apply date-based rule without installation date
+      END IF
+
+5. SINGLE-WALLED STEEL INDICATORS
+
+   ELSE IF tank_construction = "Steel":
+      RETURN "Single-Walled" (High Confidence)
+      REASON: Basic steel construction without secondary containment indicator
+      
+   ELSE IF tank_construction = "Cathodically Protected Steel-StiP3":
+      RETURN "Single-Walled" (High Confidence)
+      REASON: STI-P3 is cathodically protected single-wall steel per 40 CFR 280.20(a)(2)
+
+6. CONCRETE TANKS
+
+   ELSE IF tank_construction = "Concrete":
+      RETURN "Single-Walled" (Low Confidence)
+      REASON: Concrete tanks comonly sw old forbidden builds; insufficient data for reliable classification
+
+7. INSUFFICIENT DATA
+
+   ELSE IF tank_construction = "Tank Construction Material Other or Unknown":
+      RETURN "Unknown" (Low Confidence)
+      REASON: Material type explicitly unknown
+      
+   ELSE IF tank_construction IS NULL:
+      RETURN "Unknown" (Low Confidence)
+      REASON: No construction information available
+      
+   ELSE:
+      RETURN "Unknown" (Low Confidence)
+      REASON: Classification cannot be determined from available data
+
+END TENNESSEE CLASSIFICATION
+```
+
+### Tennessee Data Field Mapping
+
+#### Tank Construction Type Mapping
+
+| Tennessee `tank_construction` Value | Universal Classification | Confidence | Rationale |
+|------------------------------------|-------------------------|------------|-----------|
+| `Steel` | Single-Walled | High | Basic steel without secondary barrier |
+| `Cathodically Protected Steel-StiP3` | Single-Walled | High | STI-P3 = single-wall with factory-applied CP |
+| `Composite - Steel w/FRP` | Secondary Contained | High | Steel inner + FRP outer = double-wall |
+| `Fiberglass Reinforced Plastic` | Date-Dependent | Medium-High | ≥1990: Secondary; <1990: Unknown |
+| `Polyethylene Tank Jacket` | Secondary Contained | High | Jacket provides secondary barrier |
+| `Concrete` | Unknown | Low | Rare; insufficient classification data |
+| `Tank Construction Material Other or Unknown` | Unknown | Low | Explicitly unknown material |
+| `NULL` | Unknown | Low | Missing data |
+
+#### Category of Construction Mapping
+
+| Tennessee `category_of_construction` Value | Universal Classification | Confidence |
+|-------------------------------------------|-------------------------|------------|
+| `Double Wall` | Secondary Contained | Very High |
+| `Single Wall` | Single-Walled | Very High |
+| `NULL` (53,215 records) | Use tank_construction field | — |
+
+#### Date Format Conversion
+
+Tennessee stores dates as Excel serial numbers. Key conversion values:
+
+| Date | Excel Serial | Significance |
+|------|--------------|--------------|
+| July 24, 2007 | 39287 | Tennessee secondary containment requirement |
+| January 1, 1990 | 32874 | FRP industry shift to double-wall |
+| April 11, 2016 | 42470 | Federal secondary containment requirement |
+| December 22, 1988 | 32499 | Federal UST regulations effective |
+
+**R Conversion:**
+```r
+# Excel serial to R Date
+excel_to_date <- function(excel_serial) {
+  as.Date(as.numeric(excel_serial), origin = "1899-12-30")
+}
+```
+
+### Tennessee R Implementation
+
+```r
+# ==============================================================================
+# Tennessee UST Classification Function
+# Based on Tenn. Comp. R. & Regs. 0400-18-01-.02
+# ==============================================================================
+
+classify_tennessee_ust <- function(data) {
+  
+  # Critical dates (Excel serial format)
+  TN_SECONDARY_DATE <- 39287  # July 24, 2007
+  FRP_CUTOFF_DATE <- 32874    # January 1, 1990
+  FEDERAL_SECONDARY_DATE <- 42470  # April 11, 2016
+  
+  data %>%
+    mutate(
+      # Convert Excel serial to Date
+      install_date_converted = as.Date(as.numeric(date_tank_installed), 
+                                        origin = "1899-12-30"),
+      install_date_numeric = as.numeric(date_tank_installed),
+      
+      # Classification logic
+      ust_classification = case_when(
+        
+        # 1. Tennessee secondary containment date (July 24, 2007)
+        !is.na(install_date_numeric) & install_date_numeric >= TN_SECONDARY_DATE ~
+          "Secondary_Contained",
+        
+        # 2. Explicit category_of_construction
+        category_of_construction == "Double Wall" ~ "Secondary_Contained",
+        category_of_construction == "Single Wall" ~ "Single_Walled",
+        
+        # 3. Secondary contained tank construction types
+        tank_construction == "Composite - Steel w/FRP" ~ "Secondary_Contained",
+        tank_construction == "Polyethylene Tank Jacket" ~ "Secondary_Contained",
+        
+        # 4. Fiberglass - date dependent
+        tank_construction == "Fiberglass Reinforced Plastic" & 
+          !is.na(install_date_numeric) & install_date_numeric >= FRP_CUTOFF_DATE ~
+          "Secondary_Contained",
+        tank_construction == "Fiberglass Reinforced Plastic" & 
+          !is.na(install_date_numeric) & install_date_numeric < FRP_CUTOFF_DATE ~
+          "Unknown",
+        tank_construction == "Fiberglass Reinforced Plastic" & 
+          is.na(install_date_numeric) ~ "Unknown",
+        
+        # 5. Single-walled steel types
+        tank_construction == "Steel" ~ "Single_Walled",
+        tank_construction == "Cathodically Protected Steel-StiP3" ~ "Single_Walled",
+        
+        # 6. Concrete - unknown
+        tank_construction == "Concrete" ~ "Unknown",
+        
+        # 7. Insufficient data
+        tank_construction == "Tank Construction Material Other or Unknown" ~ "Unknown",
+        is.na(tank_construction) ~ "Unknown",
+        
+        # Default
+        TRUE ~ "Unknown"
+      ),
+      
+      # Confidence scoring
+      classification_confidence = case_when(
+        # Very High: Explicit indicators or post-requirement date
+        !is.na(install_date_numeric) & install_date_numeric >= TN_SECONDARY_DATE ~
+          "Very_High",
+        category_of_construction %in% c("Double Wall", "Single Wall") ~ "Very_High",
+        
+        # High: Clear material indicators
+        tank_construction %in% c("Composite - Steel w/FRP", 
+                                  "Polyethylene Tank Jacket") ~ "High",
+        tank_construction %in% c("Steel", 
+                                  "Cathodically Protected Steel-StiP3") ~ "High",
+        
+        # Medium-High: FRP with date
+        tank_construction == "Fiberglass Reinforced Plastic" & 
+          !is.na(install_date_numeric) & install_date_numeric >= FRP_CUTOFF_DATE ~
+          "Medium_High",
+        
+        # Low: Everything else
+        TRUE ~ "Low"
+      ),
+      
+      # Citation for classification
+      classification_citation = case_when(
+        !is.na(install_date_numeric) & install_date_numeric >= TN_SECONDARY_DATE ~
+          "Tenn. Comp. R. & Regs. 0400-18-01-.02(1)(c)",
+        !is.na(install_date_numeric) & install_date_numeric >= FEDERAL_SECONDARY_DATE ~
+          "40 CFR 280.20(d)",
+        category_of_construction == "Double Wall" ~ "TN Database: Explicit Double Wall",
+        category_of_construction == "Single Wall" ~ "TN Database: Explicit Single Wall",
+        tank_construction == "Composite - Steel w/FRP" ~ 
+          "Composite construction inherently double-walled",
+        tank_construction == "Polyethylene Tank Jacket" ~ 
+          "Tank jacket provides secondary containment",
+        tank_construction == "Fiberglass Reinforced Plastic" & 
+          !is.na(install_date_numeric) & install_date_numeric >= FRP_CUTOFF_DATE ~
+          "Industry standard post-1990: Double-wall FRP",
+        tank_construction %in% c("Steel", "Cathodically Protected Steel-StiP3") ~
+          "Steel/CP-Steel: Single-wall per 40 CFR 280.20(a)",
+        TRUE ~ "Insufficient data for classification"
+      ),
+      
+      # Classification reason
+      classification_reason = case_when(
+        !is.na(install_date_numeric) & install_date_numeric >= TN_SECONDARY_DATE ~
+          paste0("Installed ", install_date_converted, 
+                 " (after TN 7/24/2007 requirement)"),
+        category_of_construction == "Double Wall" ~ 
+          "Explicit Double Wall in category_of_construction",
+        category_of_construction == "Single Wall" ~ 
+          "Explicit Single Wall in category_of_construction",
+        tank_construction == "Composite - Steel w/FRP" ~ 
+          "Composite (Steel + FRP) = inherent double-wall",
+        tank_construction == "Polyethylene Tank Jacket" ~ 
+          "Polyethylene jacket = secondary containment",
+        tank_construction == "Fiberglass Reinforced Plastic" & 
+          !is.na(install_date_numeric) & install_date_numeric >= FRP_CUTOFF_DATE ~
+          paste0("FRP installed ", install_date_converted, " (>=1990: likely double-wall)"),
+        tank_construction == "Steel" ~ "Steel without double-wall indicator",
+        tank_construction == "Cathodically Protected Steel-StiP3" ~ 
+          "STI-P3 is factory-applied CP on single-wall steel",
+        TRUE ~ "Cannot determine from available data"
+      )
+    )
+}
+
+# ==============================================================================
+# Apply Classification to Tennessee Data
+# ==============================================================================
+
+# Example usage:
+# tn_compartments <- fread("path/to/TN_Compartments.csv")
+# tn_classified <- classify_tennessee_ust(tn_compartments)
+
+# Summary statistics
+# tn_classified %>%
+#   filter(status == "In Service" | status == "Temp Out of Use") %>%
+#   count(ust_classification, classification_confidence) %>%
+#   arrange(ust_classification, desc(classification_confidence))
+```
+
+### Tennessee Validation Queries
+
+```r
+# ==============================================================================
+# Tennessee-Specific Validation Queries
+# ==============================================================================
+
+# Validation Query 1: Distribution by classification and era
+tn_classified %>%
+  mutate(
+    era = case_when(
+      install_date_numeric < 32499 ~ "Pre-1988",
+      install_date_numeric < 39287 ~ "1988-2007",
+      install_date_numeric < 42470 ~ "2007-2016 (TN req)",
+      TRUE ~ "Post-2016"
+    )
+  ) %>%
+  filter(status %in% c("In Service", "Temp Out of Use")) %>%
+  count(era, ust_classification) %>%
+  pivot_wider(names_from = ust_classification, values_from = n, values_fill = 0)
+
+# Validation Query 2: Tanks installed after July 24, 2007 NOT classified as secondary
+# These should be investigated - likely data quality issues
+tn_classified %>%
+  filter(install_date_numeric >= 39287,
+         ust_classification != "Secondary_Contained") %>%
+  select(facility_id_ust, compartment_id, install_date_converted, 
+         tank_construction, category_of_construction, ust_classification)
+
+# Validation Query 3: Agreement between category_of_construction and tank_construction
+tn_classified %>%
+  filter(!is.na(category_of_construction)) %>%
+  count(category_of_construction, tank_construction, ust_classification) %>%
+  arrange(category_of_construction, desc(n))
+
+# Validation Query 4: Classification by tank_construction type
+tn_classified %>%
+  count(tank_construction, ust_classification, classification_confidence) %>%
+  arrange(tank_construction, ust_classification)
+
+# Validation Query 5: STI-P3 tanks should all be single-walled
+tn_classified %>%
+  filter(tank_construction == "Cathodically Protected Steel-StiP3") %>%
+  count(ust_classification) %>%
+  mutate(pct = n / sum(n) * 100)
+# Expected: 100% Single_Walled (unless installed after 2007, which would be unusual)
+
+# Validation Query 6: Composite tanks should all be secondary contained
+tn_classified %>%
+  filter(tank_construction == "Composite - Steel w/FRP") %>%
+  count(ust_classification) %>%
+  mutate(pct = n / sum(n) * 100)
+# Expected: 100% Secondary_Contained
+
+# Validation Query 7: Active tanks by classification
+tn_classified %>%
+  filter(status == "In Service") %>%
+  count(ust_classification) %>%
+  mutate(pct = round(n / sum(n) * 100, 1))
+
+# Validation Query 8: Missing installation dates
+tn_classified %>%
+  filter(is.na(install_date_numeric) | install_date_numeric == 0) %>%
+  count(tank_construction, ust_classification)
+```
+
+### Tennessee-Specific Considerations
+
+#### 1. High NULL Rate in `category_of_construction`
+
+The diagnostic shows 53,215 of 60,282 compartments (88.3%) have NULL values for `category_of_construction`. This means the classification algorithm must rely primarily on:
+- Installation date (if after July 24, 2007 → Secondary Contained)
+- `tank_construction` material type
+
+#### 2. Excel Serial Date Format
+
+Tennessee stores `date_tank_installed` as Excel serial numbers (integers like 22767). Conversion formula:
+```r
+as.Date(as.numeric(excel_serial), origin = "1899-12-30")
+```
+
+**Important:** Validate that dates convert correctly before classification. Sample conversions:
+- 22767 → 1962-05-07
+- 39287 → 2007-07-24 (TN requirement date)
+- 42470 → 2016-04-11 (Federal requirement date)
+
+#### 3. STI-P3 Classification
+
+"Cathodically Protected Steel-StiP3" refers to Steel Tank Institute P3 technology - factory-applied cathodic protection on single-wall steel tanks. This is **not** secondary containment despite having advanced corrosion protection. The diagnostic shows 6,935 tanks with this construction.
+
+#### 4. Polyethylene Tank Jacket
+
+The diagnostic shows 485 tanks with "Polyethylene Tank Jacket" construction. These should be classified as Secondary Contained because the polyethylene jacket serves as an outer barrier for leak containment.
+
+#### 5. LUST Data Integration
+
+Tennessee LUST data (`EnvSites`) contains 16,956 records with:
+- Discovery dates in `MMM-DD-YYYY` format (e.g., "APR-05-1994")
+- Status codes indicating case progression
+- Can be linked via `facilityid` to tank data
+
+#### 6. Reimbursement Fund Data
+
+Tennessee has an active reimbursement fund (`ReimbSites` with 5,262 records). Facilities with fund claims may have more complete closure and remediation documentation.
+
+#### 7. Geographic Considerations
+
+Tennessee data uses standard county names (available in `EnvSites.facilitycounty`). The three regional fee billing cycles (East, Middle, West) may correlate with data quality patterns.
+
+#### 8. EPA Merge Logic
+
+The diagnostic shows EPA facility IDs follow format `TN[7-digit-id]`:
+- Strip "TN" prefix from EPA IDs for matching
+- Tennessee state IDs are numeric-only
+- Match rate appears high (10/10 EPA samples found in TN data)
+
+---
+
+**Document prepared:** January 2026  
+**Data source:** Tennessee TDEC UST Database (Diagnostic Report v2)  
+**Regulatory authority:** Tenn. Comp. R. & Regs. 0400-18-01 (2018)  
+**Federal authority:** 40 CFR Part 280  
+**SPA status:** Approved November 8, 2021 (86 FR 50470)
+
+---
+
+Based on the diagnostic report and your code, I have researched the Arkansas Pollution Control and Ecology Commission (APC&EC) Rule 12.
+
+**CRITICAL CORRECTION FOR YOUR CODE:**
+In your provided R script (`02_Clean_AR.R`), you have the following logic:
+`double_walled = ifelse(dbl_wall == 1 | int_lining == 1, 1, 0)`
+
+**This is incorrect per federal and state definition.** An internal lining (`UT_MOC_IntLiningTF`) is a corrosion protection upgrade applied to **Single-Walled** tanks (typically steel) to extend their life. It does *not* create a secondary containment barrier. I have corrected this in the logic below.
+
+Here is the **Arkansas Implementation** section formatted for your schema document.
+
+---
+
+## Arkansas Implementation
+
+### Overview
+
+Arkansas regulates USTs through the Department of Energy and Environment, Division of Environmental Quality (DEQ). Arkansas has adopted federal standards by reference but established an earlier deadline for secondary containment implementation compared to the 2015 federal rules.
+
+**Implementing Agency:** Arkansas Department of Energy and Environment (DEQ), Office of Land Resources
+**State Program Approval Status:** Approved State Program (SPA)
+**Federal Register Approval:** February 26, 1990 (55 FR 6773); Revisions approved January 22, 2021 (86 FR 6573)
+**URL:** [https://www.adeq.state.ar.us/rst/](https://www.adeq.state.ar.us/rst/)
+
+### Arkansas Regulatory Framework
+
+#### State Statutes
+
+**Arkansas Code Annotated § 8-7-801 et seq.**
+
+* Regulated Substance Storage Tanks
+
+#### State Regulations
+
+**APC&EC Rule 12**
+**Full Citation:** Storage Tanks (Regulation No. 12)
+**URL:** [https://www.adeq.state.ar.us/regs/files/reg12_final_2020.pdf](https://www.google.com/search?q=https://www.adeq.state.ar.us/regs/files/reg12_final_2020.pdf)
+
+**Key Sections:**
+
+* **Reg. 12.109** - Adoption of Federal Regulations
+* **Reg. 12.502** - Secondary Containment Requirements
+* **Reg. 12.504** - General Requirements (Dates)
+
+### Arkansas-Specific Requirements
+
+#### 1. Secondary Containment Requirement - EARLIER THAN FEDERAL
+
+**APC&EC Rule 12, Reg. 12.504:**
+
+> "(A) Each new underground storage tank... installed after **July 1, 2007**, shall be secondarily contained and monitored for leaks..."
+> "(B) Any underground storage tank... replaced after **July 1, 2007**, shall be secondarily contained..."
+
+**Critical Distinction:**
+
+* **Arkansas Requirement:** July 1, 2007
+* **Federal Requirement:** April 11, 2016
+* **Difference:** Arkansas mandate is **8 years, 9 months** earlier than federal.
+
+#### 2. Trust Fund Eligibility (Advisory)
+
+Arkansas maintains a Petroleum Storage Tank Trust Fund. Data accuracy regarding tank construction is critical for fund eligibility. The dataset contains specific flags (e.g., `UT_MOC_*`) that are used to verify eligibility status.
+
+### Arkansas-Specific Timeline
+
+| Date | Arkansas Requirement | Citation | Federal Equivalent |
+| --- | --- | --- | --- |
+| **July 1, 2007** | Secondary containment required for all new/replaced tanks | Reg. 12.504 | April 11, 2016 |
+| **July 1, 2007** | Under-dispenser containment required | Reg. 12.505 | April 11, 2016 |
+| **January 22, 2021** | Federal approval of Arkansas 2015 UST regulation revisions | 86 FR 6573 | SPA Re-approval |
+
+### Arkansas Classification Algorithm
+
+```
+START ARKANSAS CLASSIFICATION
+
+1. ARKANSAS SECONDARY CONTAINMENT DATE
+
+   IF installation_date >= July 1, 2007:
+      RETURN "Secondary Contained" (Very High Confidence)
+      REASON: APC&EC Rule 12.504 requirement
+      CITATION: Reg. 12.504
+
+2. EXPLICIT DOUBLE-WALL INDICATORS (Database Flags)
+
+   ELSE IF UT_MOC_DblWallTF = TRUE (1):
+      RETURN "Secondary Contained" (High Confidence)
+      REASON: Explicit double-wall flag in tankstats
+      
+   ELSE IF UT_MOC_CompositeTF = TRUE (1):
+      RETURN "Secondary Contained" (High Confidence)
+      REASON: Composite (ACT-100) is inherently double-walled construction
+      
+   ELSE IF UT_MOC_PolyJacketTF = TRUE (1):
+      RETURN "Secondary Contained" (High Confidence)
+      REASON: Polyethylene jacket provides secondary barrier
+      
+   ELSE IF UT_MOC_ExcvLinerTF = TRUE (1):
+      RETURN "Secondary Contained" (Medium-High Confidence)
+      REASON: Excavation liner acts as secondary containment
+
+3. FIBERGLASS/PLASTIC (DATE-DEPENDENT)
+
+   ELSE IF UT_MOC_FbrPlasticTF = TRUE (1):
+      IF installation_date >= January 1, 1990:
+         RETURN "Secondary Contained" (Medium-High Confidence)
+         REASON: Industry standard post-1990 is double-wall FRP
+      ELSE:
+         RETURN "Unknown" (Low Confidence)
+
+4. SINGLE-WALL INDICATORS (Logic Correction)
+
+   ELSE IF UT_MOC_SteelTF = TRUE (1) AND UT_MOC_DblWallTF = FALSE (0):
+      RETURN "Single-Walled" (High Confidence)
+      REASON: Steel tank without double-wall flag
+      
+   ELSE IF UT_MOC_IntLiningTF = TRUE (1):
+      RETURN "Single-Walled" (High Confidence)
+      REASON: Internal lining is a corrosion upgrade for single-wall tanks, not secondary containment
+      
+   ELSE IF UT_MOC_EpoxyTF = TRUE (1):
+      RETURN "Single-Walled" (High Confidence)
+      REASON: Epoxy coating is corrosion protection, not containment
+
+5. DEFAULT CASE
+
+   ELSE:
+      RETURN "Unknown" (Low Confidence)
+
+END ARKANSAS CLASSIFICATION
+
+```
+
+### Arkansas Data Field Mapping
+
+| Arkansas Field (TankStats) | Universal Concept | Classification Implication |
+| --- | --- | --- |
+| `InstallDate` | Installation Date | Primary classifier (Cutoff: July 1, 2007) |
+| `UT_MOC_DblWallTF` | Double-Wall Flag | Explicit Secondary Containment |
+| `UT_MOC_CompositeTF` | Composite Material | Secondary Containment |
+| `UT_MOC_PolyJacketTF` | Jacket Construction | Secondary Containment |
+| `UT_MOC_ExcvLinerTF` | Excavation Liner | Secondary Containment |
+| `UT_MOC_IntLiningTF` | Internal Lining | **Single-Walled** (Upgrade) |
+| `UT_MOC_EpoxyTF` | Epoxy Coated | **Single-Walled** (Corrosion Protection) |
+| `UT_MOC_SteelTF` | Steel Material | Single-Walled (unless DW flag present) |
+
+### Arkansas R Implementation
+
+```r
+library(data.table)
+library(lubridate)
+
+classify_arkansas_ust <- function(dt) {
+  # Ensure date format
+  dt[, install_date_final := as.Date(Tank_Installation_Date)]
+  
+  # Regulatory Date
+  AR_SEC_CON_DATE <- as.Date("2007-07-01") # APC&EC Rule 12.504
+  FRP_CUTOFF      <- as.Date("1990-01-01") 
+  
+  dt[, ust_classification := case_when(
+    # 1. Regulatory Mandate (State)
+    install_date_final >= AR_SEC_CON_DATE ~ "Secondary_Contained",
+    
+    # 2. Explicit Database Flags (High Confidence)
+    dbl_wall == 1 ~ "Secondary_Contained",
+    composite == 1 ~ "Secondary_Contained",
+    poly_jacket == 1 ~ "Secondary_Contained",
+    excv_liner == 1 ~ "Secondary_Contained",
+    
+    # 3. Material Inference
+    fiberglass_plastic == 1 & install_date_final >= FRP_CUTOFF ~ "Secondary_Contained",
+    
+    # 4. Single Wall Indicators
+    # CRITICAL: int_lining and epoxy are upgrades to single-wall tanks, NOT secondary containment
+    int_lining == 1 ~ "Single_Walled",
+    epoxy == 1 ~ "Single_Walled",
+    steel == 1 & dbl_wall == 0 ~ "Single_Walled",
+    
+    # 5. Default
+    TRUE ~ "Unknown"
+  )]
+  
+  # Confidence Scoring
+  dt[, classification_confidence := case_when(
+    install_date_final >= AR_SEC_CON_DATE ~ "Very_High",
+    dbl_wall == 1 | poly_jacket == 1 ~ "High",
+    composite == 1 ~ "High",
+    ust_classification == "Single_Walled" & (int_lining == 1 | steel == 1) ~ "High",
+    ust_classification == "Secondary_Contained" & fiberglass_plastic == 1 ~ "Medium_High",
+    TRUE ~ "Low"
+  )]
+  
+  return(dt)
+}
+
+```
+
+### Arkansas Validation Queries
+
+```r
+# Query 1: Internal Lining Misclassification Check
+# Verify that tanks with int_lining == 1 are NOT classified as Secondary Contained
+# unless they meet the date requirement or have a specific dbl_wall flag.
+check_lining <- AR_UST_tanks_SD[int_lining == 1 & dbl_wall == 0 & 
+                                tank_installed_date < as.Date("2007-07-01")]
+print(table(check_lining$ust_classification))
+# EXPECTED: All should be "Single_Walled"
+
+# Query 2: Date Boundary Check
+# Ensure tanks installed post-July 2007 are captured
+check_date <- AR_UST_tanks_SD[tank_installed_date >= as.Date("2007-07-01")]
+print(table(check_date$ust_classification))
+# EXPECTED: 100% "Secondary_Contained"
+
+# Query 3: Unknowns
+print(prop.table(table(AR_UST_tanks_SD$ust_classification)))
+
+```
+---
+
+
 # PART III: IMPLEMENTATION GUIDE
 
 ## Template for Other States
@@ -2378,22 +3121,23 @@ Subtitle I of the Solid Waste Disposal Act allows state UST programs approved by
 ## Document Metadata
 
 **Title:** Universal Underground Storage Tank (UST) Classification Schema  
-**Version:** 2.0  
+**Version:** 2.1  
 **Created:** January 2026  
-**Author:** Developed from federal regulations and Louisiana implementation  
+**Author:** Developed from federal regulations and state-specific implementations (Louisiana, Alabama, Tennessee)  
 **Purpose:** Standardized framework for classifying USTs across U.S. jurisdictions  
 **Status:** Living document - updated as states are added
 
 **License:** Public Domain - This classification framework is designed for use by government agencies, researchers, and private sector for UST data management and analysis.
 
 **Citation:** When using this schema, please cite as:
-> Universal Underground Storage Tank Classification Schema, Version 2.0 (January 2026). Based on 40 CFR Part 280 and state-specific implementations.
+> Universal Underground Storage Tank Classification Schema, Version 2.1 (January 2026). Based on 40 CFR Part 280 and state-specific implementations.
 
 **Contact for Updates:** [To be determined based on maintaining organization]
 
 **Changelog:**
 - Version 1.0 (January 2026): Louisiana-specific schema
 - Version 2.0 (January 2026): Expanded to universal framework with Louisiana as first state implementation
+- Version 2.1 (January 2026): Added Tennessee implementation (July 24, 2007 secondary containment date)
 
 ---
 

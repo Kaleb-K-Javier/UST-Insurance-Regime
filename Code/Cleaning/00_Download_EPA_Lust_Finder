@@ -216,3 +216,59 @@ tryCatch({
   message("  Error extracting schema: ", e$message)
 })
 
+
+# =============================================================================
+# 6. POST-PROCESS: Fix Coordinate Reference System (EPSG:3857 -> EPSG:4326)
+# =============================================================================
+message("\nStep 6: Converting Coordinates (Web Mercator -> Lat/Long)...")
+
+# Check if 'sf' is installed (it's required for re-projection)
+if (!requireNamespace("sf", quietly = TRUE)) {
+  message("  [!] Skipping coordinate conversion: 'sf' package not installed.")
+} else {
+  library(sf)
+  
+  fac_path <- file.path(raw_dir, "Facilities.csv")
+  
+  if (file.exists(fac_path)) {
+    # 1. Read Data
+    dt_fac <- fread(fac_path)
+    
+    # Check if conversion is needed (Look for huge numbers typical of Web Mercator)
+    # Lat > 90 or Long < -180 usually indicates projected data
+    if (any(abs(dt_fac$Latitude) > 90, na.rm = TRUE)) {
+      message("  - Detected Web Mercator coordinates. Converting...")
+      
+      # Filter valid coords for conversion
+      valid_indices <- which(!is.na(dt_fac$Latitude) & !is.na(dt_fac$Longitude))
+      
+      if (length(valid_indices) > 0) {
+        # Create SF object from valid rows (Input: EPSG 3857)
+        dt_sf <- st_as_sf(dt_fac[valid_indices], 
+                          coords = c("Longitude", "Latitude"), 
+                          crs = 3857)
+        
+        # Transform to WGS84 (Output: EPSG 4326)
+        dt_sf_geo <- st_transform(dt_sf, crs = 4326)
+        
+        # Extract new coordinates
+        coords <- st_coordinates(dt_sf_geo)
+        
+        # Update original table
+        # Note: st_coordinates returns matrix [X, Y] -> [Long, Lat]
+        dt_fac[valid_indices, Longitude := coords[, 1]]
+        dt_fac[valid_indices, Latitude  := coords[, 2]]
+        
+        # Overwrite file
+        fwrite(dt_fac, fac_path)
+        message("  ✓ Coordinates converted and file updated.")
+      } else {
+        message("  - No valid coordinates found to convert.")
+      }
+    } else {
+      message("  - Coordinates appear to be WGS84 already. No changes made.")
+    }
+  } else {
+    message("  - Facilities.csv not found.")
+  }
+}
