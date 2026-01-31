@@ -13,37 +13,12 @@ library(fs)
 
 # 0. Configuration -------------------------------------------------------------
 
-RUN_CLEANING_SCRIPTS <- FALSE 
 
 # Directories
 raw_db_dir <- here("Data", "Raw", "state_databases")
 processed_dir <- here("Data", "Processed")
 
 if (!dir.exists(processed_dir)) dir.create(processed_dir, recursive = TRUE)
-
-# 1. Run Individual Cleaning Scripts -------------------------------------------
-
-if (RUN_CLEANING_SCRIPTS) {
-  message("Starting Batch Execution of Cleaning Scripts...")
-  # Added TN and AL to the list
-  scripts <- c("01_Clean_AR.R", "02_Clean_LA.R", "03_Clean_ME.R", "04_Clean_MI.R",
-               "05_Clean_NJ.R", "06_Clean_NM.R", "07_Clean_OK.R", #"08_Clean_TX.R",
-               "12_Clean_TN.R", "11_Clean_AL.R", "09_Clean_EPA_States.R")
-  
-  for (script in scripts) {
-    script_path <- here("Code", "Cleaning", script)
-    if (!file.exists(script_path)) script_path <- here(script) 
-    
-    if (file.exists(script_path)) {
-      message(paste0("Running: ", script))
-      tryCatch({ source(script_path, local = TRUE) }, 
-               error = function(e) message(paste0("Error running ", script, ": ", e$message)))
-    } else {
-      warning(paste0("Script not found: ", script))
-    }
-  }
-  message("Batch Execution Complete.")
-}
 
 # 2. Master UST Tank Aggregation -----------------------------------------------
 

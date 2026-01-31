@@ -1,0 +1,509 @@
+{
+  "metadata": {
+    "generated_by": "code_audit_llm",
+    "date": "2026-01-XX",
+    "description": "Complete mapping of file paths, dataset names, and read operations from R cleaning scripts"
+  },
+  "scripts": [
+    {
+      "script_path": "Code/Cleaning/01_Clean_AR.R",
+      "state": "Arkansas",
+      "state_folder": "Arkansas",
+      "file_reads": [
+        {
+          "line": 47,
+          "file_path": "Data/Raw/state_databases/Arkansas/TankStats_web.mdb",
+          "file_type": "mdb",
+          "read_function": "dbConnect(odbc(), .connection_string = paste0(\"Driver={Microsoft Access Driver (*.mdb, *.accdb)};Dbq=\", db_path, \";\"))",
+          "tables": [
+            {
+              "table_name": "TempRFACS_CountryNO",
+              "variable": "rfacs_data",
+              "read_function": "dbReadTable(con, \"TempRFACS_CountryNO\")",
+              "line": 54
+            },
+            {
+              "table_name": "TempTankStats_UG",
+              "variable": "tankstats_ug",
+              "read_function": "dbReadTable(con, \"TempTankStats_UG\")",
+              "line": 55
+            },
+            {
+              "table_name": "TempRLUSTLOG1",
+              "variable": "lust_data",
+              "read_function": "dbReadTable(con, \"TempRLUSTLOG1\")",
+              "line": 56
+            }
+          ],
+          "connection_closed": true,
+          "close_line": 59
+        },
+        {
+          "line": 286,
+          "file_path": "Data/Processed/county_fips_codes.csv",
+          "file_type": "csv",
+          "read_function": "fread(fips_path)",
+          "variable": "county_fips",
+          "conditional": true,
+          "condition": "file.exists(fips_path)"
+        }
+      ],
+      "output_directory": "Data/Raw/state_databases/Arkansas",
+      "output_files": [
+        "AR_Harmonized_UST_tanks.csv",
+        "AR_Harmonized_LUST.csv"
+      ]
+    },
+    {
+      "script_path": "Code/Cleaning/02_Clean_LA.R",
+      "state": "Louisiana",
+      "state_folder": "Louisiana",
+      "file_reads": [
+        {
+          "line": 185,
+          "file_path": "Data/Raw/state_databases/Louisiana/LA_record_request.xlsx",
+          "file_type": "xlsx",
+          "read_function": "read_excel(la_file_path, sheet = \"Tank Info by compartment\", col_types = \"text\")",
+          "variable": "LA_tanks_raw",
+          "sheets": [
+            {
+              "sheet_name": "Tank Info by compartment",
+              "variable": "LA_tanks_raw"
+            },
+            {
+              "sheet_name": "LUST Sites by incident ID",
+              "variable": "LA_lust_raw",
+              "read_function": "read_excel(la_file_path, sheet = \"LUST Sites by incident ID\", col_types = \"text\")"
+            }
+          ]
+        },
+        {
+          "line": 316,
+          "file_path": "Data/Processed/county_fips_codes.csv",
+          "file_type": "csv",
+          "read_function": "fread(fips_path)",
+          "variable": "county_fips",
+          "conditional": true,
+          "condition": "file.exists(fips_path)"
+        }
+      ],
+      "output_directory": "Data/Raw/state_databases/Louisiana",
+      "output_files": [
+        "LA_Harmonized_UST_tanks.csv",
+        "LA_Harmonized_LUST.csv"
+      ]
+    },
+    {
+      "script_path": "Code/Cleaning/03_Clean_ME.R",
+      "state": "Maine",
+      "state_folder": "Maine",
+      "file_reads": [
+        {
+          "line": 86,
+          "file_path": "https://www.maine.gov/dep/ftp/tanks/tanks_owner_all_registered_tanks.txt",
+          "file_type": "url_text",
+          "read_function": "download.file(url, destfile = temp_file, mode = \"wb\") then fread(temp_file, sep = \"*\", header = TRUE, fill = TRUE, colClasses = \"character\", quote = \"\")",
+          "variable": "ME_tanks_raw",
+          "is_url": true,
+          "temp_file": true
+        },
+        {
+          "line": 188,
+          "base_url": "https://www.maine.gov/dep/ftp/hoss/",
+          "files": [
+            {
+              "file_path": "https://www.maine.gov/dep/ftp/hoss/report_tank_involved.txt",
+              "file_type": "url_text",
+              "read_function": "safe_fread_strict(paste0(base_url, \"report_tank_involved.txt\"))",
+              "variable": "tank_map",
+              "is_url": true
+            },
+            {
+              "file_path": "https://www.maine.gov/dep/ftp/hoss/spill_report.txt",
+              "file_type": "url_text",
+              "read_function": "safe_fread_strict(paste0(base_url, \"spill_report.txt\"))",
+              "variable": "spill_report",
+              "is_url": true
+            },
+            {
+              "file_path": "https://www.maine.gov/dep/ftp/hoss/spill_log.txt",
+              "file_type": "url_text",
+              "read_function": "safe_fread_strict(paste0(base_url, \"spill_log.txt\"))",
+              "variable": "spill_log",
+              "is_url": true
+            }
+          ]
+        },
+        {
+          "line": 267,
+          "file_path": "Data/Processed/Census_Geography/Maine_census_geography.csv",
+          "file_type": "csv",
+          "read_function": "Sys.glob(...) then fread(census_file[1])",
+          "variable": "census_data",
+          "conditional": true,
+          "condition": "length(census_file) > 0",
+          "uses_glob": true
+        }
+      ],
+      "output_directory": "Data/Raw/state_databases/Maine",
+      "output_files": [
+        "ME_Harmonized_UST_tanks.csv",
+        "ME_Harmonized_LUST.csv"
+      ]
+    },
+    {
+      "script_path": "Code/Cleaning/04_Clean_MI.R",
+      "state": "Michigan",
+      "state_folder": "Michigan",
+      "file_reads": [
+        {
+          "line": 132,
+          "file_path": "Data/Raw/state_databases/Michigan/UTK Master List 3-3-25.xlsx",
+          "file_type": "xlsx",
+          "read_function": "read_michigan_sheets(michigan_file_path)",
+          "variable": "michigan_raw",
+          "sheets_excluded": [6, 9],
+          "custom_function": true
+        },
+        {
+          "line": 184,
+          "file_path": "Data/Raw/Releases.csv",
+          "file_type": "csv",
+          "read_function": "fread(lust_path, colClasses = \"character\")",
+          "variable": "MI_lust_raw",
+          "conditional": true,
+          "condition": "file.exists(lust_path)",
+          "filter": "state == \"Michigan\""
+        }
+      ],
+      "output_directory": "Data/Raw/state_databases/Michigan",
+      "output_files": [
+        "MI_Harmonized_UST_tanks.csv",
+        "MI_Harmonized_LUST.csv"
+      ]
+    },
+    {
+      "script_path": "Code/Cleaning/05_Clean_NJ.R",
+      "state": "New Jersey",
+      "state_folder": "New Jersey",
+      "file_reads": [
+        {
+          "line": 94,
+          "file_path": "Data/Raw/state_databases/New Jersey/New Jersey Tanks Data.csv",
+          "file_type": "csv",
+          "read_function": "fread(..., colClasses = \"character\")",
+          "variable": "NJ_tanks_raw"
+        },
+        {
+          "line": 98,
+          "file_path": "Data/Raw/state_databases/New Jersey/New Jersey Facility Data.csv",
+          "file_type": "csv",
+          "read_function": "fread(..., colClasses = \"character\")",
+          "variable": "NJ_facility_raw"
+        },
+        {
+          "line": 176,
+          "file_path": "Data/Raw/Releases.csv",
+          "file_type": "csv",
+          "read_function": "fread(lust_path, colClasses = \"character\")",
+          "variable": "NJ_lust_raw",
+          "conditional": true,
+          "condition": "file.exists(lust_path)",
+          "filter": "state == \"New Jersey\""
+        }
+      ],
+      "output_directory": "Data/Raw/state_databases/New Jersey",
+      "output_files": [
+        "NJ_Harmonized_UST_tanks.csv",
+        "NJ_Harmonized_LUST.csv"
+      ]
+    },
+    {
+      "script_path": "Code/Cleaning/06_Clean_NM.R",
+      "state": "New Mexico",
+      "state_folder": "New Mexico",
+      "file_reads": [
+        {
+          "line": 73,
+          "file_path": "Data/Raw/USTs.csv",
+          "file_type": "csv",
+          "read_function": "fread(...) %>% clean_names()",
+          "variable": "ust_data_epa"
+        },
+        {
+          "line": 78,
+          "file_path": "Data/Raw/Facilities.csv",
+          "file_type": "csv",
+          "read_function": "fread(facilities_path) %>% clean_names()",
+          "variable": "epa_facilities",
+          "conditional": true,
+          "condition": "file.exists(facilities_path)",
+          "merge_with": "ust_data_epa",
+          "merge_key": "facility_id"
+        },
+        {
+          "line": 157,
+          "file_path": "Data/Raw/state_databases/New Mexico",
+          "file_type": "directory",
+          "read_function": "list.files(nm_path, full.names = TRUE)",
+          "pattern_matching": [
+            {
+              "pattern": "rp_nfa_amount",
+              "case_sensitive": false,
+              "variable": "rp_file",
+              "read_function": "read_excel(rp_file[1])",
+              "variable_assigned": "NM_LUST_01"
+            },
+            {
+              "pattern": "sl_nfa_amount",
+              "case_sensitive": false,
+              "variable": "sl_file",
+              "read_function": "read_excel(sl_file[1])",
+              "variable_assigned": "NM_LUST_02"
+            }
+          ]
+        }
+      ],
+      "output_directory": "Data/Raw/state_databases/New Mexico",
+      "output_files": [
+        "NM_Harmonized_UST_tanks.csv",
+        "NM_Harmonized_LUST.csv"
+      ]
+    },
+    {
+      "script_path": "Code/Cleaning/07_Clean_OK.R",
+      "state": "Oklahoma",
+      "state_folder": "Oklahoma",
+      "file_reads": [
+        {
+          "line": 72,
+          "file_path": "Data/Raw/state_databases/Oklahoma",
+          "file_type": "directory",
+          "read_function": "list.files(ok_path, pattern = \"\\\\.csv$\", full.names = TRUE)",
+          "pattern_matching": [
+            {
+              "pattern": "Tank|PST_Tank",
+              "case_sensitive": false,
+              "variable": "tank_file",
+              "read_function": "fread(tank_file[1], colClasses = \"character\")",
+              "variable_assigned": "OK_Tanks_Raw"
+            },
+            {
+              "pattern": "Case|Release|PST_Case",
+              "case_sensitive": false,
+              "variable": "lust_file",
+              "read_function": "fread(lust_file[1], colClasses = \"character\")",
+              "variable_assigned": "OK_LUST_Raw"
+            }
+          ]
+        }
+      ],
+      "output_directory": "Data/Raw/state_databases/Oklahoma",
+      "output_files": [
+        "OK_Harmonized_UST_tanks.csv",
+        "OK_Harmonized_LUST.csv"
+      ]
+    },
+    {
+      "script_path": "Code/Cleaning/08_Clean_TX.R",
+      "state": "Texas",
+      "state_folder": "Texas",
+      "file_reads": [
+        {
+          "line": 190,
+          "base_url": "https://www.tceq.texas.gov/assets/public/admin/data/docs",
+          "file_type": "url_fixed_width",
+          "files": [
+            {
+              "file_path": "https://www.tceq.texas.gov/assets/public/admin/data/docs/pst_fac.txt",
+              "read_function": "load_and_process_data(paste0(base, \"/pst_fac.txt\"), fac_widths, fac_names)",
+              "variable": "fac",
+              "line": 526
+            },
+            {
+              "file_path": "https://www.tceq.texas.gov/assets/public/admin/data/docs/pst_fin_assur.txt",
+              "read_function": "load_and_process_data(paste0(base, \"/pst_fin_assur.txt\"), fa_widths, fa_names)",
+              "variable": "fa",
+              "line": 646
+            },
+            {
+              "file_path": "https://www.tceq.texas.gov/assets/public/admin/data/docs/pst_self_cert.txt",
+              "read_function": "load_and_process_data(paste0(base, \"/pst_self_cert.txt\"), sc_widths, sc_names)",
+              "variable": "self_cert",
+              "line": 1177
+            },
+            {
+              "file_path": "https://www.tceq.texas.gov/assets/public/admin/data/docs/pst_ust.txt",
+              "read_function": "load_and_process_data(paste0(base, \"/pst_ust.txt\"), ust_widths, ust_names)",
+              "variable": "ust",
+              "line": 1268
+            },
+            {
+              "file_path": "https://www.tceq.texas.gov/assets/public/admin/data/docs/pst_ust_comprt.txt",
+              "read_function": "load_and_process_data(paste0(base, \"/pst_ust_comprt.txt\"), comp_widths, comp_names)",
+              "variable": "ust_compartments",
+              "line": 1608
+            }
+          ],
+          "is_url": true,
+          "download_function": "download.file(url, tf, method = \"libcurl\", quiet = TRUE)"
+        },
+        {
+          "line": 2262,
+          "file_path": "Data/Raw/state_databases/Texas/TX_LUST.csv",
+          "file_type": "csv",
+          "read_function": "fread(...)",
+          "variable": "TX_LUST_SD"
+        },
+        {
+          "line": 2385,
+          "census_urls": [
+            {
+              "file_path": "https://www2.census.gov/programs-surveys/popest/datasets/2010-2020/counties/totals/co-est2020-alldata.csv",
+              "read_function": "reshape_pop() -> fread(url, ...)",
+              "variable": "pop_2010_2020"
+            },
+            {
+              "file_path": "https://www2.census.gov/programs-surveys/popest/datasets/2000-2009/counties/totals/co-est2009-alldata.csv",
+              "read_function": "reshape_pop() -> fread(url, ...)",
+              "variable": "pop_2000_2009"
+            },
+            {
+              "file_path_template": "https://www2.census.gov/programs-surveys/popest/tables/1990-2000/intercensal/st-co/stch-icen%d.txt",
+              "read_function": "peek_icen_year() -> fread(url, header = FALSE, colClasses = \"character\")",
+              "years": [1990, 2000],
+              "note": "Used in loop for years 1990-2000"
+            }
+          ],
+          "is_url": true
+        }
+      ],
+      "output_directory": "Data/Raw/state_databases/Texas",
+      "output_files": [
+        "TX_Harmonized_UST_tanks.csv",
+        "TX_Harmonized_LUST.csv"
+      ]
+    },
+    {
+      "script_path": "Code/Cleaning/09_Clean_EPA_Region6.R",
+      "state": "EPA_National",
+      "state_folder": "Multiple",
+      "file_reads": [
+        {
+          "line": 132,
+          "file_path": "Data/Raw/USTs.csv",
+          "file_type": "csv",
+          "read_function": "fread(..., colClasses = \"character\") %>% clean_names()",
+          "variable": "epa_usts"
+        },
+        {
+          "line": 135,
+          "file_path": "Data/Raw/Facilities.csv",
+          "file_type": "csv",
+          "read_function": "fread(..., colClasses = \"character\") %>% clean_names()",
+          "variable": "epa_facilities",
+          "merge_with": "epa_usts",
+          "merge_key": "facility_id"
+        },
+        {
+          "line": 138,
+          "file_path": "Data/Raw/Releases.csv",
+          "file_type": "csv",
+          "read_function": "fread(..., colClasses = \"character\") %>% clean_names()",
+          "variable": "epa_releases"
+        }
+      ],
+      "state_processing": {
+        "excluded_states": ["Arkansas", "Louisiana", "Maine", "Michigan", "New Jersey", "New Mexico", "Oklahoma", "Texas"],
+        "filter_code": "state_UST_full[state == state_name]",
+        "filter_code_lust": "epa_releases[state == state_name]",
+        "iteration": "for (st in states_to_process_full) { process_state_data(st) }",
+        "state_name_type": "full_state_name",
+        "state_abbr_derivation": "state.abb[match(state_name, state.name)]"
+      },
+      "output_directory_template": "Data/Raw/state_databases/{state}",
+      "output_file_templates": [
+        "{state_abbr}_Harmonized_UST_tanks.csv",
+        "{state_abbr}_Harmonized_LUST.csv"
+      ],
+      "note": "Processes all states except those with custom scripts. Filters national files by state == state_name where state_name is full state name."
+    },
+    {
+      "script_path": "Code/Cleaning/11_Clean_TN.R",
+      "state": "Tennessee",
+      "state_folder": "Tennessee",
+      "file_reads": [
+        {
+          "line": 134,
+          "file_path": "Data/Raw/state_databases/Tennessee/ust_all-tn-compartments.xlsx",
+          "file_type": "xlsx",
+          "read_function": "read_excel(..., col_types = \"text\")",
+          "variable": "dt_tanks"
+        },
+        {
+          "line": 138,
+          "file_path": "Data/Raw/state_databases/Tennessee/ust_all-tn-environmental-sites.xlsx",
+          "file_type": "xlsx",
+          "read_function": "read_excel(..., col_types = \"text\")",
+          "variable": "dt_lust_state"
+        },
+        {
+          "line": 143,
+          "file_path": "Data/Raw/Facilities.csv",
+          "file_type": "csv",
+          "read_function": "fread(..., colClasses = \"character\")",
+          "variable": "dt_epa_fac",
+          "filter": "state == 'Tennessee'",
+          "purpose": "latitude/longitude only"
+        },
+        {
+          "line": 167,
+          "file_path": "Data/Raw/uszips.csv",
+          "file_type": "csv",
+          "read_function": "fread(..., colClasses = \"character\")",
+          "variable": "dt_zip",
+          "purpose": "zip -> county crosswalk"
+        }
+      ],
+      "output_directory": "Data/Raw/state_databases/Tennessee",
+      "output_files": [
+        "TN_Harmonized_UST_tanks.csv",
+        "TN_Harmonized_LUST.csv"
+      ]
+    },
+    {
+      "script_path": "Code/Cleaning/13_Clean_CO.R",
+      "state": "Colorado",
+      "state_folder": "Colorado",
+      "file_reads": [
+        {
+          "line": 111,
+          "file_path": "Data/Raw/state_databases/Colorado/Regulated_Storage_Tanks_in_Colorado__Oil___Public_Safety_20250728.csv",
+          "file_type": "csv",
+          "read_function": "fread(..., colClasses = \"character\", na.strings=c(\"\", \"NA\", \"NULL\"))",
+          "variable": "dt_tanks_raw"
+        },
+        {
+          "line": 112,
+          "file_path": "Data/Raw/state_databases/Colorado/Petroleum_Releases__Colorado_Oil___Public_Safety_20250728.csv",
+          "file_type": "csv",
+          "read_function": "fread(..., colClasses = \"character\", na.strings=c(\"\", \"NA\", \"NULL\"))",
+          "variable": "dt_releases_raw"
+        }
+      ],
+      "output_directory": "Data/Raw/state_databases/Colorado",
+      "output_files": [
+        "CO_Harmonized_UST_tanks.csv",
+        "CO_Harmonized_LUST.csv"
+      ]
+    }
+  ],
+  "summary": {
+    "total_scripts": 12,
+    "states_with_local_files": 10,
+    "states_with_url_downloads": 2,
+    "states_with_pattern_matching": 2,
+    "states_using_epa_national": 2,
+    "states_with_db_connections": 1
+  }
+}
