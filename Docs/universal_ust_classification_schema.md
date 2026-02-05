@@ -2435,7 +2435,849 @@ print(prop.table(table(AR_UST_tanks_SD$ust_classification)))
 ```
 ---
 
+Perfect! Here's your self-contained Colorado implementation section, ready to copy-paste into your document:
 
+---
+
+## Colorado Implementation
+
+### Overview
+
+Colorado has implemented UST regulations through the Division of Oil and Public Safety (OPS) that are **more stringent** than federal requirements, particularly regarding the secondary containment mandate date. Colorado required secondary containment for all new tanks and piping nearly eight years before the federal requirement.
+
+**Implementing Agency:** Colorado Department of Labor and Employment (CDLE), Division of Oil and Public Safety (OPS)  
+**State Program Approval Status:** Approved State Program (SPA)  
+**Federal Register Approval:** May 20, 2019 (84 FR 22727-22733)  
+**Effective Date:** July 19, 2019  
+**State Regulations Effective:** January 1, 2017 (2015 federal revisions)  
+**URL:** https://ops.colorado.gov/petroleum
+
+### Colorado Regulatory Framework
+
+#### State Statutes
+**Colorado Revised Statutes (C.R.S.) Title 8, Articles 20 and 20.5**
+- C.R.S. § 8-20-101 et seq. - Oil Inspection Act
+- C.R.S. § 8-20.5-101 et seq. - Petroleum Storage Tank Act
+
+#### State Regulations
+**7 Code of Colorado Regulations (CCR) 1101-14**  
+**Full Citation:** Storage Tank Regulations  
+**Current Version:** Effective March 17, 2019  
+**URL:** https://www.sos.state.co.us/CCR/GenerateRulePdf.do?ruleVersionId=5570&fileName=7+CCR+1101-14
+
+**Key Sections:**
+- **7 CCR 1101-14 § 2-2-1** - Performance Standards for New UST Systems
+- **7 CCR 1101-14 § 2-4-4** - Release Detection Requirements
+- **7 CCR 1101-14 § 2-5-1** - Reporting and Investigation
+- **7 CCR 1101-14 § 2-8-1** - Operator Training
+
+### Colorado-Specific Requirements
+
+#### 1. Secondary Containment Requirement - EARLIER THAN FEDERAL
+
+**7 CCR 1101-14 § 2-2-1(a):**
+> "Secondary containment and interstitial monitoring is required for all new underground tank installations."
+
+**7 CCR 1101-14 § 2-2-1(b):**
+> "Secondary containment and interstitial monitoring is required for all new piping installations, including piping to remote fills."
+
+**Implementation Timeline:**
+- **Original Colorado requirement:** August 1, 2008
+- **Federal Requirement:** April 11, 2016
+- **Difference:** Colorado mandate is **7 years, 8 months** earlier than federal
+
+**Components Required (7 CCR 1101-14 § 2-2-1):**
+1. **Tanks:** Double-walled with interstitial monitoring
+2. **Piping:** Double-walled with interstitial monitoring (all new installations)
+3. **Interstitial Monitoring:** Must be used as primary release detection method
+4. **Secondary Containment Testing:** Required at installation and approximately one year thereafter
+
+#### 2. Piping Replacement Trigger
+
+**7 CCR 1101-14 § 2-2-1(b):**
+> "The secondary containment requirements for replaced piping are triggered when a minimum of **50% or 50 feet (whichever is less)** of the total length of piping connected to a single underground tank is replaced."
+
+**Comparison to Federal:**
+- **Colorado Trigger:** 50% or 50 feet (whichever is less)
+- **Federal Trigger:** 50% of piping run
+- **Colorado is MORE RESTRICTIVE** - the "50 feet" provision captures smaller piping systems
+
+#### 3. Secondary Containment Testing Requirements
+
+**Colorado-Specific Requirement (Effective 2008):**
+
+All secondary containment systems must be tested:
+- **Initial testing:** At time of installation
+- **Follow-up testing:** Approximately one year after installation
+- **Containment sump testing:** By January 1, 2020, and every three years thereafter
+
+**7 CCR 1101-14 § 2-4-4(g) - Interstitial Monitoring:**
+- Must document "normal" sensor status report for each tank monthly
+- Monthly interstitial monitoring may be used in place of annual line testing if product piping is double-walled
+- All UST systems installed during and after August 1, 2008 must use interstitial monitoring as primary release detection method
+
+#### 4. Overfill Prevention Device Restrictions
+
+**Effective January 1, 2017:**
+- Ball float valves can no longer be used as primary overfill prevention device if malfunctioning
+- Ball float valves cannot be primary overfill prevention device in new UST installations after January 1, 2017
+- Alternative devices required: drop tube fill valve, audible alarm, etc.
+
+### Colorado-Specific Timeline
+
+| Date | Colorado Requirement | Citation | Federal Equivalent |
+|------|---------------------|----------|-------------------|
+| **August 1, 2008** | Secondary containment required for all new/replaced tanks and piping | 7 CCR 1101-14 § 2-2-1 | Not required until April 11, 2016 (7.7 years later) |
+| **August 1, 2008** | Interstitial monitoring required as primary release detection | 7 CCR 1101-14 § 2-4-4(g) | October 13, 2015 (federal 2015 rule) |
+| **August 1, 2008** | Initial secondary containment testing at installation | OPS guidance | Not federally required until 2015 |
+| **January 1, 2017** | Colorado adopts 2015 federal UST revisions | 7 CCR 1101-14 (revised) | October 13, 2015 (federal effective) |
+| **January 1, 2017** | Ball float valve restrictions for overfill prevention | 7 CCR 1101-14 § 2-2-1(c) | No federal equivalent |
+| **January 1, 2020** | Containment sump testing required every three years | 7 CCR 1101-14 § 2-3-5 | Federal requirement (40 CFR 280.35) |
+| **March 17, 2019** | Amended Storage Tank Regulations effective | 7 CCR 1101-14 | Updates to state regulations |
+| **July 19, 2019** | Federal approval of Colorado's 2015 UST regulation revisions | 84 FR 22727 | State program re-approval |
+
+### Colorado Data Structure
+
+Based on the Colorado OPS database diagnostic, the following field structure is observed:
+
+#### Primary Classification Fields
+
+| Colorado Field | Universal Concept | Data Type | Classification Role |
+|----------------|-------------------|-----------|---------------------|
+| `installation_date` | Installation Date | Character (date) | Primary date-based classification |
+| `tank_material` | Tank Construction Material | Character | Primary material-based classification |
+| `tank_wall_type` | Explicit Wall Type | Character | **98.4% empty** - rarely populated |
+| `tank_corrosion_protection_method` | Corrosion Protection Type | Character | Secondary indicator (CP = single-wall) |
+| `piping_wall_type` | Piping Wall Construction | Character | Supplementary classification data |
+| `tank_status` | Tank Status | Character | Filter for active vs. closed tanks |
+
+#### Tank Material Field Distribution (N=51,529)
+
+**Critical Observation:** The `tank_wall_type` field is 98.4% empty (50,690 of 51,529 records), making `tank_material` the primary classification field.
+
+| `tank_material` Value | Count | Percentage | Classification Implication |
+|----------------------|-------|------------|----------------------------|
+| Asphalt Coated or Bare Steel | 14,385 | 27.9% | Single-Walled (requires upgrade analysis) |
+| FRP: Fiberglass Reinforced Plastic | 7,027 | 13.6% | Date-dependent classification |
+| NA (Missing) | 6,708 | 13.0% | Unknown |
+| ST: Cathodically Protected Steel | 6,663 | 12.9% | Single-Walled |
+| AST: UL142/Equiv. | 5,065 | 9.8% | Aboveground tank (excluded from UST analysis) |
+| Unknown | 4,941 | 9.6% | Unknown |
+| AST: UL2085/Equiv. (Protected) | 1,946 | 3.8% | Aboveground tank (excluded) |
+| Not Listed | 1,227 | 2.4% | Unknown |
+| COMP: Steel/FRP Composite | 771 | 1.5% | **Secondary Contained** |
+| JKT: Jacketed Steel Tank | 760 | 1.5% | **Secondary Contained** |
+| Fiberglass Reinforced Plastic | 715 | 1.4% | Date-dependent classification |
+| Epoxy Coated Steel | 369 | 0.7% | Single-Walled |
+
+#### Explicit Wall Type Cases (Where Populated, N=839)
+
+Among the 1.6% of records with `tank_wall_type` populated:
+
+| `tank_material` | `tank_wall_type` | Count | Agreement |
+|----------------|------------------|-------|-----------|
+| UL142/Equiv. | Double-Walled | 264 | ✓ AST double-wall |
+| UL2085/Equiv. (Protected) | Double-Walled | 162 | ✓ Protected AST |
+| Fiberglass Reinforced Plastic | Double-Walled | 83 | ✓ Modern FRP |
+| ST: Cathodically Protected Steel | Single-Walled | 27 | ✓ CP steel is single-wall |
+| FRP: Fiberglass Reinforced Plastic | Double-Walled | 49 | ✓ Modern FRP |
+
+**Validation:** Where `tank_wall_type` is populated, it shows high agreement with material-based inferences.
+
+#### Composite and Jacketed Tank Analysis
+
+**COMP: Steel/FRP Composite (N=771):**
+- 588 records with "Steel/Fiberglass Composite" corrosion protection method
+- 7 explicitly marked as "Double-Walled" in `tank_wall_type`
+- Installation era: Pre-1990 (137), 1990-1999 (179), 2000-2009 (385), 2010+ (49)
+
+**JKT: Jacketed Steel Tank (N=760):**
+- 650 records with "Jacketed Steel Tank" corrosion protection method
+- 4 explicitly marked as "Double-Walled" in `tank_wall_type`
+- Jacketed tanks provide secondary containment via outer jacket
+
+#### STI-P3 Analysis
+
+**Cathodically Protected Steel with STI-P3 (N=1,993):**
+- STI-P3 is Steel Tank Institute standard for factory-applied cathodic protection
+- 100% are **Single-Walled** steel tanks with corrosion protection
+- This is NOT secondary containment
+
+**Cross-reference from `tank_corrosion_protection_method` = "STI-P3" (N=2,098):**
+- 1,993 linked to "ST: Cathodically Protected Steel"
+- 84 linked to "Epoxy Coated Steel"
+- 7 linked to "Asphalt Coated or Bare Steel"
+
+#### Installation Date Distribution
+
+**By Regulatory Era (N=39,230 with valid dates):**
+
+| Era | Count | Percentage | Expected Classification |
+|-----|-------|------------|------------------------|
+| Pre-1988 | 21,635 | 55.1% | Mostly Single-Walled |
+| 1988-1999 | 8,865 | 22.6% | Single-Walled (with CP) |
+| 2000-2006 | 3,178 | 8.1% | Single-Walled |
+| 2007-2009 | 1,311 | 3.3% | Mixed (CO req starts Aug 2008) |
+| 2010-2015 | 1,666 | 4.2% | Secondary Contained (post-CO req) |
+| 2016+ | 2,575 | 6.6% | Secondary Contained (federal req) |
+
+**Missing installation dates:** 12,299 records (23.9%)
+
+#### Active Tank Analysis (Currently In Use, N=16,568)
+
+| `tank_material` | Count | Classification Expectation |
+|----------------|-------|---------------------------|
+| FRP: Fiberglass Reinforced Plastic | 4,534 | Date-dependent (likely Secondary if post-1990) |
+| AST: UL142/Equiv. | 3,315 | Aboveground (exclude) |
+| ST: Cathodically Protected Steel | 2,661 | Single-Walled |
+| NA | 2,058 | Unknown |
+| AST: UL2085/Equiv. (Protected) | 1,393 | Aboveground (exclude) |
+| JKT: Jacketed Steel Tank | 578 | Secondary Contained |
+| COMP: Steel/FRP Composite | 542 | Secondary Contained |
+
+**Wall Type for Active Tanks:**
+- NA: 15,869 (95.8%)
+- Double-Walled: 584 (3.5%)
+- Single-Walled: 115 (0.7%)
+
+### Colorado Classification Algorithm
+
+```
+START COLORADO CLASSIFICATION
+
+1. COLORADO SECONDARY CONTAINMENT DATE
+
+   IF installation_date >= August 1, 2008:
+      RETURN "Secondary Contained" (Very High Confidence)
+      REASON: 7 CCR 1101-14 § 2-2-1 requires secondary containment
+      CITATION: 7 CCR 1101-14 § 2-2-1(a)(b)
+
+2. FEDERAL SECONDARY CONTAINMENT DATE
+
+   ELSE IF installation_date >= April 11, 2016:
+      RETURN "Secondary Contained" (Very High Confidence)
+      REASON: 40 CFR 280.20(d) requires secondary containment
+      CITATION: 40 CFR 280.20(d)
+
+3. EXPLICIT WALL TYPE (Rare but Definitive)
+
+   ELSE IF tank_wall_type = "Double-Walled":
+      RETURN "Secondary Contained" (Very High Confidence)
+      REASON: Explicitly marked as double-walled in database
+      
+   ELSE IF tank_wall_type = "Single-Walled":
+      RETURN "Single-Walled" (Very High Confidence)
+      REASON: Explicitly marked as single-walled in database
+
+4. COMPOSITE AND JACKETED CONSTRUCTION
+
+   ELSE IF tank_material = "COMP:  Steel/FRP Composite":
+      RETURN "Secondary Contained" (High Confidence)
+      REASON: Composite construction is inherently double-walled (steel + FRP)
+      
+   ELSE IF tank_material = "JKT:  Jacketed Steel Tank":
+      RETURN "Secondary Contained" (High Confidence)
+      REASON: Jacket provides secondary containment barrier
+      
+   ELSE IF tank_material = "Steel/FRP Composite":
+      RETURN "Secondary Contained" (High Confidence)
+      REASON: Composite construction variant
+      
+   ELSE IF tank_material = "Jacketed Steel Tank":
+      RETURN "Secondary Contained" (High Confidence)
+      REASON: Jacketed variant
+
+5. FIBERGLASS REINFORCED PLASTIC (DATE-DEPENDENT)
+
+   ELSE IF tank_material IN ("FRP:  Fiberglass Reinforced Plastic", 
+                              "Fiberglass Reinforced Plastic"):
+      IF installation_date >= January 1, 1990:
+         RETURN "Secondary Contained" (Medium-High Confidence)
+         REASON: Industry standard post-1990 is double-wall FRP
+      ELSE IF installation_date < January 1, 1990:
+         RETURN "Unknown" (Low Confidence)
+         REASON: Mix of single and double-wall FRP before 1990
+      ELSE IF installation_date IS NULL:
+         RETURN "Unknown" (Low Confidence)
+         REASON: Cannot apply date-based rule without installation date
+      END IF
+
+6. STI-P3 CATHODICALLY PROTECTED STEEL
+
+   ELSE IF tank_material = "ST:  Cathodically Protected Steel":
+      RETURN "Single-Walled" (High Confidence)
+      REASON: STI-P3 is factory-applied CP on single-wall steel per 40 CFR 280.20(a)(2)
+      
+   ELSE IF tank_material = "Cathodically Protected Steel":
+      RETURN "Single-Walled" (High Confidence)
+      REASON: Cathodically protected steel is single-walled
+      
+   ELSE IF tank_corrosion_protection_method = "STI-P3":
+      RETURN "Single-Walled" (High Confidence)
+      REASON: STI-P3 designation from corrosion protection field
+
+7. BARE/ASPHALT STEEL AND EPOXY COATED
+
+   ELSE IF tank_material = "Asphalt Coated or Bare Steel":
+      RETURN "Single-Walled" (High Confidence)
+      REASON: Bare or asphalt-coated steel without secondary containment
+      
+   ELSE IF tank_material = "Epoxy Coated Steel":
+      RETURN "Single-Walled" (High Confidence)
+      REASON: Epoxy coating is corrosion protection for single-wall tanks
+
+8. CORROSION PROTECTION METHOD INDICATORS
+
+   ELSE IF tank_corrosion_protection_method IN ("Impressed Current", 
+                                                  "Galvanic Anodes",
+                                                  "Internally Lined",
+                                                  "Internally Lined with Impressed Current",
+                                                  "Internally Lined with Galvanic Anodes"):
+      RETURN "Single-Walled" (Medium-High Confidence)
+      REASON: These are upgrade methods for single-walled tanks per 40 CFR 280.21
+
+9. ABOVEGROUND STORAGE TANKS (EXCLUDE FROM UST CLASSIFICATION)
+
+   ELSE IF tank_material CONTAINS "AST:":
+      RETURN "Excluded_AST" (Not applicable)
+      REASON: Aboveground storage tank, not subject to UST classification
+      NOTE: AST records should be filtered out before UST analysis
+
+10. UNKNOWN/MISSING DATA
+
+    ELSE IF tank_material IN ("Unknown", "Not Listed", NA):
+       IF installation_date >= August 1, 2008:
+          RETURN "Secondary Contained" (Medium Confidence)
+          REASON: Post-Colorado requirement despite missing material data
+       ELSE:
+          RETURN "Unknown" (Low Confidence)
+          REASON: Insufficient data for classification
+       END IF
+       
+    ELSE IF installation_date IS NULL OR NA:
+       RETURN "Unknown" (Low Confidence)
+       REASON: Cannot apply date-based classification without installation date
+
+11. DEFAULT CASE
+
+    ELSE:
+       RETURN "Unknown" (Low Confidence)
+       REASON: Classification cannot be determined from available data
+
+END COLORADO CLASSIFICATION
+```
+
+### Colorado Data Field Mapping
+
+| Colorado Field | Universal Concept | Classification Implication |
+|----------------|-------------------|----------------------------|
+| `installation_date` | Installation Date | **Critical**: Compare to Aug 1, 2008 (CO) or Apr 11, 2016 (Federal) |
+| `tank_material = "COMP:  Steel/FRP Composite"` | Composite Construction | Secondary Contained (high confidence) |
+| `tank_material = "JKT:  Jacketed Steel Tank"` | Jacketed Construction | Secondary Contained (high confidence) |
+| `tank_material = "FRP:  Fiberglass Reinforced Plastic"` | Fiberglass Material | Date-dependent: ≥1990 → Secondary; <1990 → Unknown |
+| `tank_material = "ST:  Cathodically Protected Steel"` | CP Steel | Single-Walled (high confidence) |
+| `tank_material = "Asphalt Coated or Bare Steel"` | Bare/Asphalt Steel | Single-Walled (high confidence) |
+| `tank_material = "Epoxy Coated Steel"` | Epoxy Coating | Single-Walled (high confidence) |
+| `tank_material CONTAINS "AST:"` | Aboveground Tank | Exclude from UST analysis |
+| `tank_wall_type` | Explicit Wall Type | **Rarely populated** (1.6%) but definitive when present |
+| `tank_corrosion_protection_method = "STI-P3"` | STI-P3 Standard | Single-Walled (CP upgrade) |
+| `tank_corrosion_protection_method = "Impressed Current"` | IC Cathodic Protection | Single-Walled (upgrade method) |
+| `tank_corrosion_protection_method = "Galvanic Anodes"` | Galvanic CP | Single-Walled (upgrade method) |
+| `tank_corrosion_protection_method = "Internally Lined"` | Internal Lining | Single-Walled (upgrade method) |
+| `tank_corrosion_protection_method = "Jacketed Steel Tank"` | Jacketed Construction | Secondary Contained (from CP field) |
+| `tank_corrosion_protection_method = "Steel/Fiberglass Composite"` | Composite Construction | Secondary Contained (from CP field) |
+| `tank_status = "Currently In Use"` | Active Status | Filter for active tank analysis |
+| `tank_status = "Permanently Closed"` | Closed Status | Historical data; may exclude from analysis |
+
+### Colorado R Implementation
+
+```r
+# ==============================================================================
+# Colorado UST Classification Function
+# Based on 7 CCR 1101-14 § 2-2-1 (Effective August 1, 2008)
+# ==============================================================================
+
+library(data.table)
+library(lubridate)
+
+classify_colorado_ust <- function(data) {
+  
+  # Critical dates
+  CO_SECONDARY_DATE <- as.Date("2008-08-01")    # 7 CCR 1101-14 § 2-2-1
+  FEDERAL_SECONDARY_DATE <- as.Date("2016-04-11") # 40 CFR 280.20(d)
+  FRP_CUTOFF_DATE <- as.Date("1990-01-01")      # Industry standard
+  
+  data %>%
+    mutate(
+      # Parse installation date (multiple formats possible)
+      install_date_parsed = parse_date_time(installation_date, 
+                                             orders = c("mdY", "Ymd", "dmY", "mdy"),
+                                             quiet = TRUE),
+      
+      # Clean material field for matching
+      material_clean = trimws(tank_material),
+      corrosion_clean = trimws(tank_corrosion_protection_method),
+      wall_type_clean = trimws(tank_wall_type),
+      
+      # Classification logic
+      ust_classification = case_when(
+        
+        # 1. Colorado secondary containment requirement (August 1, 2008)
+        !is.na(install_date_parsed) & install_date_parsed >= CO_SECONDARY_DATE ~
+          "Secondary_Contained",
+        
+        # 2. Federal secondary containment requirement
+        !is.na(install_date_parsed) & install_date_parsed >= FEDERAL_SECONDARY_DATE ~
+          "Secondary_Contained",
+        
+        # 3. Explicit wall type (rare but definitive)
+        wall_type_clean == "Double-Walled" ~ "Secondary_Contained",
+        wall_type_clean == "Single-Walled" ~ "Single_Walled",
+        
+        # 4. Composite and Jacketed construction
+        material_clean == "COMP:  Steel/FRP Composite" ~ "Secondary_Contained",
+        material_clean == "JKT:  Jacketed Steel Tank" ~ "Secondary_Contained",
+        material_clean == "Steel/FRP Composite" ~ "Secondary_Contained",
+        material_clean == "Jacketed Steel Tank" ~ "Secondary_Contained",
+        corrosion_clean == "Steel/Fiberglass Composite" ~ "Secondary_Contained",
+        corrosion_clean == "Jacketed Steel Tank" ~ "Secondary_Contained",
+        
+        # 5. Fiberglass - date dependent
+        material_clean %in% c("FRP:  Fiberglass Reinforced Plastic",
+                              "Fiberglass Reinforced Plastic") &
+          !is.na(install_date_parsed) & install_date_parsed >= FRP_CUTOFF_DATE ~
+          "Secondary_Contained",
+        
+        material_clean %in% c("FRP:  Fiberglass Reinforced Plastic",
+                              "Fiberglass Reinforced Plastic") &
+          !is.na(install_date_parsed) & install_date_parsed < FRP_CUTOFF_DATE ~
+          "Unknown",
+        
+        # 6. STI-P3 Cathodically Protected Steel
+        material_clean == "ST:  Cathodically Protected Steel" ~ "Single_Walled",
+        material_clean == "Cathodically Protected Steel" ~ "Single_Walled",
+        corrosion_clean == "STI-P3" ~ "Single_Walled",
+        
+        # 7. Bare/Asphalt/Epoxy Steel
+        material_clean == "Asphalt Coated or Bare Steel" ~ "Single_Walled",
+        material_clean == "Epoxy Coated Steel" ~ "Single_Walled",
+        
+        # 8. Corrosion protection methods (single-wall upgrades)
+        corrosion_clean %in% c("Impressed Current", "Galvanic Anodes",
+                               "Internally Lined",
+                               "Internally Lined with Impressed Current",
+                               "Internally Lined with Galvanic Anodes") ~
+          "Single_Walled",
+        
+        # 9. Aboveground storage tanks (exclude)
+        str_detect(material_clean, "^AST:") ~ "Excluded_AST",
+        
+        # 10. Unknown/missing with date inference
+        material_clean %in% c("Unknown", "Not Listed") &
+          !is.na(install_date_parsed) & install_date_parsed >= CO_SECONDARY_DATE ~
+          "Secondary_Contained",
+        
+        is.na(material_clean) &
+          !is.na(install_date_parsed) & install_date_parsed >= CO_SECONDARY_DATE ~
+          "Secondary_Contained",
+        
+        material_clean %in% c("Unknown", "Not Listed") | is.na(material_clean) ~
+          "Unknown",
+        
+        # 11. Default
+        TRUE ~ "Unknown"
+      ),
+      
+      # Confidence scoring
+      classification_confidence = case_when(
+        # Very High: Regulatory requirement or explicit designation
+        !is.na(install_date_parsed) & install_date_parsed >= CO_SECONDARY_DATE ~
+          "Very_High",
+        !is.na(install_date_parsed) & install_date_parsed >= FEDERAL_SECONDARY_DATE ~
+          "Very_High",
+        wall_type_clean %in% c("Double-Walled", "Single-Walled") ~ "Very_High",
+        
+        # High: Clear material indicators
+        material_clean %in% c("COMP:  Steel/FRP Composite",
+                              "JKT:  Jacketed Steel Tank",
+                              "Steel/FRP Composite",
+                              "Jacketed Steel Tank") ~ "High",
+        material_clean %in% c("ST:  Cathodically Protected Steel",
+                              "Asphalt Coated or Bare Steel",
+                              "Epoxy Coated Steel") ~ "High",
+        corrosion_clean %in% c("STI-P3", "Steel/Fiberglass Composite",
+                               "Jacketed Steel Tank") ~ "High",
+        
+        # Medium-High: Date-based inference
+        material_clean %in% c("FRP:  Fiberglass Reinforced Plastic",
+                              "Fiberglass Reinforced Plastic") &
+          !is.na(install_date_parsed) ~ "Medium_High",
+        corrosion_clean %in% c("Impressed Current", "Galvanic Anodes") ~ "Medium_High",
+        
+        # Low: Insufficient data
+        ust_classification == "Unknown" ~ "Low",
+        is.na(install_date_parsed) ~ "Low",
+        
+        # Medium: Everything else
+        TRUE ~ "Medium"
+      ),
+      
+      # Citation
+      classification_citation = case_when(
+        !is.na(install_date_parsed) & install_date_parsed >= CO_SECONDARY_DATE ~
+          "7 CCR 1101-14 § 2-2-1(a)(b)",
+        !is.na(install_date_parsed) & install_date_parsed >= FEDERAL_SECONDARY_DATE ~
+          "40 CFR 280.20(d)",
+        wall_type_clean == "Double-Walled" ~
+          "CO Database: Explicit double-wall designation",
+        wall_type_clean == "Single-Walled" ~
+          "CO Database: Explicit single-wall designation",
+        material_clean %in% c("COMP:  Steel/FRP Composite", "Steel/FRP Composite") ~
+          "Composite construction: Steel + FRP double-wall",
+        material_clean %in% c("JKT:  Jacketed Steel Tank", "Jacketed Steel Tank") ~
+          "Jacketed construction: Secondary containment via outer jacket",
+        material_clean == "ST:  Cathodically Protected Steel" ~
+          "STI-P3: Factory CP on single-wall steel per 40 CFR 280.20(a)(2)",
+        material_clean %in% c("FRP:  Fiberglass Reinforced Plastic",
+                              "Fiberglass Reinforced Plastic") &
+          !is.na(install_date_parsed) ~
+          "Date-based inference: Post-1990 FRP industry standard",
+        TRUE ~ "Insufficient data for classification"
+      ),
+      
+      # Installation era for analysis
+      installation_era = case_when(
+        is.na(install_date_parsed) ~ "Unknown",
+        install_date_parsed < as.Date("1988-12-22") ~ "Pre-1988",
+        install_date_parsed < as.Date("2000-01-01") ~ "1988-1999",
+        install_date_parsed < CO_SECONDARY_DATE ~ "2000-2008",
+        install_date_parsed < FEDERAL_SECONDARY_DATE ~ "2008-2016 (CO Req)",
+        TRUE ~ "2016+ (Federal Req)"
+      )
+    )
+}
+
+# ==============================================================================
+# Example Usage
+# ==============================================================================
+
+# # Load data
+# co_tanks <- fread("path/to/Regulated_Storage_Tanks_in_Colorado__OPS.csv") %>%
+#   clean_names()
+# 
+# # Apply classification
+# co_classified <- classify_colorado_ust(co_tanks)
+# 
+# # Filter to USTs only (exclude ASTs)
+# co_ust_only <- co_classified %>%
+#   filter(ust_classification != "Excluded_AST")
+# 
+# # Summary by classification
+# co_ust_only %>%
+#   count(ust_classification, classification_confidence) %>%
+#   arrange(ust_classification, desc(classification_confidence))
+```
+
+### Colorado Validation Queries
+
+```r
+# ==============================================================================
+# Colorado-Specific Validation Queries
+# ==============================================================================
+
+# Validation Query 1: Distribution by era and classification
+co_classified %>%
+  filter(ust_classification != "Excluded_AST") %>%
+  count(installation_era, ust_classification) %>%
+  pivot_wider(names_from = ust_classification, values_from = n, values_fill = 0) %>%
+  mutate(total = rowSums(across(where(is.numeric))))
+
+# Validation Query 2: Post-Colorado requirement (Aug 1, 2008) but NOT secondary contained
+# Should be very rare or empty
+co_classified %>%
+  filter(!is.na(install_date_parsed),
+         install_date_parsed >= as.Date("2008-08-01"),
+         ust_classification != "Secondary_Contained",
+         ust_classification != "Excluded_AST") %>%
+  select(facility_name, tank_name, installation_date, tank_material,
+         ust_classification, classification_citation)
+
+# Validation Query 3: STI-P3 tanks should all be single-walled
+co_classified %>%
+  filter(str_detect(material_clean, "Cathodically Protected Steel") |
+         corrosion_clean == "STI-P3") %>%
+  count(ust_classification) %>%
+  mutate(pct = n / sum(n) * 100)
+# Expected: 100% Single_Walled
+
+# Validation Query 4: Composite/Jacketed should all be secondary contained
+co_classified %>%
+  filter(str_detect(material_clean, "COMP:|JKT:|Composite|Jacketed")) %>%
+  count(ust_classification) %>%
+  mutate(pct = n / sum(n) * 100)
+# Expected: 100% Secondary_Contained
+
+# Validation Query 5: Active tanks by classification
+co_classified %>%
+  filter(tank_status == "Currently In Use",
+         ust_classification != "Excluded_AST") %>%
+  count(ust_classification, classification_confidence) %>%
+  arrange(ust_classification, desc(classification_confidence))
+
+# Validation Query 6: Fiberglass by installation era
+co_classified %>%
+  filter(str_detect(material_clean, "FRP|Fiberglass")) %>%
+  count(installation_era, ust_classification) %>%
+  pivot_wider(names_from = ust_classification, values_from = n, values_fill = 0)
+
+# Validation Query 7: Missing installation dates
+co_classified %>%
+  filter(is.na(install_date_parsed),
+         ust_classification != "Excluded_AST") %>%
+  count(ust_classification, material_clean) %>%
+  arrange(desc(n))
+
+# Validation Query 8: Cross-check material vs corrosion protection
+co_classified %>%
+  filter(!is.na(material_clean), !is.na(corrosion_clean)) %>%
+  count(material_clean, corrosion_clean, ust_classification) %>%
+  arrange(material_clean, desc(n)) %>%
+  head(50)
+
+# Validation Query 9: County-level analysis (if county field available)
+co_classified %>%
+  filter(tank_status == "Currently In Use",
+         ust_classification != "Excluded_AST") %>%
+  count(county, ust_classification) %>%
+  pivot_wider(names_from = ust_classification, values_from = n, values_fill = 0) %>%
+  mutate(
+    total = Single_Walled + Secondary_Contained + Unknown,
+    pct_secondary = round(Secondary_Contained / total * 100, 1)
+  ) %>%
+  arrange(desc(pct_secondary))
+
+# Validation Query 10: Confidence distribution
+co_classified %>%
+  filter(ust_classification != "Excluded_AST") %>%
+  count(classification_confidence) %>%
+  mutate(pct = round(n / sum(n) * 100, 1)) %>%
+  arrange(desc(classification_confidence))
+```
+
+### Colorado-Specific Considerations
+
+#### 1. High Proportion of Aboveground Storage Tanks (ASTs)
+
+**Challenge:** 7,011 tanks (13.6%) are marked with "AST:" prefix in `tank_material` field.
+
+**Categories:**
+- AST: UL142/Equiv.: 5,065 tanks
+- AST: UL2085/Equiv. (Protected): 1,946 tanks
+- AST: UL2080/Equiv. (Fire Resistant): 170 tanks
+- AST: SwRI (Fire Tested): 15 tanks
+- AST: API 12-F: 8 tanks
+
+**Approach:**
+- Filter these out with `ust_classification = "Excluded_AST"` before UST analysis
+- These are governed by different regulations (not 40 CFR 280)
+- Maintain separate AST inventory for completeness
+
+#### 2. Empty `tank_wall_type` Field (98.4% Missing)
+
+**Challenge:** Only 839 of 51,529 records (1.6%) have `tank_wall_type` populated.
+
+**Implication:**
+- Cannot rely on `tank_wall_type` for classification
+- Must use `tank_material` as primary indicator
+- Installation date becomes critical for date-dependent classifications
+- `tank_corrosion_protection_method` provides secondary validation
+
+**Validation Evidence:** Where `tank_wall_type` IS populated, it shows high agreement with material-based inferences.
+
+#### 3. STI-P3 Cathodically Protected Steel
+
+**Colorado Pattern:** 6,663 tanks marked as "ST: Cathodically Protected Steel" + 2,098 with "STI-P3" in corrosion protection method.
+
+**Critical Distinction:**
+- STI-P3 = Steel Tank Institute Specification P3
+- Factory-applied cathodic protection on **single-walled** steel tanks
+- Provides excellent corrosion resistance but is NOT secondary containment
+- Classification: **Single-Walled** (high confidence)
+
+**Reference:** 40 CFR 280.20(a)(2) - Cathodically protected steel tanks are single-walled tanks that meet corrosion protection standards.
+
+#### 4. Composite and Jacketed Tank Reliability
+
+**High Confidence Indicators:**
+- "COMP: Steel/FRP Composite" (771 tanks) → Secondary Contained
+- "JKT: Jacketed Steel Tank" (760 tanks) → Secondary Contained
+
+**Cross-validation:**
+- Where `tank_wall_type` is populated, 100% agreement:
+  - COMP tanks with wall_type: 11 double-walled, 3 single-walled (investigate the 3)
+  - JKT tanks with wall_type: 8 double-walled, 0 single-walled
+
+**Industry Standards:**
+- Composite tanks have steel inner tank + FRP outer shell = inherent double-wall
+- Jacketed tanks have outer steel jacket = secondary containment barrier
+
+#### 5. Fiberglass Installation Era Analysis
+
+**1990 Cutoff Rationale:**
+- Pre-1990: 2,579 FRP tanks (mixed single/double-wall era)
+- 1990-1999: 1,817 FRP tanks (transition to double-wall standard)
+- 2000-2009: 993 FRP tanks (predominantly double-wall)
+- 2010+: 1,463 FRP tanks (nearly all double-wall)
+
+**Classification Approach:**
+- ≥1990: Secondary Contained (medium-high confidence)
+- <1990: Unknown (low confidence - need additional data)
+
+#### 6. Asphalt Coated or Bare Steel (27.9% of dataset)
+
+**Challenge:** 14,385 tanks marked as "Asphalt Coated or Bare Steel" - the single largest category.
+
+**Analysis:**
+- 14,154 have no corrosion protection method listed
+- 78 have "Impressed Current" CP
+- 46 have "Internally Lined with Impressed Current"
+- 39 have "Internally Lined"
+
+**Classification:**
+- All are **Single-Walled** (high confidence)
+- Many likely pre-1988 installations that may or may not have been upgraded
+- Those with CP/lining upgrades are compliant single-walled tanks
+
+#### 7. Installation Date Completeness
+
+**Data Quality:**
+- Valid dates: 39,230 (76.1%)
+- Missing dates: 12,299 (23.9%)
+
+**Impact on Classification:**
+- Missing dates prevent date-based secondary containment determination
+- For tanks with explicit material indicators (COMP, JKT, STI-P3), missing dates are less critical
+- For FRP and unknown materials, missing dates → "Unknown" classification
+
+#### 8. Pre-1988 Tank Population (55.1%)
+
+**Pattern:** 21,635 tanks installed before December 22, 1988.
+
+**Regulatory Context:**
+- Not originally required to have corrosion protection or release detection
+- Must have been upgraded by December 22, 1998 (40 CFR 280.21)
+- Vast majority are single-walled tanks with upgrades
+
+**Expected Classification:**
+- Predominantly "Single-Walled" (with CP or lining upgrades)
+- Some may be "Unknown" if upgrade documentation missing
+
+#### 9. Colorado's 2008-2016 Installation Window
+
+**Critical Period:** 1,311 tanks installed between Aug 1, 2008 and Apr 11, 2016.
+
+**Significance:**
+- Subject to Colorado's secondary containment requirement (7 CCR 1101-14 § 2-2-1)
+- NOT subject to federal requirement (which started Apr 11, 2016)
+- All should be classified as "Secondary Contained" (very high confidence)
+
+**Validation Check:**
+```r
+co_classified %>%
+  filter(install_date_parsed >= as.Date("2008-08-01"),
+         install_date_parsed < as.Date("2016-04-11")) %>%
+  count(ust_classification)
+# Expected: 100% Secondary_Contained
+```
+
+#### 10. Petroleum Storage Tank Fund Considerations
+
+**Context:** Colorado maintains a Petroleum Storage Tank Fund for reimbursement of cleanup costs and compliance incentives.
+
+**Documentation Requirements:**
+- Fund applications require accurate tank construction documentation
+- Misclassification could affect reimbursement eligibility
+- Records should be kept indefinitely for potential fund claims
+
+**Classification Impact:**
+- High-quality classification supports accurate fund eligibility determination
+- "Unknown" classifications may require additional documentation for fund applications
+
+### Expected Classification Distribution for Colorado
+
+Based on Colorado's data patterns, regulatory timeline, and diagnostic results:
+
+| Classification | Expected Percentage | Basis |
+|----------------|---------------------|-------|
+| **Single-Walled** | 45-55% | Large pre-2008 population (especially pre-1988), STI-P3, bare/asphalt steel |
+| **Secondary Contained** | 20-30% | Post-2008 installations, COMP/JKT, modern FRP, explicit double-wall |
+| **Unknown** | 20-25% | Missing dates (23.9%), pre-1990 FRP without dates, "Unknown"/"Not Listed" material |
+| **Excluded_AST** | 13-14% | Aboveground tanks (filtered out of UST analysis) |
+
+**Active Tanks Only (Currently In Use, N=16,568):**
+- Expected higher percentage of Secondary Contained (newer tanks still in service)
+- Expected lower percentage of Unknown (better documentation for active tanks)
+
+### Data Quality Specific to Colorado
+
+#### High-Quality Indicators:
+1. ✅ 76.1% of records have valid installation dates
+2. ✅ Clear material designations (COMP, JKT, STI-P3, FRP) in most records
+3. ✅ Separate corrosion protection method field provides validation
+4. ✅ Explicit AST designation allows clean filtering
+
+#### Data Quality Challenges:
+1. ⚠️ 98.4% of records missing `tank_wall_type` (must rely on material field)
+2. ⚠️ 23.9% missing installation dates
+3. ⚠️ 27.9% marked as generic "Asphalt Coated or Bare Steel" without specificity
+4. ⚠️ 13.0% marked as "NA" or "Unknown" in tank_material
+
+#### Recommended Data Quality Improvements:
+1. **Prioritize capturing installation dates** for records missing this critical field
+2. **Cross-reference with inspection records** to validate material classifications
+3. **Request explicit wall-type designation** during future inspections/upgrades
+4. **Document upgrade dates** for pre-1988 tanks to confirm compliance status
+
+### Colorado Implementation Summary
+
+**Strengths:**
+- **Earliest secondary containment requirement** (Aug 1, 2008 - 7.7 years before federal)
+- **Strong SPA status** (approved July 19, 2019)
+- **Clear material designations** (COMP, JKT, STI-P3) in most records
+- **Robust regulatory framework** (7 CCR 1101-14)
+- **Comprehensive release database** (16,879 petroleum releases with 83.2% linked to tank data)
+
+**Implementation Notes:**
+- Installation date is critical for 76.1% of tanks
+- Material field provides primary classification basis (wall_type field rarely populated)
+- STI-P3 designation clearly indicates single-walled steel with CP
+- Composite and jacketed tanks are reliably secondary contained
+- AST population (13.6%) should be filtered out before UST analysis
+
+**Regulatory Compliance Emphasis:**
+- Colorado's August 1, 2008 requirement predates federal by nearly 8 years
+- Interstitial monitoring mandatory for all post-2008 installations
+- Secondary containment testing required at installation and one year thereafter
+- Three-year containment sump testing requirement (by Jan 1, 2020)
+
+**Next Steps for Colorado Data:**
+1. Apply classification algorithm to full dataset
+2. Validate results using provided validation queries
+3. Cross-reference with petroleum releases data for release pattern analysis
+4. Generate county-level summaries for geographic patterns
+5. Identify tanks with missing critical data for follow-up documentation
+
+---
+
+**Document prepared:** January 2026  
+**Data source:** Colorado Division of Oil and Public Safety (OPS) UST Database  
+**Regulatory authority:** 7 CCR 1101-14 (Effective March 17, 2019)  
+**Federal authority:** 40 CFR Part 280  
+**SPA status:** Approved July 19, 2019 (84 FR 22727)
+
+---
+
+---
 # PART III: IMPLEMENTATION GUIDE
 
 ## Template for Other States

@@ -221,4 +221,5 @@ cat(paste0("Total Tanks:   ", nrow(final_df), "\n"))
 cat(paste0("Double Walled: ", round(mean(final_df$double_walled)*100,1), "%\n"))
 cat(paste0("Single Walled: ", round(mean(final_df$single_walled)*100,1), "%\n"))
 cat(paste0("Geocoded:      ", round(mean(!is.na(final_df$latitude))*100,1), "%\n"))
+
 cat(paste0("------------------------------------------------\n"))

@@ -15,7 +15,7 @@ library(knitr) # Required for text table formatting
 # 0. Setup ---------------------------------------------------------------------
 
 processed_dir <- here("Data", "Processed")
-output_dir    <- here("Outputs", "Data_Quality_Tables")
+output_dir    <- here("Output","Tables", "Data_Quality_Tables")
 
 if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 

@@ -13,7 +13,7 @@ library(janitor)
 library(stringr)
 library(tigris) 
 
-# Enable caching for Tigris
+# Enable caching for Tigris to speed up FIPS lookups
 options(tigris_use_cache = TRUE)
 
 # 0. Setup & Helper Functions --------------------------------------------------
@@ -21,16 +21,55 @@ options(tigris_use_cache = TRUE)
 # Ensure output root exists
 root_output_dir <- here("Data", "Raw", "state_databases")
 if (!dir.exists(root_output_dir)) dir.create(root_output_dir, recursive = TRUE)
+# --- ROBUST EPA DATE PARSER (Handles Negative Pre-1970 Timestamps) ---
+parse_epa_date <- function(x) {
+  # 1. Convert to numeric (R automatically handles "1.23e+12" strings)
+  num_val <- suppressWarnings(as.numeric(x))
+  
+  # Initialize output
+  d_out <- as.Date(rep(NA, length(x)))
+  
+  # 2. Case A: Unix Milliseconds (Positive OR Negative)
+  #    The diagnostic showed dates like -1.92e12 (approx 1909) and 1.5e12 (2018).
+  #    We use abs() > 1e10 to safely capture everything outside the "seconds" or "Excel" range.
+  #    1e10 ms = ~4 months (April 1970 or Sept 1969).
+  is_millis <- !is.na(num_val) & abs(num_val) > 1e10
+  
+  if (any(is_millis)) {
+    # Divide by 1000 to get seconds. POSIXct correctly handles negative seconds for pre-1970.
+    d_out[is_millis] <- as.Date(as.POSIXct(num_val[is_millis] / 1000, origin = "1970-01-01"))
+  }
+  
+  # 3. Case B: Excel Serial Days (Fallback)
+  #    Your diagnostic showed 0 records of this type, but we keep it as a safety net.
+  #    Range: 100 to 100,000 (Years 1900 to 2173)
+  is_serial <- !is.na(num_val) & !is_millis & num_val > 100 & num_val < 100000
+  
+  if (any(is_serial)) {
+    d_out[is_serial] <- as.Date(num_val[is_serial], origin = "1899-12-30")
+  }
+  
+  # 4. Case C: Text Formats (Final Fallback)
+  #    Your diagnostic showed 0 records, but good for robustness.
+  needs_text <- is.na(d_out) & !is.na(x) & x != ""
+  if (any(needs_text)) {
+    d_parsed <- lubridate::parse_date_time(x[needs_text], 
+                                           orders = c("ymd", "mdy", "Y-m-d", "m/d/Y", "dmy"), 
+                                           quiet = TRUE)
+    d_out[needs_text] <- as.Date(d_parsed)
+  }
+  
+  return(d_out)
+}
 
-# --- Classifiers ---
-
+# --- 2. Robust Substance Classifier ---
 classify_substances <- function(data, substance_col_name = "substances") {
   result <- copy(data)
   result[, `:=`(
     is_gasoline = 0, is_diesel = 0, is_oil_kerosene = 0, is_jet_fuel = 0, is_other = 1
   )]
   
-  # Patterns
+  # Regex Patterns
   gasoline_patterns <- paste(c(
     "\\bgasoline\\b", "\\bgas(?!\\s*(de-hy|condensate))\\b", "\\bmogas\\b", "\\bpetrol\\b", 
     "\\b(?:un)?leaded\\b", "\\bpremium\\b", "\\bregular\\b", "\\bmidgrade\\b", "\\bmid-grade\\b", 
@@ -76,31 +115,42 @@ classify_substances <- function(data, substance_col_name = "substances") {
     "\\baircraft\\b", "\\bairplane\\b", "\\bskychief\\b"
   ), collapse = "|")
   
+  # Execution
   result[, substances_lower := tolower(get(substance_col_name))]
+  
   result[!is.na(substances_lower) & substances_lower != "", 
          is_gasoline := as.integer(grepl(gasoline_patterns, substances_lower, perl = TRUE))]
+  
   result[!is.na(substances_lower) & substances_lower != "" & 
            !grepl("def|diesel exhaust fluid", substances_lower, perl = TRUE), 
          is_diesel := as.integer(grepl(diesel_patterns, substances_lower, perl = TRUE))]
+  
   result[!is.na(substances_lower) & substances_lower != "", 
          is_oil_kerosene := as.integer(grepl(oil_kerosene_patterns, substances_lower, perl = TRUE))]
+  
   result[!is.na(substances_lower) & substances_lower != "", 
          is_jet_fuel := as.integer(grepl(jet_fuel_patterns, substances_lower, perl = TRUE))]
+  
   result[, is_other := as.integer(is_gasoline + is_diesel + is_oil_kerosene + is_jet_fuel == 0)]
   result[, substances_lower := NULL]
   return(result)
 }
 
+# --- 3. Tank Wall Classifier ---
 classify_tank_walls <- function(data, tank_wall_col = "tank_wall_type") {
   result <- copy(data)
+  vals <- toupper(result[[tank_wall_col]])
+  
   result[, `:=`(
-    double_walled = as.integer(grepl("DOUBLE|TRIPLE|DBL|DUAL|SECONDAR|JACKET", toupper(get(tank_wall_col)), ignore.case = TRUE)),
-    single_walled = as.integer(grepl("SINGLE|SGL", toupper(get(tank_wall_col)), ignore.case = TRUE) & 
-                                 !grepl("UNKNOWN", toupper(get(tank_wall_col)), ignore.case = TRUE)),
-    unknown_walled = as.integer(grepl("UNKNOWN", toupper(get(tank_wall_col)), ignore.case = TRUE)),
-    missing_walled = as.integer(is.na(get(tank_wall_col)) | get(tank_wall_col) == "")
+    double_walled = as.integer(grepl("DOUBLE|TRIPLE|DBL|DUAL|SECONDAR|JACKET", vals, ignore.case = TRUE)),
+    single_walled = as.integer(grepl("SINGLE|SGL", vals, ignore.case = TRUE) & 
+                                 !grepl("UNKNOWN", vals, ignore.case = TRUE)),
+    unknown_walled = as.integer(grepl("UNKNOWN", vals, ignore.case = TRUE)),
+    missing_walled = as.integer(is.na(vals) | vals == "")
   )]
-  # Consolidate missing into unknown
+  
+  # Diagnostic: If data was "", it is now missing_walled=1. 
+  # We consolidate missing into unknown for the final robust dataset
   result[, unknown_walled := pmax(unknown_walled, missing_walled, na.rm = TRUE)]
   return(result)
 }
@@ -111,24 +161,25 @@ standardize_capacity <- function(data, capacity_col = "capacity") {
   return(result)
 }
 
-# --- FIX: Vectorized County Standardizer ---
+# --- 4. Vectorized County Standardizer ---
+# Critical Fix: Do NOT use if() on the vector. Use vectorized operations.
 standardize_county_name <- function(county_name_vec) {
-  # Ensure input is character
   name <- as.character(county_name_vec)
   name <- tolower(name)
   name <- gsub(" county$| counties$| parish$| parishes$", "", name)
   name <- gsub("[^a-z ]", "", name)
   name <- trimws(gsub("\\s+", " ", name))
   
-  # Handle empties and NAs
+  # Handle empty or NA strings
   name[name == "" | name == "na"] <- NA_character_
   return(name)
 }
 
-# 1. Load and Prep Raw Data ----------------------------------------------------
+# 1. Load Data -----------------------------------------------------------------
 
 cat("\nLoading raw EPA data (Permissive Mode)...\n")
 
+# Loading as character prevents type inference crashes on mixed columns
 epa_usts <- fread(here("Data", "Raw", "USTs.csv"), colClasses = "character") %>% 
   clean_names() %>% as.data.table()
 
@@ -138,10 +189,10 @@ epa_facilities <- fread(here("Data", "Raw", "Facilities.csv"), colClasses = "cha
 epa_releases <- fread(here("Data", "Raw", "Releases.csv"), colClasses = "character") %>% 
   clean_names() %>% as.data.table()
 
-# Join Facility info (Name, County, LAT, LONG) to USTs
-cat("\nJoining Facility info to USTs...\n")
+cat("\nJoining Geocoding Data...\n")
 fac_geo <- epa_facilities[, .(facility_id, facility_name = name, county, city, zip_code, latitude, longitude)]
 
+# Master merge of UST + Geo
 state_UST_full <- merge(
   epa_usts, 
   fac_geo, 
@@ -151,17 +202,31 @@ state_UST_full <- merge(
 
 # 2. State Partitioning --------------------------------------------------------
 
-custom_script_states <- c("Arkansas", "Louisiana", "Maine", "Michigan", "New Jersey", "New Mexico", "Oklahoma", "Texas")
+# States with custom scripts (we only extract Lat/Long for these)
+custom_script_states <- c(
+  "Arkansas",   # 01_Clean_AR.R
+  "Louisiana",  # 02_Clean_LA.R
+  "Maine",      # 03_Clean_ME.R
+  "Michigan",   # 04_Clean_MI.R
+  "New Jersey", # 05_Clean_NJ.R
+  "New Mexico", # 06_Clean_NM.R
+  "Oklahoma",   # 07_Clean_OK.R
+  "Texas",      # 08_Clean_TX.R
+  "Alabama",    # 10_Clean_AL.R
+  "Tennessee",  # 11_Clean_TN.R
+  "Colorado"    # 13_Clean_CO.R
+)
 
 all_states <- unique(state_UST_full$state)
+# All other states get full harmonization here
 states_to_process_full <- setdiff(all_states, custom_script_states)
-# Ensure Kansas is processed here even if it was custom before
 if(!"Kansas" %in% states_to_process_full) states_to_process_full <- c(states_to_process_full, "Kansas")
 
-# 3. Main Processing Function (Full Harmonization) -----------------------------
+# 3. Main Processing Function --------------------------------------------------
 
 process_state_data <- function(state_name) {
   
+  # Abbreviation Logic
   state_abbr <- state.abb[match(state_name, state.name)]
   if(is.na(state_abbr)) state_abbr <- toupper(substring(state_name, 1, 2))
   
@@ -170,15 +235,19 @@ process_state_data <- function(state_name) {
   
   cat(paste0("\n--- Processing ", state_name, " (", state_abbr, ") ---\n"))
   
-  # --- Step A: UST Data Preparation ---
+  # --- Step A: UST Data ---
   state_ust <- state_UST_full[state == state_name]
   
   state_ust[, `:=`(
     facility_id = as.character(facility_id),
     tank_id = as.character(tank_id),
     facility_name = stringr::str_to_title(trimws(gsub("[^[:alnum:] ]", "", facility_name))),
-    tank_installed_date = as.Date(lubridate::parse_date_time(installation_date, c("mdy", "ymd", "adb"), quiet=TRUE)),
-    tank_closed_date = as.Date(lubridate::parse_date_time(removal_date, c("mdy", "ymd", "adb"), quiet=TRUE)),
+    
+    # APPLY ROBUST DATE PARSER
+    tank_installed_date = parse_epa_date(installation_date),
+    tank_closed_date = parse_epa_date(removal_date),
+    
+    # Status: Matches "Closed", "Permanently Out", "Removed", "Abandoned"
     tank_status_clean = ifelse(grepl("Perm|Closed|Remov|Aband", tank_status, ignore.case = TRUE), "Closed", "Open")
   )]
   
@@ -189,14 +258,15 @@ process_state_data <- function(state_name) {
   state_ust <- classify_tank_walls(state_ust, "tank_wall_type")
   state_ust <- standardize_capacity(state_ust, "capacity")
   
-  # --- Step B: LUST Data Preparation ---
+  # --- Step B: LUST Data ---
   state_lust <- epa_releases[state == state_name]
   
   if(nrow(state_lust) > 0) {
     state_lust[, `:=`(
       facility_id = as.character(facility_id),
       LUST_id = as.character(lust_id),
-      report_date = as.Date(lubridate::parse_date_time(reported_date, c("mdy", "ymd", "adb"), quiet=TRUE)),
+      # APPLY ROBUST DATE PARSER
+      report_date = parse_epa_date(reported_date),
       nfa_date = as.Date(NA),
       state = state_abbr
     )]
@@ -209,7 +279,7 @@ process_state_data <- function(state_name) {
     leak_counts <- data.table(facility_id=character(), report_date=as.Date(character()), LUST_count=integer())
   }
   
-  # --- Step C: Merge & Indicators ---
+  # --- Step C: Merge ---
   ust_with_leaks <- merge(state_ust, leak_counts, by = "facility_id", all.x = TRUE, allow.cartesian = TRUE)
   
   ust_with_leaks[, `:=`(
@@ -219,12 +289,13 @@ process_state_data <- function(state_name) {
     no_leak = as.integer(is.na(report_date) & !is.na(tank_closed_date))
   )]
   
-  # --- Step D: Aggregation ---
+  # --- Step D: Aggregate ---
   UST_Harmonized <- ust_with_leaks[, .(
     facility_name = first(facility_name),
     tank_status = first(tank_status_clean),
     capacity = mean(capacity, na.rm = TRUE),
     
+    # Lat/Long from Facilities File
     latitude = first(as.numeric(latitude)),
     longitude = first(as.numeric(longitude)),
     
@@ -248,8 +319,7 @@ process_state_data <- function(state_name) {
   
   UST_Harmonized[, state := state_abbr]
   
-  # --- Step E: Add FIPS ---
-  # FIX: Vectorized call
+  # --- Step E: FIPS ---
   UST_Harmonized[, standardized_county := standardize_county_name(county_name)]
   
   tryCatch({
@@ -259,7 +329,7 @@ process_state_data <- function(state_name) {
     UST_Harmonized <- merge(UST_Harmonized, fips_lookup[, .(standardized_county, GEOID)], by = "standardized_county", all.x = TRUE)
     setnames(UST_Harmonized, "GEOID", "county_fips")
   }, error = function(e) {
-    message("  Warning: FIPS fetch failed for ", state_name)
+    # If fetch fails, populate NA
     if(!"county_fips" %in% names(UST_Harmonized)) UST_Harmonized[, county_fips := NA_character_]
   })
   
@@ -281,64 +351,44 @@ process_state_data <- function(state_name) {
   cat(paste0("  Saved ", state_abbr, "_Harmonized_UST_tanks.csv\n"))
 }
 
-
 # 4. Excluded States GIS Extraction --------------------------------------------
 
 process_excluded_gis <- function(state_name) {
-  
   state_abbr <- state.abb[match(state_name, state.name)]
   if(is.na(state_abbr)) state_abbr <- toupper(substring(state_name, 1, 2))
   
-  cat(paste0("\n--- Extracting GIS for Excluded State: ", state_name, " (", state_abbr, ") ---\n"))
-  
+  cat(paste0("\n--- Extracting GIS for Custom State: ", state_name, " (", state_abbr, ") ---\n"))
   state_out_dir <- here("Data", "Raw", "state_databases", state_name)
   if (!dir.exists(state_out_dir)) dir.create(state_out_dir, recursive = TRUE)
   
-  # Filter Data
   state_data <- state_UST_full[state == state_name]
   
-  # Clean IDs to match local scripts
+  # ID Cleaning Matching Local Scripts
   if (state_abbr == "MI") {
-    # Remove 'MI' prefix and pad to 8 digits with leading zeros
-    state_data[, clean_id := stringr::str_pad(gsub("^MI", "", facility_id), width = 8, side = "left", pad = "0")]
-    
+    state_data[, clean_id := gsub("^MI", "", facility_id)]
   } else if (state_abbr == "NJ") {
     state_data[, clean_id := gsub("^NJ", "", facility_id)]
-    
   } else if (state_abbr == "NM") {
     state_data[, clean_id := gsub("NM", "", facility_id)] 
-    
   } else if (state_abbr == "OK") {
-    state_data[, clean_id := gsub("^OK", "", gsub("\\[|\\]", "", facility_id))]
-    
-  } else if (state_abbr %in% c("AR", "LA", "ME", "TX")) {
-    # NEW FIX: Remove state prefix for these states
-    # e.g. "AR01000008" -> "01000008"
-    # We use paste0("^", state_abbr) to dynamically match the prefix
-    pattern <- paste0("^", state_abbr)
-    state_data[, clean_id := gsub(pattern, "", facility_id)]
-    
+    state_data[, clean_id := gsub("\\[|\\]", "", facility_id)]
   } else {
-    # Default trim
-    state_data[, clean_id := trimws(facility_id)]
+    # Default trim for others (AR, LA, ME, TX)
+    state_data[, clean_id := gsub(paste0("^", state_abbr), "", facility_id)]
   }
   
-  # Select and Aggregate
-  gis_extract <- state_data[, .(
+  gis_extract <- unique(state_data[, .(
     facility_id = as.character(clean_id),
-    tank_id = as.character(tank_id),
     state = state_abbr,
-    latitude = latitude,
-    longitude = longitude
-  )]
+    latitude = as.numeric(latitude),
+    longitude = as.numeric(longitude)
+  )])
   
-  # Deduplicate
-  gis_extract <- unique(gis_extract)
-  
+  # Save
+  gis_extract <- gis_extract[!is.na(latitude) & !is.na(longitude)]
   fwrite(gis_extract, file.path(state_out_dir, paste0(state_abbr, "_Harmonized_latlong.csv")))
-  cat(paste0("  Saved ", state_abbr, "_Harmonized_latlong.csv\n"))
+  cat(paste0("  Saved ", state_abbr, "_Harmonized_latlong.csv (", nrow(gis_extract), " records)\n"))
 }
-
 
 # 5. Execution -----------------------------------------------------------------
 
@@ -346,20 +396,12 @@ cat("\n=== Processing Standard EPA States ===\n")
 states_to_process_full <- states_to_process_full[!is.na(states_to_process_full) & states_to_process_full != ""]
 
 for (st in states_to_process_full) {
-  tryCatch({
-    process_state_data(st)
-  }, error = function(e) {
-    cat(paste0("Error processing ", st, ": ", e$message, "\n"))
-  })
+  tryCatch({ process_state_data(st) }, error = function(e) cat(paste0("Error processing ", st, ": ", e$message, "\n")))
 }
 
 cat("\n=== Extracting GIS for Custom States ===\n")
 for (st in custom_script_states) {
-  tryCatch({
-    process_excluded_gis(st)
-  }, error = function(e) {
-    cat(paste0("Error extracting GIS for ", st, ": ", e$message, "\n"))
-  })
+  tryCatch({ process_excluded_gis(st) }, error = function(e) cat(paste0("Error extracting GIS for ", st, ": ", e$message, "\n")))
 }
 
 cat("\n\nScript Complete.\n")
