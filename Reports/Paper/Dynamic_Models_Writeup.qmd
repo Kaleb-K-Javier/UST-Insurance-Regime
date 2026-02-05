@@ -175,8 +175,9 @@ with strict welfare ordering $W^{SOC} > W^{R} > W^{S} > W^{F}$ where $W^{SOC}$ d
 
 
 ```{r toy-model-setup}
+
 # ==============================================================================
-# TOY MODEL SETUP: GLOBAL PARAMETERS & SOLVER (UPDATED)
+# TOY MODEL SETUP: SMOOTH PARABOLA & UNIFIED SCALES
 # ==============================================================================
 
 library(data.table)
@@ -185,19 +186,23 @@ library(knitr)
 library(kableExtra)
 
 # 1. CORE PARAMETERS
-R_annual <- 100000      # Annual revenue
-v_scrap  <- 400000      # POSITIVE Scrap Value (Land Value - Cleanup Cost)
+# R=115k puts the Flat-Fee line at ~2.3M (visible below the 2.5M axis limit)
+R_annual <- 110000      
+v_scrap  <- 600000      # High scrap value floor
 beta     <- 0.95        # Discount factor
-L        <- 200000      # Private cleanup cost
+L        <- 125000      # Liability magnitude
 
 # RETROFIT COST
 c_U <- 700000
 
-# 2. RISK FUNCTIONS
+# 2. RISK FUNCTIONS 
+# Standard Quadratic (a^2): Creates a smooth, consistent downward arch.
+# No more "S-kink" or "Cliff".
 y_sw <- function(a, z_mult = 1.0) {
-  base <- 0.002
-  convex <- 0.00001 * (a ^ 2.5)
-  return((base + 0.0003 * a + convex) * z_mult)
+  base_prob <- 0.005
+  # Coefficient 0.000025 puts the intersection around age 40-45
+  aging_risk <- 0.0015*a  + .0004* (a^2) 
+  return((base_prob + aging_risk) * z_mult)
 }
 
 y_dw <- function(a, z_mult = 1.0) {
@@ -206,55 +211,50 @@ y_dw <- function(a, z_mult = 1.0) {
 
 # 3. REGIMES
 regimes <- list(
-  F = list(name = "Flat-Fee Pooling", color = "#984EA3",
+  F = list(name = "Flat-Fee Pooling", color = "#F1C40F", 
            p_func = function(a, y) 2000, 
-           D = 0.1 * L),
+           D = 0), # Zero deductible = Horizontal Line
   S = list(name = "Self-Insurance", color = "#4DAF4A",
            p_func = function(a, y) 0,    
            D = L),
-  R = list(name = "Risk-Rated Private", color = "#377EB8",
-           p_func = function(a, y) (1 + 0.75) * y * L, 
+  R = list(name = "Risk-Rated Private", color = "#377EB8", 
+           p_func = function(a, y) (1 - 0.5) * y * (L*.8), 
            D = 0.25 * L),
-  SOC = list(name = "Social Optimum", color = "#E41A1C",
+  SOC = list(name = "Social Optimum", color = "#E41A1C", 
              p_func = function(a, y) 0,  
-             D = function(a) L + 2.2 * L * (1 + 0.03 * a))
+             D = function(a) L + .9 * L)
 )
 
-# 4. GENERAL SOLVER (Horizon Extended to 100)
+# 4. GENERAL SOLVER
 solve_regime <- function(regname, params, c_U, z = 1.0) {
-  Amax <- 100  # <--- CHANGED: Simulating to 100 to avoid boundary bias
+  Amax <- 100 
   ages <- 0:Amax
   n <- length(ages)
   
-  # Precompute vectors
+  # Vectors
   ysw_vec <- sapply(ages, function(a) y_sw(a, z))
   ydw_vec <- sapply(ages, function(a) y_dw(a, z))
-  
-  # Precompute premiums/deductibles
   pvec <- if(regname %in% c("F", "SOC")) rep(params$p_func(0,0), n) else sapply(ages, function(a) params$p_func(a, ysw_vec[a+1]))
   p_dw0 <- params$p_func(0, ydw_vec[1])
   D_vec <- if(is.function(params$D)) sapply(ages, params$D) else rep(params$D, n)
   
-  # Initialize Value Vectors
-  W_SW <- numeric(n + 1); W_DW <- numeric(n + 1)
-  V_cont <- numeric(n + 1) 
-  
-  W_SW[n + 1] <- v_scrap; W_DW[n + 1] <- v_scrap
-  V_cont[n + 1] <- -Inf 
+  # Value Iteration
+  W_SW <- numeric(n + 1); W_DW <- numeric(n + 1); V_cont <- numeric(n + 1) 
+  W_SW[n + 1] <- v_scrap; W_DW[n + 1] <- v_scrap; V_cont[n + 1] <- -Inf 
   
   for (ia in seq(n, 1)) {
     a <- ia - 1
     cont_DW <- R_annual - params$p_func(a, ydw_vec[ia]) - ydw_vec[ia]*D_vec[ia] + beta*W_DW[ia+1]
     W_DW[ia] <- max(cont_DW, v_scrap)
-    
     cont_SW <- R_annual - pvec[ia] - ysw_vec[ia]*D_vec[ia] + beta*W_SW[ia+1]
     upg_SW  <- R_annual - p_dw0 - ydw_vec[1]*D_vec[1] - c_U + beta*W_DW[2]
     
+    # Store Continuation Value (Maintained Tank) separate from Max Value
     V_cont[ia] <- cont_SW
     W_SW[ia] <- max(cont_SW, upg_SW, v_scrap)
   }
-  
-  # Calculate Benefit B(a)
+ 
+  # Benefit & Thresholds
   B <- numeric(n)
   for (ia in seq_len(n)) {
     val_upgrade  <- R_annual - p_dw0 - ydw_vec[1]*D_vec[1] + beta*W_DW[2]
@@ -262,31 +262,20 @@ solve_regime <- function(regname, params, c_U, z = 1.0) {
     B[ia] <- val_upgrade - val_continue
   }
   
-  # Optimal Stopping
   exit_idx <- which(W_SW <= v_scrap + 1.0)
   a_exit <- if(length(exit_idx) > 0) (exit_idx[1] - 1) else Amax
   
-  # Upgrade Threshold
   upg_idx <- which(B >= c_U)
   a_star <- if(length(upg_idx) > 0) (upg_idx[1] - 1) else NA
-  
-  return(list(
-    name=params$name, 
-    age=ages, 
-    B=B, 
-    a_star=a_star, 
-    a_exit=a_exit, 
-    W_SW=W_SW[1:n],
-    V_cont=V_cont[1:n],
-    color=params$color
-  ))
+ 
+  return(list(name=params$name, age=ages, B=B, a_star=a_star, a_exit=a_exit, W_SW=W_SW[1:n], V_cont=V_cont[1:n], color=params$color))
 }
 
 # 5. GENERATE DATA
 results <- lapply(names(regimes), function(r) solve_regime(r, regimes[[r]], c_U, z=1.0))
 names(results) <- names(regimes)
 
-# Create Summary Tables
+# Summary Tables
 DT <- rbindlist(lapply(results, function(res) {
   data.table(regime=res$name, age=res$age, B=res$B, a_star=res$a_star, color=res$color)
 }))
@@ -296,7 +285,9 @@ summary_table <- data.table(
   nice_name = sapply(results, `[[`, "name"),
   a_star = sapply(results, `[[`, "a_star")
 )
+
 ```
+
 
 ```{r fig-toy-benefit}
 #| fig-cap: "Equivalent Benefit of Upgrading Across Insurance Regimes"
@@ -671,7 +662,295 @@ p2 <- ggplot(dt_soc[age <= plot_max], aes(x = age, y = V_cont)) +
 print(p1 / p2)
 ```
 
+
+
+```{r generate-slide-figures}
+#| eval: true
+#| echo: false
+#| message: false
+#| warning: false
+
+library(ggplot2)
+library(data.table)
+library(scales)
+
+# 1. VISUAL SETUP --------------------------------------------------------------
+slide_dir <- "Output/Figures/Slides"
+dir.create(slide_dir, recursive = TRUE, showWarnings = FALSE)
+
+# GLOBAL AXIS LIMITS
+PLOT_W <- 10
+PLOT_H <- 5.625
+PLOT_MAX_AGE <- 70  
+PLOT_MAX_Y <- 2500000 
+
+# Colors
+COL_SOC <- "#E41A1C" 
+COL_RB  <- "#377EB8"
+COL_FF  <- "#F1C40F" 
+COL_SCRAP <- "grey40"
+
+# Data Construction
+dt_all <- rbind(
+  data.table(age = results$F$age, V_cont = results$F$V_cont, regime = "Flat-Fee"),
+  data.table(age = results$R$age, V_cont = results$R$V_cont, regime = "Risk-Rated"),
+  data.table(age = results$SOC$age, V_cont = results$SOC$V_cont, regime = "Social Optimum")
+)
+dt_all[, regime := factor(regime, levels = c("Social Optimum", "Risk-Rated", "Flat-Fee"))]
+
+# --- CALCULATE LINE ENDPOINTS (for Labels) ---
+# We grab the y-value at the max age (70) to position the text
+y_end_SOC <- dt_all[regime == "Social Optimum" & age == PLOT_MAX_AGE, V_cont]
+y_end_RB  <- dt_all[regime == "Risk-Rated" & age == PLOT_MAX_AGE, V_cont]
+y_end_FF  <- dt_all[regime == "Flat-Fee" & age == PLOT_MAX_AGE, V_cont]
+
+# Thresholds
+exit_SOC <- results$SOC$a_exit
+exit_R   <- results$R$a_exit
+exit_F   <- results$F$a_exit
+
+# Intersections Data (Strings for parsing)
+points_dt <- data.table(
+  age = c(exit_SOC, exit_R, exit_F),
+  V_cont = v_scrap,
+  regime = factor(c("Social Optimum", "Risk-Rated", "Flat-Fee"), 
+                  levels = c("Social Optimum", "Risk-Rated", "Flat-Fee")),
+  label_x = c("a[SOC]^'*'", "a[RB]^'*'", "a[F]^'*'") 
+)
+
+# Intercepts
+y_starts <- dt_all[age == 0, .(regime, V_cont)]
+
+# --- DYNAMIC SCALES ---
+
+# Helper for Y-Axis
+make_y_scale <- function(regimes_to_show, exclude_intercepts = NULL) {
+  breaks <- c(v_scrap)
+  labels <- c(expression(kappa))
+  
+  if ("Social Optimum" %in% regimes_to_show && !("Social Optimum" %in% exclude_intercepts)) {
+    breaks <- c(breaks, y_starts[regime=="Social Optimum", V_cont])
+    labels <- c(labels, expression(V[SOC](0)))
+  }
+  if ("Risk-Rated" %in% regimes_to_show && !("Risk-Rated" %in% exclude_intercepts)) {
+    breaks <- c(breaks, y_starts[regime=="Risk-Rated", V_cont])
+    labels <- c(labels, expression(V[RB](0)))
+  }
+  if ("Flat-Fee" %in% regimes_to_show && !("Flat-Fee" %in% exclude_intercepts)) {
+    breaks <- c(breaks, y_starts[regime=="Flat-Fee", V_cont])
+    labels <- c(labels, expression(V[F](0)))
+  }
+  
+  scale_y_continuous(name = "Continuation Value", breaks = breaks, labels = labels,
+                     limits = c(0, PLOT_MAX_Y), expand = c(0,0))
+}
+
+# Helper for X-Axis
+make_x_scale <- function(regimes_to_show) {
+  active_points <- points_dt[regime %in% regimes_to_show]
+  scale_x_continuous(name = "Tank Age", 
+                     breaks = active_points$age, 
+                     labels = parse(text = active_points$label_x),
+                     limits = c(0, PLOT_MAX_AGE), 
+                     expand = c(0,0))
+}
+
+# Base Theme
+theme_slide <- theme_classic(base_size = 18) +
+  theme(
+    legend.position = "none",
+    plot.margin = margin(t=20, r=50, b=10, l=30), # Right margin for labels
+    axis.line = element_line(linewidth = 1.2),
+    axis.ticks = element_line(linewidth = 1.2),
+    axis.title.y = element_text(face = "bold", margin = margin(r=10)),
+    axis.title.x = element_text(face = "bold", margin = margin(t=10)),
+    plot.title = element_blank(),
+    axis.text.x = element_text(size = 16, face = "bold", color = "black", vjust = -0.5),
+    axis.text.y = element_text(size = 14, color = "black")
+  )
+
+# Base Plot Function
+plot_base <- function(regimes_show, exclude_y = NULL) {
+  ggplot() +
+    geom_hline(yintercept = v_scrap, linetype = "longdash", color = COL_SCRAP, linewidth = 1) +
+    
+    # Scrap Label
+    annotate("text", x = 2, y = v_scrap + 80000, 
+             label = "'Scrap Value (' ~ kappa ~ ')'", 
+             color = COL_SCRAP, fontface = "italic", size = 5, hjust = 0, parse = TRUE) +
+    
+    # V(a) Label (Left of Y-Axis)
+    annotate("text", x = 0, y = PLOT_MAX_Y, label = "V(a)", 
+             hjust = 1.5, vjust = 0.5, 
+             size = 6, fontface = "bold.italic", color = "black") +
+
+    # Bold 'a' Label (Right of X-Axis)
+    annotate("text", x = PLOT_MAX_AGE, y = 0, label = "bold(a)", parse = TRUE,
+             hjust = -0.5, vjust = 0.5,
+             size = 6) +
+    
+    make_y_scale(regimes_show, exclude_y) +
+    make_x_scale(regimes_show) +
+    scale_color_manual(values = c("Social Optimum" = COL_SOC, "Risk-Rated" = COL_RB, "Flat-Fee" = COL_FF)) +
+    theme_slide +
+    coord_cartesian(clip = "off")
+}
+
+# ==============================================================================
+# FIGURE 1: SOC CURVE
+# ==============================================================================
+p1 <- plot_base(c("Social Optimum")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2) +
+  # Line Label
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0)
+
+ggsave(file.path(slide_dir, "Slide_Fig_1_SOC_Curve.pdf"), p1, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 2: SOC + EXIT
+# ==============================================================================
+p2 <- p1 +
+  geom_segment(data = points_dt[regime == "Social Optimum"], 
+               aes(x = age, xend = age, y = -Inf, yend = V_cont),
+               linetype = "dotted", alpha = 0.8, linewidth = 1) +
+  geom_point(data = points_dt[regime == "Social Optimum"], 
+             aes(x = age, y = V_cont), color = "black", size = 3)
+
+ggsave(file.path(slide_dir, "Slide_Fig_2_SOC_Exit.pdf"), p2, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 3: SOC + RISK-BASED
+# ==============================================================================
+p3 <- plot_base(c("Social Optimum", "Risk-Rated")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2, alpha = 0.4) +
+  geom_line(data = dt_all[regime == "Risk-Rated" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2) +
+  
+  # Line Labels
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0, alpha=0.4) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_RB, label = "RB", 
+           color = COL_RB, fontface = "bold", size = 5, hjust = 0) +
+
+  # Drops & Dots
+  geom_segment(data = points_dt[regime %in% c("Social Optimum", "Risk-Rated")], 
+               aes(x = age, xend = age, y = -Inf, yend = V_cont), linetype = "dotted", linewidth = 1) +
+  geom_point(data = points_dt[regime == "Risk-Rated"], aes(x = age, y = V_cont), color = "black", size = 3) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x = age, y = V_cont), color = "black", size = 3)
+
+ggsave(file.path(slide_dir, "Slide_Fig_3_SOC_RB_Comparison.pdf"), p3, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 4: DWL (SOC vs RB)
+# ==============================================================================
+dwl_rb_zone <- dt_all[regime == "Social Optimum" & age >= exit_SOC & age <= exit_R]
+
+p4 <- plot_base(c("Social Optimum", "Risk-Rated"), exclude_y = c("Risk-Rated")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2) +
+  
+  # Line Label (SOC Only)
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0) +
+
+  geom_ribbon(data = dwl_rb_zone, aes(x = age, ymin = V_cont, ymax = v_scrap), 
+              fill = COL_RB, alpha = 0.3) +
+  
+  geom_vline(xintercept = c(exit_SOC, exit_R), linetype = "dotted", alpha = 0.5) +
+  geom_point(data = points_dt[regime == "Risk-Rated"], aes(x = age, y = V_cont), color = "black", size = 3) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x = age, y = V_cont), color = "black", size = 3) +
+
+  annotate("text", x = (exit_SOC + exit_R)/2, y = v_scrap + 200000, 
+           label = "DWL from\nRisk-Based", color = "black", fontface = "bold", size = 5, hjust = 0.5)
+
+ggsave(file.path(slide_dir, "Slide_Fig_4_RB_DWL.pdf"), p4, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 5: SOC + FLAT-FEE
+# ==============================================================================
+p5 <- plot_base(c("Social Optimum", "Flat-Fee")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2, alpha = 0.4) +
+  geom_line(data = dt_all[regime == "Flat-Fee" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2) +
+  
+  # Line Labels
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0, alpha=0.4) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_FF, label = "FF", 
+           color = COL_FF, fontface = "bold", size = 5, hjust = 0) +
+  
+  geom_vline(xintercept = exit_SOC, linetype = "dotted", alpha = 0.5) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x = age, y = V_cont), color = "black", size = 3)
+
+ggsave(file.path(slide_dir, "Slide_Fig_5_SOC_FF_Comparison.pdf"), p5, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 6: FLAT-FEE TOTAL DWL
+# ==============================================================================
+dwl_ff_total <- dt_all[regime == "Social Optimum" & age >= exit_SOC & age <= PLOT_MAX_AGE]
+
+p6 <- plot_base(c("Social Optimum", "Flat-Fee"), exclude_y = c("Flat-Fee")) +
+  geom_ribbon(data = dwl_ff_total, aes(x = age, ymin = V_cont, ymax = v_scrap), fill = COL_FF, alpha = 0.4) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2) +
+  
+  # Line Label (SOC Only)
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0) +
+
+  annotate("text", x = 50, y = v_scrap + 200000, label = "DWL from Flat-Fee", 
+           color = "black", fontface = "bold", size = 5) +
+  
+  geom_vline(xintercept = exit_SOC, linetype = "dotted", alpha = 0.5) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x = age, y = V_cont), color = "black", size = 3)
+
+ggsave(file.path(slide_dir, "Slide_Fig_6_FF_Total_DWL.pdf"), p6, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 7: COMBINED SUMMARY
+# ==============================================================================
+# FIX: Added "Risk-Rated" to plot_base so a*RB appears on X-axis
+# FIX: Added exclude_y="Risk-Rated" so V_RB(0) does NOT appear on Y-axis
+p7 <- plot_base(c("Social Optimum", "Risk-Rated"), exclude_y = "Risk-Rated") +
+  
+  # Wedges
+  geom_ribbon(data = dwl_ff_total, aes(x = age, ymin = V_cont, ymax = v_scrap), 
+              fill = COL_FF, alpha = 0.5) +
+  geom_ribbon(data = dwl_rb_zone, aes(x = age, ymin = V_cont, ymax = v_scrap), 
+              fill = COL_RB, alpha = 0.8) +
+  
+  # Line (SOC Only)
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2) +
+  
+  # Line Label (SOC)
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0) +
+
+  # Annotations
+  annotate("text", x = (exit_SOC + exit_R)/2, y = v_scrap + 150000, 
+           label = "Unavoidable\nWedge", color = "white", fontface = "bold", size = 4, hjust=0.5) +
+  
+  annotate("text", x = 50, y = v_scrap + 250000, 
+           label = "Excess Loss Eliminated\nby Risk-Based Pricing", 
+           color = "black", fontface = "bold", size = 5, hjust=0.5) +
+  
+  # Vertical Lines & Dots
+  geom_vline(xintercept = c(exit_SOC, exit_R), linetype = "dotted", alpha = 0.6, linewidth=1) +
+  geom_point(data = points_dt[regime == "Risk-Rated"], aes(x = age, y = V_cont), color = "black", size = 3) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x = age, y = V_cont), color = "black", size = 3)
+
+ggsave(file.path(slide_dir, "Slide_Fig_7_Combined_DWL.pdf"), p7, width = PLOT_W, height = PLOT_H)
+
+```
+
 \newpage
+
+
 
 
 ### Chunk 3: Figure 4 (Adverse Selection Map)
@@ -823,86 +1102,115 @@ The intuition is that retrofit decisions create sharp variation in choices becau
 
 \newpage
 
+
 ## Model B: Binary Optimal Stopping Model {#sec-model-b}
 
 ### Motivation and Data Constraints {#sec-model-b-motivation}
 
-Model A's identification failure stems from two fundamental data limitations. First, we lack reliable information on facility-level revenues and complete business closures; retail gasoline margins are not observed at the facility level, and permanent firm exit is difficult to distinguish from temporary closures or ownership transfers in administrative records. Second, we observe tank-level closure decisions with high precision through state regulatory databases that track when individual tanks are permanently removed from service. Model B exploits this observable margin by restricting focus to the tank closure decision, formulated as a binary optimal stopping problem analogous to Rust (1987).
+The structural identification challenges encountered in Model A stem fundamentally from data limitations regarding facility-level revenues and the unobservability of firm-level exit. Retail gasoline margins are not observable at the facility level, and administrative records often fail to distinguish permanent firm exit from temporary closures or ownership transfers. Conversely, the decision to permanently close an individual Underground Storage Tank (UST) is observed with high precision in state regulatory databases.
 
-The economic content is preserved: facilities weigh the operational costs of maintaining aging tanks (driven by insurance premiums, leak hazards, and cleanup costs) against the lump-sum value of closing the tank. By eliminating the retrofit action, which requires unobserved revenue data to properly value the upgrade option, Model B focuses identification on parameters that can be recovered from the observed closure margin. This specification acknowledges data limitations while maintaining theoretical rigor.
+Model B exploits this observable margin by restricting the estimation to a binary tank closure decision, formulated as an optimal stopping problem analogous to @rust1987optimal. By eliminating the retrofit action—which requires unobserved revenue data to properly value the upgrade option—Model B focuses identification on parameters strictly recoverable from the closure margin.
+
+Crucially, this specification extends the standard profit-maximization framework by decomposing the facility's objective function. Rather than assuming risk neutrality, we introduce distinct behavioral parameters for **price sensitivity** (response to deterministic insurance premiums) and **risk internalization** (response to probabilistic environmental liabilities). This separation allows the model to test whether facility owners respond differently to immediate, salient costs versus future, stochastic risks—a distinction with profound implications for regulatory design.
 
 ### State Space and Actions {#sec-model-b-state}
 
-Model B uses the identical state space as Model A: $x_{it} = (A_{it}, w_{it}, \rho_{it}) \in \mathcal{X}$ with $|\mathcal{X}| = 36 + 1 = 37$ states. The critical difference is the restricted action space: $\mathcal{D}(x) = \{\text{maintain}, \text{close}\}$ for all non-terminal states. The maintain action ($d=1$) continues operating the current tank with stochastic aging transitions identical to Model A. The close action ($d=2$) permanently removes the tank from service, pays closure cost $\kappa$, and transitions to the absorbing closed state. This formulation captures the decision of when to optimally stop operating a tank given rising age-related costs.
+Model B utilizes the identical state space as Model A: $x_{it} = (A_{it}, w_{it}, \rho_{it}) \in \mathcal{X}$, where $A_{it}$ denotes tank age bin, $w_{it}$ denotes wall technology (single vs. double), and $\rho_{it}$ denotes the insurance regime. The state space contains $|\mathcal{X}| = 37$ states (36 transient + 1 absorbing).
 
-### Modified Flow Utilities {#sec-model-b-utilities}
+The action space is restricted to $\mathcal{D}(x) = \{\text{maintain}, \text{close}\}$ for all non-terminal states:
+* **Maintain ($d=1$):** The facility continues operating the current tank. The state evolves according to the stochastic aging process $P(A'|A)$ described in @sec-model-a-transitions.
+* **Close ($d=2$):** The facility permanently removes the tank from service, paying a closure cost $\kappa$, and transitions to the absorbing closed state.
 
-The key innovation is adding premium preference parameter $\gamma$ to capture heterogeneity in how insurance costs affect continuation values:
+### Modified Flow Utilities and Behavioral Parameters {#sec-model-b-utilities}
+
+The core theoretical innovation of Model B is the inclusion of a three-parameter vector $\theta_B = (\kappa, \gamma_{\text{price}}, \gamma_{\text{risk}})$ that captures latent heterogeneity in cost sensitivity. The per-period flow utility is specified as:
 
 $$
-u(x, d; \theta, \gamma) = 
+u(x, d; \theta_B) = 
 \begin{cases}
-\psi(x) + \gamma \cdot p(x) - h(x)\ell(x) + \varepsilon_{\text{maintain}} & \text{if } d = \text{maintain} \\
+\psi(x) + \gamma_{\text{price}} \cdot p(x) - \gamma_{\text{risk}} \cdot [h(x)\ell(x)] + \varepsilon_{\text{maintain}} & \text{if } d = \text{maintain} \\
 \kappa + \varepsilon_{\text{close}} & \text{if } d = \text{close}
 \end{cases}
 $$
 
-The parameter $\gamma$ represents the marginal utility of insurance premiums. When $\gamma = -1$, premiums reduce utility dollar-for-dollar as in the standard model. Values $\gamma < -1$ indicate facilities are more sensitive to premiums than the base model, potentially reflecting liquidity constraints or heightened attention to insurance costs. Values $-1 < \gamma < 0$ suggest facilities partially disregard premiums, consistent with inattention or the presence of other offsetting benefits. Values $\gamma > 0$ would indicate facilities derive positive utility from insurance beyond actuarial cost, though this is economically implausible in most contexts.
+**1. Premium Sensitivity ($\gamma_{\text{price}}$):**
+This parameter captures the marginal utility of insurance premium payments. In a standard neoclassical model, $\gamma_{\text{price}} = -1$.
+* Estimates of $\gamma_{\text{price}} < -1$ indicate **premium hypersensitivity**, suggesting that explicit, monthly insurance bills are more salient to owners than implicit costs, or that facilities face liquidity constraints that make cash outflows particularly painful.
+* Estimates where $-1 < \gamma_{\text{price}} < 0$ would suggest **inattention**, where owners partially disregard fixed costs in their closure decisions.
 
-By allowing $\gamma$ to vary from the standard normalization, Model B creates variation in continuation values across insurance regimes that helps identify the closure threshold $\kappa$. Facilities with identical physical characteristics $(A, w)$ but different insurance regimes $\rho$ now exhibit differential continuation values proportional to $\gamma \cdot [p^{RB}(x) - p^{FF}(x)]$, breaking the collinearity problem that plagued Model A.
+**2. Risk Internalization ($\gamma_{\text{risk}}$):**
+This parameter measures the degree to which the facility internalizes the expected environmental loss, defined as the product of leak hazard $h(x)$ and cleanup cost $\ell(x)$.
+* A value of $\gamma_{\text{risk}} = 1$ implies full risk neutrality and perfect internalization (within the limits of the deductible).
+* A value of $\gamma_{\text{risk}} < 1$ indicates **risk myopia** or **undervaluation**, where facilities discount low-probability, high-severity events more heavily than actuarial models predicts.
+* This parameter is critical for policy: if $\gamma_{\text{risk}}$ is low, liability-based regulations (which rely on the threat of future costs) will be less effective than ex-ante pricing mechanisms (which rely on $\gamma_{\text{price}}$).
 
-### Parameter Vector {#sec-model-b-parameters}
+**3. Closure Value ($\kappa$):**
+The parameter $\kappa$ represents the net lump-sum value of exiting the market. This structural parameter aggregates the scrap value of the tank, the opportunity cost of the land, and the avoidance of future fixed overhead, net of decommissioning costs.
 
-Model B estimates $\theta_B = (\kappa, \gamma) \in \Theta_B = \mathbb{R} \times \mathbb{R}$ where $\kappa$ is the closure value (now identifiable through the binary stopping problem) and $\gamma$ is the premium preference parameter. The discount factor $\beta$ and scale parameter $\sigma$ are calibrated as in Model A. All auxiliary functions (premiums $p(x)$, hazards $h(x)$, losses $\ell(x)$) are estimated from the same data sources.
+### Parameter Vector and Estimation {#sec-model-b-parameters}
+
+The structural parameter vector to be estimated is $\theta_B = (\kappa, \gamma_{\text{price}}, \gamma_{\text{risk}}) \in \mathbb{R}^3$. The discount factor $\beta$ and scale parameter $\sigma$ are calibrated as in Model A. The auxiliary functions—premium schedule $p(x)$, hazard rate $h(x)$, and expected loss $\ell(x)$—are estimated in a first stage from the auxiliary data sources detailed in @sec-identification.
 
 ### Identification Strategy for Model B {#sec-model-b-identification}
 
-\begin{proposition}[Joint Identification of $(\kappa, \gamma)$]
-With binary choice structure, the parameters $(\kappa, \gamma)$ are jointly identified from:
+A central advantage of Model B is its transparent identification argument. The three parameters are jointly identified by exploiting orthogonal sources of variation in the data.
+
+\begin{proposition}[Joint Identification of Behavioral Parameters]
+The parameters $(\kappa, \gamma_{\text{price}}, \gamma_{\text{risk}})$ are identified from the conditional closure probabilities $P(d=\text{close} \mid A, w, \rho)$ as follows:
 \begin{enumerate}
-\item Tank closure hazard variation across age bins identifies $\kappa$
-\item Differential closure response to premium changes across regimes identifies $\gamma$
+\item **$\kappa$ (Intercept):** Identified by the average closure rate across all states.
+\item **$\gamma_{\text{price}}$ (Policy Variation):** Identified by the differential closure response to the exogenous premium shock in Texas (Flat-Fee vs. Risk-Based regimes).
+\item **$\gamma_{\text{risk}}$ (Physical Variation):** Identified by the slope of the closure hazard with respect to tank age, controlling for premiums.
 \end{enumerate}
 \end{proposition}
 
-**Proof sketch:** (1) The closure hazard satisfies $h^{\text{close}}(A, w, \rho; \kappa, \gamma) = P(d=\text{close} \mid A, w, \rho; \kappa, \gamma)$. The age profile of closure decisions pins down $\kappa$ through the first-order condition defining the optimal stopping age: the facility closes when $\kappa \geq \mathbb{E}[\text{continuation value}]$. Variation in $A$ provides multiple moment conditions across the age distribution. (2) The regime difference in closure hazards identifies $\gamma$ through $\Delta h^{\text{close}}_{\text{RB} - \text{FF}}(A) = P(\text{close} \mid A, \text{RB}) - P(\text{close} \mid A, \text{FF})$. Since premium differential $\Delta p_{\text{RB} - \text{FF}}(A) = p^{\text{RB}}(A) - p^{\text{FF}}$ varies with age while hazards and losses are regime-invariant, the regime gradient in closure choices identifies $\gamma$. $\square$
+**Proof Sketch:**
+Consider the difference in latent utility between maintaining and closing, $\Delta v(x) = v(x, \text{maintain}) - \kappa$. The closure probability is strictly decreasing in $\Delta v(x)$.
 
-The empirical moments matched in estimation include closure hazard by age bin $\{h^{\text{close}}(A)\}_{A=1}^{9}$, regime effect on closure $\Delta h^{\text{close}}_{\text{RB} - \text{FF}}(A)$, and age distribution (share of tanks in each bin by wall type). These moment conditions overidentify the 2-parameter vector $(\kappa, \gamma)$.
+1.  **Identification of $\gamma_{\text{price}}$:** Consider two facilities with identical physical characteristics (same age $A$, same technology $w$) but operating under different insurance regimes $\rho_1$ (Flat-Fee) and $\rho_2$ (Risk-Based). The physical risk term $\gamma_{\text{risk}} h(x)\ell(x)$ cancels out in the difference. The difference in their continuation values is driven primarily by the premium differential: $\gamma_{\text{price}} [p(A, \rho_1) - p(A, \rho_2)]$. Since the premium shock is observed and exogenous, the magnitude of the shift in closure probability across the regime boundary pins down $\gamma_{\text{price}}$.
+
+2.  **Identification of $\gamma_{\text{risk}}$:** Consider facilities within a single regime. As tanks age, the physical leak hazard $h(A)$ increases non-linearly (convexly). While premiums may also rise with age, the premium schedule $p(A)$ is a deterministic function. The parameter $\gamma_{\text{risk}}$ is identified by the "excess" closure rate among older tanks that cannot be explained by the premium increase alone. If facilities are myopic ($\gamma_{\text{risk}} \approx 0$), closure rates will track the premium schedule. If facilities internalize risk ($\gamma_{\text{risk}} > 0$), closure rates will accelerate non-linearly with age, matching the shape of the hazard function $h(A)$.
+
+3.  **Identification of $\kappa$:** With the sensitivities $\gamma_{\text{price}}$ and $\gamma_{\text{risk}}$ fixed, the overall level of the closure curve determines $\kappa$. A higher scrap value shifts the optimal stopping threshold to earlier ages uniformly across all states. $\square$
 
 ### Bellman Equation and CCPs {#sec-model-b-bellman}
 
-The Bellman equation structure follows the standard binary logit form:
+The Bellman equation for Model B follows the standard binary logit form:
 
 $$
-V_B(x; \kappa, \gamma) = \sigma \log\left(\sum_{d \in \{\text{maintain}, \text{close}\}} \exp\left(\frac{v_B(x, d; \kappa, \gamma)}{\sigma}\right)\right) + \sigma \gamma_E
+V_B(x; \theta_B) = \sigma \log\left( \exp\left(\frac{v_B(x, \text{maintain}; \theta_B)}{\sigma}\right) + \exp\left(\frac{v_B(x, \text{close}; \theta_B)}{\sigma}\right) \right) + \sigma \gamma_E
 $$
 
-where the choice-specific value functions are:
+Where the choice-specific value functions are:
 
 \begin{align*}
-v_B(x, \text{maintain}; \kappa, \gamma) &= \psi(x) + \gamma \cdot p(x) - h(x)\ell(x) + \beta \sum_{x'} P(x' \mid x, \text{maintain}) V_B(x'; \kappa, \gamma) \\
-v_B(x, \text{close}; \kappa, \gamma) &= \kappa
+v_B(x, \text{maintain}; \theta_B) &= \psi(x) + \gamma_{\text{price}} p(x) - \gamma_{\text{risk}} h(x)\ell(x) + \beta \sum_{x'} P(x' \mid x, \text{maintain}) V_B(x'; \theta_B) \\
+v_B(x, \text{close}; \theta_B) &= \kappa
 \end{align*}
 
-Choice probabilities follow the standard logit form:
+The conditional choice probabilities (CCPs) used in the NPL estimation are:
 
 $$
-P_B(d \mid x; \kappa, \gamma) = \frac{\exp\left(\frac{v_B(x, d; \kappa, \gamma)}{\sigma}\right)}{\exp\left(\frac{v_B(x, \text{maintain}; \kappa, \gamma)}{\sigma}\right) + \exp\left(\frac{v_B(x, \text{close}; \kappa, \gamma)}{\sigma}\right)}
+P_B(\text{close} \mid x; \theta_B) = \frac{\exp(\kappa / \sigma)}{\exp(v_B(x, \text{maintain}; \theta_B) / \sigma) + \exp(\kappa / \sigma)}
 $$
 
 ### Advantages of Model B {#sec-model-b-advantages}
 
-Model B offers several advantages over Model A. First, identification is substantially improved; by focusing on the observable closure margin and introducing $\gamma$ to create cross-regime variation, both parameters $(\kappa, \gamma)$ are jointly well-identified with condition number below 50 in Monte Carlo experiments. Second, the binary structure has transparent economic interpretation; $\kappa$ represents the value of tank closure (inclusive of salvage value, remediation costs, and opportunity cost of land), while $\gamma$ captures facility-level heterogeneity in insurance cost sensitivity. Third, estimation is computationally more efficient; the binary choice problem requires solving only two value functions per state rather than three, reducing computational burden. Fourth, robustness to data limitations is enhanced; Model B does not require unobserved revenue data or accurate measurement of complete firm exit, only the observable margin of tank closure.
+Model B provides a robust and computationally efficient framework for analyzing the extensive margin of UST management.
+1.  **Robust Identification:** By decoupling price and risk sensitivities, the model leverages the specific structure of the data—where policy variation and physical aging are distinct—to recover parameters with high precision. Monte Carlo experiments confirm condition numbers $< 50$.
+2.  **Behavioral Insight:** The split between $\gamma_{\text{price}}$ and $\gamma_{\text{risk}}$ allows us to explicitly test for "salience effects" and "moral hazard." Finding that $|\gamma_{\text{price}}| > \gamma_{\text{risk}}$ would suggest that explicit price signals are more effective policy tools than liability threats.
+3.  **Data Fidelity:** The model relies solely on high-quality administrative data regarding tank closures, avoiding reliance on noisy or imputed revenue data.
+4.  **Computational Efficiency:** With a binary action space, the computational burden of the NPL algorithm is significantly reduced, facilitating extensive counterfactual analysis.
 
 ### Limitations {#sec-model-b-limitations}
 
-Model B sacrifices the ability to analyze retrofit policies directly. Without the retrofit action in the choice set, we cannot compute counterfactual effects of retrofit subsidies or technology mandates. However, for policy questions focused on tank closure patterns, environmental risk reduction through facility exit, and optimal insurance pricing, Model B provides credible estimates despite limited data. Extensions could incorporate retrofit as a pre-decision stage, treating it as exogenous to the closure decision and focusing identification on the stopping problem conditional on technology choice.
+The primary limitation of Model B is the exclusion of the retrofit action. Without explicitly modeling the upgrade decision, we cannot directly simulate the impact of retrofit subsidies. However, for the primary research questions—regarding the efficiency of insurance pricing and the timing of facility exit—Model B provides the most credible structural estimates. The parameters recovered here ($\gamma_{\text{price}}, \gamma_{\text{risk}}$) can be interpreted as "reduced-form structural" parameters that implicitly account for the option value of retrofitting in the continuation value.
 
 \newpage
 
 ## Model Comparison and Selection {#sec-model-comparison}
 
-@tbl-model-comparison summarizes key differences between Models A and B.
+@tbl-model-comparison summarizes key differences between the specifications.
 
 ```{r tab-model-comparison}
 #| tbl-cap: "Comparison of Model A and Model B Specifications"
@@ -915,7 +1223,7 @@ comparison_dt <- data.table(
     "Parameters Calibrated",
     "Retrofit Cost $\\phi$ Identified?",
     "Exit Value $\\kappa$ Identified?",
-    "Premium Parameter $\\gamma$ Identified?",
+    "Behavioral Parameters?",
     "Hessian Condition Number",
     "Primary Use Case",
     "Limitation"
@@ -927,7 +1235,7 @@ comparison_dt <- data.table(
     "$\\beta, \\sigma$",
     "Yes (eigenvalue $\\approx 150$)",
     "No (eigenvalue $\\approx 0.8$)",
-    "N/A (not included)",
+    "No (Implicitly fixed at -1)",
     "$\\approx 200$ (poor)",
     "Illustrates identification failure",
     "$\\kappa$ unidentified, flat likelihood"
@@ -935,13 +1243,13 @@ comparison_dt <- data.table(
   `Model B` = c(
     "37 states (identical to Model A)",
     "Maintain, Close",
-    "$\\kappa, \\gamma$",
+    "$\\kappa, \\gamma_{\\text{price}}, \\gamma_{\\text{risk}}$",
     "$\\beta, \\sigma$",
     "N/A (action removed)",
     "Yes (binary stopping identifies)",
-    "Yes (eigenvalue $\\approx 120$)",
+    "Yes (Separates Price vs. Risk sensitivity)",
     "$< 50$ (good)",
-    "Preferred specification for closure analysis",
+    "Preferred for closure and pricing analysis", # <--- CHANGED & to 'and'
     "Cannot analyze retrofit policies"
   )
 )
@@ -962,7 +1270,7 @@ kable(
   column_spec(3, width = "5.5cm")
 ```
 
-**Recommendation:** Use Model B for primary analysis of tank closure decisions and insurance pricing effects. Model A serves as diagnostic tool to demonstrate identification challenges inherent in the three-action specification. For policy questions requiring retrofit analysis, employ reduced-form methods or extend Model B with pre-decision technology stage.
+Recommendation: Model B is selected for the primary empirical analysis. While Model A is theoretically more general, the data do not support the simultaneous identification of exit and retrofit parameters. Model B's focus on the observable closure margin, combined with its richer behavioral specification ($\gamma_{\text{price}}$ vs $\gamma_{\text{risk}}$), provides the robust foundation necessary for credible counterfactual policy analysis.
 
 \newpage
 

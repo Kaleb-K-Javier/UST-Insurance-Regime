@@ -186,6 +186,103 @@ Our primary outcome measures use four robustness specifications to classify tank
           MASTER DATA RECOVERY DIRECTORY (DIRECT LINKS & INSTRUCTIONS)
 ================================================================================
 
+# State Data Recovery Priority Matrix
+
+## 🎯 Special Status States
+
+| State | Study Group | Tanks | LUSTs | Status | Action |
+|-------|-------------|------:|------:|--------|--------|
+| **PA** | Control Tier 1 | 99,788 | 17,489 | 🎯 Data Available in Repo | Integrate facility data from PA_UST_Auction_Analysis |
+| **MO** | Remainder | 41,774 | 6,899 | 📦 Database Acquired | Parse Access database tables |
+| **IN** | Remainder | 57,525 | 9,987 | ⏸️ Records Request Pending | Wait for state response |
+| **CA** | Remainder | 37,400 | 41,661 | ❌ On Hold | Troubleshoot GeoTracker linkage |
+| **CO** | Control Tier 1 | 32,910 | 16,879 | ✅ Completed | None - data integrated |
+
+## 🟢 High Priority (Documented Solutions)
+
+| State | Study Group | Tanks | LUSTs | Critical Issues | Action |
+|-------|-------------|------:|------:|-----------------|--------|
+| **NY** | Remainder | 122,648 | 25,839 | 100% Closure | Download data.ny.gov datasets |
+| **IL** | Remainder | 84,307 | 25,336 | Wall type + LUST NFA | Download SFMO + IEPA databases |
+| **GA** | Remainder | 79,273 | 17,924 | 100% Closure | Download GA EPD corrective actions |
+| **SC** | Remainder | 45,996 | 10,128 | 100% Closure, Install | Download DES registry |
+| **MS** | Remainder | 32,132 | 4,092 | 100% Closure, Capacity, Install | Download MDEQ MUSTERWEB |
+| **UT** | Remainder | 18,100 | 4,782 | 100% Closure | Download DERR or GRAMA request |
+| **NH** | Remainder | 15,350 | 2,420 | 100% Closure, LUST | Download or email EMD@des.nh.gov |
+| **NV** | Remainder | 12,023 | 2,459 | 100% Closure, 86% Capacity | Download + email ust@ndep.nv.gov |
+| **VT** | Remainder | 11,001 | 2,182 | 100% Install | Download ANR data dump |
+| **WY** | Remainder | 10,172 | 1,630 | 100% Closure, LUST | Download DEQ storage tanks |
+| **SD** | Remainder | 10,178 | 3,963 | 80% Closure | Download DANR tanks/spills |
+| **NE** | Remainder | 6,188 | 8,717 | 100% Closure | Download SFM regulated tanks |
+
+## 🟡 Medium Priority (Documented Solutions, Minor Issues)
+
+| State | Study Group | Tanks | LUSTs | Issues | Action |
+|-------|-------------|------:|------:|--------|--------|
+| **NC** | Control Tier 2 | 91,664 | 23,594 | 14% LUST dates | Good quality overall |
+| **OH** | Control Tier 2 | 73,200 | 34,249 | 39% LUST dates | Minor recovery needed |
+| **AR** | Control Tier 1 | 34,083 | 4,868 | 63% LUST dates | Moderate issue |
+
+## 🔴 Needs Investigation
+
+| State | Study Group | Tanks | LUSTs | Issues |
+|-------|-------------|------:|------:|--------|
+| **FL** | Excluded (Treated) | 127,314 | 34,940 | 100% Closure |
+| **NJ** | Excluded (Treated) | 108,992 | 16,816 | 100% LUST |
+| **MI** | Excluded (Treated) | 98,847 | 23,369 | 100% LUST |
+| **WI** | Excluded (Treated) | 83,600 | 20,596 | 100% Closure, 80% Install |
+| **WA** | Excluded (Other) | 52,245 | 2,864 | 94% Closure, 100% LUST |
+| **KY** | Control Tier 2 | 51,771 | 13,115 | 100% LUST |
+| **AL** | Control Tier 1 | 53,361 | 5,112 | 100% Capacity |
+| **IA** | Excluded (Treated) | 37,200 | 6,334 | 100% Closure |
+| **WV** | Remainder | 25,796 | 3,699 | 100% Closure |
+| **NM** | Control Tier 1 | 16,322 | 1,880 | 97% Closure, 98% Install |
+| **ND** | Control Tier 2 | 10,372 | 1,015 | 100% LUST |
+| **RI** | Remainder | 10,834 | 2,083 | 100% Closure |
+| **DE** | Remainder | 9,388 | 4,979 | 100% LUST |
+| **AK** | Remainder | 6,853 | 2,187 | 100% Closure, LUST |
+| **HI** | Remainder | 6,763 | 1,395 | 100% Closure, LUST |
+
+## ✅ Excellent Quality (No Action Needed)
+
+| State | Study Group | Tanks | LUSTs | Notes |
+|-------|-------------|------:|------:|-------|
+| **TX** | Target | 217,725 | 29,196 | Target state - excellent data |
+| **LA** | Control Tier 1 | 46,520 | 4,116 | Minimal missingness |
+| **OK** | Control Tier 1 | 40,004 | 6,845 | Good quality |
+| **VA** | Control Tier 2 | 78,612 | 12,137 | Minor issues only |
+| **MA** | Control Tier 2 | 36,448 | 5,335 | Excellent quality |
+| **TN** | Control Tier 1 | 60,277 | 0 | Good quality |
+| **ME** | Control Tier 1 | 16,902 | 80,962 | Good quality |
+| **KS** | Control Tier 2 | 27,477 | 11,369 | Good quality |
+| **ID** | Control Tier 2 | 14,880 | 1,513 | Excellent quality |
+| **MT** | Remainder | 16,060 | 4,651 | Good quality |
+| **MD** | Control Tier 2 | 54,296 | 12,341 | Good quality |
+| **MN** | Control Tier 2 | 45,575 | 11,477 | Good quality |
+| **CT** | Excluded (Treated) | 36,076 | 2,270 | Minor issues |
+| **AZ** | Excluded (Treated) | 28,544 | 9,100 | Good quality |
+| **OR** | Excluded (Other) | 30,900 | 8,565 | Good quality |
+
+---
+
+## Summary Statistics
+
+### By Priority Category
+- **Immediate Action (PA + MO)**: 2 states, 141,562 tanks
+- **High Priority (Documented)**: 12 states, 454,639 tanks  
+- **Needs Investigation**: 16 states, 645,267 tanks
+- **Excellent Quality**: 19 states, 1,084,457 tanks
+
+### Control Group Health
+- **Control Tier 1**: 7/9 excellent/good (78%) → 8/9 after PA integration (89%)
+- **Control Tier 2**: 8/10 excellent/good (80%)
+
+### Expected Impact
+- **After PA + MO**: ~140K tanks with complete data
+- **After High Priority states**: ~600K additional tanks with complete data
+- **Total potential**: 85-90% data completeness across all states
+
+
 [ STATE: CALIFORNIA (CA) ] ---> askined state for data you cant link LUSTs to sites??
 --------------------------------------------------------------------------------
 REASON    | Fixes 100% Missing Closure Dates (All tanks listed as "Open").

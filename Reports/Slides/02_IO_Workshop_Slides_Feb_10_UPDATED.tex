@@ -1,0 +1,1039 @@
+\documentclass[aspectratio=169,]{beamer}
+
+% -------------------------------------------------------------------------
+% 1. REQUIRED PACKAGES (The "Batteries" Quarto usually includes)
+% -------------------------------------------------------------------------
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{array}      % <--- ADD THIS LINE HERE
+\usepackage[most]{tcolorbox} % REQUIRED for Quarto Callouts
+\usepackage{fontawesome5}    % REQUIRED for Callout Icons
+\usepackage{framed}          % REQUIRED for standard blocks
+
+% Fix for Pandoc's "tightlist"
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+% -------------------------------------------------------------------------
+% 2. CUSTOM DESIGN PACKAGES
+% -------------------------------------------------------------------------
+\usepackage{tikz}
+\usepackage{calc}
+\usepackage{xcolor}
+\usepackage{xparse} 
+\usepackage{etoolbox} 
+\usepackage[default]{sourcesanspro} 
+\usetikzlibrary{calc, positioning, shapes.geometric}
+
+% -------------------------------------------------------------------------
+% DEFINE QUARTO CALLOUT COLORS (REQUIRED)
+% -------------------------------------------------------------------------
+% We map these to your "Elegant Dark Mode" aesthetic.
+% Note: Quarto expects these EXACT names.
+
+% 1. Note (Blue)
+\definecolor{quarto-callout-note-color}{HTML}{3498DB}        % Icon/Title Color
+\definecolor{quarto-callout-note-color-frame}{HTML}{2980B9}  % Border Color
+
+% 2. Tip (Green)
+\definecolor{quarto-callout-tip-color}{HTML}{27AE60}
+\definecolor{quarto-callout-tip-color-frame}{HTML}{2ECC71}
+
+% 3. Important (Red/Crimson)
+\definecolor{quarto-callout-important-color}{HTML}{C0392B}
+\definecolor{quarto-callout-important-color-frame}{HTML}{E74C3C}
+
+% 4. Warning (Orange)
+\definecolor{quarto-callout-warning-color}{HTML}{F39C12}
+\definecolor{quarto-callout-warning-color-frame}{HTML}{E67E22}
+
+% 5. Caution (Yellow/Gold)
+\definecolor{quarto-callout-caution-color}{HTML}{F1C40F}
+\definecolor{quarto-callout-caution-color-frame}{HTML}{D4AC0D}
+
+% -------------------------------------------------------------------------
+% NEW: COLOR THEME COMMANDS (Robust Single-Slide Overrides)
+% -------------------------------------------------------------------------
+
+% 1. Light Mode Command
+\newcommand{\LightMode}{
+  % 1. Draw White Background (TikZ Overlay)
+  \begin{tikzpicture}[remember picture, overlay]
+    \fill[white] (current page.south west) rectangle (current page.north east);
+  \end{tikzpicture}
+  % 2. Force Text Colors to Black
+  \setbeamercolor{normal text}{fg=black}
+  \setbeamercolor{frametitle}{fg=black}
+  \setbeamercolor{itemize item}{fg=black}
+  \setbeamercolor{structure}{fg=black}
+  \usebeamercolor[fg]{normal text}
+}
+
+% 2. Black Mode Command
+\newcommand{\BlackMode}{
+  \begin{tikzpicture}[remember picture, overlay]
+    \fill[black] (current page.south west) rectangle (current page.north east);
+  \end{tikzpicture}
+  \setbeamercolor{normal text}{fg=white}
+  \setbeamercolor{frametitle}{fg=white}
+  \setbeamercolor{itemize item}{fg=white}
+  \setbeamercolor{structure}{fg=white}
+  \usebeamercolor[fg]{normal text}
+}
+
+% 3. Brand Mode Command
+\newcommand{\BrandMode}{
+  \begin{tikzpicture}[remember picture, overlay]
+    \definecolor{tempBrand}{HTML}{7D181E}
+    \fill[tempBrand] (current page.south west) rectangle (current page.north east);
+  \end{tikzpicture}
+  \setbeamercolor{normal text}{fg=white}
+  \setbeamercolor{frametitle}{fg=white}
+  \setbeamercolor{itemize item}{fg=white}
+  \setbeamercolor{structure}{fg=white}
+  \usebeamercolor[fg]{normal text}
+}
+
+
+
+% 4. UC Berkeley Theme (Modern Matte)
+% A softer, less aggressive dark mode.
+% - Uses a slightly desaturated blue to reduce eye strain.
+% - Uses Gold ONLY for bullets/accents, not text.
+
+% 4. UC Berkeley Theme (Modern Matte) - FIXED SCOPE
+% 4. UC Berkeley Theme (Modern Matte) - FIXED WITH TITLE REDRAW
+\newcommand{\BerkeleyMode}{
+  % 1. DEFINE COLORS
+  \definecolor{BerkeleyBlue}{HTML}{003262}
+  \definecolor{CaliforniaGold}{HTML}{FDB515}
+  \definecolor{BerkeleyMatte}{HTML}{0D2D52} 
+  \definecolor{SoftWhite}{HTML}{F8F9FA}
+
+  % 2. Draw Background AND Title
+  \begin{tikzpicture}[remember picture, overlay]
+    % Background Fill (Covers old title)
+    \fill[BerkeleyMatte] (current page.south west) rectangle (current page.north east);
+    % Gold Accent Strip
+    \fill[CaliforniaGold] (current page.south west) rectangle ($(current page.north west)+(0.15cm,0)$);
+    % REDRAW TITLE ON TOP
+    \node[anchor=west, white, font=\Large\bfseries] at ($(current page.north west)+(1cm,-1cm)$) {\insertframetitle};
+  \end{tikzpicture}
+  
+  % 3. Set Text Colors
+  \setbeamercolor{normal text}{fg=SoftWhite}
+  \setbeamercolor{frametitle}{fg=BerkeleyMatte} % Hide original title to prevent double-vision
+  \setbeamercolor{itemize item}{fg=CaliforniaGold} 
+  \setbeamercolor{structure}{fg=CaliforniaGold}
+  
+  \usebeamercolor[fg]{normal text}
+}
+
+% 5. UC Berkeley Theme (Academic Light) - FIXED WITH TITLE REDRAW
+\newcommand{\BerkeleyLightMode}{
+  % 1. DEFINE COLORS
+  \definecolor{BerkeleyBlue}{HTML}{003262}
+  \definecolor{CaliforniaGold}{HTML}{FDB515}
+  
+  % 2. Draw Background AND Title
+  \begin{tikzpicture}[remember picture, overlay]
+    % Background Fill
+    \fill[white] (current page.south west) rectangle (current page.north east);
+    % Blue Header Bar
+    \fill[BerkeleyBlue] (current page.north west) rectangle ($(current page.north east)+(0,-1.4cm)$);
+    % Gold Line
+    \fill[CaliforniaGold] ($(current page.north west)+(0,-1.4cm)$) rectangle ($(current page.north east)+(0,-1.45cm)$);
+    % REDRAW TITLE ON TOP
+    \node[anchor=west, white, font=\Large\bfseries] at ($(current page.north west)+(1cm,-0.7cm)$) {\insertframetitle};
+  \end{tikzpicture}
+  
+  % 3. Set Text Colors
+  \setbeamercolor{normal text}{fg=black}
+  \setbeamercolor{frametitle}{fg=white} 
+  \setbeamercolor{itemize item}{fg=BerkeleyBlue}
+  \setbeamercolor{structure}{fg=BerkeleyBlue}
+  
+  \usebeamercolor[fg]{normal text}
+}
+
+
+% -------------------------------------------------------------------------
+% NEW: ACADEMIC POWER LAYOUTS
+% -------------------------------------------------------------------------
+
+% 1. Statement Layout (Big Impact Transitions)
+% Usage: ::: {.layout-statement} Content :::
+\newenvironment{layout-statement}{
+  \vspace*{\fill}
+  \centering
+  \Huge \bfseries
+  \setbeamercolor{normal text}{fg=CaliforniaGold} % Use Gold for impact
+  \usebeamercolor[fg]{normal text}
+}{
+  \vspace*{\fill}
+}
+
+% 2. Dense Data Layout (Regression Tables)
+% Usage: ::: {.layout-dense} Table :::
+\newenvironment{layout-dense}{
+  \vspace*{\fill}
+  \tiny                  % Force tiny font
+  \setlength\tabcolsep{2pt} % Tighten table columns
+  \centering
+}{
+  \vspace*{\fill}
+}
+
+% 3. Split Slide Macro (Vertical Centering)
+% Usage: \SplitSlide{Left Content}{Right Content}
+\newcommand{\SplitSlide}[2]{
+  \begin{columns}[c] % 'c' option forces vertical centering
+    \begin{column}{0.48\textwidth}
+      #1
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      #2
+    \end{column}
+  \end{columns}
+}
+
+% -------------------------------------------------------------------------
+% 3. DYNAMIC BACKGROUND & CONTRAST LOGIC
+% -------------------------------------------------------------------------
+  \definecolor{mainbg}{HTML}{0D2D52}
+
+\setbeamercolor{background canvas}{bg=mainbg}
+
+% Logic to calculate luminance and set text color automatically
+\makeatletter
+\newcommand{\AutoSetContrast}{
+  \extractcolorspec{mainbg}{\mainbgspec}
+  \expandafter\convertcolorspec\mainbgspec{rgb}\mainbgrgb
+  \def\calculatebrightness##1,##2,##3;{
+    \pgfmathparse{0.2126*##1 + 0.7152*##2 + 0.0722*##3}
+  }
+  \expandafter\calculatebrightness\mainbgrgb;
+  \pgfmathparse{\pgfmathresult > 0.5 ? 1 : 0}
+  \ifnum\pgfmathresult=1
+    \definecolor{maintext}{HTML}{222222}
+    \definecolor{dimtext}{HTML}{555555}
+  \else
+    \definecolor{maintext}{HTML}{FFFFFF}
+    \definecolor{dimtext}{HTML}{CCCCCC}
+  \fi
+}
+\makeatother
+
+\AutoSetContrast
+
+\setbeamercolor{normal text}{fg=maintext}
+\setbeamercolor{frametitle}{fg=maintext}
+\setbeamercolor{title}{fg=maintext}
+\setbeamercolor{structure}{fg=maintext} 
+
+% -------------------------------------------------------------------------
+% 4. FOOTER CUSTOMIZATION
+% -------------------------------------------------------------------------
+\setbeamercolor{footline}{fg=dimtext}
+\setbeamerfont{footline}{size=\tiny}
+
+\newtoggle{hidesection}
+\togglefalse{hidesection}
+
+\setbeamertemplate{footline}{
+  \begin{beamercolorbox}[wd=\paperwidth, ht=2.5ex, dp=1.125ex, leftskip=.3cm, rightskip=.3cm]{footline}
+    \iftoggle{hidesection}{}{
+      \insertsectionhead
+    }
+    \hfill
+    \insertframenumber
+  \end{beamercolorbox}
+}
+\setbeamertemplate{navigation symbols}{}
+
+% -------------------------------------------------------------------------
+% 5. CUSTOM COMMANDS & ENVIRONMENTS (FIXED FOR STABILITY)
+% -------------------------------------------------------------------------
+\NewDocumentCommand{\navbutton}{ O{} O{fill=gray} m }{
+  \hyperlink{#1}{
+    \tikz[baseline=(node.base)]{
+      \node(node)[
+        anchor=base,
+        rounded corners=3pt,
+        inner sep=5pt,
+        text=white,
+        font=\small\bfseries,
+        #2
+      ]{#3};
+    }
+  }
+}
+
+\newenvironment{layout-math}{
+  \vspace*{\fill}
+  \centering
+  \begin{minipage}{\linewidth}
+  \centering
+}{
+  \end{minipage}
+  \vspace*{\fill}
+}
+
+% SAFE Layout for Tables (Removed risky \makebox)
+\newenvironment{layout-table}{
+  \vspace*{\fill}
+  \begin{center}
+}{
+  \end{center}
+  \vspace*{\fill}
+}
+
+% SAFE Layout for Full Figures (Uses LRBOX to capture content first)
+\newsavebox{\fullfigbox}
+\newenvironment{layout-full-figure}{
+  \begin{lrbox}{\fullfigbox}
+    \begin{minipage}{\paperwidth}
+      \centering
+}{
+    \end{minipage}
+  \end{lrbox}
+  \begin{tikzpicture}[remember picture, overlay]
+    \node[anchor=center, inner sep=0pt] at (current page.center) {
+      \usebox{\fullfigbox}
+    };
+  \end{tikzpicture}
+}
+
+\newcommand{\hidefootersection}{\global\toggletrue{hidesection}}
+\newcommand{\showfootersection}{\global\togglefalse{hidesection}}
+
+% -------------------------------------------------------------------------
+% 6. DOCUMENT BODY
+% -------------------------------------------------------------------------
+\title{Universal DiD Analysis: Texas UST Insurance Reform}
+\author{Kaleb K.}
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame}{Motivation}
+\phantomsection\label{motivation}
+\BerkeleyMode
+
+\textbf{Why Underground Storage Tanks Matter}
+
+\begin{itemize}
+\tightlist
+\item
+  580,000+ regulated USTs nationwide (EPA, 2023)
+\item
+  Primary source of groundwater contamination (EPA, 2023)
+\item
+  Median cleanup cost: \$250,000--\$500,000 per site
+\item
+  Long-tail risk: contamination discovered decades after installation
+\end{itemize}
+
+\textbf{The Policy Tension}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Regime & Premium Structure & Incentive Problem \\
+\midrule\noalign{}
+\endhead
+Flat-Fee & \(p^F = \bar{p}\) & Moral hazard; no risk signal \\
+Risk-Based & \(p^{RB}(a, w)\) & Price signal; may distort exit \\
+\bottomrule\noalign{}
+\end{longtable}
+\end{frame}
+
+\begin{frame}{Research Question \& Contribution}
+\phantomsection\label{research-question-contribution}
+\BerkeleyMode
+
+\textbf{Research Question}
+
+How does pricing environmental risk affect facility exit and technology
+adoption decisions?
+
+\vspace{0.5cm}
+
+\textbf{Contributions}
+
+\begin{enumerate}
+\tightlist
+\item
+  \textbf{Data} Novel facility-year panel (1990--2023) linking Texas +
+  18 control states
+\item
+  \textbf{Reduced Form} First causal evidence of risk-rating effects on
+  UST behavior
+\item
+  \textbf{Structural} Dynamic model quantifying welfare gains
+  (\(W_{RB} \gtrless W_{FF}\)?)
+\end{enumerate}
+\end{frame}
+
+\begin{frame}{Preview of Findings}
+\phantomsection\label{preview-of-findings}
+\BerkeleyMode
+
+\textbf{Reduced Form (DiD)}
+
+\begin{itemize}
+\tightlist
+\item
+  Risk-based pricing increased annual closure probability by
+  \textasciitilde2--3 pp
+\item
+  Firms substituted toward \textbf{Retrofit} rather than pure Exit
+\item
+  Leak detection rates rose \textasciitilde1 pp (environmental benefit)
+\end{itemize}
+
+\textbf{Structural Dynamic Discrete Chocie Model }
+
+\begin{itemize}
+\tightlist
+\item
+  Price sensitivity: \(\hat{\gamma}_{price} < 0\) (firms respond to
+  premiums)
+\item
+  Risk internalization: \(\hat{\gamma}_{risk} \approx 1\) (near-full
+  private cost internalization)
+\item
+  Counterfactuals: Targeted subsidies outperform mandates
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Institutional Context: The 1999 Texas Reform}
+\phantomsection\label{institutional-context-the-1999-texas-reform}
+\BerkeleyMode
+
+\textbf{Pre-1999: State-Run Flat-Fee Insurance}
+
+\begin{itemize}
+\tightlist
+\item
+  Uniform premium regardless of tank age/type
+\item
+  Low deductibles (\(D_F \approx 0.1L\))
+\item
+  Implicit cross-subsidy from safe to risky facilities
+\end{itemize}
+
+\textbf{Post-1999: Private Risk-Based Market}
+
+\begin{itemize}
+\tightlist
+\item
+  Premiums vary with age, wall type, and claims history
+\item
+  Higher deductibles (\(D_{RB} \approx 0.25L\))
+\item
+  Actuarially fair + loading:
+  \(p^{RB}(a,w) = (1+\lambda) \cdot h(a,w) \cdot L\)
+\end{itemize}
+
+\textbf{Natural Experiment} Texas transitions; 18 control states retain
+flat-fee
+\end{frame}
+
+\begin{frame}{Theoretical Framework: The ``Zombie Tank'' Problem}
+\phantomsection\label{theoretical-framework-the-zombie-tank-problem}
+\BerkeleyMode
+
+\textbf{Firm's Dynamic Problem}
+
+Each period, facility chooses:
+\(d_t \in \{\text{Maintain}, \text{Close}\}\)
+
+\textbf{Trade-off}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Maintain} Earn operating profit \(\pi(x_t)\), face leak risk
+  \(h(a_t, w_t)\)
+\item
+  \textbf{Close} Receive scrap value \(\kappa\), exit market
+\end{itemize}
+
+\textbf{State Space} \(x = (A, w, \rho)\) where:
+
+\begin{itemize}
+\tightlist
+\item
+  \(A \in \{1,...,9\}\): Age bin (5-year intervals)
+\item
+  \(w \in \{\text{single}, \text{double}\}\): Wall type
+\item
+  \(\rho \in \{FF, RB\}\): Insurance regime
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Theoretical Framework: Optimal Stopping \& Insurance}
+\phantomsection\label{theoretical-framework-optimal-stopping-insurance}
+\BerkeleyMode
+
+\textbf{The Firm's Dynamic Problem} A single facility maximizes expected
+discounted value by choosing to \textbf{Maintain} or \textbf{Exit}.
+
+\textbf{Flow Utility (Maintain)} \[
+u(s) = \underbrace{R}_{\text{Net Revenue}} - \underbrace{C_j(s)}_{\text{Insurance Premium}} - \underbrace{h(s) \cdot L}_{\text{Exp. Leak Liability}}
+\]
+
+\begin{itemize}
+\tightlist
+\item
+  \(R\) Annual revenue (less operating expenses)
+\item
+  \(L\) Private cost of a leak (Deductible + Cleanup)
+\item
+  \(h(s)\) Probability of a leak given state \(s\) (e.g., age)
+\end{itemize}
+
+\textbf{Decision Rule (Optimal Stopping)}
+
+The firm exits when the liquidity of the land (scrap) exceeds the value
+of operation
+
+\[
+\text{Exit if } \underbrace{V_{cont}(s)}_{\text{Continuation Value}} < \underbrace{\kappa}_{\text{Scrap Value}}
+\]
+
+\textbf{The Policy Lever Insurance Contracts (\(C_j\))} 1.
+\textbf{Flat-Fee (\(F\))} \(C_F(s) = \bar{p}\)
+\hfill (\textit{Risk Unpriced}) 2. \textbf{Risk-Based (\(RB\))}
+\(C_{RB}(s) = (1+\lambda) \cdot h(s) \cdot L\)
+\hfill (\textit{Risk Priced})
+\end{frame}
+
+\begin{frame}{Thought Experiment: The ``Zombie Tank''}
+\phantomsection\label{thought-experiment-the-zombie-tank}
+\BerkeleyMode
+
+\textbf{Setup: A Representative Gas Station} We simulate a single
+facility with fixed characteristics to isolate insurance incentives:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Revenue (\(R\))} \$100,000 / year (Net operating profit)
+\item
+  \textbf{Scrap Value (\(\kappa\))} \$400,000 (Land value net of closure
+  costs)
+\item
+  \textbf{Leak Liability (\(L\))} \$200,000 (Private cleanup cost)
+\item
+  \textbf{Retrofit Cost (\(c_U\))} \$700,000 (Upgrade to Double-Wall)
+\end{itemize}
+
+\textbf{The Conflict} The firm faces rising leak risk \(h(a)\) as the
+tank ages. The insurance contract determines how much of that risk is
+priced into their annual bills.
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Flat-Fee (\(F\))} Pays \textbf{\$2k/year} regardless of age.
+  Deductible = \$20k.
+
+  \begin{itemize}
+  \tightlist
+  \item
+    \emph{Result:} Cost is fixed, creating an incentive to delay exit
+    (``Zombie'').
+  \end{itemize}
+\item
+  \textbf{Risk-Based (\(RB\))} Premium rises with risk (up to
+  \textbf{\$10k+}). Deductible = \$50k.
+
+  \begin{itemize}
+  \tightlist
+  \item
+    \emph{Result:} Rising costs force efficient exit when
+    \(V_{cont} < \$400k\).
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{The First Best: Optimal Closure}
+\phantomsection\label{the-first-best-optimal-closure}
+\BerkeleyMode
+
+\includegraphics[width=0.95\textwidth,height=\textheight]{../../Output/Figures/Slide_Fig_2_SOC_Exit.pdf}
+\end{frame}
+
+\begin{frame}{3. Private Incentives: Risk-Based Pricing}
+\phantomsection\label{private-incentives-risk-based-pricing}
+\BerkeleyMode
+
+\includegraphics[width=0.95\textwidth,height=\textheight]{../../Output/Figures/Slide_Fig_3_SOC_RB_Comparison.pdf}
+\end{frame}
+
+\begin{frame}{4. The ``Unavoidable'' Wedge (Risk-Based DWL)}
+\phantomsection\label{the-unavoidable-wedge-risk-based-dwl}
+\BerkeleyMode
+
+\includegraphics[width=0.95\textwidth,height=\textheight]{../../Output/Figures/Slide_Fig_4_RB_DWL.pdf}
+\end{frame}
+
+\begin{frame}{5. Private Incentives: Flat-Fee Pricing}
+\phantomsection\label{private-incentives-flat-fee-pricing}
+\BerkeleyMode
+
+\includegraphics[width=0.95\textwidth,height=\textheight]{../../Output/Figures/Slide_Fig_5_SOC_FF_Comparison.pdf}
+\end{frame}
+
+\begin{frame}{6. The ``Infinite Tail'' (Flat-Fee DWL)}
+\phantomsection\label{the-infinite-tail-flat-fee-dwl}
+\BerkeleyMode
+
+\includegraphics[width=0.95\textwidth,height=\textheight]{../../Output/Figures/Slide_Fig_6_FF_Total_DWL.pdf}
+\end{frame}
+
+\begin{frame}{7. Summary: The Value of Reform}
+\phantomsection\label{summary-the-value-of-reform}
+\BerkeleyMode
+
+\includegraphics[width=0.95\textwidth,height=\textheight]{../../Output/Figures/Slide_Fig_7_Combined_DWL.pdf}
+\end{frame}
+
+\begin{frame}{What About the Pollution Externality?}
+\phantomsection\label{what-about-the-pollution-externality}
+\BerkeleyMode
+
+\textbf{Does Risk-Based Pricing Actually Reduce Pollution?}
+
+The effect on observable LUST counts is theoretically ambiguous due to
+two opposing forces:
+
+\textbf{1. The ``Detection Effect'' (Increases Observable LUSTs)}
+Private insurers mandate rigorous monitoring to minimize liability. -
+\textbf{Enhanced Monitoring} More inspections \(\rightarrow\) higher
+probability of detecting \emph{existing} leaks. - \textbf{Closure
+Discovery} Tank removal requires site assessment \(\rightarrow\)
+uncovers historical contamination. - \emph{Result:} Texas may report
+\textbf{more} incidents initially, despite being safer.
+
+\textbf{2. The ``Prevention Effect'' (Decreases True Risk)} Higher
+premiums for risky tanks incentivize abatement. - \textbf{Early Exit}
+High-risk tanks close before catastrophic failure. - \textbf{Retrofit}
+Single-wall tanks are replaced with double-wall technology. -
+\emph{Result:} The underlying stock of tanks becomes \textbf{safer} over
+time.
+
+\textbf{Net Result} Compositional shift toward lower true risk, even if
+reported counts rise.
+\end{frame}
+
+\begin{frame}{From Theory to Empirics}
+\phantomsection\label{from-theory-to-empirics}
+\BerkeleyMode
+
+\textbf{Testable Hypotheses from Toy Model}
+
+\vspace{0.3cm}
+
+\textbf{H0 (Age Profile)} Risk-based pricing skews age distribution \[
+f_{RB}(A) < f_{FF}(A) \quad \text{for high-risk } A
+\]
+
+\textbf{H1 (Closure Hazard)} Risk-based pricing increases closure hazard
+\[
+h^{close}_{RB}(x) > h^{close}_{FF}(x) \quad \text{for high-risk } x
+\]
+
+\textbf{H2 (Selection)} High-risk types exit earlier under \(RB\) \[
+\mathbb{E}[a | \text{exit}, RB] < \mathbb{E}[a | \text{exit}, FF]
+\]
+
+\textbf{H3 (Environment)} Aggregate leak rates decline \[
+\mathbb{E}[\lambda | RB] < \mathbb{E}[\lambda | FF]
+\]
+\end{frame}
+
+\begin{frame}{}
+\phantomsection\label{section}
+\BerkeleyMode
+
+Reduced Form
+
+Evidence
+\end{frame}
+
+\begin{frame}{Empirical Strategy: Data \& Sample}
+\phantomsection\label{empirical-strategy-data-sample}
+\BerkeleyLightMode
+
+\textbf{Universe} EPA National UST Database + State Administrative
+Records
+
+\textbf{Sample Construction}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Filter & N Facilities & N Facility-Months \\
+\midrule\noalign{}
+\endhead
+Raw Texas + 18 Controls & 297,533 & \textasciitilde60M \\
+Active 1990--2023 & 185,000 & \textasciitilde45M \\
+\textbf{Incumbent Filter} (Pre-1999) & 72,000 & \textasciitilde25M \\
+\bottomrule\noalign{}
+\end{longtable}
+
+\vspace{0.3cm}
+
+\begin{tcolorbox}[enhanced jigsaw, toptitle=1mm, leftrule=.75mm, opacityback=0, opacitybacktitle=0.6, colframe=quarto-callout-warning-color-frame, left=2mm, bottomrule=.15mm, toprule=.15mm, colback=white, bottomtitle=1mm, coltitle=black, breakable, title=\textcolor{quarto-callout-warning-color}{\faExclamationTriangle}\hspace{0.5em}{Warning}, titlerule=0mm, arc=.35mm, colbacktitle=quarto-callout-warning-color!10!white, rightrule=.15mm]
+
+\textbf{Critical} DiD requires facilities active pre-1999 (no
+post-reform entrants)
+
+\end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Identification Strategy}
+\phantomsection\label{identification-strategy}
+\BerkeleyLightMode
+
+\textbf{Difference-in-Differences Specification}
+
+\[
+Y_{it} = \beta \cdot (\text{Texas}_i \times \text{Post}_t) + \alpha_i + \delta_t + X'_{it}\gamma + \varepsilon_{it}
+\]
+
+where:
+
+\begin{itemize}
+\tightlist
+\item
+  \(Y_{it} \in \{\text{LUST}, \text{Exit}, \text{Retrofit}\}\)
+\item
+  \(\alpha_i\): Facility fixed effects
+\item
+  \(\delta_t\): Year-month fixed effects
+\item
+  \(X_{it}\): Age bins, wall type, motor fuel indicator
+\end{itemize}
+
+\textbf{Clustering} State level (19 clusters); Webb WCB inference
+\end{frame}
+
+\begin{frame}{Results: Event Study (Leak Detection)}
+\phantomsection\label{results-event-study-leak-detection}
+\BerkeleyLightMode
+
+\hidefootersection
+
+\textbf{PLACE HOLDER FOR EVENT STUDY}
+
+\showfootersection
+\end{frame}
+
+\begin{frame}{Results: Tank Closures (Extensive Margin)}
+\phantomsection\label{results-tank-closures-extensive-margin}
+\BerkeleyLightMode
+
+\textbf{PLACE HOLDER FOR LUST STEP IN RESULTS}
+\end{frame}
+
+\begin{frame}{Mechanism: Exit vs.~Retrofit}
+\phantomsection\label{mechanism-exit-vs.-retrofit}
+\BerkeleyLightMode
+
+\textbf{PLACE HOLDER FOR MECHANISM TABLE}
+
+\textbf{Key Insight} Conditional on closure, Texas facilities chose
+\textbf{Replacement} over \textbf{Exit}
+\end{frame}
+
+\begin{frame}{Reduced Form Summary}
+\phantomsection\label{reduced-form-summary}
+\BerkeleyLightMode
+
+\textbf{DiD Findings}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Outcome & Treatment Effect & Interpretation \\
+\midrule\noalign{}
+\endhead
+LUST Detection & XX.XX pp & More leaks discovered \\
+Annual Closure & XX.XX pp & Accelerated exit \\
+Retrofit Rate & XX.XX pp & Technology upgrading \\
+\bottomrule\noalign{}
+\end{longtable}
+
+\vspace{0.5cm}
+
+\textbf{Transition to Structural}
+
+Reduced form identifies the \textbf{effect}, but we need a model for:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Welfare} Is \(W_{RB} > W_{FF}\)?
+\item
+  \textbf{Counterfactuals} What if subsidies? Mandates?
+\end{itemize}
+\end{frame}
+
+\begin{frame}{}
+\phantomsection\label{section-1}
+\BerkeleyMode
+
+Structural Model
+\end{frame}
+
+\begin{frame}{Dynamic Model Setup (Model B)}
+\phantomsection\label{dynamic-model-setup-model-b}
+\BerkeleyMode
+
+\textbf{Binary Optimal Stopping Problem}
+
+\[
+V(x) = \max\left\{ \underbrace{u^m(x) + \beta \mathbb{E}[V(x') | x, d=m]}_{\text{Maintain}}, \quad \underbrace{\kappa}_{\text{Close}} \right\} + \sigma\varepsilon
+\]
+
+\textbf{Flow Utility (Maintain)}
+
+\[
+u^m(x) = \underbrace{\pi}_{\text{Revenue}} - \underbrace{\gamma_{price} \cdot p(A, w, \rho)}_{\text{Premium Cost}} - \underbrace{\gamma_{risk} \cdot h(A, w) \cdot L}_{\text{Expected Loss}}
+\]
+
+\textbf{Parameters to Estimate}
+\(\theta = (\kappa, \gamma_{price}, \gamma_{risk})\)
+\end{frame}
+
+\begin{frame}{Identification of Parameters}
+\phantomsection\label{identification-of-parameters}
+\BerkeleyMode
+
+\textbf{Parameter Recovery via NPL}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3409}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.4091}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Parameter
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Identified By
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Variation Source
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\(\kappa\) (Scrap Value) & Closure hazard \emph{levels} &
+Cross-sectional exit rates \\
+\(\gamma_{price}\) (Price Sensitivity) & Response to premium schedule &
+Age × Wall × Regime gradient \\
+\(\gamma_{risk}\) (Risk Internalization) & Response to leak cost
+exposure & Deductible variation \\
+\bottomrule\noalign{}
+\end{longtable}
+
+\vspace{0.3cm}
+
+\textbf{Estimation} Nested Pseudo-Likelihood (NPL) with K=2 iterations
+
+\textbf{Standard Errors} Bootstrap (B=999) to account for policy
+function estimation
+\end{frame}
+
+\begin{frame}{Estimation Results}
+\phantomsection\label{estimation-results}
+\BerkeleyLightMode
+\end{frame}
+
+\begin{frame}{Estimation Results}
+\phantomsection\label{estimation-results-1}
+\BerkeleyLightMode
+
+\textbf{Model B Parameter Estimates}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2683}}
+  >{\centering\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2439}}
+  >{\centering\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.0976}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.3902}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Parameter
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+Estimate
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+SE
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Interpretation
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\(\hat{\kappa}\) & 6.25 & (0.84) & Scrap value (annual revenue units) \\
+\(\hat{\gamma}_{price}\) & −1.20 & (0.31) & Firms dislike premiums
+(Price Elastic) \\
+\(\hat{\gamma}_{risk}\) & 1.00 & (0.22) & Near-perfect private
+internalization \\
+\bottomrule\noalign{}
+\end{longtable}
+
+\vspace{0.5cm}
+
+\textbf{Interpretation}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Price Sensitivity (\(\gamma < 0\))} Firms respond strongly to
+  premium hikes (\(p < 0.01\)).
+\item
+  \textbf{Risk Neutrality (\(\gamma \approx 1\))} Owners fully
+  internalize \emph{private} costs (deductibles), implying the remaining
+  distortion is purely the \textbf{external} damage.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Estimated Value Function}
+\phantomsection\label{estimated-value-function}
+\BerkeleyMode
+
+\textbf{Firm's Continuation Value \(V(x)\)}
+
+\includegraphics[width=0.95\textwidth,height=\textheight]{../../Output/Estimation_Results/CF_Value_Function.png}
+\end{frame}
+
+\begin{frame}{Counterfactual Design}
+\phantomsection\label{counterfactual-design}
+\BerkeleyLightMode
+
+\textbf{Four Policy Scenarios}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.1034}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3448}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.5517}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\#
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Scenario
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Implementation
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+1 & \textbf{Baseline} & Status quo (TX: RB, Controls: FF) \\
+2 & \textbf{Social Optimum} & \(\gamma_{risk} \times 2\) (internalize
+externality) \\
+3 & \textbf{Closure Subsidy} & \(\kappa + \text{Subsidy}\) (pay to
+close) \\
+4 & \textbf{Mandate} & Force closure if \(A \geq 30\) \&
+Single-Walled \\
+\bottomrule\noalign{}
+\end{longtable}
+
+\vspace{0.3cm}
+
+\textbf{Welfare Metrics}
+
+\begin{itemize}
+\tightlist
+\item
+  Average closure probability
+\item
+  Expected leak risk: \(\mathbb{E}[h(x) \cdot P(\text{maintain}|x)]\)
+\item
+  Social loss: Private loss \(\times\) externality multiplier
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Counterfactual Results: Closure by Policy}
+\phantomsection\label{counterfactual-results-closure-by-policy}
+\BerkeleyLightMode
+
+\textbf{PLACE HOLDER FOR COUNTERFACTUAL FIGURE}
+\end{frame}
+
+\begin{frame}{Counterfactual Comparison}
+\phantomsection\label{counterfactual-comparison}
+\BerkeleyLightMode
+
+\textbf{Welfare Summary}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.1351}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.2162}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.2973}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.1486}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.2027}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Scenario
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Avg Close Rate
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\(\Delta\) vs Baseline
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Leak Risk
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\(\Delta\) Risk
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+Baseline & 4.2\% & --- & 1.8\% & --- \\
+Social Opt & 8.1\% & +3.9 pp & 0.9\% & −50\% \\
+Subsidy & 6.5\% & +2.3 pp & 1.2\% & −33\% \\
+Mandate & 5.8\% & +1.6 pp & 1.4\% & −22\% \\
+\bottomrule\noalign{}
+\end{longtable}
+
+\vspace{0.3cm}
+
+\textbf{Ranking} Social Optimum \(>\) Subsidy \(>\) Mandate \(>\)
+Baseline
+\end{frame}
+
+\begin{frame}{Conclusion \& Policy Implications}
+\phantomsection\label{conclusion-policy-implications}
+\BerkeleyMode
+
+\textbf{Findings}
+
+\begin{enumerate}
+\tightlist
+\item
+  \textbf{Risk-based pricing works} +2--3 pp closure rates (DiD)
+\item
+  \textbf{Mechanism is upgrading, not abandonment} Retrofit substitution
+\item
+  \textbf{Welfare-improving but not First Best} Gap to Social Optimum
+  remains
+\end{enumerate}
+
+\textbf{Policy Recommendations}
+
+\begin{itemize}
+\tightlist
+\item
+  Risk-based insurance dominates flat-fee pooling
+\item
+  Targeted \textbf{closure subsidies} for high-risk tanks can close
+  remaining welfare gap
+\item
+  \textbf{Mandates} are less efficient (distort margins not requiring
+  intervention)
+\end{itemize}
+
+\textbf{Broader Implication} Market-based environmental regulation can
+outperform command-and-control when behavioral elasticities are
+sufficient.
+\end{frame}
+
+\end{document}

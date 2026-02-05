@@ -7,6 +7,7 @@
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{hyperref}
+\usepackage{array}      % <--- ADD THIS LINE HERE
 \usepackage[most]{tcolorbox} % REQUIRED for Quarto Callouts
 \usepackage{fontawesome5}    % REQUIRED for Callout Icons
 \usepackage{framed}          % REQUIRED for standard blocks
@@ -103,43 +104,49 @@
 % - Uses Gold ONLY for bullets/accents, not text.
 
 % 4. UC Berkeley Theme (Modern Matte) - FIXED SCOPE
+% 4. UC Berkeley Theme (Modern Matte) - FIXED WITH TITLE REDRAW
 \newcommand{\BerkeleyMode}{
-  % 1. DEFINE COLORS FIRST (Global to the slide)
+  % 1. DEFINE COLORS
   \definecolor{BerkeleyBlue}{HTML}{003262}
   \definecolor{CaliforniaGold}{HTML}{FDB515}
   \definecolor{BerkeleyMatte}{HTML}{0D2D52} 
   \definecolor{SoftWhite}{HTML}{F8F9FA}
 
-  % 2. Draw Background
+  % 2. Draw Background AND Title
   \begin{tikzpicture}[remember picture, overlay]
+    % Background Fill (Covers old title)
     \fill[BerkeleyMatte] (current page.south west) rectangle (current page.north east);
-    % Accent Strip
+    % Gold Accent Strip
     \fill[CaliforniaGold] (current page.south west) rectangle ($$(current page.north west)+(0.15cm,0)$$);
+    % REDRAW TITLE ON TOP
+    \node[anchor=west, white, font=\Large\bfseries] at ($$(current page.north west)+(1cm,-1cm)$$) {\insertframetitle};
   \end{tikzpicture}
   
-  % 3. Set Text Colors (Now CaliforniaGold is visible here)
+  % 3. Set Text Colors
   \setbeamercolor{normal text}{fg=SoftWhite}
-  \setbeamercolor{frametitle}{fg=white}
+  \setbeamercolor{frametitle}{fg=BerkeleyMatte} % Hide original title to prevent double-vision
   \setbeamercolor{itemize item}{fg=CaliforniaGold} 
   \setbeamercolor{structure}{fg=CaliforniaGold}
-  \setbeamercolor{footline}{fg=white!60!black}
   
   \usebeamercolor[fg]{normal text}
 }
 
-% 5. UC Berkeley Theme (Academic Light) - FIXED SCOPE
+% 5. UC Berkeley Theme (Academic Light) - FIXED WITH TITLE REDRAW
 \newcommand{\BerkeleyLightMode}{
-  % 1. DEFINE COLORS FIRST
+  % 1. DEFINE COLORS
   \definecolor{BerkeleyBlue}{HTML}{003262}
   \definecolor{CaliforniaGold}{HTML}{FDB515}
   
-  % 2. Draw Background
+  % 2. Draw Background AND Title
   \begin{tikzpicture}[remember picture, overlay]
+    % Background Fill
     \fill[white] (current page.south west) rectangle (current page.north east);
-    % Header Bar
+    % Blue Header Bar
     \fill[BerkeleyBlue] (current page.north west) rectangle ($$(current page.north east)+(0,-1.4cm)$$);
     % Gold Line
     \fill[CaliforniaGold] ($$(current page.north west)+(0,-1.4cm)$$) rectangle ($$(current page.north east)+(0,-1.45cm)$$);
+    % REDRAW TITLE ON TOP
+    \node[anchor=west, white, font=\Large\bfseries] at ($$(current page.north west)+(1cm,-0.7cm)$$) {\insertframetitle};
   \end{tikzpicture}
   
   % 3. Set Text Colors
@@ -147,10 +154,10 @@
   \setbeamercolor{frametitle}{fg=white} 
   \setbeamercolor{itemize item}{fg=BerkeleyBlue}
   \setbeamercolor{structure}{fg=BerkeleyBlue}
-  \setbeamercolor{footline}{fg=gray}
   
   \usebeamercolor[fg]{normal text}
 }
+
 
 % -------------------------------------------------------------------------
 % NEW: ACADEMIC POWER LAYOUTS

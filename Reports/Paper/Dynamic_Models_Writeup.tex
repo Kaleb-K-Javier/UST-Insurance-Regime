@@ -166,7 +166,7 @@
 \title{Dynamic Models of Underground Storage Tank Management: Theory,
 Estimation, and Welfare Analysis}
 \author{Kaleb Javier}
-\date{2026-01-22}
+\date{2026-02-04}
 
 \begin{document}
 \maketitle
@@ -498,10 +498,10 @@ Insurance Regimes}
 \toprule
 Insurance Regime & Optimal Upgrade Age\\
 \midrule
-Flat-Fee Pooling & 80 years\\
-Self-Insurance & 30 years\\
-Risk-Rated Private & 18 years\\
-Social Optimum & 7 years\\
+Flat-Fee Pooling & 86 years\\
+Self-Insurance & 8 years\\
+Risk-Rated Private & 13 years\\
+Social Optimum & 1 years\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -511,10 +511,10 @@ equivalent benefit curves \(B(a)\) for all regimes. The vertical
 distance between each curve and the dashed retrofit cost line represents
 the net benefit of upgrading at each age. Risk-rated insurance
 (\textbf{blue}) creates the largest private benefits at younger ages,
-inducing retrofit at 18 years. Self-insurance (\textbf{green}) yields
-intermediate timing at 30 years. Flat-fee pooling (\textbf{purple})
-delays retrofit until 80 years due to minimal private internalization.
-The social optimum (\textbf{red}) occurs even earlier at 7 years,
+inducing retrofit at 13 years. Self-insurance (\textbf{green}) yields
+intermediate timing at 8 years. Flat-fee pooling (\textbf{purple})
+delays retrofit until 86 years due to minimal private internalization.
+The social optimum (\textbf{red}) occurs even earlier at 1 years,
 reflecting external damages not captured by private contracts.
 
 \newpage
@@ -749,172 +749,225 @@ motivates Model B's alternative specification.
 \subsubsection{Motivation and Data
 Constraints}\label{sec-model-b-motivation}
 
-Model A's identification failure stems from two fundamental data
-limitations. First, we lack reliable information on facility-level
-revenues and complete business closures; retail gasoline margins are not
-observed at the facility level, and permanent firm exit is difficult to
-distinguish from temporary closures or ownership transfers in
-administrative records. Second, we observe tank-level closure decisions
-with high precision through state regulatory databases that track when
-individual tanks are permanently removed from service. Model B exploits
-this observable margin by restricting focus to the tank closure
-decision, formulated as a binary optimal stopping problem analogous to
-Rust (1987).
+The structural identification challenges encountered in Model A stem
+fundamentally from data limitations regarding facility-level revenues
+and the unobservability of firm-level exit. Retail gasoline margins are
+not observable at the facility level, and administrative records often
+fail to distinguish permanent firm exit from temporary closures or
+ownership transfers. Conversely, the decision to permanently close an
+individual Underground Storage Tank (UST) is observed with high
+precision in state regulatory databases.
 
-The economic content is preserved: facilities weigh the operational
-costs of maintaining aging tanks (driven by insurance premiums, leak
-hazards, and cleanup costs) against the lump-sum value of closing the
-tank. By eliminating the retrofit action, which requires unobserved
-revenue data to properly value the upgrade option, Model B focuses
-identification on parameters that can be recovered from the observed
-closure margin. This specification acknowledges data limitations while
-maintaining theoretical rigor.
+Model B exploits this observable margin by restricting the estimation to
+a binary tank closure decision, formulated as an optimal stopping
+problem analogous to \citet{rust1987optimal}. By eliminating the
+retrofit action---which requires unobserved revenue data to properly
+value the upgrade option---Model B focuses identification on parameters
+strictly recoverable from the closure margin.
+
+Crucially, this specification extends the standard profit-maximization
+framework by decomposing the facility's objective function. Rather than
+assuming risk neutrality, we introduce distinct behavioral parameters
+for \textbf{price sensitivity} (response to deterministic insurance
+premiums) and \textbf{risk internalization} (response to probabilistic
+environmental liabilities). This separation allows the model to test
+whether facility owners respond differently to immediate, salient costs
+versus future, stochastic risks---a distinction with profound
+implications for regulatory design.
 
 \subsubsection{State Space and Actions}\label{sec-model-b-state}
 
-Model B uses the identical state space as Model A:
-\(x_{it} = (A_{it}, w_{it}, \rho_{it}) \in \mathcal{X}\) with
-\(|\mathcal{X}| = 36 + 1 = 37\) states. The critical difference is the
-restricted action space:
+Model B utilizes the identical state space as Model A:
+\(x_{it} = (A_{it}, w_{it}, \rho_{it}) \in \mathcal{X}\), where
+\(A_{it}\) denotes tank age bin, \(w_{it}\) denotes wall technology
+(single vs.~double), and \(\rho_{it}\) denotes the insurance regime. The
+state space contains \(|\mathcal{X}| = 37\) states (36 transient + 1
+absorbing).
+
+The action space is restricted to
 \(\mathcal{D}(x) = \{\text{maintain}, \text{close}\}\) for all
-non-terminal states. The maintain action (\(d=1\)) continues operating
-the current tank with stochastic aging transitions identical to Model A.
-The close action (\(d=2\)) permanently removes the tank from service,
-pays closure cost \(\kappa\), and transitions to the absorbing closed
-state. This formulation captures the decision of when to optimally stop
-operating a tank given rising age-related costs.
+non-terminal states: * \textbf{Maintain (\(d=1\)):} The facility
+continues operating the current tank. The state evolves according to the
+stochastic aging process \(P(A'|A)\) described in
+Section~\ref{sec-model-a-transitions}. * \textbf{Close (\(d=2\)):} The
+facility permanently removes the tank from service, paying a closure
+cost \(\kappa\), and transitions to the absorbing closed state.
 
-\subsubsection{Modified Flow Utilities}\label{sec-model-b-utilities}
+\subsubsection{Modified Flow Utilities and Behavioral
+Parameters}\label{sec-model-b-utilities}
 
-The key innovation is adding premium preference parameter \(\gamma\) to
-capture heterogeneity in how insurance costs affect continuation values:
+The core theoretical innovation of Model B is the inclusion of a
+three-parameter vector
+\(\theta_B = (\kappa, \gamma_{\text{price}}, \gamma_{\text{risk}})\)
+that captures latent heterogeneity in cost sensitivity. The per-period
+flow utility is specified as:
 
 \[
-u(x, d; \theta, \gamma) = 
+u(x, d; \theta_B) = 
 \begin{cases}
-\psi(x) + \gamma \cdot p(x) - h(x)\ell(x) + \varepsilon_{\text{maintain}} & \text{if } d = \text{maintain} \\
+\psi(x) + \gamma_{\text{price}} \cdot p(x) - \gamma_{\text{risk}} \cdot [h(x)\ell(x)] + \varepsilon_{\text{maintain}} & \text{if } d = \text{maintain} \\
 \kappa + \varepsilon_{\text{close}} & \text{if } d = \text{close}
 \end{cases}
 \]
 
-The parameter \(\gamma\) represents the marginal utility of insurance
-premiums. When \(\gamma = -1\), premiums reduce utility
-dollar-for-dollar as in the standard model. Values \(\gamma < -1\)
-indicate facilities are more sensitive to premiums than the base model,
-potentially reflecting liquidity constraints or heightened attention to
-insurance costs. Values \(-1 < \gamma < 0\) suggest facilities partially
-disregard premiums, consistent with inattention or the presence of other
-offsetting benefits. Values \(\gamma > 0\) would indicate facilities
-derive positive utility from insurance beyond actuarial cost, though
-this is economically implausible in most contexts.
+\textbf{1. Premium Sensitivity (\(\gamma_{\text{price}}\)):} This
+parameter captures the marginal utility of insurance premium payments.
+In a standard neoclassical model, \(\gamma_{\text{price}} = -1\). *
+Estimates of \(\gamma_{\text{price}} < -1\) indicate \textbf{premium
+hypersensitivity}, suggesting that explicit, monthly insurance bills are
+more salient to owners than implicit costs, or that facilities face
+liquidity constraints that make cash outflows particularly painful. *
+Estimates where \(-1 < \gamma_{\text{price}} < 0\) would suggest
+\textbf{inattention}, where owners partially disregard fixed costs in
+their closure decisions.
 
-By allowing \(\gamma\) to vary from the standard normalization, Model B
-creates variation in continuation values across insurance regimes that
-helps identify the closure threshold \(\kappa\). Facilities with
-identical physical characteristics \((A, w)\) but different insurance
-regimes \(\rho\) now exhibit differential continuation values
-proportional to \(\gamma \cdot [p^{RB}(x) - p^{FF}(x)]\), breaking the
-collinearity problem that plagued Model A.
+\textbf{2. Risk Internalization (\(\gamma_{\text{risk}}\)):} This
+parameter measures the degree to which the facility internalizes the
+expected environmental loss, defined as the product of leak hazard
+\(h(x)\) and cleanup cost \(\ell(x)\). * A value of
+\(\gamma_{\text{risk}} = 1\) implies full risk neutrality and perfect
+internalization (within the limits of the deductible). * A value of
+\(\gamma_{\text{risk}} < 1\) indicates \textbf{risk myopia} or
+\textbf{undervaluation}, where facilities discount low-probability,
+high-severity events more heavily than actuarial models predicts. * This
+parameter is critical for policy: if \(\gamma_{\text{risk}}\) is low,
+liability-based regulations (which rely on the threat of future costs)
+will be less effective than ex-ante pricing mechanisms (which rely on
+\(\gamma_{\text{price}}\)).
 
-\subsubsection{Parameter Vector}\label{sec-model-b-parameters}
+\textbf{3. Closure Value (\(\kappa\)):} The parameter \(\kappa\)
+represents the net lump-sum value of exiting the market. This structural
+parameter aggregates the scrap value of the tank, the opportunity cost
+of the land, and the avoidance of future fixed overhead, net of
+decommissioning costs.
 
-Model B estimates
-\(\theta_B = (\kappa, \gamma) \in \Theta_B = \mathbb{R} \times \mathbb{R}\)
-where \(\kappa\) is the closure value (now identifiable through the
-binary stopping problem) and \(\gamma\) is the premium preference
-parameter. The discount factor \(\beta\) and scale parameter \(\sigma\)
-are calibrated as in Model A. All auxiliary functions (premiums
-\(p(x)\), hazards \(h(x)\), losses \(\ell(x)\)) are estimated from the
-same data sources.
+\subsubsection{Parameter Vector and
+Estimation}\label{sec-model-b-parameters}
+
+The structural parameter vector to be estimated is
+\(\theta_B = (\kappa, \gamma_{\text{price}}, \gamma_{\text{risk}}) \in \mathbb{R}^3\).
+The discount factor \(\beta\) and scale parameter \(\sigma\) are
+calibrated as in Model A. The auxiliary functions---premium schedule
+\(p(x)\), hazard rate \(h(x)\), and expected loss \(\ell(x)\)---are
+estimated in a first stage from the auxiliary data sources detailed in
+Section~\ref{sec-identification}.
 
 \subsubsection{Identification Strategy for Model
 B}\label{sec-model-b-identification}
 
-\begin{proposition}[Joint Identification of $(\kappa, \gamma)$]
-With binary choice structure, the parameters $(\kappa, \gamma)$ are jointly identified from:
+A central advantage of Model B is its transparent identification
+argument. The three parameters are jointly identified by exploiting
+orthogonal sources of variation in the data.
+
+\begin{proposition}[Joint Identification of Behavioral Parameters]
+The parameters $(\kappa, \gamma_{\text{price}}, \gamma_{\text{risk}})$ are identified from the conditional closure probabilities $P(d=\text{close} \mid A, w, \rho)$ as follows:
 \begin{enumerate}
-\item Tank closure hazard variation across age bins identifies $\kappa$
-\item Differential closure response to premium changes across regimes identifies $\gamma$
+\item **$\kappa$ (Intercept):** Identified by the average closure rate across all states.
+\item **$\gamma_{\text{price}}$ (Policy Variation):** Identified by the differential closure response to the exogenous premium shock in Texas (Flat-Fee vs. Risk-Based regimes).
+\item **$\gamma_{\text{risk}}$ (Physical Variation):** Identified by the slope of the closure hazard with respect to tank age, controlling for premiums.
 \end{enumerate}
 \end{proposition}
 
-\textbf{Proof sketch:} (1) The closure hazard satisfies
-\(h^{\text{close}}(A, w, \rho; \kappa, \gamma) = P(d=\text{close} \mid A, w, \rho; \kappa, \gamma)\).
-The age profile of closure decisions pins down \(\kappa\) through the
-first-order condition defining the optimal stopping age: the facility
-closes when \(\kappa \geq \mathbb{E}[\text{continuation value}]\).
-Variation in \(A\) provides multiple moment conditions across the age
-distribution. (2) The regime difference in closure hazards identifies
-\(\gamma\) through
-\(\Delta h^{\text{close}}_{\text{RB} - \text{FF}}(A) = P(\text{close} \mid A, \text{RB}) - P(\text{close} \mid A, \text{FF})\).
-Since premium differential
-\(\Delta p_{\text{RB} - \text{FF}}(A) = p^{\text{RB}}(A) - p^{\text{FF}}\)
-varies with age while hazards and losses are regime-invariant, the
-regime gradient in closure choices identifies \(\gamma\). \(\square\)
+\textbf{Proof Sketch:} Consider the difference in latent utility between
+maintaining and closing,
+\(\Delta v(x) = v(x, \text{maintain}) - \kappa\). The closure
+probability is strictly decreasing in \(\Delta v(x)\).
 
-The empirical moments matched in estimation include closure hazard by
-age bin \(\{h^{\text{close}}(A)\}_{A=1}^{9}\), regime effect on closure
-\(\Delta h^{\text{close}}_{\text{RB} - \text{FF}}(A)\), and age
-distribution (share of tanks in each bin by wall type). These moment
-conditions overidentify the 2-parameter vector \((\kappa, \gamma)\).
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  \textbf{Identification of \(\gamma_{\text{price}}\):} Consider two
+  facilities with identical physical characteristics (same age \(A\),
+  same technology \(w\)) but operating under different insurance regimes
+  \(\rho_1\) (Flat-Fee) and \(\rho_2\) (Risk-Based). The physical risk
+  term \(\gamma_{\text{risk}} h(x)\ell(x)\) cancels out in the
+  difference. The difference in their continuation values is driven
+  primarily by the premium differential:
+  \(\gamma_{\text{price}} [p(A, \rho_1) - p(A, \rho_2)]\). Since the
+  premium shock is observed and exogenous, the magnitude of the shift in
+  closure probability across the regime boundary pins down
+  \(\gamma_{\text{price}}\).
+\item
+  \textbf{Identification of \(\gamma_{\text{risk}}\):} Consider
+  facilities within a single regime. As tanks age, the physical leak
+  hazard \(h(A)\) increases non-linearly (convexly). While premiums may
+  also rise with age, the premium schedule \(p(A)\) is a deterministic
+  function. The parameter \(\gamma_{\text{risk}}\) is identified by the
+  ``excess'' closure rate among older tanks that cannot be explained by
+  the premium increase alone. If facilities are myopic
+  (\(\gamma_{\text{risk}} \approx 0\)), closure rates will track the
+  premium schedule. If facilities internalize risk
+  (\(\gamma_{\text{risk}} > 0\)), closure rates will accelerate
+  non-linearly with age, matching the shape of the hazard function
+  \(h(A)\).
+\item
+  \textbf{Identification of \(\kappa\):} With the sensitivities
+  \(\gamma_{\text{price}}\) and \(\gamma_{\text{risk}}\) fixed, the
+  overall level of the closure curve determines \(\kappa\). A higher
+  scrap value shifts the optimal stopping threshold to earlier ages
+  uniformly across all states. \(\square\)
+\end{enumerate}
 
 \subsubsection{Bellman Equation and CCPs}\label{sec-model-b-bellman}
 
-The Bellman equation structure follows the standard binary logit form:
+The Bellman equation for Model B follows the standard binary logit form:
 
 \[
-V_B(x; \kappa, \gamma) = \sigma \log\left(\sum_{d \in \{\text{maintain}, \text{close}\}} \exp\left(\frac{v_B(x, d; \kappa, \gamma)}{\sigma}\right)\right) + \sigma \gamma_E
+V_B(x; \theta_B) = \sigma \log\left( \exp\left(\frac{v_B(x, \text{maintain}; \theta_B)}{\sigma}\right) + \exp\left(\frac{v_B(x, \text{close}; \theta_B)}{\sigma}\right) \right) + \sigma \gamma_E
 \]
 
-where the choice-specific value functions are:
+Where the choice-specific value functions are:
 
 \begin{align*}
-v_B(x, \text{maintain}; \kappa, \gamma) &= \psi(x) + \gamma \cdot p(x) - h(x)\ell(x) + \beta \sum_{x'} P(x' \mid x, \text{maintain}) V_B(x'; \kappa, \gamma) \\
-v_B(x, \text{close}; \kappa, \gamma) &= \kappa
+v_B(x, \text{maintain}; \theta_B) &= \psi(x) + \gamma_{\text{price}} p(x) - \gamma_{\text{risk}} h(x)\ell(x) + \beta \sum_{x'} P(x' \mid x, \text{maintain}) V_B(x'; \theta_B) \\
+v_B(x, \text{close}; \theta_B) &= \kappa
 \end{align*}
 
-Choice probabilities follow the standard logit form:
+The conditional choice probabilities (CCPs) used in the NPL estimation
+are:
 
 \[
-P_B(d \mid x; \kappa, \gamma) = \frac{\exp\left(\frac{v_B(x, d; \kappa, \gamma)}{\sigma}\right)}{\exp\left(\frac{v_B(x, \text{maintain}; \kappa, \gamma)}{\sigma}\right) + \exp\left(\frac{v_B(x, \text{close}; \kappa, \gamma)}{\sigma}\right)}
+P_B(\text{close} \mid x; \theta_B) = \frac{\exp(\kappa / \sigma)}{\exp(v_B(x, \text{maintain}; \theta_B) / \sigma) + \exp(\kappa / \sigma)}
 \]
 
 \subsubsection{Advantages of Model B}\label{sec-model-b-advantages}
 
-Model B offers several advantages over Model A. First, identification is
-substantially improved; by focusing on the observable closure margin and
-introducing \(\gamma\) to create cross-regime variation, both parameters
-\((\kappa, \gamma)\) are jointly well-identified with condition number
-below 50 in Monte Carlo experiments. Second, the binary structure has
-transparent economic interpretation; \(\kappa\) represents the value of
-tank closure (inclusive of salvage value, remediation costs, and
-opportunity cost of land), while \(\gamma\) captures facility-level
-heterogeneity in insurance cost sensitivity. Third, estimation is
-computationally more efficient; the binary choice problem requires
-solving only two value functions per state rather than three, reducing
-computational burden. Fourth, robustness to data limitations is
-enhanced; Model B does not require unobserved revenue data or accurate
-measurement of complete firm exit, only the observable margin of tank
-closure.
+Model B provides a robust and computationally efficient framework for
+analyzing the extensive margin of UST management. 1. \textbf{Robust
+Identification:} By decoupling price and risk sensitivities, the model
+leverages the specific structure of the data---where policy variation
+and physical aging are distinct---to recover parameters with high
+precision. Monte Carlo experiments confirm condition numbers \(< 50\).
+2. \textbf{Behavioral Insight:} The split between
+\(\gamma_{\text{price}}\) and \(\gamma_{\text{risk}}\) allows us to
+explicitly test for ``salience effects'' and ``moral hazard.'' Finding
+that \(|\gamma_{\text{price}}| > \gamma_{\text{risk}}\) would suggest
+that explicit price signals are more effective policy tools than
+liability threats. 3. \textbf{Data Fidelity:} The model relies solely on
+high-quality administrative data regarding tank closures, avoiding
+reliance on noisy or imputed revenue data. 4. \textbf{Computational
+Efficiency:} With a binary action space, the computational burden of the
+NPL algorithm is significantly reduced, facilitating extensive
+counterfactual analysis.
 
 \subsubsection{Limitations}\label{sec-model-b-limitations}
 
-Model B sacrifices the ability to analyze retrofit policies directly.
-Without the retrofit action in the choice set, we cannot compute
-counterfactual effects of retrofit subsidies or technology mandates.
-However, for policy questions focused on tank closure patterns,
-environmental risk reduction through facility exit, and optimal
-insurance pricing, Model B provides credible estimates despite limited
-data. Extensions could incorporate retrofit as a pre-decision stage,
-treating it as exogenous to the closure decision and focusing
-identification on the stopping problem conditional on technology choice.
+The primary limitation of Model B is the exclusion of the retrofit
+action. Without explicitly modeling the upgrade decision, we cannot
+directly simulate the impact of retrofit subsidies. However, for the
+primary research questions---regarding the efficiency of insurance
+pricing and the timing of facility exit---Model B provides the most
+credible structural estimates. The parameters recovered here
+(\(\gamma_{\text{price}}, \gamma_{\text{risk}}\)) can be interpreted as
+``reduced-form structural'' parameters that implicitly account for the
+option value of retrofitting in the continuation value.
 
 \newpage
 
 \subsection{Model Comparison and Selection}\label{sec-model-comparison}
 
-\textbf{?@tbl-model-comparison} summarizes key differences between
-Models A and B.
+\textbf{?@tbl-model-comparison} summarizes key differences between the
+specifications.
 
 \begin{table}[H]
 \caption{Comparison of Model A and Model B Specifications}\tabularnewline
@@ -928,26 +981,27 @@ Feature & Model A & Model B\\
 \midrule
 \textbf{State Space Dimension} & 37 states (9 age $\times$ 2 wall $\times$ 2 regime + exit) & 37 states (identical to Model A)\\
 \textbf{Action Set} & Maintain, Exit, Retrofit & Maintain, Close\\
-\textbf{Parameters Estimated} & $\phi, \kappa$ & $\kappa, \gamma$\\
+\textbf{Parameters Estimated} & $\phi, \kappa$ & $\kappa, \gamma_{\text{price}}, \gamma_{\text{risk}}$\\
 \textbf{Parameters Calibrated} & $\beta, \sigma$ & $\beta, \sigma$\\
 \textbf{Retrofit Cost $\phi$ Identified?} & Yes (eigenvalue $\approx 150$) & N/A (action removed)\\
 \addlinespace
 \textbf{Exit Value $\kappa$ Identified?} & No (eigenvalue $\approx 0.8$) & Yes (binary stopping identifies)\\
-\textbf{Premium Parameter $\gamma$ Identified?} & N/A (not included) & Yes (eigenvalue $\approx 120$)\\
+\textbf{Behavioral Parameters?} & No (Implicitly fixed at -1) & Yes (Separates Price vs. Risk sensitivity)\\
 \textbf{Hessian Condition Number} & $\approx 200$ (poor) & $< 50$ (good)\\
-\textbf{Primary Use Case} & Illustrates identification failure & Preferred specification for closure analysis\\
+\textbf{Primary Use Case} & Illustrates identification failure & Preferred for closure and pricing analysis\\
 \textbf{Limitation} & $\kappa$ unidentified, flat likelihood & Cannot analyze retrofit policies\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
 \end{table}
 
-\textbf{Recommendation:} Use Model B for primary analysis of tank
-closure decisions and insurance pricing effects. Model A serves as
-diagnostic tool to demonstrate identification challenges inherent in the
-three-action specification. For policy questions requiring retrofit
-analysis, employ reduced-form methods or extend Model B with
-pre-decision technology stage.
+Recommendation: Model B is selected for the primary empirical analysis.
+While Model A is theoretically more general, the data do not support the
+simultaneous identification of exit and retrofit parameters. Model B's
+focus on the observable closure margin, combined with its richer
+behavioral specification (\(\gamma_{\text{price}}\) vs
+\(\gamma_{\text{risk}}\)), provides the robust foundation necessary for
+credible counterfactual policy analysis.
 
 \newpage
 
