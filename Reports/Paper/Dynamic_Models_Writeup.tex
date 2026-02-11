@@ -166,7 +166,7 @@
 \title{Dynamic Models of Underground Storage Tank Management: Theory,
 Estimation, and Welfare Analysis}
 \author{Kaleb Javier}
-\date{2026-02-04}
+\date{2026-02-09}
 
 \begin{document}
 \maketitle
@@ -498,10 +498,10 @@ Insurance Regimes}
 \toprule
 Insurance Regime & Optimal Upgrade Age\\
 \midrule
-Flat-Fee Pooling & 86 years\\
-Self-Insurance & 8 years\\
-Risk-Rated Private & 13 years\\
-Social Optimum & 1 years\\
+Flat-Fee Pooling & Never\\
+Self-Insurance & Never\\
+Risk-Rated Private & Never\\
+Social Optimum & 79 years\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -511,10 +511,10 @@ equivalent benefit curves \(B(a)\) for all regimes. The vertical
 distance between each curve and the dashed retrofit cost line represents
 the net benefit of upgrading at each age. Risk-rated insurance
 (\textbf{blue}) creates the largest private benefits at younger ages,
-inducing retrofit at 13 years. Self-insurance (\textbf{green}) yields
-intermediate timing at 8 years. Flat-fee pooling (\textbf{purple})
-delays retrofit until 86 years due to minimal private internalization.
-The social optimum (\textbf{red}) occurs even earlier at 1 years,
+inducing retrofit at NA years. Self-insurance (\textbf{green}) yields
+intermediate timing at NA years. Flat-fee pooling (\textbf{purple})
+delays retrofit until NA years due to minimal private internalization.
+The social optimum (\textbf{red}) occurs even earlier at 79 years,
 reflecting external damages not captured by private contracts.
 
 \newpage
@@ -538,6 +538,52 @@ Flat-Fee.
 vs.~Social DWL}
 
 \end{figure}%
+
+\begin{verbatim}
+
+=== SOC PURE CONTINUATION VALUE (Every 10 ages) ===
+\end{verbatim}
+
+\begin{verbatim}
+Ages 0-70: 809008 710447 589062 450608 298991 138174 -26808 -188648 
+\end{verbatim}
+
+\begin{verbatim}
+Should be: Monotonically decreasing (no floor)
+\end{verbatim}
+
+\begin{verbatim}
+=== FLAT-FEE PURE CONTINUATION VALUE (Every 10 ages) ===
+\end{verbatim}
+
+\begin{verbatim}
+Ages 0-70: 960000 960000 960000 960000 960000 960000 960000 960000 
+\end{verbatim}
+
+\begin{verbatim}
+Should be: Nearly flat (small decreases only from discounting)
+\end{verbatim}
+
+\begin{verbatim}
+=== EXIT THRESHOLDS ===
+\end{verbatim}
+
+\begin{verbatim}
+Social Optimum exits at age: 27 
+\end{verbatim}
+
+\begin{verbatim}
+Risk-Rated exits at age: 55 
+\end{verbatim}
+
+\begin{verbatim}
+Flat-Fee exits at age: 100 
+\end{verbatim}
+
+\begin{verbatim}
+
+✓ All 7 figures saved to: Output/Figures/Slides_Fixed 
+\end{verbatim}
 
 \newpage
 

@@ -1931,11 +1931,17 @@ generate_model_b_data_annual <- function(N_facilities = 1000,
   # ----------------------------------------------------------------------------
   # D. Auxiliary Variables (Flow Utility Inputs)
   # ----------------------------------------------------------------------------
-  premiums <- params$p_FF_annual + 
-    ifelse(states$rho == "RB", params$p0_RB_annual, 0) +
-    ifelse(states$w == "single", params$p_single_RB_annual, 0) +
-    (states$A - 1) * params$p_age_RB_annual
-  
+ #FF: flat premium (pooling contract, no risk variation)
+  # RB: base + wall-type surcharge + age surcharge (risk-priced)
+  is_RB <- (states$rho == "RB")
+
+  premiums <- ifelse(is_RB,
+    params$p0_RB_annual +
+      (states$w == "single") * params$p_single_RB_annual +
+      (states$A - 1) * params$p_age_RB_annual,
+    params$p_FF_annual
+  )
+
   hazards <- pmin(pmax(params$h0 + 
                          (states$w == "single") * params$h_single + 
                          params$h_age * states$A, 0.001), 0.60) # Cap at 60%

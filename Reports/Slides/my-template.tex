@@ -11,6 +11,8 @@
 \usepackage[most]{tcolorbox} % REQUIRED for Quarto Callouts
 \usepackage{fontawesome5}    % REQUIRED for Callout Icons
 \usepackage{framed}          % REQUIRED for standard blocks
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
 
 % Fix for Pandoc's "tightlist"
 \providecommand{\tightlist}{%
@@ -52,6 +54,10 @@
 % 5. Caution (Yellow/Gold)
 \definecolor{quarto-callout-caution-color}{HTML}{F1C40F}
 \definecolor{quarto-callout-caution-color-frame}{HTML}{D4AC0D}
+
+% Add this right before \begin{document}
+\newcommand{\Est}[1]{\textcolor{quarto-callout-important-color}{\mathbf{#1}}}
+
 
 % -------------------------------------------------------------------------
 % NEW: COLOR THEME COMMANDS (Robust Single-Slide Overrides)
@@ -96,22 +102,18 @@
   \usebeamercolor[fg]{normal text}
 }
 
+% -------------------------------------------------------------------------
+% 4. UC BERKELEY THEME (Modern Matte) - FIXED SCOPE
+% -------------------------------------------------------------------------
 
+% 1. DEFINE COLORS GLOBALLY (Required for assumptionbox and modes)
+\definecolor{BerkeleyBlue}{HTML}{003262}
+\definecolor{CaliforniaGold}{HTML}{FDB515}
+\definecolor{BerkeleyMatte}{HTML}{0D2D52} 
+\definecolor{SoftWhite}{HTML}{F8F9FA}
 
 % 4. UC Berkeley Theme (Modern Matte)
-% A softer, less aggressive dark mode.
-% - Uses a slightly desaturated blue to reduce eye strain.
-% - Uses Gold ONLY for bullets/accents, not text.
-
-% 4. UC Berkeley Theme (Modern Matte) - FIXED SCOPE
-% 4. UC Berkeley Theme (Modern Matte) - FIXED WITH TITLE REDRAW
 \newcommand{\BerkeleyMode}{
-  % 1. DEFINE COLORS
-  \definecolor{BerkeleyBlue}{HTML}{003262}
-  \definecolor{CaliforniaGold}{HTML}{FDB515}
-  \definecolor{BerkeleyMatte}{HTML}{0D2D52} 
-  \definecolor{SoftWhite}{HTML}{F8F9FA}
-
   % 2. Draw Background AND Title
   \begin{tikzpicture}[remember picture, overlay]
     % Background Fill (Covers old title)
@@ -124,18 +126,16 @@
   
   % 3. Set Text Colors
   \setbeamercolor{normal text}{fg=SoftWhite}
-  \setbeamercolor{frametitle}{fg=BerkeleyMatte} % Hide original title to prevent double-vision
+  \setbeamercolor{frametitle}{fg=BerkeleyMatte} % Hide original title
   \setbeamercolor{itemize item}{fg=CaliforniaGold} 
   \setbeamercolor{structure}{fg=CaliforniaGold}
   
   \usebeamercolor[fg]{normal text}
 }
 
-% 5. UC Berkeley Theme (Academic Light) - FIXED WITH TITLE REDRAW
+% 5. UC Berkeley Theme (Academic Light)
 \newcommand{\BerkeleyLightMode}{
-  % 1. DEFINE COLORS
-  \definecolor{BerkeleyBlue}{HTML}{003262}
-  \definecolor{CaliforniaGold}{HTML}{FDB515}
+  % (Color definitions removed here as they are now global)
   
   % 2. Draw Background AND Title
   \begin{tikzpicture}[remember picture, overlay]
@@ -157,7 +157,6 @@
   
   \usebeamercolor[fg]{normal text}
 }
-
 
 % -------------------------------------------------------------------------
 % NEW: ACADEMIC POWER LAYOUTS
@@ -313,6 +312,25 @@ $endif$
 
 \newcommand{\hidefootersection}{\global\toggletrue{hidesection}}
 \newcommand{\showfootersection}{\global\togglefalse{hidesection}}
+
+
+% -------------------------------------------------------------------------
+% CUSTOM BERKELEY CALLOUT BOX
+% -------------------------------------------------------------------------
+\newtcolorbox{assumptionbox}[1]{
+  enhanced,
+  colback=SoftWhite,       % White-ish background
+  colframe=CaliforniaGold, % Gold Border
+  coltitle=SoftWhite,      % White Title Text
+  colbacktitle=BerkeleyMatte, % Berkeley Blue Title Background
+  title={#1},
+  fonttitle=\bfseries\small,
+  arc=2pt,                 % Slight rounded corners
+  boxrule=1pt,             % Thin elegant border
+  left=5pt, right=5pt, top=5pt, bottom=5pt, % Padding
+  titlerule=0pt,
+  width=\linewidth
+}
 
 % -------------------------------------------------------------------------
 % 6. DOCUMENT BODY

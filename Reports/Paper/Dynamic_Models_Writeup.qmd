@@ -187,8 +187,8 @@ library(kableExtra)
 
 # 1. CORE PARAMETERS
 # R=115k puts the Flat-Fee line at ~2.3M (visible below the 2.5M axis limit)
-R_annual <- 110000      
-v_scrap  <- 600000      # High scrap value floor
+R_annual <- 70000      
+v_scrap  <- 800000      # High scrap value floor
 beta     <- 0.95        # Discount factor
 L        <- 125000      # Liability magnitude
 
@@ -201,7 +201,7 @@ c_U <- 700000
 y_sw <- function(a, z_mult = 1.0) {
   base_prob <- 0.005
   # Coefficient 0.000025 puts the intersection around age 40-45
-  aging_risk <- 0.0015*a  + .0004* (a^2) 
+  aging_risk <- 0.0008 * (a^1.5)
   return((base_prob + aging_risk) * z_mult)
 }
 
@@ -247,11 +247,13 @@ solve_regime <- function(regname, params, c_U, z = 1.0) {
     cont_DW <- R_annual - params$p_func(a, ydw_vec[ia]) - ydw_vec[ia]*D_vec[ia] + beta*W_DW[ia+1]
     W_DW[ia] <- max(cont_DW, v_scrap)
     cont_SW <- R_annual - pvec[ia] - ysw_vec[ia]*D_vec[ia] + beta*W_SW[ia+1]
-    upg_SW  <- R_annual - p_dw0 - ydw_vec[1]*D_vec[1] - c_U + beta*W_DW[2]
+    #upg_SW  <- R_annual - p_dw0 - ydw_vec[1]*D_vec[1] - c_U + beta*W_DW[2]
     
     # Store Continuation Value (Maintained Tank) separate from Max Value
     V_cont[ia] <- cont_SW
-    W_SW[ia] <- max(cont_SW, upg_SW, v_scrap)
+    #W_SW[ia] <- max(cont_SW, upg_SW, v_scrap)
+    # Change max() to only consider continuation vs scrap:
+   W_SW[ia] <- max(cont_SW, v_scrap)
   }
  
   # Benefit & Thresholds
@@ -947,6 +949,693 @@ p7 <- plot_base(c("Social Optimum", "Risk-Rated"), exclude_y = "Risk-Rated") +
 ggsave(file.path(slide_dir, "Slide_Fig_7_Combined_DWL.pdf"), p7, width = PLOT_W, height = PLOT_H)
 
 ```
+
+```{r, toy-model-setup-fixed}
+# ==============================================================================
+# FIXED: Pure Continuation Values for Clean Slide Pedagogy
+# ==============================================================================
+
+library(data.table)
+library(ggplot2)
+
+# 1. CORE PARAMETERS
+R_annual <- 50000      
+v_scrap  <- 500000      
+beta     <- 0.95        
+L        <- 155000      
+
+# 2. SMOOTH RISK FUNCTION
+y_sw <- function(a, z_mult = 1.0) {
+  base_prob <- 0.005
+  aging_risk <- 0.00025  * (a^1.5)
+  return((base_prob + aging_risk) * z_mult)
+}
+
+y_dw <- function(a, z_mult = 1.0) {
+  return(0.05 * y_sw(0, z_mult)) 
+}
+
+# 3. REGIMES
+regimes <- list(
+  F = list(
+    name = "Flat-Fee Pooling", 
+    color = "#F1C40F", 
+    p_func = function(a, y) 2000, 
+    D = 0
+  ),
+  R = list(
+    name = "Risk-Rated Private", 
+    color = "#377EB8", 
+    p_func = function(a, y) (1 - 0.15) * y * (L*.9), 
+    D = 0.25 * L
+  ),
+  SOC = list(
+    name = "Social Optimum", 
+    color = "#E41A1C", 
+    p_func = function(a, y) 0,  
+    D = function(a) L + .9 * L
+  )
+)
+
+# 4. SOLVER WITH SEPARATE PURE CONTINUATION VALUE
+solve_regime_pure <- function(regname, params, z = 1.0) {
+  Amax <- 100 
+  ages <- 0:Amax
+  n <- length(ages)
+  
+  # Risk and premium vectors
+  ysw_vec <- sapply(ages, function(a) y_sw(a, z))
+  pvec <- if(regname %in% c("F", "SOC")) {
+    rep(params$p_func(0,0), n) 
+  } else {
+    sapply(ages, function(a) params$p_func(a, ysw_vec[a+1]))
+  }
+  D_vec <- if(is.function(params$D)) {
+    sapply(ages, params$D) 
+  } else {
+    rep(params$D, n)
+  }
+  
+  # TWO SEPARATE VALUE FUNCTIONS
+  V_pure <- numeric(n + 1)  # Pure continuation (no exit option)
+  W_opt <- numeric(n + 1)   # Optimal value (with exit option)
+  
+  V_pure[n + 1] <- -Inf     # Terminal value irrelevant (goes far out)
+  W_opt[n + 1] <- v_scrap   # Terminal value is scrap
+  
+  # === KEY CHANGE: TWO-PASS ALGORITHM ===
+  
+  # PASS 1: Compute PURE continuation value (forced to continue forever)
+  # Work backwards assuming you MUST keep operating
+  for (ia in seq(n, 1)) {
+    a <- ia - 1
+    flow <- R_annual - pvec[ia] - ysw_vec[ia]*D_vec[ia]
+    
+    # Pure continuation: recursively reference PURE future value
+    # This creates a value that keeps falling (no floor)
+    if (ia == n) {
+      # At horizon, use very long tail approximation
+      V_pure[ia] <- flow / (1 - beta)  # Infinite horizon approximation
+    } else {
+      V_pure[ia] <- flow + beta * V_pure[ia+1]
+    }
+  }
+  
+  # PASS 2: Compute OPTIMAL value (with exit option)
+  # This determines WHERE to exit
+  for (ia in seq(n, 1)) {
+    a <- ia - 1
+    flow <- R_annual - pvec[ia] - ysw_vec[ia]*D_vec[ia]
+    cont_val <- flow + beta * W_opt[ia+1]
+    W_opt[ia] <- max(cont_val, v_scrap)
+  }
+  
+  # Find exit threshold - uses V_pure which is what we plot
+  exit_idx <- which(V_pure[1:n] <= v_scrap)
+  a_exit <- if(length(exit_idx) > 0) (exit_idx[1] - 1) else Amax
+
+  return(list(
+    name = params$name, 
+    age = ages, 
+    a_exit = a_exit, 
+    V_pure = V_pure[1:n],  # This is what we plot - keeps falling!
+    W_opt = W_opt[1:n],    # Optimal value (for reference)
+    color = params$color
+  ))
+}
+
+# 5. GENERATE DATA
+results <- lapply(names(regimes), function(r) {
+  solve_regime_pure(r, regimes[[r]], z=1.0)
+})
+names(results) <- names(regimes)
+
+# 6. DIAGNOSTIC: Check that values keep falling
+cat("\n=== SOC PURE CONTINUATION VALUE (Every 10 ages) ===\n")
+soc_vals <- results$SOC$V_pure[seq(1, 71, 10)]
+cat("Ages 0-70:", round(soc_vals, 0), "\n")
+cat("Should be: Monotonically decreasing (no floor)\n\n")
+
+cat("=== FLAT-FEE PURE CONTINUATION VALUE (Every 10 ages) ===\n")
+ff_vals <- results$F$V_pure[seq(1, 71, 10)]
+cat("Ages 0-70:", round(ff_vals, 0), "\n")
+cat("Should be: Nearly flat (small decreases only from discounting)\n\n")
+
+# ==============================================================================
+# GENERATE SLIDE FIGURES
+# ==============================================================================
+
+slide_dir <- "Output/Figures/Slides_Fixed"
+dir.create(slide_dir, recursive = TRUE, showWarnings = FALSE)
+
+PLOT_W <- 10
+PLOT_H <- 5.625
+PLOT_MAX_AGE <- 70  
+PLOT_MAX_Y <- 1200000 
+
+COL_SOC <- "#E41A1C" 
+COL_RB  <- "#377EB8"
+COL_FF  <- "#F1C40F" 
+COL_SCRAP <- "grey40"
+
+# Data for plotting - Using V_pure instead of V_cont
+dt_all <- rbind(
+  data.table(age = results$F$age, V_cont = results$F$V_pure, regime = "Flat-Fee"),
+  data.table(age = results$R$age, V_cont = results$R$V_pure, regime = "Risk-Rated"),
+  data.table(age = results$SOC$age, V_cont = results$SOC$V_pure, regime = "Social Optimum")
+)
+dt_all[, regime := factor(regime, levels = c("Social Optimum", "Risk-Rated", "Flat-Fee"))]
+
+# Line endpoints for labels
+y_end_SOC <- dt_all[regime == "Social Optimum" & age == PLOT_MAX_AGE, V_cont]
+y_end_RB  <- dt_all[regime == "Risk-Rated" & age == PLOT_MAX_AGE, V_cont]
+y_end_FF  <- dt_all[regime == "Flat-Fee" & age == PLOT_MAX_AGE, V_cont]
+
+# Exit thresholds
+exit_SOC <- results$SOC$a_exit
+exit_R   <- results$R$a_exit
+exit_F   <- results$F$a_exit
+
+cat("=== EXIT THRESHOLDS ===\n")
+cat("Social Optimum exits at age:", exit_SOC, "\n")
+cat("Risk-Rated exits at age:", exit_R, "\n")
+cat("Flat-Fee exits at age:", exit_F, "\n\n")
+
+# Intersection points
+points_dt <- data.table(
+  age = c(exit_SOC, exit_R, exit_F),
+  V_cont = v_scrap,
+  regime = factor(c("Social Optimum", "Risk-Rated", "Flat-Fee"), 
+                  levels = c("Social Optimum", "Risk-Rated", "Flat-Fee")),
+  label_x = c("a[SOC]^'*'", "a[RB]^'*'", "a[UP]^'*'") 
+)
+
+# Y-axis intercepts
+y_starts <- dt_all[age == 0, .(regime, V_cont)]
+
+# ==============================================================================
+# HELPER FUNCTIONS (DEFINED ONCE)
+# ==============================================================================
+
+# Helper for Y-Axis
+make_y_scale <- function(regimes_to_show, exclude_intercepts = NULL) {
+  breaks <- c(v_scrap)
+  labels <- c(expression(kappa))
+  
+  if ("Social Optimum" %in% regimes_to_show && !("Social Optimum" %in% exclude_intercepts)) {
+    breaks <- c(breaks, y_starts[regime=="Social Optimum", V_cont])
+    labels <- c(labels, expression(V[SOC](0)))
+  }
+  if ("Risk-Rated" %in% regimes_to_show && !("Risk-Rated" %in% exclude_intercepts)) {
+    breaks <- c(breaks, y_starts[regime=="Risk-Rated", V_cont])
+    labels <- c(labels, expression(V[RB](0)))
+  }
+  if ("Flat-Fee" %in% regimes_to_show && !("Flat-Fee" %in% exclude_intercepts)) {
+    breaks <- c(breaks, y_starts[regime=="Flat-Fee", V_cont])
+    labels <- c(labels, expression(V[UP](0)))
+  }
+  
+  scale_y_continuous(name = "Continuation Value", breaks = breaks, labels = labels,
+                     limits = c(0, PLOT_MAX_Y), expand = c(0,0))
+}
+
+# Helper for X-Axis
+make_x_scale <- function(regimes_to_show) {
+  active_points <- points_dt[regime %in% regimes_to_show]
+  scale_x_continuous(
+    name = "Tank Age", 
+    breaks = active_points$age, 
+    labels = parse(text = active_points$label_x),
+    limits = c(0, PLOT_MAX_AGE), 
+    expand = c(0,0)
+  )
+}
+
+# Base Theme
+theme_slide <- theme_classic(base_size = 18) +
+  theme(
+    legend.position = "none",
+    plot.margin = margin(t=20, r=50, b=10, l=30),
+    axis.line = element_line(linewidth = 1.2),
+    axis.ticks = element_line(linewidth = 1.2),
+    axis.title.y = element_text(face = "bold", margin = margin(r=10)),
+    axis.title.x = element_text(face = "bold", margin = margin(t=10)),
+    plot.title = element_blank(),
+    axis.text.x = element_text(size = 16, face = "bold", color = "black", vjust = -0.5),
+    axis.text.y = element_text(size = 14, color = "black")
+  )
+
+# Base Plot Function
+plot_base <- function(regimes_show, exclude_y = NULL) {
+  ggplot() +
+    geom_hline(yintercept = v_scrap, linetype = "longdash", 
+               color = COL_SCRAP, linewidth = 1) +
+    annotate("text", x = 2, y = v_scrap + 80000, 
+             label = "'Scrap Value (' ~ kappa ~ ')'", 
+             color = COL_SCRAP, fontface = "italic", size = 5, hjust = 0, parse = TRUE) +
+    annotate("text", x = 0, y = PLOT_MAX_Y, label = "V(a)", 
+             hjust = 1.5, vjust = 0.5, 
+             size = 6, fontface = "bold.italic", color = "black") +
+    annotate("text", x = PLOT_MAX_AGE, y = 0, label = "bold(a)", parse = TRUE,
+             hjust = -0.5, vjust = 0.5, size = 6) +
+    make_y_scale(regimes_show, exclude_y) +
+    make_x_scale(regimes_show) +
+    scale_color_manual(values = c(
+      "Social Optimum" = COL_SOC, 
+      "Risk-Rated" = COL_RB, 
+      "Flat-Fee" = COL_FF
+    )) +
+    theme_slide +
+    coord_cartesian(clip = "off")
+}
+
+# ==============================================================================
+# GENERATE ALL 7 SLIDE FIGURES
+# ==============================================================================
+
+# ==============================================================================
+# FIGURE 1: SOC CURVE
+# ==============================================================================
+p1 <- plot_base(c("Social Optimum")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0)
+
+ggsave(file.path(slide_dir, "Slide_Fig_1_SOC_Curve.pdf"), p1, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 2: SOC + EXIT
+# ==============================================================================
+p2 <- p1 +
+  geom_segment(data = points_dt[regime == "Social Optimum"], 
+               aes(x = age, xend = age, y = -Inf, yend = V_cont),
+               linetype = "dotted", alpha = 0.8, linewidth = 1) +
+  geom_point(data = points_dt[regime == "Social Optimum"], 
+             aes(x = age, y = V_cont), color = "black", size = 3)
+
+ggsave(file.path(slide_dir, "Slide_Fig_2_SOC_Exit.pdf"), p2, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 3: SOC + RISK-BASED
+# ==============================================================================
+p3 <- plot_base(c("Social Optimum", "Risk-Rated")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2, alpha = 0.4) +
+  geom_line(data = dt_all[regime == "Risk-Rated" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0, alpha=0.4) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_RB, label = "RB", 
+           color = COL_RB, fontface = "bold", size = 5, hjust = 0) +
+  geom_segment(data = points_dt[regime %in% c("Social Optimum", "Risk-Rated")], 
+               aes(x = age, xend = age, y = -Inf, yend = V_cont), linetype = "dotted", linewidth = 1) +
+  geom_point(data = points_dt[regime == "Risk-Rated"], aes(x = age, y = V_cont), color = "black", size = 3) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x = age, y = V_cont), color = "black", size = 3)
+
+ggsave(file.path(slide_dir, "Slide_Fig_3_SOC_RB_Comparison.pdf"), p3, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 4: DWL (SOC vs RB)
+# ==============================================================================
+dwl_rb_zone <- dt_all[regime == "Social Optimum" & age >= exit_SOC & age <= exit_R]
+
+p4 <- plot_base(c("Social Optimum", "Risk-Rated"), exclude_y = c("Risk-Rated")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0) +
+  geom_ribbon(data = dwl_rb_zone, aes(x = age, ymin = V_cont, ymax = v_scrap), 
+              fill = COL_RB, alpha = 0.3) +
+  geom_vline(xintercept = c(exit_SOC, exit_R), linetype = "dotted", alpha = 0.5) +
+  geom_point(data = points_dt[regime == "Risk-Rated"], aes(x = age, y = V_cont), color = "black", size = 3) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x = age, y = V_cont), color = "black", size = 3) +
+  annotate("text", x = (exit_SOC + exit_R)/2, y = v_scrap + 200000, 
+           label = "DWL from\nRisk-Based", color = "black", fontface = "bold", size = 5, hjust = 0.5)
+
+ggsave(file.path(slide_dir, "Slide_Fig_4_RB_DWL.pdf"), p4, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 5: SOC + UNIFORM PREMIUM
+# ==============================================================================
+p5 <- plot_base(c("Social Optimum", "Flat-Fee")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2, alpha = 0.4) +
+  geom_line(data = dt_all[regime == "Flat-Fee" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = V_cont, color = regime), linewidth = 2) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0, alpha=0.4) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_FF, label = "UP", 
+           color = COL_FF, fontface = "bold", size = 5, hjust = 0) +
+  geom_vline(xintercept = exit_SOC, linetype = "dotted", alpha = 0.5) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x = age, y = V_cont), color = "black", size = 3)
+
+ggsave(file.path(slide_dir, "Slide_Fig_5_SOC_FF_Comparison.pdf"), p5, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 6: UNIFORM PREMIUM TOTAL DWL (FIXED)
+# ==============================================================================
+
+# Get SOC data from exit point to plot edge
+dwl_ff_total <- dt_all[regime == "Social Optimum" & age >= exit_SOC & age <= PLOT_MAX_AGE]
+
+# Clip negative values at 0 for visual display
+dwl_ff_total[, V_display := pmax(V_cont, 0)]
+
+p6 <- plot_base(c("Social Optimum", "Flat-Fee"), exclude_y = c("Flat-Fee")) +
+  # Yellow ribbon using clipped values
+  geom_ribbon(data = dwl_ff_total, 
+              aes(x = age, ymin = V_display, ymax = v_scrap), 
+              fill = COL_FF, alpha = 0.4) +
+  
+  # SOC line (only plot visible portion)
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = pmax(V_cont, 0), color = regime), linewidth = 2) +
+  
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0) +
+  annotate("text", x = 50, y = v_scrap + 200000, label = "DWL from Uniform Premium", 
+           color = "black", fontface = "bold", size = 5) +
+  geom_vline(xintercept = exit_SOC, linetype = "dotted", alpha = 0.5) +
+  geom_point(data = points_dt[regime == "Social Optimum"], 
+             aes(x = age, y = V_cont), color = "black", size = 3)
+
+ggsave(file.path(slide_dir, "Slide_Fig_6_FF_Total_DWL.pdf"), p6, width = PLOT_W, height = PLOT_H)
+
+# ==============================================================================
+# FIGURE 7: COMBINED SUMMARY (FIXED)
+# ==============================================================================
+
+# Prepare both DWL zones with clipped values
+dwl_ff_total_7 <- dt_all[regime == "Social Optimum" & age >= exit_SOC & age <= PLOT_MAX_AGE]
+dwl_ff_total_7[, V_display := pmax(V_cont, 0)]
+
+dwl_rb_zone_7 <- dt_all[regime == "Social Optimum" & age >= exit_SOC & age <= exit_R]
+dwl_rb_zone_7[, V_display := pmax(V_cont, 0)]
+
+p7 <- plot_base(c("Social Optimum", "Risk-Rated"), exclude_y = "Risk-Rated") +
+  # Yellow ribbon (full extent)
+  geom_ribbon(data = dwl_ff_total_7, 
+              aes(x = age, ymin = V_display, ymax = v_scrap), 
+              fill = COL_FF, alpha = 0.5) +
+  
+  # Blue ribbon (overlays on yellow)
+  geom_ribbon(data = dwl_rb_zone_7, 
+              aes(x = age, ymin = V_display, ymax = v_scrap), 
+              fill = COL_RB, alpha = 0.8) +
+  
+  # SOC line
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], 
+            aes(x = age, y = pmax(V_cont, 0), color = regime), linewidth = 2) +
+  
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", 
+           color = COL_SOC, fontface = "bold", size = 5, hjust = 0) +
+  annotate("text", x = (exit_SOC + exit_R)/2, y = v_scrap + 150000, 
+           label = "Unavoidable\nWedge", color = "white", fontface = "bold", 
+           size = 4, hjust=0.5) +
+  annotate("text", x = 50, y = v_scrap + 250000, 
+           label = "Excess Loss Eliminated\nby Risk-Based Pricing", 
+           color = "black", fontface = "bold", size = 5, hjust=0.5) +
+  geom_vline(xintercept = c(exit_SOC, exit_R), linetype = "dotted", 
+             alpha = 0.6, linewidth=1) +
+  geom_point(data = points_dt[regime == "Risk-Rated"], 
+             aes(x = age, y = V_cont), color = "black", size = 3) +
+  geom_point(data = points_dt[regime == "Social Optimum"], 
+             aes(x = age, y = V_cont), color = "black", size = 3)
+
+ggsave(file.path(slide_dir, "Slide_Fig_7_Combined_DWL.pdf"), p7, width = PLOT_W, height = PLOT_H)
+
+cat("\n✓ All 7 figures saved to:", slide_dir, "\n")
+```
+
+```{r toy-model-setup-inspections}
+# ==============================================================================
+# TOY MODEL SETUP: INSPECTION REGIME (Saved to results_insp)
+# ==============================================================================
+
+library(data.table)
+library(ggplot2)
+
+# 1. CORE PARAMETERS
+R_annual <- 115000      
+v_scrap  <- 800000      
+beta     <- 0.95        
+L        <- 600000      
+c_U      <- 700000
+
+# 2. RISK FUNCTIONS (Steepened for visibility)
+y_sw <- function(a, z_mult = 1.0) {
+  base_prob <- 0.005
+  # INCREASED from 0.000025 to 0.00004 to make the wedge bigger/deeper
+  aging_risk <- 0.00004 * (a^2) 
+  return((base_prob + aging_risk) * z_mult)
+}
+
+y_dw <- function(a, z_mult = 1.0) {
+  return(0.05 * y_sw(0, z_mult)) 
+}
+
+# 3. INSPECTION REGIMES
+regimes_insp <- list(
+  F_Insp = list(name = "Flat-Fee + Inspection", color = "#F1C40F", 
+                p_func = function(a, y) 2000, D = 0, inspect = TRUE),
+  
+  R_Insp = list(name = "Risk-Rated + Inspection", color = "#377EB8", 
+                p_func = function(a, y) (1 + 0.5) * y * L, D = 0.25 * L, inspect = TRUE),
+                
+  SOC = list(name = "Social Optimum", color = "#E41A1C", 
+             p_func = function(a, y) 0, D = function(a) L + 1.5 * L, inspect = FALSE)
+)
+
+# 4. SOLVER WITH INSPECTION LOGIC
+solve_regime_insp <- function(regname, params, c_U, z = 1.0) {
+  Amax <- 100 
+  ages <- 0:Amax
+  n <- length(ages)
+  
+  # Vectors
+  ysw_vec <- sapply(ages, function(a) y_sw(a, z))
+  ydw_vec <- sapply(ages, function(a) y_dw(a, z))
+  pvec <- if(grepl("SOC", params$name)) rep(params$p_func(0,0), n) else sapply(ages, function(a) params$p_func(a, ysw_vec[a+1]))
+  p_dw0 <- params$p_func(0, ydw_vec[1])
+  D_vec <- if(is.function(params$D)) sapply(ages, params$D) else rep(params$D, n)
+  
+  # Value Iteration
+  W_SW <- numeric(n + 1); V_cont <- numeric(n + 1) 
+  W_SW[n + 1] <- v_scrap; V_cont[n + 1] <- -Inf 
+  
+  for (ia in seq(n, 1)) {
+    a <- ia - 1
+    
+    # --- INSPECTION LOGIC ---
+    is_insp_year <- (a > 0) && (a %% 3 == 0) && isTRUE(params$inspect)
+    
+    if (is_insp_year) {
+      future_val <- (1 - ysw_vec[ia]) * W_SW[ia+1] + ysw_vec[ia] * v_scrap
+    } else {
+      future_val <- W_SW[ia+1]
+    }
+    
+    cont_SW <- R_annual - pvec[ia] - ysw_vec[ia]*D_vec[ia] + beta * future_val
+    upg_SW  <- R_annual - p_dw0 - ydw_vec[1]*D_vec[1] - c_U + beta * W_SW[2]
+    
+    V_cont[ia] <- cont_SW
+    W_SW[ia] <- max(cont_SW, upg_SW, v_scrap)
+  }
+ 
+  # Exit Threshold
+  exit_idx <- which(W_SW <= v_scrap + 1.0)
+  a_exit <- if(length(exit_idx) > 0) (exit_idx[1] - 1) else Amax
+  
+  return(list(name=params$name, age=ages, a_exit=a_exit, W_SW=W_SW[1:n], V_cont=V_cont[1:n], color=params$color))
+}
+
+# 5. GENERATE DATA
+results_insp <- lapply(names(regimes_insp), function(r) solve_regime_insp(r, regimes_insp[[r]], c_U, z=1.0))
+names(results_insp) <- names(regimes_insp)
+```
+
+
+
+
+
+```{r generate-slide-figures-inspections}
+#| eval: true
+#| echo: false
+#| message: false
+#| warning: false
+
+library(ggplot2)
+library(data.table)
+library(scales)
+
+# 1. SETUP
+slide_dir <- "Output/Figures/Slides/Inspections"
+dir.create(slide_dir, recursive = TRUE, showWarnings = FALSE)
+
+PLOT_MAX_AGE <- 70  
+PLOT_MAX_Y <- 2500000 
+COL_SOC <- "#E41A1C" 
+COL_RB  <- "#377EB8"
+COL_FF  <- "#F1C40F" 
+COL_SCRAP <- "grey40"
+
+# 2. DATA PREP
+dt_all <- rbind(
+  data.table(age = results_insp$F_Insp$age, V_cont = results_insp$F_Insp$V_cont, regime = "Flat-Fee"),
+  data.table(age = results_insp$R_Insp$age, V_cont = results_insp$R_Insp$V_cont, regime = "Risk-Rated"),
+  data.table(age = results_insp$SOC$age,    V_cont = results_insp$SOC$V_cont,    regime = "Social Optimum")
+)
+dt_all[, regime := factor(regime, levels = c("Social Optimum", "Risk-Rated", "Flat-Fee"))]
+
+# Endpoints
+y_end_SOC <- dt_all[regime == "Social Optimum" & age == PLOT_MAX_AGE, V_cont]
+y_end_RB  <- dt_all[regime == "Risk-Rated" & age == PLOT_MAX_AGE, V_cont]
+y_end_FF  <- dt_all[regime == "Flat-Fee" & age == PLOT_MAX_AGE, V_cont]
+
+# Thresholds
+exit_SOC <- results_insp$SOC$a_exit
+exit_R   <- results_insp$R_Insp$a_exit
+exit_F   <- results_insp$F_Insp$a_exit
+
+# Intersections
+points_dt <- data.table(
+  age = c(exit_SOC, exit_R, exit_F),
+  V_cont = v_scrap,
+  regime = factor(c("Social Optimum", "Risk-Rated", "Flat-Fee"), 
+                  levels = c("Social Optimum", "Risk-Rated", "Flat-Fee")),
+  label_x = c("a[SOC]^'*'", "a[RB]^'*'", "a[UP]^'*'") 
+)
+
+y_starts <- dt_all[age == 0, .(regime, V_cont)]
+
+# 3. PLOTTING FUNCTIONS
+make_y_scale <- function(regimes_to_show, exclude_intercepts = NULL) {
+  breaks <- c(v_scrap)
+  labels <- c(expression(kappa))
+  
+  if ("Social Optimum" %in% regimes_to_show && !("Social Optimum" %in% exclude_intercepts)) {
+    breaks <- c(breaks, y_starts[regime=="Social Optimum", V_cont])
+    labels <- c(labels, expression(V[SOC](0)))
+  }
+  if ("Risk-Rated" %in% regimes_to_show && !("Risk-Rated" %in% exclude_intercepts)) {
+    breaks <- c(breaks, y_starts[regime=="Risk-Rated", V_cont])
+    labels <- c(labels, expression(V[RB](0)))
+  }
+  if ("Flat-Fee" %in% regimes_to_show && !("Flat-Fee" %in% exclude_intercepts)) {
+    breaks <- c(breaks, y_starts[regime=="Flat-Fee", V_cont])
+    labels <- c(labels, expression(V[F](0)))
+  }
+  
+  scale_y_continuous(name = "Continuation Value", breaks = breaks, labels = labels,
+                     limits = c(0, PLOT_MAX_Y), expand = c(0,0))
+}
+
+make_x_scale <- function(regimes_to_show) {
+  active_points <- points_dt[regime %in% regimes_to_show]
+  scale_x_continuous(name = "Tank Age", 
+                     breaks = active_points$age, 
+                     labels = parse(text = active_points$label_x),
+                     limits = c(0, PLOT_MAX_AGE), expand = c(0,0))
+}
+
+theme_slide <- theme_classic(base_size = 18) +
+  theme(legend.position = "none",
+        plot.margin = margin(t=20, r=50, b=10, l=30),
+        axis.line = element_line(linewidth = 1.2),
+        axis.ticks = element_line(linewidth = 1.2),
+        axis.title.y = element_text(face = "bold", margin = margin(r=10)),
+        axis.title.x = element_text(face = "bold", margin = margin(t=10)),
+        axis.text.x = element_text(size = 16, face = "bold", color = "black", vjust = -0.5),
+        axis.text.y = element_text(size = 14, color = "black"))
+
+plot_base <- function(regimes_show, exclude_y = NULL) {
+  ggplot() +
+    geom_hline(yintercept = v_scrap, linetype = "longdash", color = COL_SCRAP, linewidth = 1) +
+    annotate("text", x = 2, y = v_scrap + 80000, label = "'Scrap Value (' ~ kappa ~ ')'", 
+             color = COL_SCRAP, fontface = "italic", size = 5, hjust = 0, parse = TRUE) +
+    annotate("text", x = 0, y = PLOT_MAX_Y, label = "V(a)", hjust = 1.5, vjust = 0.5, 
+             size = 6, fontface = "bold.italic", color = "black") +
+    annotate("text", x = PLOT_MAX_AGE, y = 0, label = "bold(a)", parse = TRUE,
+             hjust = -0.5, vjust = 0.5, size = 6) +
+    make_y_scale(regimes_show, exclude_y) +
+    make_x_scale(regimes_show) +
+    scale_color_manual(values = c("Social Optimum" = COL_SOC, "Risk-Rated" = COL_RB, "Flat-Fee" = COL_FF)) +
+    theme_slide + coord_cartesian(clip = "off")
+}
+
+# 4. FIGURES (INSPECTION MODEL)
+
+# P1: SOC Curve
+p1 <- plot_base(c("Social Optimum")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], aes(x=age, y=V_cont, color=regime), linewidth=2) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", color = COL_SOC, fontface = "bold", size = 5, hjust = 0)
+ggsave(file.path(slide_dir, "Slide_Fig_1_SOC_Curve.pdf"), p1, width = PLOT_W, height = PLOT_H)
+
+# P2: SOC + Exit
+p2 <- p1 +
+  geom_segment(data = points_dt[regime == "Social Optimum"], aes(x=age, xend=age, y=-Inf, yend=V_cont), linetype="dotted", alpha=0.8, linewidth=1) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x=age, y=V_cont), color="black", size=3)
+ggsave(file.path(slide_dir, "Slide_Fig_2_SOC_Exit.pdf"), p2, width = PLOT_W, height = PLOT_H)
+
+# P3: SOC + RB (Inspection)
+p3 <- plot_base(c("Social Optimum", "Risk-Rated")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], aes(x=age, y=V_cont, color=regime), linewidth=2, alpha=0.4) +
+  geom_line(data = dt_all[regime == "Risk-Rated" & age <= PLOT_MAX_AGE], aes(x=age, y=V_cont, color=regime), linewidth=2) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", color = COL_SOC, fontface = "bold", size = 5, hjust = 0, alpha=0.4) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_RB, label = "RB", color = COL_RB, fontface = "bold", size = 5, hjust = 0) +
+  geom_segment(data = points_dt[regime %in% c("Social Optimum", "Risk-Rated")], aes(x=age, xend=age, y=-Inf, yend=V_cont), linetype="dotted", linewidth=1) +
+  geom_point(data = points_dt[regime == "Risk-Rated"], aes(x=age, y=V_cont), color="black", size=3) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x=age, y=V_cont), color="black", size=3)
+ggsave(file.path(slide_dir, "Slide_Fig_3_SOC_RB_Comparison.pdf"), p3, width = PLOT_W, height = PLOT_H)
+
+# P4: DWL RB (Inspection)
+dwl_rb <- dt_all[regime == "Social Optimum" & age >= exit_SOC & age <= exit_R]
+p4 <- plot_base(c("Social Optimum", "Risk-Rated"), exclude_y = c("Risk-Rated")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], aes(x=age, y=V_cont, color=regime), linewidth=2) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", color = COL_SOC, fontface = "bold", size = 5, hjust = 0) +
+  geom_ribbon(data = dwl_rb, aes(x=age, ymin=V_cont, ymax=v_scrap), fill = COL_RB, alpha = 0.3) +
+  geom_vline(xintercept = c(exit_SOC, exit_R), linetype = "dotted", alpha = 0.5) +
+  geom_point(data = points_dt[regime %in% c("Social Optimum", "Risk-Rated")], aes(x=age, y=V_cont), color="black", size=3) +
+  annotate("text", x = (exit_SOC + exit_R)/2, y = v_scrap + 300000, label = "DWL from\nRisk-Based", color = "black", fontface = "bold", size = 5, hjust = 0.5)
+ggsave(file.path(slide_dir, "Slide_Fig_4_RB_DWL.pdf"), p4, width = PLOT_W, height = PLOT_H)
+
+# P5: SOC + FF (Inspection)
+p5 <- plot_base(c("Social Optimum", "Flat-Fee")) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], aes(x=age, y=V_cont, color=regime), linewidth=2, alpha=0.4) +
+  geom_line(data = dt_all[regime == "Flat-Fee" & age <= PLOT_MAX_AGE], aes(x=age, y=V_cont, color=regime), linewidth=2) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", color = COL_SOC, fontface = "bold", size = 5, hjust = 0, alpha=0.4) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_FF, label = "UP", color = COL_FF, fontface = "bold", size = 5, hjust = 0) +
+  geom_vline(xintercept = exit_SOC, linetype = "dotted", alpha = 0.5) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x=age, y=V_cont), color="black", size=3)
+ggsave(file.path(slide_dir, "Slide_Fig_5_SOC_FF_Comparison.pdf"), p5, width = PLOT_W, height = PLOT_H)
+
+# P6: DWL FF (Inspection) - NO PRIVATE LINES
+dwl_ff <- dt_all[regime == "Social Optimum" & age >= exit_SOC & age <= PLOT_MAX_AGE]
+p6 <- plot_base(c("Social Optimum", "Flat-Fee"), exclude_y = c("Flat-Fee")) +
+  geom_ribbon(data = dwl_ff, aes(x=age, ymin=V_cont, ymax=v_scrap), fill = COL_FF, alpha = 0.4) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], aes(x=age, y=V_cont, color=regime), linewidth=2) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", color = COL_SOC, fontface = "bold", size = 5, hjust = 0) +
+  annotate("text", x = 50, y = v_scrap + 300000, label = "DWL from Uniform Premium", color = "black", fontface = "bold", size = 5) +
+  geom_vline(xintercept = exit_SOC, linetype = "dotted", alpha = 0.5) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x=age, y=V_cont), color="black", size=3)
+ggsave(file.path(slide_dir, "Slide_Fig_6_FF_Total_DWL.pdf"), p6, width = PLOT_W, height = PLOT_H)
+
+# P7: Combined (Inspection) - NO PRIVATE LINES
+p7 <- plot_base(c("Social Optimum", "Risk-Rated", "Flat-Fee"), exclude_y = c("Risk-Rated", "Flat-Fee")) +
+  geom_ribbon(data = dwl_ff, aes(x=age, ymin=V_cont, ymax=v_scrap), fill = COL_FF, alpha = 0.5) +
+  geom_ribbon(data = dwl_rb, aes(x=age, ymin=V_cont, ymax=v_scrap), fill = COL_RB, alpha = 0.8) +
+  geom_line(data = dt_all[regime == "Social Optimum" & age <= PLOT_MAX_AGE], aes(x=age, y=V_cont, color=regime), linewidth=2) +
+  annotate("text", x = PLOT_MAX_AGE, y = y_end_SOC, label = "SOC", color = COL_SOC, fontface = "bold", size = 5, hjust = 0) +
+  geom_vline(xintercept = c(exit_SOC, exit_R, exit_F), linetype = "dotted", alpha = 0.6, linewidth=1) +
+  geom_point(data = points_dt[regime == "Social Optimum"], aes(x = age, y = V_cont), color = "black", size = 3) +
+  # Add points for other regimes on X-Axis so labels appear, even if lines are hidden
+  geom_point(data = points_dt[regime %in% c("Risk-Rated", "Flat-Fee")], aes(x = age, y = V_cont), color = "black", size = 3) +
+  annotate("text", x = 50, y = v_scrap + 300000, label = "Inspection Regime\nReduces Tail Risk", color = "black", fontface = "bold", size = 5, hjust = 0.5)
+ggsave(file.path(slide_dir, "Slide_Fig_7_Inspection_Summary.pdf"), p7, width = PLOT_W, height = PLOT_H)
+```
+
+
 
 \newpage
 

@@ -1,760 +1,715 @@
 # ==============================================================================
-# 04_Counterfactual_Analysis_CORRECTED.R
+# 03_Welfare.R  —  Counterfactual Policy Analysis (Model B, 3-Parameter)
 # ==============================================================================
-# PURPOSE: 
-#   Run Policy Counterfactuals using Model B Estimates (3-Parameter Version)
-#   
-#   Scenarios:
-#     1. Baseline (Status Quo)
-#     2. Social Optimum (Firm internalizes externality via increased gamma_risk)
-#     3. Tank Closure Subsidy (Planner pays $X to close)
-#     4. Command & Control (Mandatory closure for old SW tanks)
+# PURPOSE:
+#   Compute policy counterfactuals and welfare from NPL-estimated structural
+#   model of UST facility closure under heterogeneous insurance regimes.
 #
-# FIXES APPLIED:
-#   - 3-parameter theta: (kappa, gamma_price, gamma_risk)
-#   - Proper cache construction via create_estimation_cache_model_b()
-#   - Mandate constraint applied WITHIN policy iteration
-#   - Social optimum via gamma_risk modification OR cache rebuild
+#   Scenarios:
+#     1. Baseline  (status quo estimated theta)
+#     2. Social Optimum  (firm internalizes full externality -> gamma_risk scaled)
+#     3. Closure Subsidy  (planner pays S to close -> kappa shifted)
+#     4. Mandate  (old SW tanks forced to close)
+#
+#   WELFARE AGGREGATION:
+#     The Markov chain decomposes into 4 disconnected components by
+#     (wall x regime).  We compute the quasi-stationary distribution WITHIN
+#     each component, then combine using observed population shares from
+#     the estimation sample.
+#
+# DEPENDS:
+#   improved_estimator_OPTIMIZED.r, Model_B_Estimates.rds, Estimated_Primitives.rds
 # ==============================================================================
 
-library(data.table)
-library(Matrix)
-library(ggplot2)
-library(here)
+suppressPackageStartupMessages({
+  library(data.table)
+  library(Matrix)
+  library(ggplot2)
+  library(here)
+  library(scales)
+  library(xtable) # Added for QME slide table generation
+})
 
-# Source helper functions (contains all Model B functions)
 source(here("Code", "Helpers", "improved_estimator_OPTIMIZED.r"))
 
+
+# Helper function for capitalization
+simpleCap <- function(x) {
+  s <- strsplit(x, " ")[[1]]
+  paste(toupper(substring(s, 1,1)), substring(s, 2),
+      sep="", collapse=" ")
+}
+
 # ==============================================================================
-# SETUP: LOAD ESTIMATION RESULTS
+# 0. PATHS & CONSTANTS
 # ==============================================================================
 
 RESULTS_DIR <- here("Output", "Estimation_Results")
+if (!dir.exists(RESULTS_DIR)) dir.create(RESULTS_DIR, recursive = TRUE)
 
-# Load estimation output
+SCALE_FACTOR <- 10000  # 1 model unit = $10,000
+
+# Externality multiplier: social cost = ext_mult x private loss
+EXT_MULT_DEFAULT <- 2.0
+
+# ==============================================================================
+# 1. LOAD ESTIMATION OUTPUT & PRIMITIVES
+# ==============================================================================
+cat("\n[1/7] Loading Estimation Results & Primitives...\n")
+
 est_result <- readRDS(file.path(RESULTS_DIR, "Model_B_Estimates.rds"))
-
-# Extract components
-theta_hat <- est_result$theta_hat
-config <- est_result$config
-cache_est <- est_result$cache
-
-# NOTE: est_result$cache contains:
-#   - n_states, premiums, hazards, losses, hazard_loss
-#   - F_maintain, F_exit (transition matrices)
-#   - beta
-
-# We need the raw primitives and states to rebuild cache for counterfactuals
-# If not saved separately, reconstruct from cache or load from primitives file
 primitives <- readRDS(file.path(RESULTS_DIR, "Estimated_Primitives.rds"))
 
-# Reconstruct state space (must match estimation)
-states <- CJ(
-  A = 1:9,
-  w = factor(c("single", "double"), levels = c("single", "double")),
-  rho = factor(c("FF", "RB"), levels = c("FF", "RB")),
-  sorted = FALSE
-)
-states[, state_idx := .I]
+theta_hat <- est_result$theta_hat
+config    <- est_result$config
+if (is.null(config$n_actions)) config$n_actions <- 2
+
+stopifnot(all(c("kappa", "gamma_price", "gamma_risk") %in% names(theta_hat)))
+cat(sprintf("  theta_hat: kappa=%.3f  gamma_price=%.3f  gamma_risk=%.3f\n",
+            theta_hat["kappa"], theta_hat["gamma_price"], theta_hat["gamma_risk"]))
+
+# State space
+states <- primitives$states
+if (!"state_idx" %in% names(states)) states[, state_idx := .I]
 setkey(states, state_idx)
+n_states <- nrow(states)
 
-# ==============================================================================
-# HELPER: BUILD TRANSITIONS (if not available from est_result)
-# ==============================================================================
-
-build_transitions_model_b <- function(states, age_probs = NULL) {
-  
-  n_states <- nrow(states)
-  
-  # Default annual aging probabilities (5-year bins)
-  if (is.null(age_probs)) {
-    age_probs <- list(
-      p_up   = c(0.18, 0.19, 0.20, 0.21, 0.22, 0.23, 0.24, 0.25, 0.00),
-      p_stay = c(0.82, 0.81, 0.80, 0.79, 0.78, 0.77, 0.76, 0.75, 1.00)
-    )
-  }
-  
-  state_map <- setNames(states$state_idx, 
-                        paste(states$A, states$w, states$rho, sep = "_"))
-  
-  F_maintain <- Matrix(0, n_states, n_states, sparse = TRUE)
-  
-  for (i in 1:n_states) {
-    A_i <- states$A[i]
-    if (A_i < 9) {
-      k_s <- paste(A_i, states$w[i], states$rho[i], sep = "_")
-      k_u <- paste(A_i + 1, states$w[i], states$rho[i], sep = "_")
-      F_maintain[i, state_map[k_s]] <- age_probs$p_stay[A_i]
-      F_maintain[i, state_map[k_u]] <- age_probs$p_up[A_i]
-    } else {
-      F_maintain[i, i] <- 1.0
-    }
-  }
-  
-  list(
-    maintain = F_maintain,
-    exit = Diagonal(n_states)
-  )
-}
-
-# Build or extract transitions
+# Transitions
+cache_est <- est_result$cache
 if (!is.null(cache_est$F_maintain)) {
-  transitions <- list(
-    maintain = cache_est$F_maintain,
-    exit = cache_est$F_exit
-  )
+  transitions <- list(maintain = cache_est$F_maintain, exit = cache_est$F_exit)
+} else if (!is.null(primitives$transitions)) {
+  transitions <- primitives$transitions
 } else {
-  transitions <- build_transitions_model_b(states)
+  stop("No transition matrices found.")
+}
+
+cat(sprintf("  State space: %d states\n", n_states))
+
+# ==============================================================================
+# 2. POPULATION WEIGHTS FROM DATA
+# ==============================================================================
+# Load panel to get cross-sectional composition for weighting.
+
+panel_path <- here("Data", "Processed", "annual_facility_panel.csv")
+if (file.exists(panel_path)) {
+  panel_raw <- fread(panel_path)
+  panel_raw[, A_idx := pmin(floor(age_start / 5) + 1, 9)]
+  panel_raw[, w_idx := ifelse(wall_type == "single", 1L, 2L)]
+  panel_raw[, r_idx := ifelse(regime == "RB", 2L, 1L)]
+  panel_raw[, s_idx := (r_idx - 1) * 18 + (w_idx - 1) * 9 + A_idx]
+
+  pop_counts <- panel_raw[, .N, by = s_idx]
+  pop_weights <- rep(0, n_states)
+  pop_weights[pop_counts$s_idx] <- pop_counts$N
+  pop_weights <- pop_weights / sum(pop_weights)
+  cat("  Population weights from panel data.\n")
+} else {
+  pop_weights <- rep(1 / n_states, n_states)
+  cat("  WARNING: Panel not found, using uniform population weights.\n")
+}
+
+# Sub-chain membership (wall x regime)
+chain_id <- paste(states$w, states$rho, sep = "_")
+chain_labels <- unique(chain_id)
+
+# ==============================================================================
+# 3. ERGODIC DISTRIBUTION (DECOMPOSED BY SUB-CHAIN)
+# ==============================================================================
+
+#' Compute quasi-stationary distribution within each disconnected sub-chain,
+#' then combine using observed population shares.
+compute_weighted_ergodic <- function(P, F_maintain, states, pop_weights,
+                                      max_iter = 5000, tol = 1e-10) {
+
+  n <- nrow(P)
+  p_m <- P[, "maintain"]
+  mu_full <- rep(0, n)
+
+  for (cl in chain_labels) {
+    idx <- which(chain_id == cl)
+    n_sub <- length(idx)
+
+    # Sub-chain transition kernel
+    T_sub <- as.matrix(Diagonal(n_sub, x = p_m[idx]) %*% F_maintain[idx, idx])
+
+    # Population share for this sub-chain
+    chain_share <- sum(pop_weights[idx])
+    if (chain_share < 1e-15) next
+
+    # Power iteration: init from data distribution within chain
+    mu_sub <- pop_weights[idx] / sum(pop_weights[idx])
+
+    for (iter in 1:max_iter) {
+      mu_new <- as.numeric(mu_sub %*% T_sub)
+      s <- sum(mu_new)
+      if (s < 1e-15) {
+        mu_sub <- rep(1 / n_sub, n_sub)
+        break
+      }
+      mu_new <- mu_new / s
+      if (max(abs(mu_new - mu_sub)) < tol) {
+        mu_sub <- mu_new
+        break
+      }
+      mu_sub <- mu_new
+    }
+
+    # Scale by chain's population share
+    mu_full[idx] <- mu_sub * chain_share
+  }
+
+  if (sum(mu_full) > 0) mu_full <- mu_full / sum(mu_full)
+  return(mu_full)
 }
 
 # ==============================================================================
-# COUNTERFACTUAL SOLVER: GENERAL INTERFACE
+# 4. COUNTERFACTUAL SOLVER
 # ==============================================================================
 
-#' Solve Counterfactual Equilibrium
-#'
-#' @param scenario Character: "baseline", "social", "subsidy", "mandate"
-#' @param theta_base Estimated parameters from NPL
-#' @param states State space data.table
-#' @param premiums Premium vector
-#' @param hazards Hazard rate vector
-#' @param losses Loss vector (private)
-#' @param transitions List with $maintain, $exit matrices
-#' @param config Configuration list
-#' @param subsidy_amount For "subsidy": payment to close (in revenue units)
-#' @param externality_mult For "social": multiplier on gamma_risk
-#' @param mandate_age For "mandate": age threshold (A_idx >=)
-#' @param mandate_wall For "mandate": wall type to target ("single")
-#' @return List with P (CCPs), V (values), scenario info
 solve_counterfactual <- function(scenario = c("baseline", "social", "subsidy", "mandate"),
-                                  theta_base,
-                                  states,
-                                  premiums,
-                                  hazards,
-                                  losses,
-                                  transitions,
-                                  config,
+                                  theta_base, states, premiums, hazards, losses,
+                                  transitions, config,
                                   subsidy_amount = 0,
                                   externality_mult = 2.0,
                                   mandate_age = 7,
                                   mandate_wall = "single") {
-  
 
   scenario <- match.arg(scenario)
-  cat(sprintf("\n--- Solving Counterfactual: %s ---\n", toupper(scenario)))
-  
-  # Initialize modified theta and primitives
- theta_cf <- theta_base
-  premiums_cf <- premiums
-  hazards_cf <- hazards
-  losses_cf <- losses
-  
-  # ===========================================================================
-  # SCENARIO-SPECIFIC MODIFICATIONS
-  # ===========================================================================
-  
-  if (scenario == "baseline") {
-    # No modifications - use estimated parameters as-is
-    cat("  Using baseline (estimated) parameters\n")
-    
-  } else if (scenario == "social") {
-    # Social Optimum: Firm internalizes full externality
-    # 
-    # APPROACH: Increase gamma_risk so firm "sees" social cost
-    # If private gamma_risk = 1.0 and externality = 1x private loss,
-    # then social gamma_risk = 2.0 (firm internalizes 2x)
-    #
-    # Alternative: Rebuild cache with losses_cf = losses * externality_mult
-    # But modifying gamma_risk is cleaner and doesn't change state space
-    
-    theta_cf["gamma_risk"] <- theta_base["gamma_risk"] * externality_mult
-    cat(sprintf("  gamma_risk: %.3f -> %.3f (externality mult = %.1f)\n",
-                theta_base["gamma_risk"], theta_cf["gamma_risk"], externality_mult))
-    
+  cat(sprintf("\n--- Solving: %s ---\n", toupper(scenario)))
+
+  theta_cf <- theta_base
+
+if (scenario == "social") {
+    theta_cf["gamma_risk"] <- externality_mult
+    cat(sprintf("  gamma_risk: %.3f -> %.3f\n",
+                theta_base["gamma_risk"], theta_cf["gamma_risk"]))
   } else if (scenario == "subsidy") {
-    # Closure Subsidy: Planner pays subsidy_amount to close
-    #
-    # This increases the terminal payoff: u_close = kappa + subsidy
-    # Equivalent to increasing kappa by subsidy_amount
-    
     theta_cf["kappa"] <- theta_base["kappa"] + subsidy_amount
-    cat(sprintf("  kappa: %.3f -> %.3f (subsidy = %.1f)\n",
-                theta_base["kappa"], theta_cf["kappa"], subsidy_amount))
-    
-  } else if (scenario == "mandate") {
-    # Command & Control: Mandatory closure for specific states
-    # Handled via constrained policy iteration below
-    cat(sprintf("  Mandate: Close if A >= %d and wall = %s\n", 
-                mandate_age, mandate_wall))
+    cat(sprintf("  kappa: %.3f -> %.3f  (subsidy ~$%.0f)\n",
+                theta_base["kappa"], theta_cf["kappa"],
+                subsidy_amount * SCALE_FACTOR))
   }
-  
-  # ===========================================================================
-  # BUILD CACHE FOR COUNTERFACTUAL
-  # ===========================================================================
-  
+
   cache_cf <- create_estimation_cache_model_b(
-    states = states,
-    premiums = premiums_cf,
-    hazards = hazards_cf,
-    losses = losses_cf,
-    transitions = transitions,
-    config = config
+    states = states, premiums = premiums, hazards = hazards,
+    losses = losses, transitions = transitions, config = config
   )
-  
-  # ===========================================================================
-  # SOLVE EQUILIBRIUM
-  # ===========================================================================
-  
+
   if (scenario != "mandate") {
-    # Standard policy iteration
     eq <- solve_equilibrium_policy_model_b(
-      theta = theta_cf,
-      cache = cache_cf,
-      config = config,
+      theta = theta_cf, cache = cache_cf, config = config,
       check_bellman = TRUE
     )
-    
   } else {
-    # Constrained policy iteration for mandate
     eq <- solve_mandate_equilibrium(
-      theta = theta_cf,
-      cache = cache_cf,
-      config = config,
-      states = states,
-      mandate_age = mandate_age,
-      mandate_wall = mandate_wall
+      theta = theta_cf, cache = cache_cf, config = config,
+      states = states, mandate_age = mandate_age, mandate_wall = mandate_wall
     )
   }
-  
-  # ===========================================================================
-  # RETURN RESULTS
-  # ===========================================================================
-  
-  list(
-    scenario = scenario,
-    theta = theta_cf,
-    P = eq$P,
-    V = eq$V,
-    converged = eq$converged,
-    cache = cache_cf
-  )
+
+  cat(sprintf("  Converged: %s\n", eq$converged))
+  list(scenario = scenario, theta = theta_cf,
+       P = eq$P, V = eq$V, converged = eq$converged, cache = cache_cf)
 }
 
-# ==============================================================================
-# MANDATE SOLVER: CONSTRAINED POLICY ITERATION
-# ==============================================================================
-
-#' Solve Equilibrium with Mandate Constraint
-#'
-#' @description
-#' For mandated states, P(close) = 1 is enforced WITHIN the policy iteration.
-#' This ensures value function consistency (unlike post-hoc override).
 solve_mandate_equilibrium <- function(theta, cache, config, states,
                                        mandate_age, mandate_wall) {
-  
-  # Identify mandated states
+
   mandate_mask <- (states$A >= mandate_age) & (states$w == mandate_wall)
-  n_mandated <- sum(mandate_mask)
-  cat(sprintf("  Mandated states: %d / %d\n", n_mandated, nrow(states)))
-  
-  # Compute flow utilities
+  cat(sprintf("  Mandated states: %d / %d\n", sum(mandate_mask), nrow(states)))
+
   U <- calculate_flow_utilities_model_b(theta, cache)
-  n_states <- cache$n_states
-  
-  # Initialize CCPs
-  P <- matrix(0.5, n_states, 2, dimnames = list(NULL, c("maintain", "close")))
-  
-  # Apply mandate constraint to initial P
+  n_s <- cache$n_states
+
+  P <- matrix(0.5, n_s, 2, dimnames = list(NULL, c("maintain", "close")))
   P[mandate_mask, "maintain"] <- config$eps_prob
-  P[mandate_mask, "close"] <- 1 - config$eps_prob
-  
-  max_iter <- 5000
-  tol <- 1e-8
-  
-  for (iter in 1:max_iter) {
-    
-    # 1. Invert value function (Hotz-Miller)
+  P[mandate_mask, "close"]    <- 1 - config$eps_prob
+
+  for (iter in 1:5000) {
     V <- invert_value_function_model_b(P, U, config)
-    
-    # Handle numerical issues
-    if (any(is.na(V))) {
-      V[is.na(V)] <- -1e5
-    }
-    
-    # 2. Compute new CCPs
+    if (any(is.na(V))) V[is.na(V)] <- -1e5
     P_new <- compute_ccps_model_b(U, V, cache, config)
-    
-    # 3. CRITICAL: Reapply mandate constraint
     P_new[mandate_mask, "maintain"] <- config$eps_prob
-    P_new[mandate_mask, "close"] <- 1 - config$eps_prob
-    
-    # 4. Check convergence
-    ccp_diff <- max(abs(P_new - P), na.rm = TRUE)
-    
-    if (!is.na(ccp_diff) && ccp_diff < tol) {
-      P <- P_new
-      break
-    }
-    
+    P_new[mandate_mask, "close"]    <- 1 - config$eps_prob
+    if (max(abs(P_new - P), na.rm = TRUE) < 1e-9) { P <- P_new; break }
     P <- P_new
   }
-  
-  # Final value function
+
   V_final <- invert_value_function_model_b(P, U, config)
-  
-  list(
-    P = P,
-    V = V_final,
-    converged = (iter < max_iter),
-    n_iter = iter,
-    n_mandated = n_mandated
-  )
+  list(P = P, V = V_final, converged = (iter < 5000),
+       n_iter = iter, n_mandated = sum(mandate_mask))
 }
 
 # ==============================================================================
-# RUN ALL COUNTERFACTUALS
+# 5. WELFARE METRICS
 # ==============================================================================
 
-cat("\n")
-cat("==============================================================\n")
-cat("          COUNTERFACTUAL POLICY ANALYSIS\n")
-cat("==============================================================\n")
-cat(sprintf("Estimated theta: kappa=%.3f, gamma_price=%.3f, gamma_risk=%.3f\n",
-            theta_hat["kappa"], theta_hat["gamma_price"], theta_hat["gamma_risk"]))
+compute_welfare <- function(result, states, hazards, losses,
+                            F_maintain, pop_weights,
+                            theta_ref, cache_ref, config, 
+                            externality_mult = EXT_MULT_DEFAULT) {
 
-# 1. Baseline
-res_baseline <- solve_counterfactual(
-  scenario = "baseline",
-  theta_base = theta_hat,
-  states = states,
-  premiums = primitives$premiums,
-  hazards = primitives$hazards,
-  losses = primitives$losses,
-  transitions = transitions,
-  config = config
-)
+  P_policy <- result$P
+  V_policy <- result$V 
 
-# 2. Social Optimum (2x risk internalization)
-res_social <- solve_counterfactual(
-  scenario = "social",
-  theta_base = theta_hat,
-  states = states,
-  premiums = primitives$premiums,
-  hazards = primitives$hazards,
-  losses = primitives$losses,
-  transitions = transitions,
-  config = config,
-  externality_mult = 2.0
-)
+  mu <- compute_weighted_ergodic(P_policy, F_maintain, states, pop_weights)
 
-# 3. Closure Subsidy ($1.0 in revenue units ~ 1 year of profit)
-res_subsidy <- solve_counterfactual(
-  scenario = "subsidy",
-  theta_base = theta_hat,
-  states = states,
-  premiums = primitives$premiums,
-  hazards = primitives$hazards,
-  losses = primitives$losses,
-  transitions = transitions,
-  config = config,
-  subsidy_amount = 1.0  # In annual revenue units
-)
+  # Re-evaluate Real Value using baseline primitives (No Transfers)
+  U_real <- calculate_flow_utilities_model_b(theta_ref, cache_ref)
+  V_real <- invert_value_function_model_b(P_policy, U_real, config)
 
-# 4. Mandate: SW tanks >= 30 years (A_idx >= 7 means age bin [30-35)+)
-res_mandate <- solve_counterfactual(
-  scenario = "mandate",
-  theta_base = theta_hat,
-  states = states,
-  premiums = primitives$premiums,
-  hazards = primitives$hazards,
-  losses = primitives$losses,
-  transitions = transitions,
-  config = config,
-  mandate_age = 7,
-  mandate_wall = "single"
-)
+  # Aggregation
+  avg_firm_surplus_perceived <- sum(mu * V_policy)
+  avg_firm_surplus_real      <- sum(mu * V_real)
 
-# ==============================================================================
-# WELFARE COMPUTATION
-# ==============================================================================
+  exp_leak_risk    <- sum(mu * P_policy[, "maintain"] * hazards)
+  exp_private_loss <- sum(mu * P_policy[, "maintain"] * hazards * losses)
+  exp_external_dam <- exp_private_loss * (externality_mult - 1)
+  
+  # Social Welfare = Real Private Value - External Damages
+  pv_factor <- 1 / (1 - config$beta)
+  social_welfare_val <- avg_firm_surplus_real - (exp_external_dam * pv_factor)
 
-#' Compute Welfare Metrics for a Counterfactual
-#'
-#' @param result Output from solve_counterfactual()
-#' @param states State space
-#' @param hazards Hazard rates
-#' @param losses Loss amounts
-#' @param externality_mult Social cost multiplier on private loss
-#' @return Data.table with welfare metrics
-compute_welfare <- function(result, states, hazards, losses, 
-                            externality_mult = 2.0) {
+  govt_cost_implied <- avg_firm_surplus_perceived - avg_firm_surplus_real
+
+  # Subgroup Closures
+  subgroup_close <- function(mask) {
+    w <- mu[mask]; s <- sum(w)
+    if (s < 1e-15) return(NA_real_)
+    sum(w * P_policy[mask, "close"]) / s
+  }
   
-  P <- result$P
-  V <- result$V
-  n_states <- nrow(states)
-  
-  # Ergodic distribution (simplified: uniform over non-absorbing states)
-  # For proper welfare, should compute stationary distribution under P
-  # Here we use simple averages as approximation
-  
-  # Average closure probability
-  avg_close_prob <- mean(P[, "close"])
-  
-  # Expected leak risk (weighted by maintain probability)
-  # Risk only realized if facility maintains
-  exp_leak_risk <- sum(hazards * P[, "maintain"]) / n_states
-  
-  # Expected private loss (conditional on leak)
-  exp_private_loss <- sum(hazards * losses * P[, "maintain"]) / n_states
-  
-  # Expected social loss (includes externality)
-  exp_social_loss <- exp_private_loss * externality_mult
-  
-  # Average value (firm welfare proxy)
-  avg_value <- mean(V)
-  
-  # Closure rate by wall type
-  sw_mask <- states$w == "single"
-  dw_mask <- states$w == "double"
-  
-  avg_close_sw <- mean(P[sw_mask, "close"])
-  avg_close_dw <- mean(P[dw_mask, "close"])
-  
-  # Closure rate by age (young vs old)
-  young_mask <- states$A <= 4
-  old_mask <- states$A >= 7
-  
-  avg_close_young <- mean(P[young_mask, "close"])
-  avg_close_old <- mean(P[old_mask, "close"])
-  
+  sw <- states$w == "single"; dw <- states$w == "double"
+  young <- states$A <= 4;     old <- states$A >= 7
+  ff <- states$rho == "FF";   rb <- states$rho == "RB"
+
   data.table(
-    Scenario = result$scenario,
-    Converged = result$converged,
-    Avg_Close_Prob = avg_close_prob,
-    Exp_Leak_Risk = exp_leak_risk,
-    Exp_Private_Loss = exp_private_loss,
-    Exp_Social_Loss = exp_social_loss,
-    Avg_Value = avg_value,
-    Close_SW = avg_close_sw,
-    Close_DW = avg_close_dw,
-    Close_Young = avg_close_young,
-    Close_Old = avg_close_old
+    Scenario         = result$scenario,
+    Converged        = result$converged,
+    Avg_Close_Prob   = sum(mu * P_policy[, "close"]),
+    Exp_Leak_Risk    = exp_leak_risk,
+    Exp_External_Dam = exp_external_dam,         # Correctly exported for Fig 6
+    Firm_Surplus     = avg_firm_surplus_perceived, 
+    Real_Surplus     = avg_firm_surplus_real,      
+    Social_Welfare   = social_welfare_val,         
+    Govt_Cost        = govt_cost_implied,          
+    
+    Close_SW = subgroup_close(sw), Close_DW = subgroup_close(dw),
+    Close_Young = subgroup_close(young), Close_Old = subgroup_close(old),
+    Close_SW_RB = subgroup_close(sw & rb), Close_SW_FF = subgroup_close(sw & ff),
+    Close_DW_RB = subgroup_close(dw & rb), Close_DW_FF = subgroup_close(dw & ff)
   )
 }
 
-# Compute welfare for all scenarios
-welfare_results <- rbindlist(list(
-  compute_welfare(res_baseline, states, primitives$hazards, primitives$losses),
-  compute_welfare(res_social, states, primitives$hazards, primitives$losses),
-  compute_welfare(res_subsidy, states, primitives$hazards, primitives$losses),
-  compute_welfare(res_mandate, states, primitives$hazards, primitives$losses)
+
+# ==============================================================================
+# 6. RUN COUNTERFACTUALS
+# ==============================================================================
+cat("\n[2/7] Solving Counterfactual Scenarios...\n")
+
+cf_base <- list(states = states, premiums = primitives$premiums,
+                hazards = primitives$hazards, losses = primitives$losses,
+                transitions = transitions, config = config)
+
+res_baseline <- do.call(solve_counterfactual,
+  c(list(scenario = "baseline", theta_base = theta_hat), cf_base))
+
+res_social <- do.call(solve_counterfactual,
+  c(list(scenario = "social", theta_base = theta_hat,
+         externality_mult = EXT_MULT_DEFAULT), cf_base))
+
+res_subsidy <- do.call(solve_counterfactual,
+  c(list(scenario = "subsidy", theta_base = theta_hat,
+         subsidy_amount = 1.0), cf_base))
+
+res_mandate <- do.call(solve_counterfactual,
+  c(list(scenario = "mandate", theta_base = theta_hat,
+         mandate_age = 7, mandate_wall = "single"), cf_base))
+
+
+# ==============================================================================
+# 7. WELFARE TABLE & LATEX EXPORT
+# ==============================================================================
+cat("\n[3/7] Computing Welfare (Standardized to Baseline Primitives)...\n")
+
+welfare_args <- list(states = states, hazards = primitives$hazards,
+                     losses = primitives$losses, F_maintain = transitions$maintain,
+                     pop_weights = pop_weights,
+                     theta_ref = theta_hat, 
+                     cache_ref = res_baseline$cache, 
+                     config = config)
+
+welfare_results <- rbindlist(lapply(
+  list(res_baseline, res_social, res_subsidy, res_mandate),
+  function(r) do.call(compute_welfare, c(list(result = r), welfare_args))
 ))
 
-cat("\n")
-cat("==============================================================\n")
-cat("                    WELFARE SUMMARY\n")
-cat("==============================================================\n")
-print(welfare_results, digits = 4)
+# --- Calculate Deltas ---
+bl <- welfare_results[Scenario == "baseline"]
+welfare_results[, Delta_Close_pp := (Avg_Close_Prob - bl$Avg_Close_Prob) * 100]
+welfare_results[, Delta_Risk_pct := (Exp_Leak_Risk - bl$Exp_Leak_Risk) / bl$Exp_Leak_Risk * 100]
+welfare_results[, Delta_Social_W := Social_Welfare - bl$Social_Welfare]
 
-# ==============================================================================
-# VISUALIZATION: CLOSURE PROBABILITIES BY STATE
-# ==============================================================================
-
-# Prepare plotting data
-plot_data <- data.table()
-
-scenarios <- list(
-  Baseline = res_baseline,
-  Social = res_social,
-  Subsidy = res_subsidy,
-  Mandate = res_mandate
-)
-
-for (name in names(scenarios)) {
-  res <- scenarios[[name]]
-  
-  # Extract CCPs with state info
-  dt <- data.table(
-    Scenario = name,
-    state_idx = 1:nrow(states),
-    A = states$A,
-    Age_Years = (states$A - 1) * 5 + 2.5,  # Midpoint of age bin
-    Wall = as.character(states$w),
-    Regime = as.character(states$rho),
-    P_Close = res$P[, "close"],
-    P_Maintain = res$P[, "maintain"],
-    Value = res$V
-  )
-  
-  plot_data <- rbind(plot_data, dt)
-}
-
-# Plot 1: SW Closure by Age
-g1 <- ggplot(plot_data[Wall == "single"], 
-             aes(x = Age_Years, y = P_Close, color = Scenario, linetype = Regime)) +
-  geom_line(linewidth = 1.1) +
-  facet_wrap(~Regime) +
-  scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
-  labs(
-    title = "Single-Wall Tank Closure Probability by Policy",
-    subtitle = "By age and insurance regime",
-    x = "Tank Age (Years)",
-    y = "P(Close)"
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(legend.position = "bottom")
-
-# Plot 2: DW Closure by Age
-g2 <- ggplot(plot_data[Wall == "double"], 
-             aes(x = Age_Years, y = P_Close, color = Scenario, linetype = Regime)) +
-  geom_line(linewidth = 1.1) +
-  facet_wrap(~Regime) +
-  scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
-  labs(
-    title = "Double-Wall Tank Closure Probability by Policy",
-    subtitle = "By age and insurance regime",
-    x = "Tank Age (Years)",
-    y = "P(Close)"
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(legend.position = "bottom")
-
-# Plot 3: Value Function Comparison
-g3 <- ggplot(plot_data[Wall == "single" & Regime == "RB"], 
-             aes(x = Age_Years, y = Value, color = Scenario)) +
-  geom_line(linewidth = 1.1) +
-  labs(
-    title = "Value Function: Single-Wall Tanks under Risk-Based Insurance",
-    x = "Tank Age (Years)",
-    y = "V(x)"
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(legend.position = "bottom")
-
-# ==============================================================================
-# SAVE OUTPUTS
-# ==============================================================================
-
-# Save welfare table
-fwrite(welfare_results, file.path(RESULTS_DIR, "Counterfactual_Welfare.csv"))
-
-# Save full results
-saveRDS(
-  list(
-    baseline = res_baseline,
-    social = res_social,
-    subsidy = res_subsidy,
-    mandate = res_mandate,
-    welfare = welfare_results,
-    plot_data = plot_data
-  ),
-  file.path(RESULTS_DIR, "Counterfactual_Results.rds")
-)
-
-# Save plots
-ggsave(file.path(RESULTS_DIR, "CF_Closure_SW.png"), g1, width = 10, height = 6)
-ggsave(file.path(RESULTS_DIR, "CF_Closure_DW.png"), g2, width = 10, height = 6)
-ggsave(file.path(RESULTS_DIR, "CF_Value_Function.png"), g3, width = 8, height = 5)
-
-cat("\n")
-cat("==============================================================\n")
-cat("Results saved to: ", RESULTS_DIR, "\n")
-cat("==============================================================\n")
-
-# ==============================================================================
-# OPTIONAL: POLICY COMPARISON TABLE
-# ==============================================================================
-
-# Compute changes relative to baseline
-baseline_close <- welfare_results[Scenario == "baseline", Avg_Close_Prob]
-baseline_risk <- welfare_results[Scenario == "baseline", Exp_Leak_Risk]
-
-policy_comparison <- welfare_results[, .(
-  Scenario,
-  Close_Rate = sprintf("%.1f%%", 100 * Avg_Close_Prob),
-  Delta_Close = sprintf("%+.1f pp", 100 * (Avg_Close_Prob - baseline_close)),
-  Leak_Risk = sprintf("%.2f%%", 100 * Exp_Leak_Risk),
-  Delta_Risk = sprintf("%+.1f%%", 100 * (Exp_Leak_Risk - baseline_risk) / baseline_risk)
+# Avoided leaks & cost-effectiveness
+welfare_results[, Avoided_Leaks := bl$Exp_Leak_Risk - Exp_Leak_Risk]
+welfare_results[, Cost_Per_Avoided_Leak := fifelse(
+  Avoided_Leaks > 0 & Govt_Cost > 0, Govt_Cost / Avoided_Leaks, NA_real_
 )]
 
-cat("\n")
-cat("==============================================================\n")
-cat("              POLICY COMPARISON (vs Baseline)\n")
-cat("==============================================================\n")
-print(policy_comparison)
+# --- Generate Production LaTeX Table ---
+cat("\n[4/7] Generating LaTeX Table for QME Slides...\n")
 
+# Format for display
+tex_dt <- welfare_results[, .(
+  Scenario = simpleCap(as.character(Scenario)),
+  `Closure Rate` = sprintf("%.1f\\%%", Avg_Close_Prob * 100),
+  `Leak Risk`    = sprintf("%.2f\\%%", Exp_Leak_Risk * 100),
+  `Firm Surplus` = sprintf("%.2f", Real_Surplus),
+  `Social Welfare` = sprintf("%.2f", Social_Welfare),
+  `$\\Delta$ Welfare` = sprintf("%+.3f", Delta_Social_W)
+)]
+
+# Create xtable object
+xt <- xtable(tex_dt, 
+             caption = "Counterfactual Welfare Analysis (Model B)",
+             label = "tab:welfare_cf",
+             align = c("l", "l", "c", "c", "c", "c", "c"))
+
+# Save to file
+print(xt, 
+      file = file.path(RESULTS_DIR, "Welfare_Summary.tex"),
+      include.rownames = FALSE,
+      sanitize.text.function = identity, # Allow LaTeX symbols in columns
+      booktabs = TRUE)
+
+cat(sprintf("  Saved LaTeX table to: %s\n", file.path(RESULTS_DIR, "Welfare_Summary.tex")))
+
+# Console Print
+print(welfare_results[, .(Scenario, Close=sprintf("%.1f%%", Avg_Close_Prob*100), 
+                          dSocW=sprintf("%+.3f", Delta_Social_W))])
+
+fwrite(welfare_results, file.path(RESULTS_DIR, "Counterfactual_Welfare.csv"))
 
 # ==============================================================================
-# APPENDIX: ADVANCED MECHANISM PLOTS (Append to end of 03_Welfare.R)
+# 8. FIGURES
 # ==============================================================================
-# PURPOSE: Generate graduate-level mechanism figures for the proposal.
-# 1. Welfare Wedge (Visualizing the externality)
-# 2. Moral Hazard (Visualizing the identification strategy)
-# 3. Fleet Survival (Visualizing the dynamic clean-up)
-# ==============================================================================
+cat("\n[5/7] Generating Figures...\n")
 
-cat("\n[Appendix] Generating Advanced Mechanism Figures...\n")
+# FIX: Define pv_factor globally for this section to prevent scope errors in Fig 6 & Loop
+pv_factor <- 1 / (1 - config$beta) 
 
-# --- SAFETY CHECK: LOAD DATA IF MISSING ---
-if (!exists("est_result")) est_result <- readRDS(file.path(RESULTS_DIR, "Model_B_Estimates.rds"))
-# We specifically need the primitives file which contains the "True" physics
-if (!exists("primitives")) primitives <- readRDS(file.path(RESULTS_DIR, "Estimated_Primitives.rds"))
+theme_pub <- theme_minimal(base_size = 13) +
+  theme(legend.position = "bottom",
+        plot.title = element_text(face = "bold", size = 14),
+        plot.subtitle = element_text(size = 11, color = "grey30"),
+        panel.grid.minor = element_blank())
 
-theta_hat <- est_result$theta_hat
-# Use config from estimation, but ensure n_actions is set
-config <- est_result$config
-if(is.null(config$n_actions)) config$n_actions <- 2
+scenario_colors <- c("Baseline" = "grey40", "Mandate" = "#D55E00",
+                      "Closure Subsidy" = "#0072B2", "Social Optimum" = "#009E73")
+scenario_labels <- c(baseline = "Baseline", social = "Social Optimum",
+                      subsidy = "Closure Subsidy", mandate = "Mandate")
 
-# ==============================================================================
-# 1. ROBUST POLICY SOLVER (Rebuilds Cache to prevent Dimension Errors)
-# ==============================================================================
-solve_policy_robust <- function(theta_in, primitives, config) {
-  
-  # A. Rebuild Cache Locally
-  # This guarantees matrices are 36x36 and match the vectors
-  cache_local <- create_estimation_cache_model_b(
-    states = primitives$states,
-    premiums = primitives$premiums,
-    hazards = primitives$hazards,
-    losses = primitives$losses,
-    transitions = primitives$transitions, # MUST exist in primitives file
-    config = config
+all_results <- list(res_baseline, res_social, res_subsidy, res_mandate)
+
+plot_data <- rbindlist(lapply(all_results, function(res) {
+  data.table(
+    Scenario  = scenario_labels[res$scenario],
+    A         = states$A,
+    Age_Years = (states$A - 1) * 5 + 2.5,
+    Wall      = as.character(states$w),
+    # RENAME: FF -> Uniform Premium
+    Regime    = ifelse(states$rho == "FF", "Uniform Premium", "Risk-Based"),
+    P_Close   = res$P[, "close"],
+    P_Maintain = res$P[, "maintain"],
+    Value     = res$V
   )
-  
-  # B. Calculate Flow Utilities
-  U_in <- calculate_flow_utilities_model_b(theta_in, cache_local)
-  
-  # C. Iterate Bellman (Fixed Point)
-  n_states <- nrow(primitives$states)
-  P_iter <- matrix(0.1, n_states, 2); colnames(P_iter) <- c("maintain", "close")
-  
-  for(i in 1:1000) {
-    V_iter <- invert_value_function_model_b(P_iter, U_in, config)
-    P_new  <- compute_ccps_model_b(U_in, V_iter, cache_local, config)
-    
-    diff <- max(abs(P_new - P_iter))
-    if(diff < 1e-9) break
-    P_iter <- P_new
-  }
-  return(P_iter)
-}
+}))
+plot_data[, Scenario := factor(Scenario,
+  levels = c("Baseline", "Mandate", "Closure Subsidy", "Social Optimum"))]
 
-# ==============================================================================
-# FIGURE A: THE WELFARE WEDGE (Externality)
-# ==============================================================================
-cat("  Generating Figure A: Welfare Wedge...\n")
+# ---------- FIGURE 1: SW Closure by Policy ----------
+g1 <- ggplot(plot_data[Wall == "single"],
+             aes(x = Age_Years, y = P_Close, color = Scenario)) +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 1.8, alpha = 0.7) +
+  facet_wrap(~ Regime) + # Labels already handled in data.table creation
+  scale_y_continuous(limits = c(0, 1), labels = percent) +
+  scale_color_manual(values = scenario_colors) +
+  labs(title = "Single-Wall Closure Probability by Policy Scenario",
+       subtitle = "Structural counterfactuals, by insurance regime",
+       x = "Tank Age (Years)", y = "P(Close)") +
+  theme_pub
 
-# 1. Solve Basline (Private) Policy
-P_private <- solve_policy_robust(theta_hat, primitives, config)
+ggsave(file.path(RESULTS_DIR, "CF_Closure_SW.png"), g1, width = 10, height = 6, dpi = 300)
 
-# 2. Solve Social Optimum Policy
-# Social Planner feels 2x the risk (Externalities internalized)
-theta_social <- theta_hat
-theta_social["gamma_risk"] <- theta_hat["gamma_risk"] * 2.0 
-P_social <- solve_policy_robust(theta_social, primitives, config)
-
-# 3. Extract Data for Single-Walled, Risk-Based (The sensitive group)
-states <- primitives$states
-target_idx <- which(states$w == "single" & states$rho == "RB")
+# ---------- FIGURE 2: Welfare Wedge ----------
+idx_target <- which(states$w == "single" & states$rho == "RB")
 
 df_wedge <- rbind(
-  data.table(Age = states$A[target_idx], Prob = P_private[target_idx, "close"], Type = "Private (Baseline)"),
-  data.table(Age = states$A[target_idx], Prob = P_social[target_idx, "close"],  Type = "Social Optimum")
+  data.table(Age_Years = (states$A[idx_target] - 1) * 5 + 2.5,
+             Prob = res_baseline$P[idx_target, "close"],
+             Type = "Private (Baseline)"),
+  data.table(Age_Years = (states$A[idx_target] - 1) * 5 + 2.5,
+             Prob = res_social$P[idx_target, "close"],
+             Type = "Social Optimum")
 )
-df_wedge[, Age_Years := (Age - 1) * 5 + 2.5] # Midpoint years
+df_ribbon <- dcast(df_wedge, Age_Years ~ Type, value.var = "Prob")
 
-# 4. Plot
-g_wedge <- ggplot(df_wedge, aes(x = Age_Years, y = Prob, color = Type, linetype = Type)) +
-  geom_line(linewidth = 1.2) +
-  # Highlight the wedge area
-  geom_ribbon(data = dcast(df_wedge, Age_Years ~ Type, value.var = "Prob"),
-              aes(x = Age_Years, ymin = `Private (Baseline)`, ymax = `Social Optimum`, 
-                  y = NULL, color = NULL, linetype = NULL), 
-              fill = "red", alpha = 0.1) +
-  scale_color_manual(values = c("blue", "red")) +
-  scale_y_continuous(labels = scales::percent, limits = c(0, 0.5)) +
-  labs(title = "The Welfare Wedge: Uninternalized Leak Risk",
-       subtitle = "Gap between Private and Socially Optimal Exit (Single-Walled Tanks)",
-       x = "Tank Age (Years)", y = "Annual Probability of Closure") +
-  theme_minimal(base_size = 14) + theme(legend.position = "bottom")
+g2 <- ggplot(df_wedge, aes(x = Age_Years, y = Prob, color = Type, linetype = Type)) +
+  geom_line(linewidth = 1.3) +
+  geom_ribbon(data = df_ribbon,
+              aes(x = Age_Years,
+                  ymin = `Private (Baseline)`, ymax = `Social Optimum`,
+                  y = NULL, color = NULL, linetype = NULL),
+              fill = "#D55E00", alpha = 0.12) +
+  scale_color_manual(values = c("Private (Baseline)" = "grey30",
+                                 "Social Optimum" = "#009E73")) +
+  scale_linetype_manual(values = c("Private (Baseline)" = "solid",
+                                    "Social Optimum" = "dashed")) +
+  scale_y_continuous(labels = percent, limits = c(0, NA)) +
+  labs(title = "The Welfare Wedge: Uninternalized Leak Externality",
+       subtitle = "Single-wall tanks, risk-based insurance",
+       x = "Tank Age (Years)", y = "P(Close)",
+       color = NULL, linetype = NULL) +
+  theme_pub +
+  theme(legend.position = c(0.25, 0.85),
+        legend.background = element_rect(fill = alpha("white", 0.8), color = NA))
 
-ggsave(file.path(RESULTS_DIR, "Mech_Fig1_Welfare_Wedge.png"), g_wedge, width = 8, height = 6)
+ggsave(file.path(RESULTS_DIR, "Welfare_Wedge.png"), g2, width = 8, height = 6, dpi = 300)
 
-# ==============================================================================
-# FIGURE B: MORAL HAZARD (Identification)
-# ==============================================================================
-cat("  Generating Figure B: Moral Hazard...\n")
-
-# Compare Exit Rates in Flat Fee vs. Risk-Based regimes using Private Policy
+# ---------- FIGURE 3: Insurance Regime Effect ----------
 idx_RB <- which(states$w == "single" & states$rho == "RB")
 idx_FF <- which(states$w == "single" & states$rho == "FF")
 
-df_moral <- rbind(
-  data.table(Age = states$A[idx_RB], Prob = P_private[idx_RB, "close"], Regime = "Risk-Based (Texas)"),
-  data.table(Age = states$A[idx_FF], Prob = P_private[idx_FF, "close"], Regime = "Flat Fee (Florida)")
+df_regime <- rbind(
+  data.table(Age_Years = (states$A[idx_RB] - 1) * 5 + 2.5,
+             Prob = res_baseline$P[idx_RB, "close"],
+             Regime = "Risk-Based"),
+  data.table(Age_Years = (states$A[idx_FF] - 1) * 5 + 2.5,
+             Prob = res_baseline$P[idx_FF, "close"],
+             Regime = "Uniform Premium") # RENAME: Uniform Premium
 )
-df_moral[, Age_Years := (Age - 1) * 5 + 2.5]
 
-g_moral <- ggplot(df_moral, aes(x = Age_Years, y = Prob, color = Regime)) +
-  geom_line(linewidth = 1.2) +
-  geom_point(size = 3) +
-  scale_color_manual(values = c("orange", "darkblue")) +
-  labs(title = "Evidence of Moral Hazard",
-       subtitle = "Flat fees depress exit incentives for old, risky tanks compared to Risk-Based pricing",
-       x = "Tank Age (Years)", y = "Annual Probability of Closure") +
-  theme_minimal(base_size = 14) + theme(legend.position = "bottom")
+# Determine direction for subtitle
+rb_old <- res_baseline$P[idx_RB[which.max(states$A[idx_RB])], "close"]
+ff_old <- res_baseline$P[idx_FF[which.max(states$A[idx_FF])], "close"]
 
-ggsave(file.path(RESULTS_DIR, "Mech_Fig2_Moral_Hazard.png"), g_moral, width = 8, height = 6)
-
-# ==============================================================================
-# FIGURE C: FLEET SURVIVAL (Dynamic Simulation)
-# ==============================================================================
-cat("  Generating Figure C: Fleet Survival...\n")
-
-# 1. Define Cohort Simulation Function
-simulate_survival <- function(P_input, steps=20) {
-  survivors <- numeric(steps)
-  share <- 1.0
-  # Start with a cohort of 15-year-old tanks (Age Bin 4)
-  curr_age_idx <- 4 
-  
-  for(t in 1:steps) {
-    # Get closure prob for current state (Single, RB)
-    # Cap age index at 9 (absorbing state)
-    eff_age <- min(curr_age_idx, 9)
-    s_idx <- which(states$A == eff_age & states$w == "single" & states$rho == "RB")
-    
-    p_close <- P_input[s_idx, "close"]
-    share <- share * (1 - p_close)
-    survivors[t] <- share
-    
-    # Deterministic Aging: Move to next bin every 5 years
-    if(t %% 5 == 0) curr_age_idx <- curr_age_idx + 1
-  }
-  return(survivors)
+if (rb_old > ff_old) {
+  regime_subtitle <- "Risk-based pricing increases exit incentives for high-risk tanks"
+} else {
+  regime_subtitle <- "Uniform premium pooling depresses exit rates for high-risk tanks"
 }
 
-# 2. Solve Subsidy Policy (Increase Kappa by 20%)
-theta_sub <- theta_hat
-theta_sub["kappa"] <- theta_hat["kappa"] * 1.20
-P_subsidy <- solve_policy_robust(theta_sub, primitives, config)
+g3 <- ggplot(df_regime, aes(x = Age_Years, y = Prob, color = Regime)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2.5) +
+  scale_color_manual(values = c("Risk-Based" = "#0072B2",
+                                 "Uniform Premium" = "#E69F00")) +
+  scale_y_continuous(labels = percent) +
+  labs(title = "Insurance Regime and Closure Incentives",
+       subtitle = regime_subtitle,
+       x = "Tank Age (Years)", y = "P(Close)", color = NULL) +
+  theme_pub
 
-# 3. Run Simulations
-df_surv <- data.table(
-  Year = rep(1:20, 3),
-  Survival = c(simulate_survival(P_private), simulate_survival(P_subsidy), simulate_survival(P_social)),
-  Policy = rep(c("Baseline", "Closure Subsidy", "Social Optimum"), each=20)
+ggsave(file.path(RESULTS_DIR, "Moral_Hazard.png"), g3, width = 8, height = 6, dpi = 300)
+
+# ---------- FIGURE 4: Fleet Survival ----------
+simulate_cohort_survival <- function(P_mat, F_maintain, start_state_idx, steps = 25) {
+  n_s <- nrow(P_mat)
+  mu <- rep(0, n_s)
+  mu[start_state_idx] <- 1.0
+  survival <- numeric(steps)
+
+  for (t in 1:steps) {
+    mu_active <- mu * P_mat[, "maintain"]
+    mu <- as.numeric(t(mu_active) %*% F_maintain)
+    survival[t] <- sum(mu)
+  }
+  return(survival)
+}
+
+start_idx <- which(states$A == 4 & states$w == "single" & states$rho == "RB")
+T_sim <- 25
+
+df_surv <- rbindlist(lapply(all_results, function(res) {
+  surv <- simulate_cohort_survival(res$P, transitions$maintain, start_idx, T_sim)
+  data.table(Year = 1:T_sim, Survival = surv,
+             Scenario = scenario_labels[res$scenario])
+}))
+df_surv[, Scenario := factor(Scenario,
+  levels = c("Baseline", "Mandate", "Closure Subsidy", "Social Optimum"))]
+
+g4 <- ggplot(df_surv, aes(x = Year, y = Survival, color = Scenario, linetype = Scenario)) +
+  geom_line(linewidth = 1.2) +
+  scale_color_manual(values = scenario_colors) +
+  scale_y_continuous(labels = percent, limits = c(0, 1)) +
+  labs(title = "Fleet Cleansing Dynamics",
+       subtitle = "Survival of single-wall RB cohort (initial age 15 years)",
+       x = "Years from Policy Implementation",
+       y = "Fraction of Cohort Remaining",
+       color = NULL, linetype = NULL) +
+  theme_pub
+
+ggsave(file.path(RESULTS_DIR, "Fleet_Survival.png"), g4, width = 8, height = 6, dpi = 300)
+
+# ---------- FIGURE 5: Value Function ----------
+g5 <- ggplot(plot_data[Wall == "single" & Regime == "Risk-Based"], # Using new label
+             aes(x = Age_Years, y = Value, color = Scenario)) +
+  geom_line(linewidth = 1.1) +
+  scale_color_manual(values = scenario_colors) +
+  labs(title = "Value Function: Single-Wall Tanks, Risk-Based Insurance",
+       subtitle = "V(x) in annual revenue units",
+       x = "Tank Age (Years)", y = expression(V(x))) +
+  theme_pub
+
+ggsave(file.path(RESULTS_DIR, "Value_Function.png"), g5, width = 8, height = 5, dpi = 300)
+
+# ---------- FIGURE 6: WELFARE DECOMPOSITION (CORRECTED) ----------
+bl_fw  <- welfare_results[Scenario == "baseline", Firm_Surplus]
+# FIXED: Using correct column name Exp_External_Dam
+bl_dam <- welfare_results[Scenario == "baseline", Exp_External_Dam] * pv_factor
+bl_sw  <- welfare_results[Scenario == "baseline", Social_Welfare]
+
+dt_delta <- welfare_results[Scenario != "baseline", .(
+  Scenario = factor(Scenario, levels = c("social", "subsidy", "mandate"),
+                    labels = c("Social Optimum", "Closure Subsidy", "Mandate")),
+  
+  `Change in Firm Surplus`   = Firm_Surplus - bl_fw,
+  `Avoided External Damages` = -(Exp_External_Dam * pv_factor - bl_dam),
+  `Government Cost`          = -Govt_Cost,
+  `Net Social Welfare Gain`  = Social_Welfare - bl_sw
+)]
+
+dt_delta_long <- melt(dt_delta, id.vars = "Scenario",
+                      variable.name = "Component", value.name = "Value")
+dt_delta_long[, Value_dollars := Value * SCALE_FACTOR]
+
+g6 <- ggplot(dt_delta_long, aes(x = Scenario, y = Value_dollars, fill = Component)) +
+  geom_bar(data = dt_delta_long[Component != "Net Social Welfare Gain"],
+           stat = "identity", position = "stack", width = 0.6) + 
+  geom_point(data = dt_delta_long[Component == "Net Social Welfare Gain"],
+             aes(y = Value_dollars, fill = Component),
+             shape = 21, size = 4, color = "black", stroke = 1.5, show.legend = TRUE) +
+  geom_hline(yintercept = 0, linewidth = 0.4) +
+  scale_fill_manual(values = c(
+    "Change in Firm Surplus"   = "#0072B2", 
+    "Avoided External Damages" = "#009E73", 
+    "Government Cost"          = "#D55E00", 
+    "Net Social Welfare Gain"  = "white"    
+  )) +
+  labs(title = "Welfare Decomposition (Standardized)",
+       subtitle = "Components sum to Net Welfare (Dot). Subsidy treated as transfer.",
+       x = NULL, y = "Change from Baseline ($)", fill = NULL) +
+  scale_y_continuous(labels = dollar_format()) +
+  theme_pub +
+  theme(legend.position = "right")
+
+ggsave(file.path(RESULTS_DIR, "Welfare_Decomposition.png"), g6, width = 9, height = 6, dpi = 300)
+
+# ---------- FIGURE 7: POLICY HETEROGENEITY HEATMAP ----------
+dt_heat <- plot_data[Scenario != "Baseline"]
+dt_base_ref <- plot_data[Scenario == "Baseline", .(Age_Years, Wall, Regime,
+                                                    P_Close_Base = P_Close)]
+dt_heat <- merge(dt_heat, dt_base_ref, by = c("Age_Years", "Wall", "Regime"))
+dt_heat[, Delta_Close := (P_Close - P_Close_Base) * 100]  # in pp
+
+dt_heat[, State_Label := paste0(
+  ifelse(Wall == "single", "SW", "DW"), ", ",
+  Regime)] # Already "Uniform Premium"
+
+COLOR_CAP <- 15 
+dt_heat[, Delta_Capped := pmin(Delta_Close, COLOR_CAP)]
+dt_heat[, Cell_Label := sprintf("%+.1f", Delta_Close)]
+dt_heat[, Is_Capped := Delta_Close > COLOR_CAP]
+
+g7 <- ggplot(dt_heat,
+             aes(x = Age_Years, y = State_Label, fill = Delta_Capped)) +
+  geom_tile(color = "white", linewidth = 0.3) +
+  geom_text(aes(label = Cell_Label,
+                fontface = ifelse(Is_Capped, "bold", "plain"),
+                color = ifelse(Delta_Capped > COLOR_CAP * 0.7, "white", "black")),
+            size = 2.6, show.legend = FALSE) +
+  scale_color_identity() +
+  facet_wrap(~ Scenario, ncol = 1) +
+  scale_fill_gradient(low = "white", high = "#D55E00",
+                       limits = c(0, COLOR_CAP),
+                       name = expression(Delta*" P(Close) (pp)"),
+                       breaks = seq(0, COLOR_CAP, 5)) +
+  scale_x_continuous(breaks = seq(2.5, 42.5, 5)) +
+  labs(title = "Policy Impact Heterogeneity",
+       subtitle = paste0("Change in closure probability (pp) vs. baseline. ",
+                          "Color capped at ", COLOR_CAP, "pp; bold = exceeds cap."),
+       x = "Tank Age (Years)", y = NULL) +
+  theme_pub +
+  theme(legend.position = "right", panel.grid = element_blank())
+
+ggsave(file.path(RESULTS_DIR, "Policy_Heterogeneity.png"), g7,
+       width = 10, height = 8, dpi = 300)
+
+
+# ---------- FIGURE 8: EXTERNALITY SENSITIVITY ----------
+cat("\n[6/7] Computing externality sensitivity...\n")
+
+ext_grid <- seq(1.0, 4.0, by = 0.25)
+U_real_base <- calculate_flow_utilities_model_b(theta_hat, cf_base$cache)
+
+# pv_factor is now defined globally at top of Section 8
+
+sens_results <- rbindlist(lapply(ext_grid, function(em) {
+  theta_s <- theta_hat
+  theta_s["gamma_risk"] <- theta_hat["gamma_risk"] * em
+  eq_s <- solve_equilibrium_policy_model_b(theta_s, cf_base$cache, config)
+  mu_s <- compute_weighted_ergodic(eq_s$P, transitions$maintain, states, pop_weights)
+  
+  V_real_s <- invert_value_function_model_b(eq_s$P, U_real_base, config)
+  firm_V_real <- sum(mu_s * V_real_s)
+
+  leak_risk_s <- sum(mu_s * eq_s$P[, "maintain"] * primitives$hazards)
+  priv_loss_s <- sum(mu_s * eq_s$P[, "maintain"] * primitives$hazards * primitives$losses)
+  external_dam_s <- priv_loss_s * (em - 1)
+  social_welfare  <- firm_V_real - (external_dam_s * pv_factor)
+
+  data.table(
+    Ext_Mult       = em,
+    Close_Rate     = sum(mu_s * eq_s$P[, "close"]),
+    Leak_Risk      = leak_risk_s,
+    Firm_Surplus   = firm_V_real,
+    Social_Loss    = priv_loss_s * em,
+    Social_Welfare = social_welfare
+  )
+}))
+
+# ==============================================================================
+# 9. SAVE
+# ==============================================================================
+cat("\n[7/7] Saving all results...\n")
+
+saveRDS(
+  list(baseline = res_baseline, social = res_social,
+       subsidy = res_subsidy, mandate = res_mandate,
+       welfare = welfare_results, plot_data = plot_data,
+       sensitivity = sens_results,
+       theta_hat = theta_hat, config = config,
+       pop_weights = pop_weights, scale_factor = SCALE_FACTOR),
+  file.path(RESULTS_DIR, "Counterfactual_Results.rds")
 )
 
-g_surv <- ggplot(df_surv, aes(x = Year, y = Survival, color = Policy)) +
-  geom_line(linewidth = 1.2) +
-  scale_color_manual(values = c("black", "purple", "red")) +
-  scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
-  labs(title = "Fleet Cleansing Dynamics (Single-Walled Cohort)",
-       subtitle = "Survival rate of high-risk tanks (Age 15 start) over next 20 years",
-       x = "Years from Today", y = "% of Fleet Remaining") +
-  theme_minimal(base_size = 14) + theme(legend.position = "bottom")
+# ==============================================================================
+# 10. PREMIUM DIAGNOSTIC
+# ==============================================================================
+cat("\n[Final] Premium Diagnostic...\n")
 
-ggsave(file.path(RESULTS_DIR, "Mech_Fig3_Fleet_Survival.png"), g_surv, width = 8, height = 6)
+prem_diag <- data.table(states[, .(A, w, rho, state_idx)],
+                         premium = primitives$premiums)
 
-cat("SUCCESS: All advanced figures generated and saved.\n")
+cat("\nPremium structure (single-wall only):\n")
+print(dcast(prem_diag[w == "single"], A ~ rho, value.var = "premium"))
+
+ff_sw_prem <- prem_diag[rho == "FF" & w == "single", premium]
+if (sd(ff_sw_prem) > 0.001) {
+  cat("\n  WARNING: Uniform Premium (FF) premiums vary across age states (sd =",
+      round(sd(ff_sw_prem), 4), ").\n")
+}
+
+cat(sprintf("\nDone. All outputs in: %s\n", RESULTS_DIR))
