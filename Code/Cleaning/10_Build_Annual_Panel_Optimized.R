@@ -71,24 +71,39 @@ master_tanks <- fread(here("Data", "Processed", "Master_Harmonized_UST_Tanks.csv
 log_step("Loading Master Harmonized LUST...", 0)
 master_lust <- fread(here("Data", "Processed", "Master_Harmonized_LUST.csv"))
 
-# 1.3 Load Texas FR Data (Auxiliary)
+# 1.3 Load Texas FR Data (Auxiliary) - KEEP IN MEMORY FOR LATER
 log_step("Loading Texas FR Auxiliary Data...", 0)
-# FA Monthly
+
+# FA Monthly - ENHANCED: Dynamically detect ALL issuer and dummy columns
 fa_monthly <- fread(here("Data", "Raw", "fa_monthly.csv"))
-# Filter/Select FA Monthly columns dynamically as before
+
+# Define base columns to ALWAYS keep
+fa_base_cols <- c("FACILITY_ID", "YEAR", "MONTH", "DETAIL_TYPE", "CATEGORY", 
+                  "uses_private", "uses_self", "fr_covered", 
+                  "transition_month", "multiple_contracts", "dropped_by_zurich") 
+
+# Dynamically identify variable groups
 fa_issuer_cols <- grep("^ISSUER_NAME", names(fa_monthly), value = TRUE)
-fa_keep <- unique(c("FACILITY_ID", "YEAR", "MONTH", "DETAIL_TYPE", "CATEGORY", 
-                    "uses_private", "uses_self", "fr_covered", 
-                    "transition_month", "multiple_contracts", "dropped_by_zurich",
-                    fa_issuer_cols))
-fa_monthly <- fa_monthly[, .SD, .SDcols = intersect(fa_keep, names(fa_monthly))]
+fa_cat_dummies <- grep("^CATEGORY_", names(fa_monthly), value = TRUE)
+fa_det_dummies <- grep("^DETAIL_TYPE_", names(fa_monthly), value = TRUE)
+fa_cover_vars  <- grep("^COVER_", names(fa_monthly), value = TRUE)
+
+# Combine and subset
+fa_keep <- unique(c(fa_base_cols, fa_issuer_cols, fa_cat_dummies, fa_det_dummies, fa_cover_vars))
+fa_keep <- intersect(fa_keep, names(fa_monthly)) # Safety check
+fa_monthly <- fa_monthly[, .SD, .SDcols = fa_keep]
+
+log_step(sprintf("FA monthly: %s rows (with %d issuer cols, %d dummies)", 
+                 format(nrow(fa_monthly), big.mark=","), 
+                 length(fa_issuer_cols), 
+                 length(c(fa_cat_dummies, fa_det_dummies))), 1)
 
 # Zurich Lookup
 zurich_2012_lookup <- fread(here("Data", "Raw", "zurich_2012_lookup.csv"))
 
 log_step("Data loading complete.", 1)
 
-head(fa_monthly[,FACILITY_ID])
+#==============================================================================
 # SECTION 2: DATA CLEANING & PANEL PREP
 #==============================================================================
 cat("\n========================================\n")
@@ -96,10 +111,9 @@ cat("SECTION 2: CLEANING & FILTERING\n")
 cat("========================================\n\n")
 
 # 2.1 Standardize IDs & Create Panel ID
-# Logic: panel_id = facility_id + "_" + state
 log_step("Creating composite panel_id...", 0)
 
-# Master Tanks (Already standardized in 04_Master_Build, but robustly ensure consistency)
+# Master Tanks
 master_tanks[, `:=`(
   facility_id = toupper(trimws(as.character(facility_id))),
   tank_id     = toupper(trimws(as.character(tank_id))),
@@ -114,30 +128,23 @@ master_lust[, `:=`(
 )]
 master_lust[, panel_id := paste(facility_id, state, sep = "_")]
 
-# --- CRITICAL FIX: Standardize Texas Auxiliary Files to Match Harmonized ID ---
-# Logic: Harmonized Data stripped leading zeros for Texas. We must do the same here.
-# Also: Suffix must be "_TX", not "_TEXAS".
-
-# FA Monthly
+# FA Monthly - Standardize IDs to match harmonized data
 log_step("Standardizing FA Monthly IDs (Stripping zeros + 'TX' suffix)...", 1)
 fa_monthly[, clean_id := str_remove(toupper(trimws(as.character(FACILITY_ID))), "^0+")]
 fa_monthly[, `:=`(
   facility_id = clean_id,
   panel_id    = paste(clean_id, "TX", sep = "_") 
 )]
-fa_monthly[, clean_id := NULL] # Cleanup
+fa_monthly[, clean_id := NULL]
 
 # Zurich Lookup
 log_step("Standardizing Zurich IDs (Stripping zeros + 'TX' suffix)...", 1)
-# Check names first if unsure: names(zurich_2012_lookup)
-# Likely Fix: Change facility_id to FACILITY_ID
 zurich_2012_lookup[, clean_id := str_remove(toupper(trimws(as.character(FACILITY_ID))), "^0+")]
 zurich_2012_lookup[, `:=`(
   facility_id = clean_id,
   panel_id    = paste(clean_id, "TX", sep = "_")
 )]
-zurich_2012_lookup[, clean_id := NULL] # Cleanup
-
+zurich_2012_lookup[, clean_id := NULL]
 
 # 2.2 Date Type Standardization
 log_step("Standardizing date types...", 0)
@@ -147,13 +154,11 @@ master_tanks[, `:=`(
 )]
 master_lust[, report_date := coerce_date(report_date)]
 
-
-# 2.3 Strict Filtering Rules (Per Instructions)
+# 2.3 Strict Filtering Rules
 log_step("Applying strict facility filtering rules...", 0)
 n_fac_orig <- uniqueN(master_tanks$panel_id)
 
 # Rule 1: Drop facility if ANY tank is 'Closed' but missing closure date
-# We check this by grouping by panel_id
 problem_closed <- master_tanks[
   tolower(tank_status) == "closed" & is.na(tank_closed_date),
   .(panel_id)
@@ -180,42 +185,32 @@ log_step(sprintf("  Facilities Remaining: %s (%.1f%% retained)",
                  format(n_fac_final, big.mark=","), 
                  100 * n_fac_final / n_fac_orig), 1)
 
-
 # 2.4 Create Panel Bounded Dates (1970 - 2025)
 log_step("Creating panel start/end date bounds...", 0)
 
 PANEL_START <- as.IDate("1970-01-01") 
 PANEL_END   <- as.IDate("2025-12-31")
 
-# Create panel_start_date (Left censor at 1970)
-# If install date is NA (and we kept it), default to Panel Start to be safe, 
-# though filtering should have caught most active ones.
+# Create panel_start_date
 master_tanks[, tank_panel_start_date := fifelse(
   is.na(tank_installed_date) | tank_installed_date < PANEL_START,
   PANEL_START,
   tank_installed_date
 )]
 
-# Create panel_end_date (Right censor at 2025 or Closure)
-master_tanks[, tank_panel_end_date := PANEL_END] # Default to active until 2025
-
-# If closed, use closure date (clamped to 2025)
+# Create panel_end_date
+master_tanks[, tank_panel_end_date := PANEL_END]
 master_tanks[!is.na(tank_closed_date), tank_panel_end_date := pmin(tank_closed_date, PANEL_END)]
 
-# Validation: Start <= End
-# If a tank closed before 1970, End < Start. These are "dead" relative to panel.
+# Validation
 master_tanks[, valid_panel_tank := tank_panel_end_date >= tank_panel_start_date]
-
-# Exclude tanks that closed before the panel began
-# (We keep them in 'master_tanks' for now if we need baseline stats, 
-# but we filter them out for the backbone creation)
 active_panel_tanks <- master_tanks[valid_panel_tank == TRUE]
 
 log_step(sprintf("  Tanks active within 1970-2025 window: %s", 
                  format(nrow(active_panel_tanks), big.mark=",")), 1)
 
-
-#==============================================================================
+#=====================================================
+=========================
 # SECTION 3: CREATE FACILITY-MONTH BACKBONE
 #==============================================================================
 cat("\n========================================\n")
@@ -226,33 +221,21 @@ cat("========================================\n\n")
 facility_ranges <- active_panel_tanks[, .(
   start_date = min(tank_panel_start_date, na.rm=TRUE),
   end_date   = max(tank_panel_end_date, na.rm=TRUE),
-  # Carry forward geographic info
   county_name = first(na.omit(county_name)),
   county_fips = first(na.omit(county_fips))
 ), by = .(facility_id, state, panel_id)]
 
-
-# =========================================================================
-# FAST BACKBONE CREATION (Vectorized)
-# =========================================================================
-
-# 1. Convert Start/End Dates to "Absolute Month Integers" (Integers are fast)
-#    (Formula: (Year - 1970) * 12 + Month)
+# Fast Backbone Creation (Vectorized)
 facility_ranges[, start_m_abs := (year(start_date) - 1970L) * 12L + month(start_date)]
 facility_ranges[, end_m_abs   := (year(end_date)   - 1970L) * 12L + month(end_date)]
 
-# 2. Expand using C-optimized Integer Sequence
-#    data.table optimizes 'x:y' inside 'j' significantly better than 'seq()'
-#    We include county/state in 'by' to carry them forward automatically
 log_step("Expanding facilities (Integer Method)...", 0)
 
 panel_dates <- facility_ranges[, .(
     month_abs = start_m_abs:end_m_abs 
-), by = .(panel_id, state, county_name, county_fips)]
+), by = .(panel_id, facility_id, state, county_name, county_fips)]
 
-# 3. Fast Date Recovery (Lookup Table Method)
-#    Instead of running as.Date() on millions of rows, run it on ~700 unique months 
-#    and join. This is orders of magnitude faster.
+# Fast Date Recovery
 min_m <- min(panel_dates$month_abs)
 max_m <- max(panel_dates$month_abs)
 
@@ -261,29 +244,27 @@ date_lookup[, `:=`(
     year  = 1970L + (month_abs - 1L) %/% 12L,
     month = (month_abs - 1L) %% 12L + 1L
 )]
-# Create Date object once per unique month
 date_lookup[, date := as.IDate(sprintf("%04d-%02d-01", year, month))]
 
-# 4. Merge Date back to Panel
 log_step("Mapping dates...", 0)
 panel_dates <- merge(panel_dates, date_lookup, by = "month_abs", sort = FALSE)
 
-# Cleanup columns to match your original schema
 panel_dates[, `:=`(panel_year = year, panel_month = month)]
 panel_dates[, c("month_abs", "year", "month") := NULL]
 
 log_step(sprintf("  Backbone created: %s facility-months", format(nrow(panel_dates), big.mark=",")), 1)
 
 rm(facility_ranges, date_lookup)
-# =========================================================================
-# SECTION 4: COMPUTE MONTHLY TANK COMPOSITION (CORRECTED)
-# =========================================================================
+
+
+#==============================================================================
+# SECTION 4: COMPUTE MONTHLY TANK COMPOSITION
+#==============================================================================
 cat("\n========================================\n")
 cat("SECTION 4: MONTHLY TANK COMPOSITION (NON-EQUI JOIN)\n")
 cat("========================================\n\n")
 
-# 1. Prepare tanks for join (numeric dates for speed)
-#    Ensure install_date is IDate for compatibility
+# Prepare tanks for join
 tanks_for_join <- active_panel_tanks[, .(
     panel_id, facility_id, state,
     tank_start_num = as.numeric(tank_panel_start_date),
@@ -293,7 +274,7 @@ tanks_for_join <- active_panel_tanks[, .(
     is_gasoline, is_diesel, is_oil_kerosene, is_jet_fuel, is_other
 )]
 
-# 2. Process by State
+# Process by State
 states <- unique(panel_dates$state)
 tank_month_list <- vector("list", length(states))
 
@@ -302,30 +283,21 @@ log_step("Performing non-equi joins by state...", 0)
 for (i in seq_along(states)) {
     st <- states[i]
 
-    # Subset backbone and tanks
     backbone_st <- panel_dates[state == st]
     tanks_st    <- tanks_for_join[state == st]
 
     if(nrow(backbone_st) == 0 || nrow(tanks_st) == 0) next
     
-    # Numeric date for join logic ONLY
     backbone_st[, date_num := as.numeric(date)]
 
-    # The Join: Tanks active during the specific month
-    # date_num is used for logic but dropped from result. 
-    # 'date' (IDate) is preserved automatically.
     active <- tanks_st[backbone_st, 
                        on = .(panel_id, 
                               tank_start_num <= date_num, 
                               tank_end_num >= date_num),
                        nomatch = 0L, allow.cartesian = TRUE]
-
-    # REMOVED: active[, date := as.Date(date_num...)] <-- CAUSE OF ERROR
     
-    # Calc Age (using the preserved 'date' column)
     active[, tank_age := as.numeric(date - install_date_for_age) / 365.25]
 
-    # Aggregation
     tank_month_list[[i]] <- active[, .(
       active_tanks   = .N,
       avg_tank_age   = mean(tank_age, na.rm=TRUE),
@@ -333,7 +305,10 @@ for (i in seq_along(states)) {
       single_tanks   = sum(single_walled, na.rm=TRUE),
       double_tanks   = sum(double_walled, na.rm=TRUE),
       has_gasoline   = max(is_gasoline, na.rm=TRUE),
-      has_diesel     = max(is_diesel, na.rm=TRUE)
+      has_diesel     = max(is_diesel, na.rm=TRUE),
+      has_oil_kerosene = max(is_oil_kerosene, na.rm=TRUE),
+      has_jet_fuel   = max(is_jet_fuel, na.rm=TRUE),
+      has_other      = max(is_other, na.rm=TRUE)
     ), by = .(panel_id, state, date)]
 
     if (i %% 5 == 0) cat(".")
@@ -361,7 +336,6 @@ monthly[, `:=`(
     has_unknown_walled  = as.integer(active_tanks > (single_tanks + double_tanks))
 )]
 
-
 log_step("Section 4 Complete.", 1)
 
 #==============================================================================
@@ -374,20 +348,20 @@ cat("========================================\n\n")
 # 5.1 LUST Events
 leaks_agg <- master_lust[!is.na(report_date), .(leak_incident = 1L), 
                          by = .(panel_id, date = floor_date(report_date, "month"))]
-# Deduplicate (multiple leaks in same month = 1 incident for binary flag, or sum?)
-# Using sum for counts, binary for year flag later.
 leaks_agg <- leaks_agg[, .(leak_incident = sum(leak_incident)), by = .(panel_id, date)]
 
-# 5.2 Closures (from Master Tanks)
+# 5.2 Closures
 closures_agg <- master_tanks[!is.na(tank_closed_date), .(
   tanks_closed = .N,
-  capacity_closed = sum(capacity, na.rm=TRUE)
+  capacity_closed = sum(capacity, na.rm=TRUE),
+  single_walled_closed = sum(single_walled, na.rm=TRUE)
 ), by = .(panel_id, date = floor_date(tank_closed_date, "month"))]
 
-# 5.3 Installs (from Master Tanks)
+# 5.3 Installs
 installs_agg <- master_tanks[!is.na(tank_installed_date), .(
   tanks_installed = .N,
-  capacity_installed = sum(capacity, na.rm=TRUE)
+  capacity_installed = sum(capacity, na.rm=TRUE),
+  double_walled_installed = sum(double_walled, na.rm=TRUE)
 ), by = .(panel_id, date = floor_date(tank_installed_date, "month"))]
 
 # 5.4 Merge All
@@ -396,140 +370,334 @@ monthly <- merge(monthly, closures_agg, by=c("panel_id", "date"), all.x=TRUE)
 monthly <- merge(monthly, installs_agg, by=c("panel_id", "date"), all.x=TRUE)
 
 # Fill NAs
-fill_cols <- c("leak_incident", "tanks_closed", "capacity_closed", "tanks_installed", "capacity_installed")
+fill_cols <- c("leak_incident", "tanks_closed", "capacity_closed", "single_walled_closed",
+               "tanks_installed", "capacity_installed", "double_walled_installed")
 for(col in fill_cols) set(monthly, which(is.na(monthly[[col]])), col, 0)
 
-# =========================================================================
-# SECTION 5.5: FINALIZE MONTHLY (WITHOUT MERGING TEXAS YET)
-# =========================================================================
-# NOTE: We skip the Texas merge here to save RAM. We will do it in Section 6.
+# 5.5 Create Replacement/Retrofit Variables
+monthly[, `:=`(
+  replacement_event = as.integer(tanks_closed > 0 & tanks_installed > 0),
+  single_to_double_replacement = as.integer(
+    tanks_closed > 0 & tanks_installed > 0 & 
+    single_walled_closed > 0 & double_walled_installed > 0
+  )
+)]
 
-# 1. Immediate Memory Cleanup
-#    Remove intermediate aggregations now that they are merged into 'monthly'
-rm(leaks_agg, closures_agg, installs_agg)
+# 5.6 Save Intermediate Monthly Panel (WITHOUT FR DATA to save memory)
+log_step("Saving intermediate monthly panel...", 0)
+output_monthly <- here("Data", "Processed", "facility_leak_behavior_monthly_intermediate.csv")
+fwrite(monthly, output_monthly)
+log_step(sprintf("✓ Saved Monthly RDS: %s", output_monthly), 1)
 
-# 2. Remove Redundant Panels
-#    'active_panel_tanks' is a subset of 'master_tanks'.
-#    'panel_dates' is the pre-merge version of 'monthly'.
-rm(active_panel_tanks, panel_dates)
+
+
+# =========================================================================
+# SECTION 5.7: MEMORY CLEANUP
+# =========================================================================
+rm(leaks_agg, closures_agg, installs_agg, panel_dates)
 gc()
 
-# 3. Shrink Master Files for Section 7
-#    Section 7 ONLY needs 'panel_id' and specific dates.
-#    We drop everything else to free up ~2GB+ of RAM.
+# Shrink Master Files for Section 7
 log_step("Shrinking Master Tables to bare minimum...", 0)
-
-# Keep only Closed tanks with valid dates
+master_tanks_full <- copy(master_tanks)  # KEEP FULL VERSION FOR SECTION 7.5
 master_tanks <- master_tanks[!is.na(tank_closed_date), .(panel_id, tank_closed_date)]
-
-# Keep only Leaks with valid dates
 master_lust <- master_lust[!is.na(report_date), .(panel_id, report_date)]
 
-# 4. Trigger Deep Garbage Collection
 log_memory("Pre-Aggregation Cleanup")
 gc()
 
-
-# =========================================================================
-# SECTION 6: ANNUAL AGGREGATION & LATE MERGE
-# =========================================================================
+#==============================================================================
+# SECTION 6: ANNUAL AGGREGATION & LATE FR MERGE
+#==============================================================================
 cat("\n========================================\n")
 cat("SECTION 6: ANNUAL AGGREGATION (LATE MERGE STRATEGY)\n")
 cat("========================================\n\n")
 
-# 6.1 Create Annual Backbone (Aggregation)
-#    We aggregate the massive monthly panel down to facility-years.
 log_step("Aggregating monthly panel to annual...", 0)
 
 # Add YEAR column if not present
 if(!"YEAR" %in% names(monthly)) monthly[, YEAR := year(date)]
 
-# A. December Snapshot (Stocks: Capacity, Active Tanks)
-#    We take the state of the facility in the last month of the year
+# A. December Snapshot (Stocks)
 setorder(monthly, panel_id, YEAR, date)
 december <- monthly[, .SD[.N], by = .(panel_id, YEAR), 
                     .SDcols = c("active_tanks", "total_capacity", "avg_tank_age", 
                                 "single_tanks", "double_tanks", "state", 
-                                "county_name", "county_fips")]
+                                "county_name", "county_fips",
+                                "has_single_walled", "has_double_walled")]
 
-# Rename columns for clarity (these are end-of-year stocks)
 setnames(december, 
-         old = c("active_tanks", "total_capacity", "avg_tank_age", "single_tanks", "double_tanks"), 
-         new = paste0(c("active_tanks", "total_capacity", "avg_tank_age", "single_tanks", "double_tanks"), "_dec"))
+         old = c("active_tanks", "total_capacity", "avg_tank_age", "single_tanks", "double_tanks",
+                 "has_single_walled", "has_double_walled"), 
+         new = paste0(c("active_tanks", "total_capacity", "avg_tank_age", "single_tanks", "double_tanks",
+                        "has_single_walled", "has_double_walled"), "_dec"))
 
-# B. Annual Flows (Events: Leaks, Closures, etc.)
+# B. Annual Flows (CORRECTED)
 annual_flows <- monthly[, .(
-    n_leaks      = sum(leak_incident, na.rm=TRUE),
-    leak_year    = as.integer(sum(leak_incident, na.rm=TRUE) > 0),
-    n_closures   = sum(tanks_closed, na.rm=TRUE),
-    closure_year = as.integer(sum(tanks_closed, na.rm=TRUE) > 0),
-    n_installs   = sum(tanks_installed, na.rm=TRUE)
+    facility_id = first(facility_id),
+
+    # Flow Variables
+    n_leaks       = sum(leak_incident, na.rm=TRUE),
+    leak_year     = as.integer(sum(leak_incident, na.rm=TRUE) > 0),
+    n_closures    = sum(tanks_closed, na.rm=TRUE),
+    closure_year  = as.integer(sum(tanks_closed, na.rm=TRUE) > 0),
+    n_installs    = sum(tanks_installed, na.rm=TRUE),
+    n_retrofits   = sum(replacement_event, na.rm=TRUE),
+    retrofit_year = as.integer(sum(replacement_event, na.rm=TRUE) > 0),
+    n_single_to_double = sum(single_to_double_replacement, na.rm=TRUE),
+    single_to_double_year = as.integer(sum(single_to_double_replacement, na.rm=TRUE) > 0),
+
+    # Capacity Flows
+    capacity_installed_year = sum(capacity_installed, na.rm=TRUE),
+    capacity_closed_year = sum(capacity_closed, na.rm=TRUE),
+    double_walled_installed_year = sum(double_walled_installed, na.rm=TRUE),
+
+    # Mean Stocks
+    active_tanks_mean = mean(active_tanks, na.rm=TRUE),
+    total_capacity_mean = mean(total_capacity, na.rm=TRUE),
+    avg_tank_age_mean = mean(avg_tank_age, na.rm=TRUE),
+
+    # Fuel Types (FIXED: Use 'any' to avoid -Inf and ensure integer type)
+    has_gasoline_year = as.integer(any(has_gasoline == 1, na.rm=TRUE)),
+    has_diesel_year   = as.integer(any(has_diesel == 1, na.rm=TRUE))
 ), by = .(panel_id, YEAR)]
+
+
 
 # C. Merge Stocks and Flows
 annual <- merge(annual_flows, december, by = c("panel_id", "YEAR"))
 
 # D. Cleanup Monthly to free RAM
-#    CRITICAL: This releases the huge monthly dataset.
 rm(monthly, december, annual_flows)
 gc()
 
 log_step(sprintf("Annual Panel Created: %s rows", format(nrow(annual), big.mark=",")), 1)
-
-
-# 6.2 Late Merge: Texas FR Data (Aggregated to Annual)
+# =========================================================================
+# 6.2 LATE MERGE: Texas FR Data (DECEMBER SNAPSHOT + ANNUAL FLOWS)
+# =========================================================================
 log_step("Preparing Texas FR data for annual merge...", 0)
 
-# A. Aggregate FA Monthly to Annual
-#    Calculate coverage share: (Months with Coverage) / 12
-#    We filter for valid rows, count them per year, and join.
-fa_annual <- fa_monthly[
-  !is.na(CATEGORY) & CATEGORY != "None",
-  .(months_covered = .N),
-  by = .(panel_id, YEAR)
-]
+# -------------------------------------------------------------------------
+# A. December Snapshot (FR Status as of December 31st)
+# -------------------------------------------------------------------------
+# This captures: What was the facility's FR situation at year-end?
 
-# B. Merge FA Data to Annual Panel
-annual <- merge(annual, fa_annual, by = c("panel_id", "YEAR"), all.x = TRUE)
-annual[is.na(months_covered), months_covered := 0]
-annual[, fr_coverage_share := months_covered / 12]
+# Add YEAR/MONTH to fa_monthly for filtering
+fa_monthly[, `:=`(YEAR = YEAR, MONTH = MONTH)]
 
-# C. Merge Zurich Lookup
-#    Make sure Zurich IDs are cleaned (Section 2.1 logic)
-#    Note: Section 2.1 already cleaned 'zurich_2012_lookup', so we just use it.
-#    If the object was deleted in cleanup, reload it here or ensure it wasn't deleted.
-#    (Based on the script flow, if you deleted it in Section 5.5, reload it below).
-if(!exists("zurich_2012_lookup")) {
-  zurich_2012_lookup <- fread(here("Data", "Raw", "zurich_2012_lookup.csv"))
-  zurich_2012_lookup[, clean_id := str_remove(toupper(trimws(as.character(FACILITY_ID))), "^0+")]
-  zurich_2012_lookup[, panel_id := paste(clean_id, "TX", sep = "_")]
+# Get December observations (or last available month if December missing)
+setorder(fa_monthly, panel_id, YEAR, MONTH)
+
+fa_december <- fa_monthly[, .SD[.N], by = .(panel_id, YEAR), 
+                          .SDcols = c("DETAIL_TYPE", "CATEGORY", 
+                                      "uses_private", "uses_self", "fr_covered")]
+
+# Rename to indicate these are end-of-year stocks
+setnames(fa_december,
+         old = c("DETAIL_TYPE", "CATEGORY", "uses_private", "uses_self", "fr_covered"),
+         new = c("DETAIL_TYPE_dec", "CATEGORY_dec", "uses_private_dec", 
+                 "uses_self_dec", "fr_covered_dec"))
+
+# Add issuer name if available
+issuer_col <- grep("^ISSUER_NAME", names(fa_monthly), value = TRUE)[1]
+if(!is.null(issuer_col) && length(issuer_col) > 0) {
+  fa_monthly[, ISSUER_NAME := get(issuer_col)]
+  
+  fa_december_issuer <- fa_monthly[, .SD[.N], by = .(panel_id, YEAR), 
+                                   .SDcols = "ISSUER_NAME"]
+  setnames(fa_december_issuer, "ISSUER_NAME", "ISSUER_NAME_dec")
+  
+  fa_december <- merge(fa_december, fa_december_issuer, by = c("panel_id", "YEAR"))
 }
+
+log_step("  December FR snapshot created", 1)
+
+# -------------------------------------------------------------------------
+# B. Annual Flows (FR Events During the Year)
+# -------------------------------------------------------------------------
+# This captures: What FR activity/changes occurred during the year?
+
+fa_annual_flows <- fa_monthly[, .(
+  # Coverage metrics
+  months_covered = sum(!is.na(CATEGORY) & CATEGORY != "None", na.rm = TRUE),
+  months_with_data = .N,
+  
+  # Coverage type shares (for comparison)
+  share_private = mean(uses_private, na.rm = TRUE),
+  share_self = mean(uses_self, na.rm = TRUE),
+  
+  # Transitions and gaps
+  n_transitions = sum(transition_month, na.rm = TRUE),
+  any_transition = as.integer(max(transition_month, na.rm = TRUE) > 0),
+  n_gap_months = sum(is.na(CATEGORY) | CATEGORY == "None", na.rm = TRUE),
+  
+  # Modal values (most common during year)
+  modal_detail_type = {
+    valid_types <- DETAIL_TYPE[!is.na(DETAIL_TYPE) & DETAIL_TYPE != ""]
+    if(length(valid_types) > 0) {
+      tbl <- table(valid_types)
+      names(which.max(tbl))
+    } else NA_character_
+  },
+  
+  modal_category = {
+    valid_cats <- CATEGORY[!is.na(CATEGORY) & CATEGORY != "None"]
+    if(length(valid_cats) > 0) {
+      tbl <- table(valid_cats)
+      names(which.max(tbl))
+    } else NA_character_
+  }
+), by = .(panel_id, YEAR)]
+
+# Create derived flow variables
+fa_annual_flows[, `:=`(
+  any_gap = as.integer(n_gap_months > 0),
+  fr_coverage_share = months_covered / 12,
+  fr_stable = as.integer(n_transitions == 0 & n_gap_months == 0)
+)]
+
+log_step("  Annual FR flows created", 1)
+
+# -------------------------------------------------------------------------
+# C. Merge FR Stocks and Flows to Annual Panel
+# -------------------------------------------------------------------------
+
+# Merge December snapshot
+annual <- merge(annual, fa_december, 
+                by.x = c("panel_id", "panel_year"), 
+                by.y = c("panel_id", "YEAR"), 
+                all.x = TRUE)
+
+# Merge annual flows
+annual <- merge(annual, fa_annual_flows, 
+                by.x = c("panel_id", "panel_year"), 
+                by.y = c("panel_id", "YEAR"), 
+                all.x = TRUE)
+
+log_step("  FR data merged to annual panel", 1)
+
+# -------------------------------------------------------------------------
+# D. Fill NAs for Non-Texas Facilities
+# -------------------------------------------------------------------------
+
+# December snapshot variables (stocks)
+dec_vars <- c("DETAIL_TYPE_dec", "CATEGORY_dec", "uses_private_dec", 
+              "uses_self_dec", "fr_covered_dec", "ISSUER_NAME_dec")
+
+for(var in dec_vars) {
+  if(var %in% names(annual)) {
+    # For character vars, fill with "None" or NA
+    if(is.character(annual[[var]])) {
+      annual[is.na(get(var)), (var) := "None"]
+    } else {
+      # For numeric/binary, fill with 0
+      annual[is.na(get(var)), (var) := 0]
+    }
+  }
+}
+
+# Annual flow variables
+flow_vars <- c("months_covered", "months_with_data", "share_private", "share_self",
+               "n_transitions", "any_transition", "n_gap_months", "any_gap",
+               "fr_coverage_share", "fr_stable")
+
+for(var in flow_vars) {
+  if(var %in% names(annual)) {
+    annual[is.na(get(var)), (var) := 0]
+  }
+}
+
+# Modal variables
+modal_vars <- c("modal_detail_type", "modal_category")
+for(var in modal_vars) {
+  if(var %in% names(annual)) {
+    annual[is.na(get(var)), (var) := "None"]
+  }
+}
+
+log_step("  NAs filled for non-Texas facilities", 1)
+
+# -------------------------------------------------------------------------
+# E. Merge Zurich Lookup
+# -------------------------------------------------------------------------
 
 annual <- merge(annual, unique(zurich_2012_lookup[, .(panel_id, had_zurich_2012)]), 
                 by = "panel_id", all.x = TRUE)
 
-# D. Create Treatment Variable (Dropped by Zurich)
-#    Definition: Had Zurich 2012, Year >= 2012, and Zero Months of Coverage
+# -------------------------------------------------------------------------
+# F. Create Treatment Variable (Dropped by Zurich)
+# -------------------------------------------------------------------------
+# Definition: Had Zurich in 2012, Year >= 2012, and no coverage in December
+
 annual[state == "TX", dropped_by_zurich := as.integer(
-    had_zurich_2012 == 1 & YEAR >= 2012 & months_covered == 0
+    had_zurich_2012 == 1 & 
+    panel_year >= 2012 & 
+    (is.na(CATEGORY_dec) | CATEGORY_dec == "None")
 )]
+
 annual[is.na(dropped_by_zurich), dropped_by_zurich := 0]
 annual[is.na(had_zurich_2012), had_zurich_2012 := 0]
 
-# E. Final Cleanup of Texas Data
-rm(fa_monthly, fa_annual, zurich_2012_lookup)
+log_step("  Treatment variable created", 1)
+
+# -------------------------------------------------------------------------
+# G. Calculate Year-over-Year FR Changes
+# -------------------------------------------------------------------------
+setorder(annual, panel_id, panel_year)
+
+annual[, `:=`(
+  # Coverage status change (gained or lost coverage)
+  fr_coverage_change = as.integer(
+    fr_covered_dec != shift(fr_covered_dec, 1, type = "lag")
+  ),
+  
+  # Coverage type change (switched between private, self, etc.)
+  fr_type_change = as.integer(
+    DETAIL_TYPE_dec != shift(DETAIL_TYPE_dec, 1, type = "lag") &
+    !is.na(DETAIL_TYPE_dec) & DETAIL_TYPE_dec != "None" &
+    !is.na(shift(DETAIL_TYPE_dec, 1, type = "lag")) & 
+    shift(DETAIL_TYPE_dec, 1, type = "lag") != "None"
+  ),
+  
+  # Issuer change (switched insurance provider)
+  fr_issuer_change = as.integer(
+    exists("ISSUER_NAME_dec") &&
+    ISSUER_NAME_dec != shift(ISSUER_NAME_dec, 1, type = "lag") &
+    !is.na(ISSUER_NAME_dec) & ISSUER_NAME_dec != "None" &
+    !is.na(shift(ISSUER_NAME_dec, 1, type = "lag")) & 
+    shift(ISSUER_NAME_dec, 1, type = "lag") != "None"
+  )
+), by = panel_id]
+
+# Fill NAs for first year observations
+annual[is.na(fr_coverage_change), fr_coverage_change := 0]
+annual[is.na(fr_type_change), fr_type_change := 0]
+annual[is.na(fr_issuer_change), fr_issuer_change := 0]
+
+log_step("  YoY FR changes calculated", 1)
+
+# -------------------------------------------------------------------------
+# H. Final Cleanup of Texas Data (KEEP fa_monthly for Section 8)
+# -------------------------------------------------------------------------
+rm(fa_december, fa_annual_flows, zurich_2012_lookup)
+
+# Keep fa_december_issuer if it exists
+if(exists("fa_december_issuer")) rm(fa_december_issuer)
+
 gc()
 
-log_step("Annual merge complete.", 1)
+log_step("Annual FR merge complete.", 1)
 
 
 # 6.3 Calculate YoY Changes
 setorder(annual, panel_id, YEAR)
 annual[, `:=`(
-  panel_year = YEAR,  # Rename for consistency with legacy code
+  panel_year = YEAR,
   capacity_change_year = total_capacity_dec - shift(total_capacity_dec, 1, type = "lag"),
   net_tank_change      = active_tanks_dec - shift(active_tanks_dec, 1, type = "lag")
 ), by = panel_id]
+
+log_step("Annual aggregation complete.", 1)
 
 #==============================================================================
 # SECTION 7: ROBUST LEAK CLASSIFICATION
@@ -538,89 +706,560 @@ cat("\n========================================\n")
 cat("SECTION 7: LEAK CLASSIFICATION\n")
 cat("========================================\n\n")
 
-# Prepare tables for matching
 closures_exact <- master_tanks[!is.na(tank_closed_date), .(panel_id, closure_date = tank_closed_date)]
 leaks_exact    <- master_lust[!is.na(report_date), .(panel_id, report_date)]
 
-# Only proceed if we have data
 if(nrow(closures_exact) > 0 && nrow(leaks_exact) > 0) {
   
   setkey(closures_exact, panel_id)
   setkey(leaks_exact, panel_id)
   
-  # Cartesian join of all leaks to all closures within facility
   pairs <- leaks_exact[closures_exact, on = .(panel_id), allow.cartesian = TRUE]
   pairs[, diff := as.numeric(report_date - closure_date)]
   
-  # Apply Classification Definitions
+  # Apply Classification Definitions (4 Specs)
   pairs[, `:=`(
     # Primary: 0 to 60 days after
     is_rev_prim = diff >= 0 & diff <= 60,
     is_kno_prim = diff < -180,
+    is_ind_prim = diff >= -180 & diff < 0,
+    
+    # Narrow: 0 to 30 days
+    is_rev_nar = diff >= 0 & diff <= 30,
+    is_kno_nar = diff < -365,
+    
+    # Wide: 0 to 90 days
+    is_rev_wid = diff >= 0 & diff <= 90,
+    is_kno_wid = diff < -90,
+    
     # Regulatory: 0 to 45 days
     is_rev_reg  = diff >= 0 & diff <= 45,
     is_kno_reg  = diff < -180
   )]
   
-  # Summarize to Facility-Year level (based on closure year)
   pairs[, closure_year := year(closure_date)]
   
   closure_flags <- pairs[, .(
-    tank_closure_revealed = as.integer(any(is_rev_prim)),
-    tank_closure_known    = as.integer(any(is_kno_prim)),
-    tank_closure_rev_reg  = as.integer(any(is_rev_reg))
-  ), by = .(panel_id, panel_year = closure_year)]
+    has_rev_prim = any(is_rev_prim),
+    has_kno_prim = any(is_kno_prim),
+    has_ind_prim = any(is_ind_prim),
+    has_rev_nar = any(is_rev_nar),
+    has_kno_nar = any(is_kno_nar),
+    has_rev_wid = any(is_rev_wid),
+    has_kno_wid = any(is_kno_wid),
+    has_rev_reg = any(is_rev_reg),
+    has_kno_reg = any(is_kno_reg)
+  ), by = .(panel_id, closure_date)]
   
-  # Merge into annual panel
-  annual <- merge(annual, closure_flags, by = c("panel_id", "panel_year"), all.x = TRUE)
+  closure_flags[, panel_year := year(closure_date)]
   
-  # Fill NAs with 0
-  annual[is.na(tank_closure_revealed), tank_closure_revealed := 0]
-  annual[is.na(tank_closure_known), tank_closure_known := 0]
-  annual[is.na(tank_closure_rev_reg), tank_closure_rev_reg := 0]
+  annual_flags <- closure_flags[, .(
+    tank_closure_revealed = as.integer(any(has_rev_prim)),
+    tank_closure_known_leak = as.integer(any(has_kno_prim)),
+    tank_closure_indeterminate = as.integer(any(has_ind_prim)),
+    tank_closure_revealed_narrow = as.integer(any(has_rev_nar)),
+    tank_closure_known_leak_narrow = as.integer(any(has_kno_nar)),
+    tank_closure_revealed_wide = as.integer(any(has_rev_wid)),
+    tank_closure_known_leak_wide = as.integer(any(has_kno_wid)),
+    tank_closure_revealed_reg = as.integer(any(has_rev_reg)),
+    tank_closure_known_leak_reg = as.integer(any(has_kno_reg))
+  ), by = .(panel_id, panel_year)]
+  
+  annual <- merge(annual, annual_flags, by = c("panel_id", "panel_year"), all.x = TRUE)
+  
+  cols_to_fill <- grep("tank_closure_", names(annual), value=TRUE)
+  for(col in cols_to_fill) annual[is.na(get(col)), (col) := 0]
+  
+  annual[, tank_closure_clean := as.integer(
+    closure_year == 1 & 
+    tank_closure_revealed == 0 & 
+    tank_closure_known_leak == 0
+  )]
   
 } else {
-  annual[, `:=`(tank_closure_revealed=0, tank_closure_known=0, tank_closure_rev_reg=0)]
+  annual[, `:=`(
+    tank_closure_revealed = 0,
+    tank_closure_known_leak = 0,
+    tank_closure_clean = 0
+  )]
 }
 
+log_step("Leak classification complete.", 1)
 
 #==============================================================================
-# SECTION 8: SURVIVAL & POLICY VARIABLES
+# SECTION 7.5: FACILITY BASELINE (PRE-PANEL CLOSURES)
 #==============================================================================
 cat("\n========================================\n")
-cat("SECTION 8: FINAL VARIABLES & SAVE\n")
+cat("SECTION 7.5: FACILITY BASELINE\n")
 cat("========================================\n\n")
 
-# 8.1 Survival
-setorder(annual, panel_id, panel_year)
-annual[, `:=`(
-  cumulative_leaks = cumsum(n_leaks),
-  cumulative_closures = cumsum(n_closures),
-  ever_leaked = as.integer(cumsum(leak_year) > 0),
-  # Exit flag: if this is the last year we see them AND it's before 2025
-  last_year = max(panel_year),
-  first_year = min(panel_year)
-), by = panel_id]
+log_step("Creating facility baseline for pre-panel closures...", 0)
+baseline_start <- Sys.time()
 
-annual[, exit_flag := as.integer(panel_year == last_year & last_year < 2025)]
+if(!exists("master_tanks_full")) {
+  log_step("⚠ master_tanks_full not found, skipping baseline", 1)
+} else {
+  pre_panel_closures <- master_tanks_full[
+    !is.na(tank_closed_date) & 
+    tank_closed_date < PANEL_START,
+    .(
+      n_tanks_closed_before_panel = .N,
+      earliest_closure_date = min(tank_closed_date, na.rm = TRUE)
+    ),
+    by = panel_id
+  ]
+  
+  annual <- merge(annual, pre_panel_closures, by = "panel_id", all.x = TRUE)
+  annual[is.na(n_tanks_closed_before_panel), n_tanks_closed_before_panel := 0]
+  
+  log_step(sprintf("Facilities with pre-panel closures: %s", 
+                   format(sum(annual[panel_year == min(panel_year)]$n_tanks_closed_before_panel > 0), big.mark=",")), 1)
+  
+  rm(master_tanks_full)
+  gc()
+}
 
-# 8.2 Policy Flags
+log_step(sprintf("✓ Baseline created in %.1f seconds", 
+                 difftime(Sys.time(), baseline_start, units="secs")), 1)
+
+#==============================================================================
+# SECTION 8: WIDE ISSUER DATA (TEXAS ONLY)
+#==============================================================================
+cat("\n========================================\n")
+cat("SECTION 8: WIDE ISSUER DATA\n")
+cat("========================================\n\n")
+
+log_step("Creating wide issuer columns...", 0)
+
+# Find issuer column(s) in fa_monthly
+issuer_col <- grep("^ISSUER_NAME", names(fa_monthly), value = TRUE)[1]
+
+if(!is.null(issuer_col) && length(issuer_col) > 0) {
+  
+  # Create clean issuer names (8 char limit)
+  fa_monthly[, cleaned_issuer := str_sub(
+    str_replace_all(toupper(get(issuer_col)), "[^A-Z0-9]", ""), 1, 8
+  )]
+  
+  # Count months per issuer per facility-year
+  issuer_counts <- fa_monthly[
+    !is.na(cleaned_issuer) & cleaned_issuer != "",
+    .(n_months = .N),
+    by = .(panel_id, panel_year = YEAR, cleaned_issuer)
+  ]
+  
+  # Cast to wide format
+  issuer_wide <- dcast(
+    issuer_counts,
+    panel_id + panel_year ~ cleaned_issuer,
+    value.var = "n_months",
+    fill = 0
+  )
+  
+  # Rename columns with TX_issuers_ prefix
+  issuer_cols <- setdiff(names(issuer_wide), c("panel_id", "panel_year"))
+  setnames(issuer_wide, issuer_cols, paste0("TX_issuers_", issuer_cols))
+  
+  # Merge into annual
+  annual <- merge(annual, issuer_wide, by = c("panel_id", "panel_year"), all.x = TRUE)
+  
+  # Fill NAs with 0
+  wide_cols <- grep("TX_issuers_", names(annual), value = TRUE)
+  for(col in wide_cols) {
+    annual[is.na(get(col)), (col) := 0]
+  }
+  
+  log_step(sprintf("✓ Created %d issuer columns", length(wide_cols)), 1)
+  
+  rm(issuer_counts, issuer_wide)
+  gc()
+  
+} else {
+  log_step("⚠ ISSUER_NAME not found in fa_monthly, skipping wide issuer data", 1)
+}
+
+# Now we can safely remove fa_monthly
+rm(fa_monthly)
+gc()
+
+#==============================================================================
+# SECTION 9: POLICY, TREATMENT & COVARIATES
+#==============================================================================
+cat("\n========================================\n")
+cat("SECTION 9: POLICY & COVARIATES\n")
+cat("========================================\n\n")
+
+log_step("Creating policy & cohort variables...", 0)
+
+# Define treated states and their treatment years
+treated_states <- c("TX", "WI", "NJ", "MI", "IA", "FL", "AZ", "CT")
+treatment_years <- c(1999, 1998, 2010, 2014, 2000, 1999, 2006, 2010)
+
+# Create basic policy flags
 annual[, `:=`(
   post_1999 = as.integer(panel_year >= 1999),
   texas_treated = as.integer(state == "TX"),
-  is_incumbent = as.integer(first_year < 1999)
+  treated_state_flag = as.integer(state %in% treated_states)
 )]
 
-# 8.3 Saving
-output_csv <- here("Data", "Processed", "facility_leak_behavior_annual_panel.csv")
-fwrite(annual, output_csv)
-log_step(sprintf("Saved CSV: %s", output_csv), 1)
+# First/last observed years
+annual[, `:=`(
+  first_observed = min(panel_year),
+  last_observed = max(panel_year)
+), by = panel_id]
 
+# Treatment variables
+annual[, treatment_year := treatment_years[match(state, treated_states)]]
+annual[is.na(treatment_year), treatment_year := 0]
+
+annual[, treatment_group := fcase(
+  state == "TX", "Texas",
+  state %in% treated_states, "Other Treated",
+  default = "Control"
+)]
+
+# Relative year to treatment
+annual[, rel_year := fifelse(
+  treated_state_flag == 1,
+  panel_year - treatment_year,
+  NA_integer_
+)]
+
+# Cohort
+annual[, `:=`(
+  cohort = fifelse(first_observed < 1999, "Incumbent", "Entrant"),
+  is_incumbent = as.integer(first_observed < 1999)
+)]
+
+# Tank age bins
+annual[, age_bins := cut(
+  avg_tank_age_dec,
+  breaks = c(seq(0, 35, 5), Inf),
+  include.lowest = TRUE,
+  labels = c("0-5", "5-10", "10-15", "15-20", "20-25", "25-30", "30-35", "35+")
+)]
+
+# Install year
+annual[, install_year := panel_year - floor(avg_tank_age_dec)]
+annual[is.na(install_year), install_year := 1990]
+
+annual[, `:=`(
+  pre1998_install = as.integer(install_year < 1998),
+  reg_vintage = fcase(
+    install_year < 1988, "Pre-RCRA",
+    install_year >= 1988 & install_year <= 1998, "Transition",
+    install_year > 1998, "Post-Deadline",
+    default = "Unknown"
+  )
+)]
+
+# Wall type classification
+annual[, wall_type := fcase(
+  has_double_walled_dec > 0 & has_single_walled_dec == 0, "Double-Walled",
+  has_single_walled_dec > 0 & has_double_walled_dec == 0, "Single-Walled",
+  has_double_walled_dec > 0 & has_single_walled_dec > 0, "Mixed",
+  default = "Unknown"
+)]
+
+log_step("✓ Policy variables created", 1)
+
+#==============================================================================
+# SECTION 10: SURVIVAL & DECOMPOSITION
+#==============================================================================
+cat("\n========================================\n")
+cat("SECTION 10: SURVIVAL VARIABLES\n")
+cat("========================================\n\n")
+
+log_step("Creating survival & decomposition variables...", 0)
+
+setorder(annual, panel_id, panel_year)
+
+# Exit Flags
+annual[, last_year_id := max(panel_year), by = panel_id]
+annual[, exit_flag := as.integer(panel_year == last_year_id & last_year_id < 2025)]
+annual[, pulse_exit := exit_flag]
+
+# Cumulative & Duration Variables
+annual[, `:=`(
+  ever_leaked = as.integer(cumsum(leak_year) > 0),
+  ever_closed = as.integer(cumsum(closure_year) > 0),
+  ever_exited = as.integer(cumsum(exit_flag) > 0),
+  cumulative_leaks = cumsum(n_leaks),
+  cumulative_closures = cumsum(n_closures),
+  cumulative_retrofits = cumsum(n_retrofits),
+  years_since_entry = panel_year - first_observed
+), by = panel_id]
+
+# Lagged Events
+annual[, `:=`(
+  has_previous_leak = as.integer(shift(cumsum(n_leaks), 1, fill = 0) > 0),
+  has_previous_closure = as.integer(shift(cumsum(n_closures), 1, fill = 0) > 0)
+), by = panel_id]
+
+# First Event Timing
+annual[, `:=`(
+  event_first_leak = as.integer(leak_year == 1 & cumsum(leak_year) == 1),
+  event_first_closure = as.integer(closure_year == 1 & cumsum(closure_year) == 1)
+), by = panel_id]
+
+annual[, year_of_first_leak := fifelse(
+  any(leak_year > 0),
+  panel_year[which(leak_year > 0)[1]],
+  NA_integer_
+), by = panel_id]
+
+annual[, years_since_first_leak := panel_year - year_of_first_leak]
+
+# Exit Decompositions
+annual[, `:=`(
+  exit_no_leak = as.integer(exit_flag == 1 & leak_year == 0),
+  exit_with_leak = as.integer(exit_flag == 1 & leak_year == 1),
+  retrofit_no_exit = as.integer(retrofit_year == 1 & exit_flag == 0),
+  exit_no_retrofit = as.integer(exit_flag == 1 & retrofit_year == 0),
+  both_exit_retrofit = as.integer(exit_flag == 1 & retrofit_year == 1)
+)]
+
+# Leak Classification Aliases
+annual[, `:=`(
+  lust_within_90d_of_closure = tank_closure_revealed,
+  leak_found_by_closure = tank_closure_revealed,
+  leak_not_found_by_exit = as.integer(exit_flag == 1 & leak_year == 0)
+)]
+
+# Stock Variable Aliases
+annual[, `:=`(
+  active_tanks = active_tanks_dec,
+  total_capacity = total_capacity_dec,
+  avg_tank_age = avg_tank_age_dec,
+  single_tanks = single_tanks_dec,
+  double_tanks = double_tanks_dec,
+  has_single_walled = has_single_walled_dec,
+  has_double_walled = has_double_walled_dec
+)]
+
+log_step("✓ Survival variables created", 1)
+
+#==============================================================================
+# SECTION 10.5: ADDITIONAL DERIVED VARIABLES
+#==============================================================================
+log_step("Creating additional derived variables...", 0)
+
+# Capacity change flags
+annual[, `:=`(
+  capacity_increased = as.integer(capacity_change_year > 0),
+  capacity_decreased = as.integer(capacity_change_year < 0),
+  is_motor_fuel = as.integer(has_gasoline_year == 1 | has_diesel_year == 1)
+)]
+
+log_step("✓ Derived variables created", 1)
+
+#==============================================================================
+# SECTION 11: SAVE OUTPUTS
+#==============================================================================
+cat("\n========================================\n")
+cat("SECTION 11: SAVING OUTPUTS\n")
+cat("========================================\n\n")
+
+# Save CSV
+output_csv <- here("Data", "Processed", "facility_leak_behavior_annual.csv")
+fwrite(annual, output_csv)
+log_step(sprintf("✓ Saved CSV: %s", output_csv), 1)
+
+# # Save RDS
 # output_rds <- here("Data", "Processed", "facility_leak_behavior_annual.rds")
 # saveRDS(annual, output_rds)
-# log_step(sprintf("Saved RDS: %s", output_rds), 1)
+# log_step(sprintf("✓ Saved RDS: %s", output_rds), 1)
 
+#==============================================================================
+# SECTION 12: DATA DICTIONARY GENERATION
+#==============================================================================
+cat("\n========================================\n")
+cat("SECTION 12: GENERATING DATA DICTIONARY\n")
+cat("========================================\n\n")
+
+log_step("Generating data dictionary...", 0)
+
+data_dict <- data.table(
+  variable_name = c(
+    # Identifiers
+    "panel_id", "facility_id", "state", "panel_year", "county_name", "county_fips",
+    
+    # Stock Variables (December)
+    "active_tanks_dec", "total_capacity_dec", "avg_tank_age_dec",
+    "single_tanks_dec", "double_tanks_dec", 
+    "has_single_walled_dec", "has_double_walled_dec",
+    
+    # Stock Variables (Annual Mean)
+    "active_tanks_mean", "total_capacity_mean", "avg_tank_age_mean",
+    
+    # Flow Variables
+    "n_leaks", "leak_year", "n_closures", "closure_year", "n_installs",
+    "n_retrofits", "retrofit_year", "n_single_to_double", "single_to_double_year",
+    "capacity_installed_year", "capacity_closed_year", "double_walled_installed_year",
+    
+    # Year-over-Year Changes
+    "capacity_change_year", "net_tank_change", "capacity_increased", "capacity_decreased",
+    
+    # Leak Classification (Primary)
+    "tank_closure_revealed", "tank_closure_known_leak", "tank_closure_indeterminate", "tank_closure_clean",
+    
+    # Leak Classification (Robustness)
+    "tank_closure_revealed_narrow", "tank_closure_known_leak_narrow",
+    "tank_closure_revealed_wide", "tank_closure_known_leak_wide",
+    "tank_closure_revealed_reg", "tank_closure_known_leak_reg",
+    
+    # Leak Classification (Aliases)
+    "lust_within_90d_of_closure", "leak_found_by_closure", "leak_not_found_by_exit",
+    
+    # Duration Variables
+    "first_observed", "last_observed", "last_year_id", "years_since_entry",
+    
+    # Exit Variables
+    "exit_flag", "pulse_exit",
+    
+    # Cumulative Variables
+    "ever_leaked", "ever_closed", "ever_exited",
+    "cumulative_leaks", "cumulative_closures", "cumulative_retrofits",
+    
+    # Lagged Variables
+    "has_previous_leak", "has_previous_closure",
+    
+    # Event Timing
+    "event_first_leak", "event_first_closure", "year_of_first_leak", "years_since_first_leak",
+    
+    # Exit Decomposition
+    "exit_no_leak", "exit_with_leak", "retrofit_no_exit", "exit_no_retrofit", "both_exit_retrofit",
+    
+    # FR Coverage
+    "fr_coverage_share", "share_private", "share_self",
+    "n_transitions", "any_transition", "modal_detail_type",
+    
+    # FR Treatment
+    "had_zurich_2012", "dropped_by_zurich",
+    
+    # Baseline
+    "n_tanks_closed_before_panel", "earliest_closure_date",
+    
+    # Policy Variables
+    "post_1999", "texas_treated", "treated_state_flag", "treatment_year", 
+    "treatment_group", "rel_year",
+    
+    # Cohort Variables
+    "cohort", "is_incumbent",
+    
+    # Vintage Variables
+    "age_bins", "install_year", "pre1998_install", "reg_vintage", "wall_type",
+    
+    # Fuel Type
+    "has_gasoline_year", "has_diesel_year", "is_motor_fuel",
+    
+    # Stock Aliases
+    "active_tanks", "total_capacity", "avg_tank_age", 
+    "single_tanks", "double_tanks", "has_single_walled", "has_double_walled"
+  ),
+  
+  category = c(
+    rep("Identifier", 6),
+    rep("Stock (EOY)", 7),
+    rep("Stock (Annual Mean)", 3),
+    rep("Flow (Annual)", 12),
+    rep("YoY Change", 4),
+    rep("Leak Class (Primary)", 4),
+    rep("Leak Class (Narrow)", 2),
+    rep("Leak Class (Wide)", 2),
+    rep("Leak Class (Regulatory)", 2),
+    rep("Leak Class (Alias)", 3),
+    rep("Duration", 4),
+    rep("Exit", 2),
+    rep("Cumulative", 6),
+    rep("Lagged", 2),
+    rep("Event Timing", 4),
+    rep("Exit Type", 5),
+    rep("FR Coverage", 6),
+    rep("FR Treatment", 2),
+    rep("Baseline", 2),
+    rep("Policy", 6),
+    rep("Cohort", 2),
+    rep("Vintage", 5),
+    rep("Fuel Type", 3),
+    rep("Stock (Alias)", 7)
+  ),
+  
+  description = c(
+    "Composite key (facility_id + state)", "Facility ID", "State", "Year", "County name", "County FIPS",
+    
+    "Active tanks (December)", "Total capacity (December)", "Average tank age (December)",
+    "Single-walled tanks (December)", "Double-walled tanks (December)",
+    "Has single-walled tanks (December)", "Has double-walled tanks (December)",
+    
+    "Mean active tanks (annual)", "Mean capacity (annual)", "Mean tank age (annual)",
+    
+    "Number of leaks", "Leak occurred (binary)", "Number of closures", "Closure occurred (binary)",
+    "Number of installations", "Number of retrofits", "Retrofit occurred (binary)",
+    "Number of single→double upgrades", "Upgrade occurred (binary)",
+    "Capacity installed", "Capacity closed", "Double-walled tanks installed",
+    
+    "YoY capacity change", "YoY net tank change", "Capacity increased", "Capacity decreased",
+    
+    "Revealed leak (0-60d)", "Known leak (>180d before)", "Indeterminate (-180 to 0d)", "Clean closure",
+    "Revealed leak (0-30d)", "Known leak (>365d before)",
+    "Revealed leak (0-90d)", "Known leak (>90d before)",
+    "Revealed leak (0-45d - Regulatory)", "Known leak (>180d before - Regulatory)",
+    
+    "Alias for revealed (wide)", "Alias for revealed (primary)", "Exit without finding leak",
+    
+    "First year observed", "Last year observed", "Last year ID", "Years since entry",
+    
+    "Exit flag", "Exit pulse (alias)",
+    
+    "Ever had leak", "Ever closed tank", "Ever exited",
+    "Cumulative leaks", "Cumulative closures", "Cumulative retrofits",
+    
+    "Had previous leak", "Had previous closure",
+    
+    "First leak event", "First closure event", "Year of first leak", "Years since first leak",
+    
+    "Exit without leak", "Exit with leak", "Retrofit without exit", "Exit without retrofit", "Both exit and retrofit",
+    
+    "FR coverage share", "Share using private insurance", "Share self-insured",
+    "Number of transitions", "Any transition", "Modal detail type",
+    
+    "Had Zurich 2012", "Dropped by Zurich (treatment)",
+    
+    "Tanks closed before 1970", "Earliest pre-panel closure",
+    
+    "Post-1999 period", "Texas treatment", "Treated state flag", "Treatment year",
+    "Treatment group", "Relative year to treatment",
+    
+    "Cohort (Incumbent/Entrant)", "Incumbent flag",
+    
+    "Age bins", "Install year", "Pre-1998 install", "Regulatory vintage", "Wall type",
+    
+    "Has gasoline", "Has diesel", "Motor fuel facility",
+    
+    "Alias for active_tanks_dec", "Alias for total_capacity_dec", "Alias for avg_tank_age_dec",
+    "Alias for single_tanks_dec", "Alias for double_tanks_dec", 
+    "Alias for has_single_walled_dec", "Alias for has_double_walled_dec"
+  )
+)
+
+# Save data dictionary
+dict_path <- here("Data", "Processed", "facility_leak_behavior_annual_data_dictionary.csv")
+fwrite(data_dict, dict_path)
+log_step(sprintf("✓ Data dictionary saved: %s", dict_path), 1)
+
+#==============================================================================
+# SCRIPT COMPLETE
+#==============================================================================
 cat("\n========================================\n")
 cat("SCRIPT COMPLETE\n")
-cat(sprintf("Total Time: %.1f minutes\n", difftime(Sys.time(), script_start_time, units="mins")))
-cat("========================================\n")
+cat(sprintf("Total Runtime: %.1f minutes\n", 
+            difftime(Sys.time(), script_start_time, units="mins")))
+cat("========================================\n\n")
+
+cat("✓ Outputs created:\n")
+cat(sprintf("  1. %s\n", output_csv))
+# cat(sprintf("  2. %s\n", output_rds))
+cat(sprintf("  3. %s\n", output_monthly))
+cat(sprintf("  4. %s\n", dict_path))
+cat("\n")

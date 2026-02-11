@@ -116,7 +116,7 @@ if(file.exists(epa_path)) {
   master_tanks[, merge_id := NA_character_]
   
   # A. Prefix State (TX, CO, LA, ME, NJ, NM, TN, AR)
-  group_prefix <- c("TX", "CO", "LA", "ME", "NJ", "NM", "TN", "AR")
+  group_prefix <- c("TX", "CO", "LA", "ME", "NJ", "NM", "TN", "AR",'PA')
   master_tanks[state %in% group_prefix, merge_id := paste0(state, facility_id)]
   
   # B. Michigan (Prefix + Strip Zeros)
@@ -293,12 +293,17 @@ lust_stats <- master_lust[, .(
 
 # B. Calculate Tank Variable Missingness (Detailed)
 # --- SURGICAL REPLACEMENT: calc_missing function ---
+# --- REPLACEMENT: calc_missing function (Fixes the Report Bug) ---
 calc_missing <- function(dt) {
+  # Use latitude_final if it exists (post-merge), otherwise use latitude (raw)
+  # This ensures the report reflects the data we actually HAVE, not just what we started with.
+  lat_col  <- if("latitude_final" %in% names(dt)) dt$latitude_final else dt$latitude
+  long_col <- if("longitude_final" %in% names(dt)) dt$longitude_final else dt$longitude
+  
   dt[, .(
     total_tanks = .N,
     
     # 1. New Required Metrics
-    # Share of CLOSED tanks missing closed date
     pct_closed_missing_date = {
       n_closed = sum(tank_status == "Closed", na.rm = TRUE)
       if(n_closed > 0) {
@@ -308,11 +313,10 @@ calc_missing <- function(dt) {
       }
     },
     
-    # Share of ALL tanks missing install date
     pct_missing_install_date = round(sum(is.na(tank_installed_date)) / .N * 100, 1),
     
-    # 2. Existing Geo Metrics
-    pct_miss_lat    = round(sum(is.na(latitude)) / .N * 100, 1),
+    # 2. Existing Geo Metrics (UPDATED TO CHECK FINAL COORDS)
+    pct_miss_lat    = round(sum(is.na(lat_col)) / .N * 100, 1),
     pct_miss_county = round(sum(is.na(county_name) | county_name == "") / .N * 100, 1),
     pct_miss_capacity = round(sum(is.na(capacity)) / .N * 100, 1),
     pct_miss_tank_status = round(sum(is.na(tank_status) | tank_status == "") / .N * 100, 1),
@@ -349,3 +353,4 @@ fwrite(master_lust, file.path(processed_dir, "Master_Harmonized_LUST.csv"))
 fwrite(report, file.path(processed_dir, "Master_Data_Quality_Report.csv"))
 
 message("Done.")
+

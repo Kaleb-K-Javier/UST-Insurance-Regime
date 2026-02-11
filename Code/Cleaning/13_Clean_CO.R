@@ -120,28 +120,33 @@ cat("Loaded", nrow(dt_tanks_raw), "tanks and", nrow(dt_releases_raw), "releases.
 # 3. Process Tanks --------------------------------------------------------
 cat("\nProcessing Tank Attributes...\n")
 
-# drop all ASTs and LPGs
-
-# A. Filter to only UST (Crucial CO Step)
+# A. Filter to only UST
 # Exclude tanks where material starts with "AST:"
 cat("Excluding", nrow(dt_tanks_raw[grepl("AST", tank_type)]), "Aboveground Storage Tanks (ASTs)...\n")
 dt_tanks_raw_no_AST <- dt_tanks_raw[grepl("UST", tank_type)]
 
+# --- SAFETY CHECK ---
+if (!"closure_date" %in% names(dt_tanks_raw_no_AST)) {
+  stop("CRITICAL ERROR: 'closure_date' column is missing from dataframe. Check clean_names() output.")
+}
+# --------------------
 
-# A. Rename & Select
+# B. Rename & Select (Explicit Selection)
 dt_tanks <- dt_tanks_raw_no_AST[, .(
   facility_id = clean_ids(facility_id),
   facility_name = facility_name,
-  tank_id = clean_ids(tank_tag), # Use Tag as ID (unique within facility)
+  tank_id = clean_ids(tank_tag), 
+  
+  # DATE PARSING: Explicitly target the 'closure_date' column found in diagnostics
   tank_installed_date = safe_parse_date(installation_date),
-  tank_closed_date = safe_parse_date(closure_date),
+  tank_closed_date    = safe_parse_date(closure_date), 
+  
   status_raw = tank_status,
   capacity = as.numeric(gsub("[^0-9.]", "", capacity_gallons)),
   tank_material,
   tank_wall_type,
   product,
   county_name = county,
-  # CO Tank file typically lacks Lat/Long, will merge from Release file later
   latitude = NA_real_,
   longitude = NA_real_
 )]
@@ -151,10 +156,17 @@ dt_tanks[, tank_status := fcase(
   grepl("Currently In Use", status_raw, ignore.case=TRUE), "Open",
   grepl("Closed|Permanently", status_raw, ignore.case=TRUE), "Closed",
   grepl("Temporarily|Pending", status_raw, ignore.case=TRUE), "Temporary",
-  default = "Closed" # Default conservative
+  default = "Closed" 
 )]
 dt_tanks <- dt_tanks[tank_status != "Temporary"]
-dt_tanks
+
+# D. Verification Print (Immediate Feedback)
+missing_counts <- dt_tanks[tank_status == "Closed", .(
+  Total_Closed = .N, 
+  Missing_Date = sum(is.na(tank_closed_date))
+)]
+cat("\nVERIFICATION AFTER ASSIGNMENT:\n")
+print(missing_counts)
 
 
 # D. Classifications
