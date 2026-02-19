@@ -1366,7 +1366,175 @@ p7 <- plot_base(c("Social Optimum", "Risk-Rated"), exclude_y = "Risk-Rated") +
 ggsave(file.path(slide_dir, "Slide_Fig_7_Combined_DWL.pdf"), p7, width = PLOT_W, height = PLOT_H)
 
 cat("\n✓ All 7 figures saved to:", slide_dir, "\n")
+
 ```
+
+
+
+
+```{r, toy-paper-figs}
+
+
+# ==============================================================================
+# "Internalizing Environmental Risk" - Toy Model Figures (Corrected)
+# ==============================================================================
+
+library(data.table)
+library(ggplot2)
+
+dir.create("Output/Figures/Paper", recursive = TRUE, showWarnings = FALSE)
+
+# 1. PARAMETERS
+R_annual <- 50000; v_scrap <- 500000; beta <- 0.95; L <- 155000; E_factor <- 0.9
+
+# 2. FUNCTIONS
+h_func <- function(a) { 0.005 + 0.00025 * (a^1.5) }
+
+# Regimes (Cost Definitions)
+# UP: Cost is low (2000), so Value is HIGH (Top Curve)
+# SOC: Cost is high (L+E), so Value is LOW (Bottom Curve)
+regimes <- list(
+  UP = list(name = "Uniform Premium", cost_func = function(a) 2000),
+  RB = list(name = "Risk-Based", cost_func = function(a) h_func(a) * L),
+  SOC = list(name = "Social Optimum", cost_func = function(a) h_func(a) * (L * (1 + E_factor)))
+)
+
+# Solver
+solve_cv <- function(regime) {
+  ages <- 0:100; n <- length(ages)
+  costs <- sapply(ages, regime$cost_func)
+  flows <- R_annual - costs
+  V <- numeric(n); V[n] <- flows[n] / (1 - beta)
+  for (i in seq(n-1, 1)) V[i] <- flows[i] + beta * V[i+1]
+  
+  # Exit Age: First time Value drops below Scrap
+  exit_idx <- which(V < v_scrap)
+  a_star <- if(length(exit_idx) > 0) ages[exit_indices <- exit_idx[1]] else 100
+  
+  return(list(age=ages, val=V, a_star=a_star, name=regime$name))
+}
+
+# Run Solver
+res <- lapply(regimes, solve_cv)
+
+# 3. DATA PLOTTING
+dt <- rbind(
+  data.table(age=res$UP$age, V=res$UP$val, regime="Uniform Premium"),
+  data.table(age=res$RB$age, V=res$RB$val, regime="Risk-Based"),
+  data.table(age=res$SOC$age, V=res$SOC$val, regime="Social Optimum")
+)
+dt[, regime := factor(regime, levels=c("Uniform Premium", "Risk-Based", "Social Optimum"))]
+
+# Exit Points
+exits <- data.table(
+  regime = c("Uniform Premium", "Risk-Based", "Social Optimum"),
+  age = c(res$UP$a_star, res$RB$a_star, res$SOC$a_star)
+)
+
+# Y-Axis Intercepts (for labels)
+y_labs <- dt[age==0, .(regime, V)]
+
+# ==============================================================================
+# FIGURE 1: MECHANISM (Corrected Line Mapping)
+# ==============================================================================
+
+# Explicit Mapping: Name -> Linetype
+# UP (Flat) = Dotted
+# RB (Middle) = Dashed
+# SOC (Bottom) = Solid
+lt_map <- c("Uniform Premium"="dotted", "Risk-Based"="dashed", "Social Optimum"="solid")
+
+p1 <- ggplot(dt[age <= 60], aes(x=age, y=V)) +
+  # Scrap Line
+  geom_hline(yintercept=v_scrap, color="grey40", size=0.8, linetype="longdash") +
+  annotate("text", x=2, y=v_scrap+25000, label="Scrap~Value~(kappa)", parse=TRUE, 
+           size=4, hjust=0, fontface="italic") +
+  
+  # Curves
+  geom_line(aes(linetype=regime), size=1) +
+  
+  # Droplines
+  geom_segment(data=exits, aes(x=age, xend=age, y=-Inf, yend=v_scrap), 
+               linetype="dotted", color="grey50") +
+  
+  # Labels
+  scale_linetype_manual(values=lt_map) +
+  scale_y_continuous(name="Continuation Value V(a)", 
+                     breaks=c(v_scrap, y_labs$V),
+                     labels=c(expression(kappa), expression(V[UP](0)), expression(V[RB](0)), expression(V[SOC](0)))) +
+  scale_x_continuous(name="Tank Age (a)", breaks=exits$age,
+                     labels=c(expression(a[UP]^"*"), expression(a[RB]^"*"), expression(a[SOC]^"*")),
+                     expand=c(0,0), limits=c(0,60)) +
+  
+  theme_classic(base_size=14) +
+  theme(legend.position=c(0.75, 0.8), legend.title=element_blank(),
+        legend.background=element_rect(color="black"))
+
+ggsave("Output/Figures/Paper/Fig_1_Mechanism.pdf", p1, width=8, height=5)
+
+
+# ==============================================================================
+# FIGURE 2: WELFARE (Corrected Polygon Shading)
+# ==============================================================================
+
+# Helper to build polygon coordinates:
+# Top Edge: Left->Right along y=kappa
+# Bottom Edge: Right->Left along y=V_SOC
+build_poly <- function(start_a, end_a) {
+  # Indices in the data (R is 1-based, age 0 is index 1)
+  idx_start <- start_a + 1
+  idx_end <- end_a + 1
+  
+  # Sequence of ages for smooth curve
+  a_seq <- res$SOC$age[idx_start:idx_end]
+  v_seq <- res$SOC$val[idx_start:idx_end]
+  
+  data.frame(
+    x = c(a_seq, rev(a_seq)),
+    y = c(rep(v_scrap, length(a_seq)), rev(v_seq))
+  )
+}
+
+# Region 1: Externality (a_SOC to a_RB)
+poly_E <- build_poly(res$SOC$a_star, res$RB$a_star)
+
+# Region 2: Avoided Loss (a_RB to a_UP)
+poly_Avoid <- build_poly(res$RB$a_star, res$UP$a_star)
+
+p2 <- ggplot(dt[regime == "Social Optimum" & age <= 60], aes(x=age, y=V)) +
+  geom_hline(yintercept=v_scrap, color="grey40", size=0.8, linetype="longdash") +
+  
+  # Shading layers (Corrected Geometry)
+  geom_polygon(data=poly_Avoid, aes(x=x, y=y), fill="grey90", alpha=1) +
+  geom_polygon(data=poly_E, aes(x=x, y=y), fill="grey60", alpha=0.8) +
+  
+  # SOC Line
+  geom_line(size=1.2) +
+  
+  # Annotations
+  annotate("text", x=mean(poly_E$x), y=v_scrap-100000, label="Uninternalized\nExternality", 
+           fontface="bold", size=4) +
+  annotate("text", x=mean(poly_Avoid$x), y=v_scrap-200000, label="Loss Avoided by\nRisk-Based Pricing", 
+           color="grey40", size=4) +
+  
+  # Droplines
+  geom_vline(xintercept=c(res$SOC$a_star, res$RB$a_star, res$UP$a_star), 
+             linetype="dotted", color="grey50") +
+  
+  scale_y_continuous(name="Social Continuation Value V(a)", 
+                     breaks=c(v_scrap, res$SOC$val[1]),
+                     labels=c(expression(kappa), expression(V[SOC](0)))) +
+  scale_x_continuous(name="Tank Age (a)", breaks=exits$age,
+                     labels=c(expression(a[UP]^"*"), expression(a[RB]^"*"), expression(a[SOC]^"*")),
+                     expand=c(0,0), limits=c(0,60)) +
+  
+  theme_classic(base_size=14) +
+  annotate("text", x=55, y=res$SOC$val[56], label="V[SOC](a)", parse=TRUE, size=5, hjust=0)
+
+ggsave("Output/Figures/Paper/Fig_2_Welfare.pdf", p2, width=8, height=5)
+
+```
+
 
 ```{r toy-model-setup-inspections}
 # ==============================================================================
@@ -1656,25 +1824,45 @@ z_grid <- seq(0.5, 3.0, length.out = 50)
 sorting_list <- list()
 
 for (z in z_grid) {
-  s_F   <- solve_regime("F", regimes$F, c_U, z)
-  s_R   <- solve_regime("R", regimes$R, c_U, z)
-  s_SOC <- solve_regime("SOC", regimes$SOC, c_U, z)
   
-  sorting_list[[length(sorting_list)+1]] <- data.table(z=z, regime="Flat-Fee Pooling", a_exit=s_F$a_exit)
-  sorting_list[[length(sorting_list)+1]] <- data.table(z=z, regime="Risk-Rated Private", a_exit=s_R$a_exit)
-  sorting_list[[length(sorting_list)+1]] <- data.table(z=z, regime="Social Optimum", a_exit=s_SOC$a_exit)
+  # --- Define Z-adjusted Cost Functions ---
+  # UP (Uniform Premium): Flat fee, does NOT change with firm risk z
+  cost_up_z <- function(a) 2000 
+  
+  # RB (Risk-Based): Cost scales with risk z
+  cost_rb_z <- function(a) h_func(a) * z * L
+  
+  # SOC (Social Optimum): Cost scales with risk z (including Externality)
+  cost_soc_z <- function(a) h_func(a) * z * (L * (1 + E_factor))
+  
+  # --- Create Temporary Regime Objects ---
+  # We reuse the linetypes/names for consistency
+  p_UP  <- list(name="Uniform Premium", cost_func=cost_up_z, linetype="dotted")
+  p_RB  <- list(name="Risk-Based",      cost_func=cost_rb_z, linetype="dashed")
+  p_SOC <- list(name="Social Optimum",  cost_func=cost_soc_z, linetype="solid")
+  
+  # --- Solve using the NEW solver from the previous chunk ---
+  s_UP  <- solve_continuation_value(p_UP)
+  s_RB  <- solve_continuation_value(p_RB)
+  s_SOC <- solve_continuation_value(p_SOC)
+  
+  # --- Store Results ---
+  sorting_list[[length(sorting_list)+1]] <- data.table(z=z, regime="Uniform Premium", a_exit=s_UP$a_star)
+  sorting_list[[length(sorting_list)+1]] <- data.table(z=z, regime="Risk-Based",      a_exit=s_RB$a_star)
+  sorting_list[[length(sorting_list)+1]] <- data.table(z=z, regime="Social Optimum",  a_exit=s_SOC$a_star)
 }
 
+# 2. Process Data for Plotting
 dt_sorting <- rbindlist(sorting_list)
-dt_sorting[a_exit >= 80, a_exit := 80] 
-dt_sorting[, regime := factor(regime, levels = c("Social Optimum", "Risk-Rated Private", "Flat-Fee Pooling"))]
+dt_sorting[a_exit >= 80, a_exit := 80] # Cap for visual clarity
+dt_sorting[, regime := factor(regime, levels = c("Social Optimum", "Risk-Based", "Uniform Premium"))]
 
-# 2. Labeling Data (End of lines)
+# Labeling Data (End of lines)
 label_dt <- dt_sorting[z == max(z)]
 
 # 3. Plot
 ggplot(dt_sorting, aes(x = z, y = a_exit, color = regime)) +
-  geom_step(linewidth = 1.2) +
+  geom_step(size = 1.2) +
   
   # Direct Labels
   geom_text(data = label_dt, aes(x = z + 0.05, label = regime), 
@@ -1682,24 +1870,26 @@ ggplot(dt_sorting, aes(x = z, y = a_exit, color = regime)) +
   
   # Explanatory Annotations
   annotate("text", x = 1.5, y = 75, 
-           label = "Insensitive to Risk:\nLow deductible masks\ncost signal", 
-           color = "#984EA3", size = 3, fontface = "italic") +
+           label = "Insensitive to Risk:\nFlat fee masks\ncost signal", 
+           color = "black", size = 3, fontface = "italic") +
   
   annotate("text", x = 1.0, y = 15, 
            label = "Efficient Sorting:\nRisky firms exit early", 
-           color = "#377EB8", size = 3, fontface = "italic") +
+           color = "grey50", size = 3, fontface = "italic") +
 
-  scale_color_manual(values = c("Social Optimum"="#E41A1C", 
-                                "Risk-Rated Private"="#377EB8", 
-                                "Flat-Fee Pooling"="#984EA3")) +
+  # Consistent Colors
+  scale_color_manual(values = c("Social Optimum"="black", 
+                                "Risk-Based"="grey50", 
+                                "Uniform Premium"="grey70")) +
   
   scale_x_continuous(name = "Firm Risk Type (z) [Higher = Riskier]",
-                     breaks = seq(0.5, 3.0, 0.5), limits = c(0.5, 3.6)) +
+                     breaks = seq(0.5, 3.0, 0.5), limits = c(0.5, 3.8)) +
   scale_y_continuous(name = "Optimal Exit Age (Years)", limits = c(0, 85)) +
   
   theme_classic(base_size = 12) +
-  theme(legend.position = "none", # Removed legend
+  theme(legend.position = "none", 
         panel.grid.major.y = element_line(color = "grey92"))
+
 ```
 
 

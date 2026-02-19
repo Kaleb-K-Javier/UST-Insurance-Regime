@@ -281,12 +281,29 @@ pa_lust_clean <- data.table()
 
 if(file.exists(linkage_file) & file.exists(epa_path)) {
   
-  # 5.1 Linkage Table (Facility ID <-> eFACTS ID)
+  # 5.1 Linkage Table
   linkage <- fread(linkage_file, colClasses = "character") %>%
     clean_names() %>%
-    select(facility_id, efacts_facility_id) %>% 
-    mutate(efacts_id = trimws(efacts_facility_id)) %>%
-    filter(efacts_id != "", !is.na(efacts_id))
+    select(facility_id, efacts_facility_id, site_id) %>%
+    mutate(
+      efacts_clean = na_if(trimws(efacts_facility_id), "NA"),
+      site_clean   = na_if(trimws(site_id), "NA"),
+      epa_numeric  = coalesce(efacts_clean, site_clean)
+    ) %>%
+    filter(!is.na(epa_numeric)) %>%
+    select(facility_id, epa_numeric) %>%
+    distinct()
+
+  cat("Linkage table: ", nrow(linkage), "facilities with resolved EPA ID\n")
+
+  # ── ATTACH EPA KEY TO TANKS ──────────────────────────────────────────────
+  # Do this immediately after linkage is built so epa_key is always present
+  # regardless of whether LUST processing below succeeds or fails.
+  pa_tanks <- merge(pa_tanks,
+                    linkage[, .(facility_id, epa_key = paste0("PA", epa_numeric))],
+                    by = "facility_id", all.x = TRUE)
+  cat("epa_key attached:", sum(!is.na(pa_tanks$epa_key)), "of", nrow(pa_tanks), "tanks matched\n")
+  # ──────────────────
   
   # 5.2 Load Raw EPA
   epa_raw <- fread(epa_path, colClasses = "character") %>% 
@@ -294,31 +311,36 @@ if(file.exists(linkage_file) & file.exists(epa_path)) {
     filter(state == "Pennsylvania")
   
   # 5.3 Clean & Standardize EPA Data
-  pa_lust_clean <- epa_raw %>%
-    transmute(
-      efacts_id = str_remove(facility_id, "^PA") %>% trimws(),
-      epa_facility_id = facility_id, 
-      report_date = safe_parse_date(reported_date),
-      nfa_date = NA_Date_,
-      lust_id = lust_id,
-      substance = substance,
-      status = status,
-      state = "PA"  # <--- CRITICAL FIX: Add State Column
-    ) %>%
-    filter(!is.na(efacts_id)) %>%
-    inner_join(linkage, by = "efacts_id") %>%
-    select(
-      facility_id,      # PA Master ID
-      lust_id,          
-      report_date,
-      nfa_date,
-      status,
-      substance,
-      state,            # <--- Keep State
-      epa_facility_id   
-    ) %>%
-    as.data.table()
-  
+# 5.3 Clean & Standardize EPA Data
+pa_lust_clean <- epa_raw %>%
+  transmute(
+    # Strip PA prefix to get raw numeric — matches our epa_numeric column
+    epa_numeric     = str_remove(facility_id, "^PA") %>% trimws(),
+    epa_facility_id = facility_id,
+    report_date     = safe_parse_date(reported_date),
+    nfa_date        = NA_Date_,
+    lust_id         = lust_id,
+    substance       = substance,
+    status          = status,
+    state           = "PA"
+  ) %>%
+  filter(!is.na(epa_numeric)) %>%
+  # Join via epa_numeric -> resolves to PA DEP facility_id
+  inner_join(linkage, by = "epa_numeric") %>%
+  select(
+    facility_id,
+    lust_id,
+    report_date,
+    nfa_date,
+    status,
+    substance,
+    state,
+    epa_facility_id
+  ) %>%
+  as.data.table()
+
+cat("PA LUST records matched:", nrow(pa_lust_clean), "\n")
+
   # 5.4 Merge into Tank Panel for Flags
   leak_agg <- pa_lust_clean[, .(
     first_leak_date = min(report_date, na.rm = TRUE),
@@ -344,10 +366,11 @@ pa_tanks[, state := "PA"]
 
 # Select Final Tank Columns
 cols_to_keep <- c(
-  "facility_id", "tank_id", "state", "tank_installed_date", "tank_closed_date", "tank_status",
+  "facility_id", "tank_id", "state", "epa_key",          # <-- add epa_key
+  "tank_installed_date", "tank_closed_date", "tank_status",
   "leak_after_closure", "no_leak",
   "capacity", "single_walled", "double_walled", "unknown_walled",
-  "is_gasoline", "is_diesel", "is_oil_kerosene", "is_jet_fuel", "is_other", 
+  "is_gasoline", "is_diesel", "is_oil_kerosene", "is_jet_fuel", "is_other",
   "county_name", "latitude", "longitude"
 )
 cols_to_keep <- intersect(names(pa_tanks), cols_to_keep)

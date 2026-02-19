@@ -109,6 +109,27 @@ To mitigate the liability associated with these environmental risks, the EPA's 1
 
 Texas initially utilized a public fund model but diverged in 1998 following the passage of House Bill 2587. Facing actuarial insolvency, the legislature sunset the Texas Petroleum Storage Tank Remediation Fund, forcing the entire facility population to migrate to the private market or self-insure by 1999. This sharp policy discontinuity serves as the central identification strategy. In the post-transition period (2007–2021), 89.8% of Texas retail facilities met their obligations through private insurance, with the remainder relying on self-insurance mechanisms available only to highly capitalized firms.
 
+# Conceptual Framework: Insurance Design and Optimal Stopping
+
+The facility owner's decision is modeled as a single-agent dynamic discrete choice problem following the optimal stopping literature (Rust, 1987). In an infinite horizon setting with time indexed by $t$, the agent operates a single underground storage tank (UST) and observes the state variable $a_t$, representing the tank's age. At the beginning of each period, the agent chooses a binary action $d_t \in \{ \text{Maintain}, \text{Close} \}$ to maximize the expected present discounted value of future payoffs. If the agent chooses to close ($d_t = \text{Close}$), the facility exits the market permanently, receiving a terminal scrap value $\kappa$ representing the liquidity of the land net of decommissioning costs. Conditional on maintenance ($d_t = \text{Maintain}$), the flow utility is specified as $u(a_t) = R - P_j(a_t)$, where $R$ denotes the annual net revenue from operations less all non-insurance costs, and $P_j(a_t)$ is the insurance premium under regime $j$. While the structural estimation in Section 5 relaxes this assumption to incorporate deductibles and partial risk internalization, this simplified framework assumes full insurance coverage for tractability, treating environmental risk solely as an ex-ante premium cost rather than an ex-post liability shock. The agent’s value function $V(a)$ satisfies the Bellman equation:
+
+$$
+V(a) = \max \left\{ R - P_j(a) + \beta \mathbb{E}[V(a') \mid a], \kappa \right\}
+$$
+
+where $\beta \in (0, 1)$ is the discount factor and the expectation is taken over the stochastic evolution of tank age. The optimal stopping rule dictates that the firm closes the tank when the continuation value of operation falls below the scrap value $\kappa$.
+
+The divergence in firm behavior across states is driven by the elasticity of the premium function $P_j(a)$ with respect to capital depreciation. Under the **Uniform Premium (Public Fund)** regime, the price is invariant to risk, such that $P(a) = \bar{P}$ and the marginal cost of aging is zero ($\frac{\partial P}{\partial a} = 0$). This flat pricing structure eliminates the financial incentive to retire aging capital, pivoting the continuation value curve upward and causing the firm to retain the asset until it is physically obsolete, defined as age $a^*_{UP}$. Conversely, under the **Risk-Based (Private Market)** regime, premiums are strictly increasing in the leak hazard rate $h(a)$, such that $\frac{\partial P}{\partial a} > 0$. This introduces a positive marginal cost of aging, pivoting the value function downward for older tanks and accelerating the optimal exit age to $a^*_{RB}$. Figure 1 illustrates this mechanism, demonstrating that the introduction of risk-based pricing strictly reduces the optimal tank lifespan relative to the uniform pricing baseline ($a^*_{RB} < a^*_{UP}$).
+
+![The Mechanism: Optimal Stopping under Alternative Insurance Regimes](Output/Figures/Paper/Fig_1_Mechanism.pdf){#fig-mechanism width=90%}
+
+While risk-based pricing improves allocative efficiency by penalizing higher failure rates, it does not achieve the first-best social optimum due to unpriced health externalities. The social planner’s objective function includes both the remediation costs ($L$) covered by insurers and the health damages ($E$) from groundwater contamination, which are typically unobservable and generate no third-party claims (Marcus, 2021). Consequently, the private actuarial premium $P_{RB} \propto h(a)L$ is strictly less than the social marginal cost $h(a)(L+E)$. This wedge implies that while the private market induces earlier exit than the public fund, the equilibrium exit age $a^*_{RB}$ remains higher than the socially optimal age $a^*_{SOC}$. Figure 2 visualizes this welfare loss, identifying the shaded region between $a^*_{SOC}$ and $a^*_{RB}$ as the uninternalized externality. The theoretical prediction for the empirical analysis is therefore a monotonic ordering of tank lifespans where $a^*_{SOC} < a^*_{RB} < a^*_{UP}$.
+
+![Welfare Analysis: The Externality Wedge and Partial Correction](Output/Figures/Paper/Fig_2_Welfare.pdf){#fig-welfare width=90%}
+
+
+
+
 ## Data and Sample Construction {#sec-data}
 
 The empirical analysis relies on a composite panel constructed from three distinct layers of administrative microdata. These layers comprise a comprehensive facility-level backbone covering the universe of regulated entities, a market-based premium overlay for the treated jurisdiction of Texas, and a claims-cost overlay for a subset of control states.
@@ -536,6 +557,77 @@ Here, the dependent variable, $\text{Reported Leak}_{i,t}$, is a binary indicato
 
 The results in @tbl-leak_results  show that the transition to risk-based insurance pricing had a statistically significant and negative impact on the probability of reported leaks among single-walled tanks. The coefficient estimates of -0.0097 in column (1) and -0.0124 in column (2) indicate that the policy reduced the annual probability of a reported leak by approximately 0.97% to 1.24% relative to control states. This reduction is economically meaningful, especially given the baseline leak rate of around 1.13% for single-walled tanks in the pre-policy period. The inclusion of age bin controls in column (2) does not materially change the magnitude or significance of the treatment effect, suggesting that the policy's impact is robust to accounting for differential leak rates across tank ages.
 
+
+#  Dynamic Discrete Choice Model
+
+In this section, I develop a dynamic structural model of the facility owner's decision problem. The framework follows the optimal stopping literature where agents weigh the immediate returns of operation against the liability risks of aging capital @rust_optimal_1987.
+
+## 3.1 The Agent's Problem
+
+I model the behavior of a risk-neutral facility owner operating a single underground storage tank in an infinite horizon setting. Time is discrete and indexed by $t=1, 2, \dots, \infty$. In each period, the agent observes the state of the facility, $x_t$, and a vector of idiosyncratic payoff shocks, $\varepsilon_t$. Conditional on these states, the agent chooses a binary action $d_t \in \{Maintain, Close\}$ to maximize the expected present discounted value of future payoffs. The discount factor is denoted by $\beta \in (0, 1)$.
+
+## State Space and Transitions
+
+The observable state vector $x_t = (A_t, w_t, \rho_t)$ characterizes the facility's physical and regulatory environment. The variable $A_t \in \{1, \dots, 9\}$ represents the age of the tank, discretized into five-year bins, where $A=9$ is an absorbing state for tanks older than 40 years. The variable $w_t \in \{Single, Double\}$ denotes the tank's wall type, which is fixed over time. Finally, $\rho_t \in \{FF, RB\}$ indicates the insurance regime, where $FF$ represents the flat-fee public fund and $RB$ represents the risk-based private market.
+
+The state transition process is governed by the facility's choice. If the agent chooses to close the facility ($d_t = Close$), the process terminates. If the agent chooses to maintain the facility ($d_t = Maintain$), the tank ages stochastically. I define the transition probability $F(x_{t+1} | x_t, d_t)$ such that wall type and regime are persistent, while age follows a stochastic process:
+
+$$
+A_{t+1} = \begin{cases} 
+A_t + 1 & \text{with probability } \pi_{up}(A_t) \\
+A_t & \text{with probability } 1 - \pi_{up}(A_t)
+\end{cases}
+$$
+
+This stochastic aging process captures the uncertainty in asset depreciation and allows the model to match the empirical duration of tank active life.
+
+## Flow Payoffs
+
+The period payoff depends on the chosen action and the structural parameters governing revenue, costs, and risk preferences. Payoffs are normalized such that the net revenue from operation is the numeraire.
+
+If the agent chooses to **Maintain**, the flow utility is specified as:
+
+$$
+u(x_t, Maintain) = 1 + \gamma_{price} \cdot P(x_t) - \gamma_{risk} \cdot h(x_t) \cdot L(x_t)
+$$
+
+The first term, $1$, represents the normalized annual net revenue. The second term captures the disutility of insurance premiums, where $P(x_t)$ is the observed premium and $\gamma_{price}$ is the price sensitivity parameter. The third term represents the internalized cost of environmental risk, where $h(x_t)$ is the engineering hazard rate of a leak, $L(x_t)$ is the expected remediation cost, and $\gamma_{risk}$ is a scaling parameter. A value of $\gamma_{risk} < 1$ would imply moral hazard, where firms undervalue the true expected liability.
+
+If the agent chooses to **Close**, the facility exits the market and the agent receives a terminal scrap value:
+
+$$
+u(x_t, Close) = \kappa
+$$
+
+The parameter $\kappa$ captures the liquidation value of the land and equipment, net of any decommissioning costs. This value is assumed to be constant across states.
+
+## The Value Function
+
+The agent's optimization problem can be represented by the Bellman equation. Assuming the idiosyncratic shocks $\varepsilon_t$ follow a Type I Extreme Value distribution with scale parameter $\sigma$, the ex-ante value function $V(x_t)$ is given by:
+
+$$
+V(x_t) = \int \max_{d \in \{M, C\}} \left\{ v(x_t, d) + \varepsilon_t(d) \right\} dG(\varepsilon)
+$$
+
+where $v(x_t, d)$ represents the conditional choice-specific value function:
+
+$$
+v(x_t, d) = u(x_t, d) + \beta \sum_{x_{t+1}} V(x_{t+1}) F(x_{t+1} | x_t, d)
+$$
+
+This structure allows for the estimation of the structural parameters $\theta = (\kappa, \gamma_{price}, \gamma_{risk})$ using a Nested Pseudo-Likelihood (NPL) estimator (Aguirregabiria & Mira, 2007).
+
+## Identification
+
+The identification of the structural parameters $\theta = (\kappa, \gamma_{price}, \gamma_{risk})$ relies on mapping distinct sources of data variation to specific model primitives. While the parameters are estimated jointly via the Nested Pseudo-Likelihood algorithm, we can heuristically characterize the variation that identifies each term.
+
+The scrap value, $\kappa$, is identified by the unconditional probability of facility exit. In the optimal stopping framework, $\kappa$ acts as the reservation value; therefore, a higher average exit rate across all states implies a higher relative scrap value, holding flow profits constant. Identification requires that the baseline exit rate is not driven solely by unobserved heterogeneity, which we address through the inclusion of facility-level fixed effects in the reduced-form steps.
+
+The price sensitivity parameter, $\gamma_{price}$, is identified by the response of exit rates to cross-sectional variation in insurance premiums. The transition from the flat-fee Public Fund (FF) to the risk-based private market (RB) generates exogenous variation in $P(x_t)$ that is independent of the facility's engineering risk. Specifically, under the FF regime, premiums are constant ($\frac{\partial P}{\partial A} = 0$), whereas under the RB regime, premiums rise with age ($\frac{\partial P}{\partial A} > 0$). The covariance between these policy-induced price shocks and subsequent closure decisions isolates the agent's marginal disutility of payment.
+
+The risk internalization parameter, $\gamma_{risk}$, is identified by the gradient of exit rates with respect to the leak hazard $h(x_t)$, distinct from the premium channel. While premiums in the private market are correlated with risk, the correlation is not perfect due to deductible structures and coverage limits. If firms face liability costs beyond the premium (e.g., deductibles or reputational harm), they will exit high-risk states at a rate faster than predicted by premium costs alone. This residual sensitivity of the exit rule to the engineering hazard rate $h(A_t)$ identifies $\gamma_{risk}$.
+
+
 # Discussion
 
 The empirical results present a clear and compelling narrative about the power of market-based environmental policy. The transition to risk-adjusted insurance premiums in Texas prompted a significant and rational response from the owners of the highest-risk USTs. Faced with insurance costs that reflected the true environmental hazard of their aging, single-walled tanks, owners accelerated their closure. Critically, this did not lead to a mass exodus from the market. Instead, the policy spurred investment in safer technology, as facilities were more likely to replace their risky tanks rather than shut down entirely. This finding directly addresses a common concern that stringent environmental pricing will simply drive firms out of business, demonstrating instead that it can be a powerful catalyst for technology adoption.
@@ -561,81 +653,3 @@ The success of this price-based mechanism in reducing environmental risk invites
 
 
 
-<!-- Sections TBD
-
-
-# UST Release Risk Rating 
-
-$$
- E\left[ Y_{it}(T) - Y_{it}(T') \mid T, X \right] = E\left[ Y_{it}(T) - Y_{it}(T') \mid T', X \right] \quad \forall , T, T'
- $$
-
-
-**Empirical Strategy** To establish the empirical relevance of the transition to private market UST insurance, I use two event-study specifications and two create two different comparison groups.
-
-The first comparision groups pools pools the eighteen public fund states faciltes and use them as controls for the texas facilites.
-The second comparison group pools the focues in on the EPA Redgion 6 states (New Mexico, Oklahoma, Luisianna and Arkansasa) and uses them as controls for the texas facilites in a spatial diff-in-diff framework. 
-
-The second comparison group is motivated by the fact that the EPA Redgion 6 states have the same federal aminisistrotrs managing the UST program and have similar geogrpahic and climatic conditions as Texas that could affect the underlying nature of UST release risk.
-
-_Event-Study with Unit Fixed Effects_
-
-$$
-y_{i,s,t} \;=\; \sum_{k=-10}^{-2} \beta_k \,\mathbb{1}[\,t - T_0(i) = k\,] \;+\; 
-\sum_{k=0}^{20} \beta_k \,\mathbb{1}[\,t - T_0(i) = k\,] 
-\;+\; \delta_i \;+\; \delta_t \;+\; \epsilon_{i,s,t,v},
-
-$${#eq-ES-unit}
-
-where ${\delta}_i$ is a facility (unit) fixed effect and ${\delta}_t$ is a year fixed effect.
-
-_Event-Study with Vintage Fixed Effects_
-$$
-y_{i,s,t} \;=\; \sum_{k=-10}^{-2} \beta_k \,\mathbb{1}[\,t - T_0(v) = k\,] \;+\; 
-\sum_{k=0}^{20} \beta_k \,\mathbb{1}[\,t - T_0(v) = k\,] 
-\;+\; \delta_v \;+\; \delta_t \;+\; \gamma X_i \;+\; \epsilon_{i,s,t,v}
-$${#eq-ES-vintage}
-
-where ${\delta}_v$ is a vintage (build-year) fixed effect, ${\delta}_t$ is a year fixed effect, and $X_i$ represents the time-invariant facility-level variables.
-
-The key difference is that equation (1) compares units against their own pre-treatment baselines, while equation (2) enforces comparisons among units sharing the same build vintage.  
-
-For both of these specifications,the dependent variables of interest are the binary variables recoreding 1 for  if a facility reporting a release in year $t$, closed a tank in year $t$, or the facility closed  in year $t$ and 0 otherwise.
-
-
-
-**Validity**
-
-<!-- Both event-study specifications rely on the following key assumptions to ensure their validity:
-
-Parallel Trends Assumption: In the absence of treatment, the treated and control groups would have followed similar trajectories over time. This means that any differences in outcomes are attributable to the treatment rather than underlying trends.
-
-Graphical Analysis of Parallel Trends:
-Description: Plot the average outcomes for treated and control groups over time to visually assess whether their pre-treatment trends are similar.
-Testing: Include interaction terms between time indicators and treatment status in the regression to statistically test for differences in trends
-
-
-Exogeneity of Treatment Timing: The timing of the treatment is not correlated with unobserved factors that also affect the outcome. This ensures that the assignment of treatment is as good as random conditional on the controls.
-## tests ----------------------------------------
-Placebo Tests:
-Description: Apply the event-study framework to periods before the actual treatment occurs to check for any apparent "effects" when there should be none.
-Testing: If significant effects are found in placebo periods, this may indicate violations of the parallel trends assumption.
-
-Checking for Anticipation Effects:
-Description: Ensure that units do not adjust their behavior in anticipation of the treatment, which could bias the estimates.
-Testing: Analyze the coefficients for periods leading up to the treatment to detect any abnormal patterns.
-
-**Results**
-
-The event study plots for both @eq-ES-unit and @eq-ES-vintage are presented in Figures 1a [link]  and 1b [link], respectively.
-UST facilities in Texas experienced a significant increase  (results) in the probability of reporting a release after the transition to private market insurance and the probabiliiy in closing a tank (results).  
-
-The results are consistent with the theoretical predictions of the model and suggest that the transition to private market insurance led to a increase in the incentives for UST owners to invest in pollution prevention and compliance.
-
-
-**Discussion**
-
-**Mechanisms**
-
- -->
-````

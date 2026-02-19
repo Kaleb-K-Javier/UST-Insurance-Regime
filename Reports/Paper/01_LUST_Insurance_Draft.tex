@@ -1,0 +1,1783 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
+%
+\documentclass[
+  11.5pt,
+]{article}
+
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else  
+    % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\usepackage[top=0.5in, bottom=1in, paperwidth= 8.5in, paperheight=
+11in,]{geometry}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+% Make \paragraph and \subparagraph free-standing
+\ifx\paragraph\undefined\else
+  \let\oldparagraph\paragraph
+  \renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+  \let\oldsubparagraph\subparagraph
+  \renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+% definitions for citeproc citations
+\NewDocumentCommand\citeproctext{}{}
+\NewDocumentCommand\citeproc{mm}{%
+  \begingroup\def\citeproctext{#2}\cite{#1}\endgroup}
+\makeatletter
+ % allow citations to break across lines
+ \let\@cite@ofmt\@firstofone
+ % avoid brackets around text for \cite:
+ \def\@biblabel#1{}
+ \def\@cite#1#2{{#1\if@tempswa , #2\fi}}
+\makeatother
+\newlength{\cslhangindent}
+\setlength{\cslhangindent}{1.5em}
+\newlength{\csllabelwidth}
+\setlength{\csllabelwidth}{3em}
+\newenvironment{CSLReferences}[2] % #1 hanging-indent, #2 entry-spacing
+ {\begin{list}{}{%
+  \setlength{\itemindent}{0pt}
+  \setlength{\leftmargin}{0pt}
+  \setlength{\parsep}{0pt}
+  % turn on hanging indent if param 1 is 1
+  \ifodd #1
+   \setlength{\leftmargin}{\cslhangindent}
+   \setlength{\itemindent}{-1\cslhangindent}
+  \fi
+  % set entry spacing
+  \setlength{\itemsep}{#2\baselineskip}}}
+ {\end{list}}
+\usepackage{calc}
+\newcommand{\CSLBlock}[1]{\hfill\break\parbox[t]{\linewidth}{\strut\ignorespaces#1\strut}}
+\newcommand{\CSLLeftMargin}[1]{\parbox[t]{\csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLRightInline}[1]{\parbox[t]{\linewidth - \csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLIndent}[1]{\hspace{\cslhangindent}#1}
+
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{float}
+\usepackage{tablefootnote}
+\floatplacement{figure}{H}
+\usepackage{tikz}
+\usepackage{pdflscape}
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\AtBeginDocument{%
+\ifdefined\contentsname
+  \renewcommand*\contentsname{Table of contents}
+\else
+  \newcommand\contentsname{Table of contents}
+\fi
+\ifdefined\listfigurename
+  \renewcommand*\listfigurename{List of Figures}
+\else
+  \newcommand\listfigurename{List of Figures}
+\fi
+\ifdefined\listtablename
+  \renewcommand*\listtablename{List of Tables}
+\else
+  \newcommand\listtablename{List of Tables}
+\fi
+\ifdefined\figurename
+  \renewcommand*\figurename{Figure}
+\else
+  \newcommand\figurename{Figure}
+\fi
+\ifdefined\tablename
+  \renewcommand*\tablename{Table}
+\else
+  \newcommand\tablename{Table}
+\fi
+}
+\@ifpackageloaded{float}{}{\usepackage{float}}
+\floatstyle{ruled}
+\@ifundefined{c@chapter}{\newfloat{codelisting}{h}{lop}}{\newfloat{codelisting}{h}{lop}[chapter]}
+\floatname{codelisting}{Listing}
+\newcommand*\listoflistings{\listof{codelisting}{List of Listings}}
+\makeatother
+\makeatletter
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\@ifpackageloaded{subcaption}{}{\usepackage{subcaption}}
+\makeatother
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\usepackage{bookmark}
+
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same} % disable monospaced font for URLs
+\hypersetup{
+  pdftitle={Internalizing Environmental Risk: Insurance Design and Firm Behavior in Hazardous Industries},
+  pdfauthor={Kaleb K. Javier},
+  colorlinks=true,
+  linkcolor={blue},
+  filecolor={Maroon},
+  citecolor={Blue},
+  urlcolor={Blue},
+  pdfcreator={LaTeX via pandoc}}
+
+\title{Internalizing Environmental Risk: Insurance Design and Firm
+Behavior in Hazardous Industries}
+\author{Kaleb K. Javier}
+\date{Invalid Date}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+Public trust funds in thirty-eight U.S. states insure underground
+storage tank (UST) leaks at a uniform flat fee, even though leak risk
+varies widely with observable traits such as tank age and wall
+construction. This paper quantifies how replacing flat-fee pooling with
+actuarially priced coverage changes firm behavior and environmental
+outcomes. I exploit Texas's 1999 closure of its trust fund, which forced
+all owners into a private market that sets premiums according to
+facility risk. A facility-year panel covering 1990--2021 links EPA
+inventories with administrative microdata for Texas and eighteen control
+states that retained public funds. Difference-in-differences and
+event-study estimates show that, among single-wall tanks installed
+before 1999, risk-rated premiums increased annual closure rates by two
+to three percentage points, shifted closures from market exit to on-site
+replacement with safer equipment, and reduced the probability of a
+reported leak by about one percentage point, nearly the entire
+pre-policy baseline for this high-risk group. The findings provide the
+first causal micro-evidence that cost-based environmental liability
+insurance can internalize pollution risk more effectively than uniform
+public pooling, offering clear guidance for states that are
+reconsidering the structure of UST insurance programs.
+\end{abstract}
+
+\clearpage
+
+\section{Introduction}\label{introduction}
+
+Underground storage tanks holding motor fuels and other hazardous
+liquids sit beneath about half a million U.S. facilities, and leaks from
+these tanks are the leading documented source of groundwater
+contamination EPA (\citeproc{ref-epa_underground_2024}{2024}). Cleanup
+is costly; median remediation expenses exceed \$100 000 per site Marcus
+(\citeproc{ref-marcus_going_2021}{2021}), and the probability of a
+release rises sharply with observable characteristics such as tank age
+and whether the walls are single or double. Despite these predictable
+differences, thirty-eight states finance remediation through public
+trust funds that charge every facility the same premium, diluting
+incentives to invest in safer technology and crowding out private
+insurers ASTSWMO (\citeproc{ref-astswmo_archive}{2025}).
+
+Economic theory predicts that tying premiums to expected damages should
+induce firms to internalize environmental risk Shavell
+(\citeproc{ref-shavell_liability_1984}{1984b}); Polinsky
+(\citeproc{ref-polinsky_strict_1980}{1980}), yet empirical tests of this
+mechanism for USTs are scarce. Michigan's mid-1990s shift toward
+private, risk-rated coverage suggested large gains but relied on
+aggregate counts that could not isolate facility-level responses Yin,
+Pfaff, and Kunreuther (\citeproc{ref-yin_can_2011}{2011}); Yin,
+Kunreuther, and White (\citeproc{ref-yin_risk-based_2011}{2011}).
+Whether actuarial pricing disciplines high-risk owners without simply
+driving them out of the market therefore remains unresolved.
+
+Texas provides a clean natural experiment. In 1999 the state closed its
+public fund overnight and required all owners to purchase private
+coverage whose premiums vary with observable risk. I assemble a new
+facility-year panel covering 1990 to 2021 that links EPA inventories
+with administrative microdata from the Texas Commission on Environmental
+Quality and comparable data from eighteen control states that retained
+trust funds. A difference-in-differences design compares Texas with
+these fund states, and an event-study variant confirms parallel
+pre-trends.
+
+Three main results emerge. First, among single-wall tanks installed
+before 1999, risk-based pricing raised annual closure probabilities by
+roughly two to three percentage points and shifted closures from
+outright exit to on-site replacement with safer equipment. Second, the
+probability of a reported leak fell by about one percentage point,
+nearly the entire pre-policy baseline for this high-risk group. Third,
+the effect on leak rates is concentrated among facilities that were
+already high-risk before the policy change, suggesting that cost-based
+pricing effectively targets riskier firms. By providing the first causal
+micro-evidence that actuarially priced environmental liability insurance
+changes firm behavior in hazardous industries, the paper speaks directly
+to current policy debates over the future of state UST funds.
+
+\textbf{Related Literature}
+
+A well-established body of theoretical work suggests that strict
+liability rules can be an effective policy instrument for environmental
+risks, particularly when paired with insurance contracts that align a
+firm's private incentives with social costs (Shavell
+(\citeproc{ref-shavell_liability_1984}{1984b}), Shavell
+(\citeproc{ref-shavell_model_1984}{1984a}), Shavell
+(\citeproc{ref-shavell_liability_1982}{1982}), Polinsky
+(\citeproc{ref-polinsky_strict_1980}{1980}), Boyd and Kunreuther
+(\citeproc{ref-boyd_retroactive_1997}{1997}), Shavell
+(\citeproc{ref-shavell_chapter_2007}{2007})). A crucial condition for
+this alignment is the insurer's ability to accurately price the risk of
+environmental harm. This paper provides the first empirical test of this
+principle in the context of environmental liability, offering causal
+estimates of how firms respond to a transition from flat-fee to more
+efficient, cost-based insurance contracts.
+
+The challenge of pricing environmental risk connects this study to the
+broader economics literature on insurance and selection markets.
+Specifically, this paper builds on work examining the effects of
+cost-based pricing and contract design on market outcomes and
+participant behavior (Janvry, McIntosh, and Sadoulet
+(\citeproc{ref-de_janvry_supply-_2010}{2010}), McWilliams, Hsu, and
+Newhouse (\citeproc{ref-mcwilliams_new_2012}{2012}), Einav, Jenkins, and
+Levin (\citeproc{ref-einav_contract_2012}{2012}), Einav, Jenkins, and
+Levin (\citeproc{ref-einav_impact_2013}{2013}), Brown et al.
+(\citeproc{ref-brown_how_2014}{2014}), Liberman et al.
+(\citeproc{ref-liberman_equilibrium_2018}{2018}), Nelson
+(\citeproc{ref-nelson_private_2025}{2025}), Einav, Finkelstein, and
+Mahoney (\citeproc{ref-einav_io_2021}{2021})). By studying the
+transition to risk-based premiums for environmental liability, this
+research contributes new evidence on how mispriced insurance can distort
+markets, particularly in hazardous industries where the social costs of
+pollution are significant.
+
+This paper also contributes to the literature on U.S. UST policy. While
+much of the existing work focuses on estimating the marginal damages of
+pollution from leaks (Marcus (\citeproc{ref-marcus_going_2021}{2021}),
+Zabel and Guignet (\citeproc{ref-zabel_hedonic_2012}{2012}), Guignet
+(\citeproc{ref-guignet_sell_2014}{2014}), Guignet and Martinez-Cruz
+(\citeproc{ref-guignet_impacts_2018}{2018}), Guignet et al.
+(\citeproc{ref-guignet_contamination_2018}{2018}), Walsh and Mui
+(\citeproc{ref-walsh_contaminated_2017}{2017}), Guignet
+(\citeproc{ref-guignet_what_2013}{2013})), this study is complementary,
+examining the design of management policies intended to prevent those
+damages.
+
+This research is most closely related to studies of a similar insurance
+market reform in Michigan by Yin, Pfaff, and Kunreuther
+(\citeproc{ref-yin_can_2011}{2011}), Yin, Kunreuther, and White
+(\citeproc{ref-yin_risk-based_2011}{2011}), and Yin, Kunreuther, and
+White (\citeproc{ref-yin_environmental_2007}{2007}). That body of work
+finds that transitioning to risk-based insurance reduced the number of
+small firms and reported leaks. However, those analyses relied on
+aggregate or cross-sectional data, which cannot control for unobserved
+facility-level heterogeneity and may be susceptible to omitted variable
+bias.This research is most closely related to studies of a similar
+insurance market reform in Michigan by Yin, Pfaff, and Kunreuther
+(\citeproc{ref-yin_can_2011}{2011}), Yin, Kunreuther, and White
+(\citeproc{ref-yin_risk-based_2011}{2011}), and Yin, Kunreuther, and
+White (\citeproc{ref-yin_environmental_2007}{2007}). That body of work
+finds that transitioning to risk-based insurance reduced the number of
+small firms and reported leaks. However, those analyses relied on
+aggregate or cross-sectional data, which cannot control for unobserved
+facility-level heterogeneity and may be susceptible to omitted variable
+bias. This paper advances on prior work by adopting an empirical
+strategy similar to other modern studies of environmental liability
+(Boomhower (\citeproc{ref-boomhower_drilling_2019}{2019})). By using a
+rich, facility-level panel dataset, I can implement
+difference-in-differences models that control for unobserved facility
+characteristics and common time shocks, providing more credible causal
+estimates of how firms adjust their technology, replacement, and exit
+decisions in response to cost-based pricing.
+
+\section{Setting and Data}\label{setting-and-data}
+
+\subsection{The Policy and Technical Landscape of U.S. Underground
+Storage
+Tanks}\label{the-policy-and-technical-landscape-of-u.s.-underground-storage-tanks}
+
+An underground storage tank (UST) is defined by the U.S. Environmental
+Protection Agency as any tank, including its connected underground
+piping, with at least 10\% of its volume below ground (EPA
+(\citeproc{ref-epa_underground_2024}{2024})). Most UST facilities house
+multiple tanks on a single site and typically contain hazardous
+substances like petroleum. Importantly, the majority of these facilities
+are retail gas stations. In Texas, for example, an annual average of
+75\% of active facilities during the sample period are retail gas
+stations. The next largest category is fleet refueling firms (20\%),
+with the remainder comprising airports, marinas, industrial plants, and
+municipal properties. These shares are consistent with national
+averages, where retail gas stations account for approximately 75\% of
+all UST facilities (EPA (\citeproc{ref-epa_underground_2024}{2024})).
+
+The primary technical distinction between USTs is their construction:
+either single-walled or double-walled. This initial technology choice is
+critical because, in practice, facility owners rarely invest in
+incremental upgrades once a tank is operational. Comprehensive data on
+such improvements are sparse, but evidence from Texas, where pricing
+incentives to upgrade have been strongest, is telling. From 1998 to
+2021, only 0.003\% of facilities ever upgraded their tanks. Instead,
+investment decisions are concentrated at two points: initial
+installation and subsequent closure with tank replacement, or complete
+exit from the market. This resistance to midlife retrofits underscores
+their high cost and reflects the perverse incentives created by
+vintage-differentiated minimum performance standards, which often
+grandfather in older, less safe technologies.\footnote{For example, 30
+  Tex. Admin. Code §334.45(d)(E)(i) requires that new tanks and piping
+  (installed on or after Jan.~1, 2009) ``must incorporate secondary
+  containment''. In other words, only newly installed UST systems must
+  have dual containment, whereas older tanks (installed before that
+  date) are not retroactively required to do so. Furthermore, the Texas
+  code defines a new UST system as one whose installation ``commenced
+  after December 22, 1988.'' Every state has similar language,
+  effectively grandfathering in older tanks and creating a
+  vintage-differentiated regulation that discourages retrofits
+  Gruenspecht (\citeproc{ref-gruenspecht_differentiated_1982}{1982})}
+
+A facility's choice of UST construction carries significant economic and
+environmental consequences. Single-walled tanks are markedly cheaper to
+build but leak far more often than double-walled designs. Retail
+catalogues and direct correspondence with a major manufacturer indicate
+that single-walled fiberglass tanks sell for roughly one-half to
+one-third the price of comparable double-walled units.\footnote{Direct
+  correspondence with one of the largest UST manufacturers confirm that
+  single-walled tank costs remains roughly one-half to two-thirds the
+  price of an otherwise comparable double-walled tank. The sales team
+  (speaking under a promise of anonymity) explained that they update
+  list prices to reflect general input-cost inflation, i.e with general
+  input costs, but the manufacturer deliberately keeps the percentage
+  surcharge for secondary containment almost unchanged. Historical
+  evidence echoes this pattern. An industry survey reported by the U.S.
+  GAO priced a new 10 000-gallon fiberglass tank in 1987 at about \$23
+  000 for single wall versus \$39 000 for double wall, a 67 percent
+  premium that has persisted for decades ({``Hazardous Materials:
+  Upgrading of Underground Storage Tanks Can Be Improved to Avoid Costly
+  Cleanups''} (\citeproc{ref-gao1987}{1992})). A January 2021
+  Containment Solutions guide lists double-walled fiberglass tanks from
+  \$162 270 (15 000 gal) to \$462 425 (50 000 gal); although the
+  catalogue no longer offers single-wall primaries, accessory pages show
+  one-third lower prices for single-wall collars and sumps, implying a
+  similar shell-level surcharge (Containment Solutions, Inc.
+  (\citeproc{ref-csi2021}{2021})). A 2018 Xerxes list quotes single-wall
+  prices of \$19 382 (10 000 gal) and \$174 690 (50 000 gal), while the
+  matching double-wall prices are \$47 497 and \$326 671, confirming a
+  60--90 percent differential in that year (Xerxes Corporation
+  (\citeproc{ref-xerxes2018}{2018})). All figures cover the tank itself;
+  installation labour, required release-detection equipment, and other
+  site-specific costs are additional.} This cost-safety trade-off is
+borne out empirically. As shown in Figure~\ref{fig-leak-risk},
+facilities equipped with single-walled systems are significantly more
+likely to report releases than their double-walled peers at every age.
+
+The evolution of the nation's UST stock has been heavily shaped by the
+1998 federal deadline requiring the closure or upgrade of all
+non-compliant tanks. In the years leading up to this deadline, the
+average annual closure rate was a substantial 25.56\% (SE = 9.91).
+Following this large-scale removal of older tanks, the turnover rate
+dropped dramatically; from 1999 onward, the average annual closure rate
+fell to just 3.29\% (SE = 3.12). This slow post-deadline replacement
+cycle has led to a persistently old and high-risk tank population. In
+1994, single-wall tanks constituted 56.2\% of all active tanks, and
+while this share has declined, they still represented 47.8\% of the
+active stock in 2019. This persistence is reflected in the age of the
+tanks, with the average age of an active tank steadily increasing from
+13.3 years in 1994 to 30.7 years in 2019. Across the entire sample,
+single-wall tanks are significantly older, with an average age of 22.5
+years, compared to 11.7 years for double-wall tanks. While the 1998
+deadline removed a large cohort of the riskiest tanks, the subsequent
+low turnover rate has resulted in a significant and aging stock of
+high-risk USTs remaining in operation today.
+
+Given the significant cleanup costs from leaks, federal regulations
+require UST owners to demonstrate financial responsibility, typically by
+securing \$1 million in coverage. In the early 1990s, with the private
+insurance market for this risk still nascent, many states established
+UST Trust Funds to provide publicly managed insurance pools. However,
+unlike traditional insurance, these public funds typically operated on a
+flat-fee basis, charging uniform premiums regardless of
+facility-specific risk. While this approach ensures remediation costs
+are covered, it creates a significant price externality. By pooling
+diverse risks under one price, these funds distort incentives for risk
+mitigation and crowd out the private insurance market. In states with
+such funds, they consistently cover 90-100\% of all facilities, an
+unsurprising outcome given that the subsidized, flat-fee contracts are
+difficult for any private, risk-based insurer to compete
+against.\footnote{Surveys from the Association of State and Territorial
+  Solid Waste Management Officials (ASTSWMO
+  (\citeproc{ref-astswmo_archive}{2025})) show that between 2000 and
+  2021 consistently show that in states with public funds, these funds
+  cover 90-100\% of facilities. This holds true even in state fund
+  states that permit owners to use private insurance, indicating the
+  state fund is the dominant instrument.}
+
+Six states have since transitioned away from this public model to
+private insurance markets, with Texas transitioning in 1999. This shift
+provides the setting for this paper's analysis. In Texas, from 2007 to
+2021, an average of 89.8\% of retail UST facilities met their financial
+responsibility requirements using private insurance. The remaining
+10.2\% relied on other mechanisms, predominantly self-insurance, a path
+available only to large owners who can meet stringent financial asset
+tests. Crucially, this private insurance market appears to incorporate
+facility risk. On average, 69.4\% of these privately insured facilities
+were comprised of at least one single-wall tank. This indicates that
+higher-risk facilities are not excluded from the market but instead
+select into private insurance, where they face risk-adjusted premiums
+that reflect their specific operational characteristics.
+
+In summary, the U.S. is managing a large and aging stock of underground
+storage tanks where construction type is a strong predictor of leak
+risk. The prevailing insurance regime, either a flat-fee public fund or
+a cost-based pricing private market, critically shapes the incentives
+for managing these risks. To empirically test how insurance design
+affects firm behavior, the following sections detail the data and causal
+methodology used to analyze Texas's transition to a private insurance
+market.
+
+\clearpage
+
+\section{Setting, Data, and Institutional
+Background}\label{setting-data-and-institutional-background}
+
+\subsection{The Technical and Regulatory Landscape of U.S. Underground
+Storage
+Tanks}\label{the-technical-and-regulatory-landscape-of-u.s.-underground-storage-tanks}
+
+The physical setting of this analysis concerns the U.S. Environmental
+Protection Agency (EPA) definition of an underground storage tank (UST)
+system: any tank and connected underground piping with at least 10\% of
+its volume beneath the surface (EPA
+(\citeproc{ref-epa_underground_2024}{2024})). These facilities are
+predominantly retail gas stations, which account for approximately 75\%
+of active sites in both the national average and the Texas-specific
+sample. The remainder comprises fleet refueling depots (20\%) and a mix
+of industrial, aviation, and municipal facilities.
+
+The primary source of heterogeneity in this capital stock is the tank
+construction technology. The critical distinction lies between
+single-walled systems---essentially bare steel or fiberglass
+shells---and double-walled systems, which incorporate an interstitial
+space for leak detection. This initial technology choice is economically
+critical because facility owners rarely invest in incremental upgrades
+once a tank is operational. From 1998 to 2021, only 0.003\% of Texas
+facilities ever retrofitted their tanks prior to a terminal closure
+event. Investment decisions are consequently concentrated at the
+extensive margin of entry and exit. This resistance to midlife retrofits
+reflects high switching costs and the perverse incentives created by
+vintage-differentiated standards. State regulations typically
+grandfather in older systems, requiring secondary containment only for
+new installations initiated after specific cutoff dates, such as
+December 1988 or January 2009.
+
+The construction type dictates the environmental risk profile.
+Single-walled tanks are significantly cheaper to install but exhibit
+higher failure rates. Historical industry data indicates a persistent
+price differential; a 1987 GAO survey priced single-walled units at
+approximately \$23,000 compared to \$39,000 for double-walled
+equivalents, a 67\% premium. Federal regulation explicitly targets this
+risk through the 1984 Hazardous and Solid Waste Amendments (HSWA), which
+culminated in a 1998 deadline requiring the closure or upgrade of
+non-compliant tanks. While the years preceding this deadline saw annual
+closure rates averaging 25.56\% (SE = 9.91), the post-deadline turnover
+dropped precipitously to 3.29\% (SE = 3.12). This collapse in capital
+turnover resulted in an aging legacy fleet. In 2019, single-walled tanks
+still constituted 47.8\% of the active stock, with an average age of
+22.5 years compared to 11.7 years for double-walled units.
+
+\subsection{Financial Responsibility and the Insurance
+Regime}\label{financial-responsibility-and-the-insurance-regime}
+
+To mitigate the liability associated with these environmental risks, the
+EPA's 1988 Financial Responsibility Rule (40 CFR Part 280, Subpart H)
+mandates that owners secure coverage for corrective action and
+third-party liability, typically \$1 million per occurrence. In the late
+1980s, the immaturity of the private environmental insurance market led
+many states to establish public trust funds. These funds typically
+operate on a flat-fee basis, charging uniform premiums regardless of
+facility-specific risk. While effective at ensuring solvency, this
+pooling mechanism creates a price externality that distorts incentives
+for risk mitigation. In states retaining such funds, they consistently
+cover 90\% to 100\% of facilities.
+
+Texas initially utilized a public fund model but diverged in 1998
+following the passage of House Bill 2587. Facing actuarial insolvency,
+the legislature sunset the Texas Petroleum Storage Tank Remediation
+Fund, forcing the entire facility population to migrate to the private
+market or self-insure by 1999. This sharp policy discontinuity serves as
+the central identification strategy. In the post-transition period
+(2007--2021), 89.8\% of Texas retail facilities met their obligations
+through private insurance, with the remainder relying on self-insurance
+mechanisms available only to highly capitalized firms.
+
+\section{Conceptual Framework: Insurance Design and Optimal
+Stopping}\label{conceptual-framework-insurance-design-and-optimal-stopping}
+
+The facility owner's decision is modeled as a single-agent dynamic
+discrete choice problem following the optimal stopping literature (Rust,
+1987). In an infinite horizon setting with time indexed by \(t\), the
+agent operates a single underground storage tank (UST) and observes the
+state variable \(a_t\), representing the tank's age. At the beginning of
+each period, the agent chooses a binary action
+\(d_t \in \{ \text{Maintain}, \text{Close} \}\) to maximize the expected
+present discounted value of future payoffs. If the agent chooses to
+close (\(d_t = \text{Close}\)), the facility exits the market
+permanently, receiving a terminal scrap value \(\kappa\) representing
+the liquidity of the land net of decommissioning costs. Conditional on
+maintenance (\(d_t = \text{Maintain}\)), the flow utility is specified
+as \(u(a_t) = R - P_j(a_t)\), where \(R\) denotes the annual net revenue
+from operations less all non-insurance costs, and \(P_j(a_t)\) is the
+insurance premium under regime \(j\). While the structural estimation in
+Section 5 relaxes this assumption to incorporate deductibles and partial
+risk internalization, this simplified framework assumes full insurance
+coverage for tractability, treating environmental risk solely as an
+ex-ante premium cost rather than an ex-post liability shock. The agent's
+value function \(V(a)\) satisfies the Bellman equation:
+
+\[
+V(a) = \max \left\{ R - P_j(a) + \beta \mathbb{E}[V(a') \mid a], \kappa \right\}
+\]
+
+where \(\beta \in (0, 1)\) is the discount factor and the expectation is
+taken over the stochastic evolution of tank age. The optimal stopping
+rule dictates that the firm closes the tank when the continuation value
+of operation falls below the scrap value \(\kappa\).
+
+The divergence in firm behavior across states is driven by the
+elasticity of the premium function \(P_j(a)\) with respect to capital
+depreciation. Under the \textbf{Uniform Premium (Public Fund)} regime,
+the price is invariant to risk, such that \(P(a) = \bar{P}\) and the
+marginal cost of aging is zero (\(\frac{\partial P}{\partial a} = 0\)).
+This flat pricing structure eliminates the financial incentive to retire
+aging capital, pivoting the continuation value curve upward and causing
+the firm to retain the asset until it is physically obsolete, defined as
+age \(a^*_{UP}\). Conversely, under the \textbf{Risk-Based (Private
+Market)} regime, premiums are strictly increasing in the leak hazard
+rate \(h(a)\), such that \(\frac{\partial P}{\partial a} > 0\). This
+introduces a positive marginal cost of aging, pivoting the value
+function downward for older tanks and accelerating the optimal exit age
+to \(a^*_{RB}\). Figure 1 illustrates this mechanism, demonstrating that
+the introduction of risk-based pricing strictly reduces the optimal tank
+lifespan relative to the uniform pricing baseline
+(\(a^*_{RB} < a^*_{UP}\)).
+
+\begin{figure}
+
+\caption{\label{fig-mechanism}The Mechanism: Optimal Stopping under
+Alternative Insurance Regimes}
+
+\centering{
+
+\includegraphics[width=0.9\textwidth,height=\textheight]{Output/Figures/Paper/Fig_1_Mechanism.pdf}
+
+}
+
+\end{figure}%
+
+While risk-based pricing improves allocative efficiency by penalizing
+higher failure rates, it does not achieve the first-best social optimum
+due to unpriced health externalities. The social planner's objective
+function includes both the remediation costs (\(L\)) covered by insurers
+and the health damages (\(E\)) from groundwater contamination, which are
+typically unobservable and generate no third-party claims (Marcus,
+2021). Consequently, the private actuarial premium
+\(P_{RB} \propto h(a)L\) is strictly less than the social marginal cost
+\(h(a)(L+E)\). This wedge implies that while the private market induces
+earlier exit than the public fund, the equilibrium exit age \(a^*_{RB}\)
+remains higher than the socially optimal age \(a^*_{SOC}\). Figure 2
+visualizes this welfare loss, identifying the shaded region between
+\(a^*_{SOC}\) and \(a^*_{RB}\) as the uninternalized externality. The
+theoretical prediction for the empirical analysis is therefore a
+monotonic ordering of tank lifespans where
+\(a^*_{SOC} < a^*_{RB} < a^*_{UP}\).
+
+\begin{figure}
+
+\caption{\label{fig-welfare}Welfare Analysis: The Externality Wedge and
+Partial Correction}
+
+\centering{
+
+\includegraphics[width=0.9\textwidth,height=\textheight]{Output/Figures/Paper/Fig_2_Welfare.pdf}
+
+}
+
+\end{figure}%
+
+\subsection{Data and Sample Construction}\label{sec-data}
+
+The empirical analysis relies on a composite panel constructed from
+three distinct layers of administrative microdata. These layers comprise
+a comprehensive facility-level backbone covering the universe of
+regulated entities, a market-based premium overlay for the treated
+jurisdiction of Texas, and a claims-cost overlay for a subset of control
+states.
+
+\subsubsection{The Administrative
+Backbone}\label{the-administrative-backbone}
+
+The core dataset consists of the universe of regulated UST facilities in
+Texas and eighteen control states, harmonized from raw state-level
+administrative inventories and EPA summary files. The panel tracks
+facility lifecycles from initial registration through 2023. For every
+facility-month observation, I observe the exact timing of critical
+behavioral outcomes including tank closures, system retrofits, and
+confirmed releases. As shown in the gray intervals of
+Figure~\ref{fig-d1} (Panel B), this administrative backbone is
+continuous across the 1999 policy intervention window for all sampled
+states. This continuity ensures that the primary outcome variables
+(\(Y_{it}\)) are measured consistently before and after the treatment.
+
+\begin{figure}
+
+\caption{\label{fig-d1}Analysis Sample Coverage. Administrative facility
+data exists for all analysis states; Cost data is limited to specific
+subsets.}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=\textheight]{Output/Figures/FD01_analysis_coverage_combined.png}
+\end{center}
+\end{minipage}%
+\newline
+\begin{minipage}{\linewidth}
+\small \emph{Note:} Notes: Gray bars in Panel B represent the `Admin
+Data' backbone (facility entry/exit/leaks) available for all analysis
+states. Colored overlays indicate periods where cost data is available:
+Orange for Texas Market Premiums (starting 2006), and Blue for cleanup
+costs in select control states. The gaps illustrate the data matching
+challenge.\end{minipage}%
+
+\end{figure}%
+
+\subsubsection{Premium Reconstruction and Rating Engine
+Dynamics}\label{premium-reconstruction-and-rating-engine-dynamics}
+
+To parameterize the structural model, I reconstruct the private
+insurance premiums that Texas facilities faced following the 1999
+privatization. Because private insurers do not publicly disclose
+individual policy premiums, I build a ``bottom-up'' rating engine based
+on the actuarial filings of the Mid-Continent Casualty Company, a
+dominant insurer in the Texas UST market. Using rate manuals obtained
+from the System for Electronic Rates \& Forms Filing (SERFF) covering
+2006 through 2021, I recover the precise algorithms used to price tank
+risk. I estimate the monthly premium \(P_{ijt}\) for tank \(j\) at
+facility \(i\) in month \(t\) using the insurer's canonical pricing
+formula:
+
+\[
+P_{ijt} = \text{Base}_{t} \times \text{ILF}_{it} \times \left( 1 + \sum_{k} \lambda_{k,t} \mathbf{X}_{ijt} \right)
+\]
+
+The resulting pricing engine exhibits four distinct structural
+properties verified in the rate filings. First, the insurer prices
+depreciation through a discrete step function rather than a linear
+trend. As shown in Figure~\ref{fig-age-steps}, premiums remain
+relatively flat for new capital but ratchet up significantly as tanks
+cross specific actuarial age thresholds (e.g., 20 and 30 years),
+creating non-linear incentives for replacement.
+
+\begin{figure}
+
+\caption{\label{fig-age-steps}The Age Pricing Schedule (Step Function).
+Visualizing the discrete age-loading tables from the rate filings
+relative to tank vintage.}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+\includegraphics[width=0.8\textwidth,height=\textheight]{Output/Figures/FD02a_engine_age_steps.png}
+\end{center}
+\end{minipage}%
+\newline
+\begin{minipage}{\linewidth}
+\small \emph{Note:} The solid line represents the mean per-tank premium
+calculated by the actuarial engine for each integer age (0--40 years).
+The discrete steps correspond to the age bins defined in the
+Mid-Continent rate filings (e.g., 0--5, 6--10, 11--15). The gray bars
+(right axis) show the distribution of tank ages in the Texas sample,
+indicating that a significant portion of the fleet is in the older,
+higher-priced age brackets.\end{minipage}%
+
+\end{figure}%
+
+Second, conditional on age, the construction technology dictates the
+base risk load. Figure~\ref{fig-risk-loads} illustrates the additive
+premium surcharges applied to single-walled and steel systems.
+Single-walled tanks face substantial penalties independent of their age,
+reflecting the insurer's assessment of their inherent structural
+vulnerability.
+
+\begin{figure}
+
+\caption{\label{fig-risk-loads}Construction Risk Loads. Impact of
+`construction\_load' and `piping\_load' factors.}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+\includegraphics[width=0.8\textwidth,height=\textheight]{Output/Figures/FD02b_engine_risk_loads.png}
+\end{center}
+\end{minipage}%
+\newline
+\begin{minipage}{\linewidth}
+\small \emph{Note:} Boxplots showing the distribution of per-tank
+premiums by tank technology type. ``Double-Walled'' tanks receive the
+lowest base rates (baseline risk). ``Fiberglass'' and
+``Single-Walled/Steel'' tanks incur additive percentage surcharges (risk
+loads) as specified in the rate filings, resulting in strictly higher
+premiums. Diamonds indicate group means.\end{minipage}%
+
+\end{figure}%
+
+Third, the market structure suggests constant returns to scale regarding
+liability. As demonstrated in Figure~\ref{fig-scale-check}, the rating
+engine applies no volume discounts; the per-tank premium remains
+invariant to the number of tanks at a facility. This implies that larger
+facilities face a linear cost function with respect to their capital
+stock size.
+
+\begin{figure}
+
+\caption{\label{fig-scale-check}Scale Neutrality Check. Engine Logic: No
+explicit volume discount (Flat per-unit price expected).}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+\includegraphics[width=0.8\textwidth,height=\textheight]{Output/Figures/FD02c_engine_scale_check.png}
+\end{center}
+\end{minipage}%
+\newline
+\begin{minipage}{\linewidth}
+\small \emph{Note:} Average per-tank premium plotted against the number
+of tanks at the facility. The flat trend confirms that the pricing
+engine aggregates risk linearly (sum of individual tank premiums)
+without applying bulk discounts for larger facilities. This validates
+the use of per-tank pricing as the fundamental unit of
+analysis.\end{minipage}%
+
+\end{figure}%
+
+Finally, the insurer actively updates these schedules to reflect
+evolving risk perceptions. Figure~\ref{fig-filing-evolution} decomposes
+the aggregate age curves by regulatory filing era. Over time, the
+insurer has steepened the penalty for older tanks, particularly in the
+2019 and 2021 filings, indicating a learning process where the realized
+losses from the aging legacy fleet are increasingly priced into the
+market.
+
+\begin{figure}
+
+\caption{\label{fig-filing-evolution}Evolution of the Age-Risk Pricing
+Schedule. Each line represents the active actuarial age curve during a
+specific filing period.}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=\textheight]{Output/Figures/FE_age_curve_by_filing.png}
+\end{center}
+\end{minipage}%
+\newline
+\begin{minipage}{\linewidth}
+\small \emph{Note:} This figure decomposes the aggregate age curve by
+regulatory filing era. It visualizes how the insurer's assessment of
+age-related risk has evolved, showing the specific step-function
+schedules active during the 2006--2014, 2014--2019, 2019--2020, and
+post-2021 periods.\end{minipage}%
+
+\end{figure}%
+
+\subsubsection{Addressing Data Gaps}\label{addressing-data-gaps}
+
+The analysis addresses two specific dimensions of data sparsity
+visualized in Figure~\ref{fig-d1}. First, regarding geographic
+heterogeneity, the cost estimation routine is restricted to control
+states with verifiable claims data and extrapolated to
+administrative-only states based on observable facility characteristics.
+Second, regarding temporal gaps, the administrative backbone extends
+beyond the cost data windows. Specifically, the period from 1999 to 2005
+in Texas represents a transition window where private prices existed but
+granular microdata is unavailable. For such periods, I assume
+stationarity in the conditional cost distribution while allowing for
+aggregate inflation adjustments.
+
+\subsubsection{Cost Data Overlay: Control Group
+Liability}\label{cost-data-overlay-control-group-liability}
+
+While the treated group faces ex-ante premium pricing, the control group
+operates under a public insurance regime where costs are realized
+ex-post. To parameterize the severity of environmental failure
+(\(C \mid \text{Leak}\)) for these facilities, I link administrative
+facility identifiers to the payment ledgers of state trust funds in
+Colorado, Louisiana, New Mexico, Tennessee, and Utah. This subset
+provides the empirical distribution of cleanup costs required to model
+the ``state's burden'' under the flat-fee regime.
+
+The resulting cost distribution, visualized in
+Figure~\ref{fig-claims-dist}, is characterized by extreme positive
+skewness. The data rejects a normal distribution hypothesis in favor of
+a heavy-tailed log-normal structure. The distinction between the median
+and mean cost is economically significant; while the median represents
+the typical remediation event, the mean is driven upward by catastrophic
+outliers---rare events where groundwater contamination plumes migrate
+off-site, triggering liability magnitudes orders of magnitude larger
+than the modal claim.
+
+\begin{figure}
+
+\caption{\label{fig-claims-dist}Distribution of Realized Cleanup Costs.
+The distribution is right-skewed with a heavy tail of catastrophic
+damages.}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=\textheight]{Output/Figures/FD03a_claims_dist.png}
+\end{center}
+\end{minipage}%
+\newline
+\begin{minipage}{\linewidth}
+\small \emph{Note:} Notes: This histogram plots the frequency of Leaking
+Underground Storage Tank (LUST) cleanup costs across the five control
+states (CO, LA, NM, TN, UT), adjusted to 2023 dollars. The x-axis uses a
+log scale. The dashed black line marks the median, while the dotted red
+line marks the mean. The substantial deviation between mean and median
+illustrates the heavy-tailed nature of environmental
+liability.\end{minipage}%
+
+\end{figure}%
+
+Furthermore, liability exhibits spatial heterogeneity driven by
+differences in hydrogeology and state-specific remediation standards.
+Figure~\ref{fig-claims-state} breaks down these costs by jurisdiction.
+Although the central tendency (median) varies by state, the
+dispersion---specifically the reach of the upper tail---remains a
+consistent feature across all sampled public funds. This confirms that
+the ``catastrophic tail risk'' is a fundamental technological property
+of UST systems rather than an artifact of specific state administrative
+procedures.
+
+\begin{figure}
+
+\caption{\label{fig-claims-state}Realized Cleanup Costs by State.
+Heterogeneity in environmental liability magnitude across control
+jurisdictions.}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=\textheight]{Output/Figures/FD03b_claims_by_state.png}
+\end{center}
+\end{minipage}%
+\newline
+\begin{minipage}{\linewidth}
+\small \emph{Note:} Notes: Boxplots display the distribution of cleanup
+costs (log scale, 2023 dollars) for each state in the claims sample. The
+central line represents the median cost, while the box captures the
+interquartile range. While median costs vary by jurisdiction, the
+presence of high-cost outliers is a consistent feature across all state
+funds.\end{minipage}%
+
+\end{figure}%
+
+\subsubsection{Cost Data Overlay and Gap
+Adjustments}\label{cost-data-overlay-and-gap-adjustments}
+
+To parameterize the structural model, I overlay financial data onto the
+administrative backbone as depicted by the colored intervals in
+Figure~\ref{fig-d1}. Post-1999, Texas facilities migrated to private
+insurance where I observe facility-specific premium quotes and coverage
+terms from the \emph{Mid-Continent Group} rate filings. While the policy
+shock occurred in 1999, granular premium microdata is only available
+starting in 2006. The period from 1999 to 2005 represents a transition
+window where prices existed but are not directly observed in the sample.
+For the control group, I link facility identifiers to state fund claim
+records to derive the empirical distribution of cleanup costs
+conditional on a leak.
+
+The analysis addresses two specific dimensions of data sparsity
+visualized in Figure~\ref{fig-d1}. First, regarding geographic
+heterogeneity, not all control states provide claims transparency. The
+analysis therefore restricts the cost estimation routine to states with
+verifiable claims data and extrapolates these cost functions to
+administrative-only states based on observable facility characteristics
+such as age, tank capacity, and local geology. Second, regarding
+temporal gaps, the administrative backbone extends beyond the cost data
+windows. For periods where cost data is missing, such as the Texas 1999
+to 2005 window or pre-1990 control states, I assume stationarity in the
+conditional cost distribution while allowing for aggregate inflation
+adjustments. This structure implies that while firm behavior (\(Q\)) is
+observed continuously, financial incentives (\(P\)) are imputed during
+gap years using the structural parameters recovered from the data-rich
+windows.
+
+\subsubsection{Facility Risk and Endogenous
+Detection}\label{facility-risk-and-endogenous-detection}
+
+The final data layer characterizes the realized environmental
+performance of the tank capital, specifically how the insurance regime
+alters the \emph{timing} of leak discovery. I define the annual leak
+probability using the realized history of Leaking Underground Storage
+Tank (LUST) incidents reported to state regulators. Aggregating the
+monthly panel to the facility-year level, I calculate the realized
+failure rate per effective exposure-year.
+
+Crucially, I distinguish between two mutually exclusive detection
+mechanisms. \textbf{Operational Discovery} refers to releases identified
+by leak detection equipment (e.g., automatic tank gauging, interstitial
+monitoring) while the facility is active. \textbf{Closure Discovery}
+refers to releases identified only during the physical removal of the
+tank system.
+
+Figure~\ref{fig-leak-prob} reveals a structural shift in detection
+behavior driven by the insurance regime. In the Control Group (State
+Funds), a significant proportion of releases are ``Found at Closure''
+(Orange), indicating a passive monitoring environment where leaks
+accumulate as latent liabilities, hidden until market exit. In contrast,
+the Texas (Private Insurance) sample exhibits a higher rate of
+``Operational Discovery'' (Blue) and a collapsed rate of closure-found
+leaks. This shift is consistent with the presence of active insurer
+monitoring: private underwriters require proof of integrity for
+coverage, forcing the endogenous detection of leaks that would otherwise
+remain hidden under the flat-fee regime.
+
+\begin{figure}
+
+\caption{\label{fig-leak-prob}Annual Leak Probability by Detection
+Method. Decomposing environmental risk into operational failures and
+latent liabilities revealed at exit.}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+\includegraphics[width=0.8\textwidth,height=\textheight]{Output/Figures/FD04a_leak_annual_prob.png}
+\end{center}
+\end{minipage}%
+\newline
+\begin{minipage}{\linewidth}
+\small \emph{Note:} Notes: This stacked bar chart displays the
+unconditional annual probability of a confirmed release for facilities
+in the analysis sample. The ``Operational Discovery'' (Blue) component
+represents leaks detected while the tank was in service. The ``Found at
+Closure'' (Orange) component represents leaks detected during tank
+removal or permanent closure. The height of the bar represents the total
+annual hazard rate. The shift from ``Closure'' to ``Operational''
+detection in Texas illustrates the monitoring effect of private
+insurance.\end{minipage}%
+
+\end{figure}%
+
+\section{Causal Evidence from the Transition to Private
+Insurance}\label{causal-evidence-from-the-transition-to-private-insurance}
+
+This section presents the empirical evidence on the effects of
+risk-adjusted insurance on UST facilities by analyzing the behavioral
+responses of incumbent facilities to the transition from flat-fee public
+insurance to risk-based private market coverage. The analysis focuses on
+identifying causal effects through comparison of treatment and control
+states, examining how facilities adjusted their technology adoption,
+closure decisions, and risk management practices when faced with
+insurance premiums that reflected their actual environmental risk
+profile.
+
+\subsection{The Causal Impact of Risk-Based Insurance on Firm
+Behavior}\label{the-causal-impact-of-risk-based-insurance-on-firm-behavior}
+
+This section presents the main empirical results of the paper, using a
+difference-in-differences framework to compare Texas with control states
+that maintained public insurance funds. The analysis proceeds in two
+steps. First, to establish the economic rationale for risk-based
+pricing, I demonstrate that observable facility characteristics, such as
+tank age and construction type, are strong and significant predictors of
+environmental risk. This confirms that a key condition for an efficient
+insurance market is met. Second, having established this predictive
+relationship, I then estimate the causal impact of the transition to
+risk-based insurance on the behavior of incumbent UST facilities,
+focusing on their decisions to close, replace, or exit the market.
+Finally, I examine whether these behavioral changes had a measurable
+impact on environmental outcomes, specifically reported leak rates. This
+two-step approach allows for a robust analysis of the effects of
+risk-based insurance on both firm behavior and environmental risk
+mitigation.
+
+\subsubsection{Environmental Risk and UST Facility
+Characteristics}\label{environmental-risk-and-ust-facility-characteristics}
+
+Risk-rated insurance markets can significantly reduce environmental
+hazards by aligning private facility incentives with social costs---a
+critical mechanism for internalizing pollution externalities. When
+insurance premiums accurately reflect facility-specific risk factors,
+owners face direct financial incentives to invest in safer technologies
+and operational practices. However, the effectiveness of this
+market-based approach hinges entirely on insurers' ability to accurately
+assess facility-level risk characteristics. Without precise risk
+assessment, the transition from flat-fee to cost-based pricing contracts
+may fail to improve environmental outcomes or could even create perverse
+incentives for underreporting and maintenance avoidance. To quantify the
+predictive relationship between observable facility characteristics and
+actual environmental risk, I employ a 10-fold cross-validation approach
+using a comprehensive facility-level panel dataset of USTs:
+
+\begin{equation}\phantomsection\label{eq-risk-pred}{
+\begin{aligned}
+10\text{-fold cross-validation:} &\\
+\text{Reported Leak}_{i,s,t} =& \alpha_t + \delta_s + \sum_{k} \beta_k \text{Wall}_{k,i} + \sum_{m} \gamma_m \text{Age Bins}_{m,i} + \\
+&\sum_{k,m} \zeta_{km} (\text{Wall}_{k,i} \times \text{Age}_{m,i}) + \theta\mathbf{X}_{i,s,t} + \epsilon_{i,s,t}
+\end{aligned}
+}\end{equation}
+
+In this cross-validation framework, I model the probability of a
+reported leak as a function of facility characteristics while
+controlling for temporal and spatial heterogeneity. The dependent
+variable, \(\text{Reported Leak}_{i,s,t}\), is a binary indicator equal
+to one if facility \(i\) in state \(s\) reports a leak in year \(t\).
+The model includes year fixed effects (\(\alpha_t\)) and state fixed
+effects (\(\delta_s\)) to account for temporal trends and state-specific
+regulatory environments, respectively. To capture the relationship
+between tank technology and leak risk, I include indicator variables for
+single-walled UST systems (\(\text{Wall}_{k,i}\)) and categorize
+facility age into 5-year bins (\(\text{AgeBin}_{m,i}\)). The interaction
+terms between wall type and age bins
+(\(\text{Wall}_{k,i} \times \text{Age}_{m,i}\)) allow for heterogeneous
+effects of tank construction across different facility age profiles.
+Additionally, the vector \(\mathbf{X}_{i,s,t}\) contains other
+facility-specific characteristics that may influence leak probability,
+including tank size, construction material, and the employed release
+detection method. This specification enables the assessment of how
+observable facility characteristics predict environmental risk while
+controlling for unobserved heterogeneity across time and space.
+
+Figure~\ref{fig-leak-risk} plots the predicted annual probability of a
+reported leak by tank age and construction type, confirming that these
+observable characteristics are strong predictors of environmental risk
+and thus provide a clear economic rationale for risk-based pricing. The
+two technologies exhibit starkly different hazard profiles. Single-wall
+tanks (the orange line) follow an inverted U-shape, with the probability
+of a reported leak rising sharply to a peak of nearly 1.8\% for tanks
+aged 20-25 years before declining as the riskiest units are presumably
+removed from service. In contrast, double-wall tanks (the green line)
+have a much lower and flatter risk profile for most of their operational
+life. The key takeaway is that single-wall tanks are substantially more
+likely to have a reported leak than their double-wall counterparts
+throughout the critical 5-to-30-year age window. This fundamental,
+predictable difference in risk based on observable technology and age is
+undeniable.
+
+\begin{figure}
+
+\caption{\label{fig-leak-risk}Predictive Relationship Between Facility
+Characteristics and Reported Leak Probability.}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=\textheight]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/cv_leak_risk_abs_no_title.png}
+\end{center}
+\end{minipage}%
+\newline
+\begin{minipage}{\linewidth}
+\small \emph{Note:} This figure shows predicted annual leak
+probabilities by tank age and wall type, estimated using 10-fold
+cross-validation with facility-level sampling. The model specification
+includes wall type interacted with age bin categories, controlling for
+active tanks, fuel type (gasoline/diesel), year, and state fixed
+effects. Predictions are generated exclusively from out-of-sample
+facilities in each iteration to reduce overfitting. Model performance
+metrics: Overall RMSE = 0.0963, Single-Walled RMSE = 0.1063,
+Double-Walled RMSE = 0.081. The total sample includes 4,191,898
+facility-year observations with an overall leak rate of 1.13\%. Error
+bars represent 95\% confidence intervals for the mean prediction across
+all cross-validation iterations. Single-walled tanks consistently show
+higher leak risk compared to double-walled tanks, with the risk gap
+widening as tanks age, particularly after 15 years of
+operation.\end{minipage}%
+
+\end{figure}%
+
+\subsection{Causal Evidence of Risk-Adjusted Insurance on UST Facility
+Behavior}\label{causal-evidence-of-risk-adjusted-insurance-on-ust-facility-behavior}
+
+This section presents the empirical evidence of the effect of the
+transition to private market insurance on UST facility behavior. To
+ensure clean identification of the causal impact, I restrict the
+analysis to single-walled tanks installed before 1999. This sample
+restriction serves multiple analytical purposes. First, single-walled
+tanks represent the highest observable risk category, making them
+particularly sensitive to insurance design changes and thus providing
+the strongest signal for detection. Second, focusing exclusively on
+pre-1999 installations eliminates potential selection effects from
+facilities that entered after the policy announcement, which might
+confound the treatment effect. Finally, this approach allows me to
+isolate how incumbent facilities---those directly experiencing the
+regulatory regime shift---modified their behavior in response to the
+transition from flat-fee to risk-adjusted insurance premiums. By
+examining this well-defined cohort, I can more precisely estimate the
+treatment effect while minimizing bias from compositional changes in the
+market.
+
+To study the UST owner response I estimate a panel differnece in
+differences model and the following event-study specifications to
+identify the causal effect of the transition to private market insurance
+on UST facility behavior:
+
+\begin{equation}\phantomsection\label{eq-tank-closure-did}{
+\text{Tank Closure}_{i,t} = \beta \cdot \text{Treatment}_{i,t} + \sum_{a=1}^{N} \gamma_a \cdot \mathbf{1}[\text{AgeBin}_a]_{i,t} + \alpha_i + \alpha_t + \epsilon_{i,t}
+}\end{equation}
+
+\begin{equation}\phantomsection\label{eq-tank-closure-event}{
+\text{Tank Closure}_{i,t} = \sum_{k=-K, k \neq -1}^{L} \beta_k \cdot \mathbf{1}[t - t^*_i = k] \cdot \text{Texas}_i + \sum_{a=1}^{N} \gamma_a \cdot \mathbf{1}[\text{AgeBin}_a]_{i,t} + \alpha_i + \alpha_t + \epsilon_{i,t}
+}\end{equation}
+
+I estimate two empirical specifications to identify the causal effect of
+transitioning to private market insurance on incumbent Texas UST Owners.
+Equation \ref{eq-tank-closure-did} presents a standard
+difference-in-differences specification where \(\text{Treatment}_{i,t}\)
+is an indicator equal to one for Texas facilities in the post-1999
+period. The coefficient \(\beta\) captures the average treatment effect
+of the policy change. The specification includes facility fixed effects
+(\(\alpha_i\)) that account for time-invariant facility characteristics
+and year fixed effects (\(\alpha_t\)) that control for common temporal
+shocks. I also include a flexible set of age indicators
+(\(\mathbf{1}[\text{AgeBin}_a]_{i,t}\)) to account for differential
+closure rates across the facility lifecycle.
+
+Equation \ref{eq-tank-closure-event} presents an event study
+specification that allows for time-varying treatment effects. The
+coefficients \(\beta_k\) trace out the dynamic response to the policy
+change, where \(k\) indexes time relative to the treatment year
+\(t^*_i\). The omitted category is \(k=-1\) (the year immediately before
+treatment), making all coefficients relative to this pre-treatment
+period. This specification maintains the same controls as the
+difference-in-differences model, allowing me to examine pre-trends for
+parallel trends assumption validation and to investigate how the
+treatment effect evolves over time.
+
+\begin{table}
+
+\caption{\label{tbl-reg_closure}\textbf{Policy effects on single-walled
+facility decisions}.}
+
+\centering{
+
+\centering
+\label{tbl:reg_closure}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Dependent Variables:} & \multicolumn{2}{c}{\textbf{Tank Closure}} & \multicolumn{2}{c}{\textbf{Exit | Closure}} & \multicolumn{2}{c}{\textbf{Replace | Closure}} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+\textbf{Model:} & (1) & (2) & (3) & (4) & (5) & (6) \\
+\midrule
+Texas × Post-Policy & 0.0303$^{***}$ & 0.0183$^{***}$ & -0.0953$^{**}$ & -0.1107$^{***}$ & 0.0733 & 0.1032$^{**}$ \\
+      & (0.0058) & (0.0054) & (0.0348) & (0.0345) & (0.0420) & (0.0361) \\
+      \midrule
+      Age Bin Controls        & No & Yes & No & Yes & No & Yes \\
+      \midrule
+      \textbf{Fixed-effects} & & & & & & \\
+      Year FE             & Yes & Yes & Yes & Yes & Yes & Yes \\
+      Facility FE         & Yes & Yes & Yes & Yes & Yes & Yes \\
+      \bottomrule
+      \multicolumn{7}{p{0.95\textwidth}}{\small \textit{Notes:}
+      This table reports difference-in-differences estimates of Texas' 1999 transition from public to private UST insurance on single-walled tank facilities operating before 1999. All models include facility and year fixed effects. Columns 1-2 show that Texas facilities had higher tank closure rates (1.8-3.0 percentage points) after the policy change. Among facilities that closed tanks, Texas facilities were less likely to exit completely (columns 3-4) and more likely to replace tanks (columns 5-6). These results suggest risk-based insurance encouraged technology updates rather than facility abandonment. Standard errors (in parentheses) are clustered at the state level. Significance: $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$. Observations: 3,816,313 (columns 1-2), 136,078 (columns 3-6).
+
+      }
+      \end{tabular}
+      }
+      
+
+}
+
+\end{table}%
+
+The results in Table~\ref{tbl-reg_closure} provide strong evidence that
+the transition to risk-based insurance induced a significant behavioral
+response from the owners of high-risk facilities. The positive and
+highly significant coefficients in columns (1) and (2) show that the
+policy increased the annual probability of closing a single-walled tank
+in Texas by 1.8 to 3.0 percentage points relative to control states.
+However, the subsequent columns reveal a crucial nuance in this
+response. The negative and significant coefficients in columns (3) and
+(4) indicate that, conditional on a closure, Texas facilities were 9.5
+to 11.1 percentage points less likely to exit the market entirely.
+Correspondingly, column (6) shows they were 10.3 percentage points more
+likely to replace the tank. Taken together, these findings suggest that
+risk-adjusted insurance did not simply drive high-risk firms out of the
+market. Instead, it created a powerful incentive for technology
+adoption, encouraging incumbent owners to scrap their riskiest assets
+(single-walled tanks) and invest in safer replacements, thereby reducing
+environmental risk while continuing operations.
+
+\begin{figure}
+
+\caption{\label{fig-close-event}Dynamic Policy Effects on Tank Closures
+(Single-Wall Tanks, Texas)}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+\includegraphics[width=1\textwidth,height=\textheight]{C:/Users/kaleb/Box/UST-Insurance/Output/Figures/event_study_tank_closures.png}
+\end{center}
+\end{minipage}%
+\newline
+\begin{minipage}{\linewidth}
+\small \emph{Note:} TThis figure presents an event study of the
+differential effect of Texas' 1999 transition from public to private
+insurance on underground storage tank (UST) closure decisions. The plot
+shows point estimates and 95\% confidence intervals for the interaction
+between a Texas indicator and each event year, relative to 1998 (the
+year before the policy change). The sample is restricted to facilities
+that had only single-walled tanks in the pre-1999 period. The underlying
+regression includes facility and year fixed effects, with standard
+errors clustered at the state level. The specification controls for a
+1998 spike in tank removals that occurred industry-wide. The pattern
+reveals how the policy affected the timing and magnitude of tank closure
+decisions, with particular attention to whether facility owners
+strategically accelerated or delayed tank closures in response to the
+policy change. Estimates to the right of the vertical red line represent
+post-policy treatment effects, while estimates to the left establish the
+pre-trends necessary for causal identification in the
+difference-in-differences framework.\end{minipage}%
+
+\end{figure}%
+
+The event study in Figure~\ref{fig-close-event} complements the
+regression results by visualizing the dynamic impact of the policy on
+single-walled tank closures and testing the crucial parallel trends
+assumption. The coefficients for the pre-treatment period (years prior
+to 1999) are all statistically insignificant and centered around zero.
+This provides strong visual support for the parallel trends assumption,
+indicating no systematic differences in closure trends between Texas and
+control states before the policy change. Following the transition to
+private insurance in 1999 (year 0), there is an immediate and sustained
+increase in the probability of tank closure in Texas relative to control
+states. Furthermore, the magnitude of the treatment effect grows over
+time, with the point estimates trending upward throughout the
+post-policy period. This suggests that the incentive to remove
+high-risk, single-walled tanks was not a temporary shock but a
+persistent and strengthening behavioral response to risk-based pricing.
+Together, these dynamic results reinforce the causal interpretation of
+the findings in Table~\ref{tbl-reg_closure}, demonstrating that the
+introduction of risk-adjusted insurance led to an immediate and growing
+increase in the removal of the riskiest assets from the market.
+
+\subsection{Effect of Risk-Based Pricing on Reported
+Leaks}\label{effect-of-risk-based-pricing-on-reported-leaks}
+
+The preceding analysis demonstrates that risk-based insurance pricing
+induced a significant behavioral response, accelerating the closure and
+replacement of high-risk, single-walled tanks. The final and most
+critical question is whether this behavioral change translated into a
+tangible reduction in environmental harm. To assess this, I examine the
+policy's impact on the frequency of reported leaks, the primary measure
+of environmental incidents in this context.
+
+The transition to risk-based pricing is expected to reduce leak
+incidents through two primary channels, both of which were identified in
+the previous section:
+
+The Replacement Effect: By incentivizing the replacement of old,
+single-walled tanks with newer, safer technology, the policy should
+mechanically lower the aggregate leak rate over time. The Exit Effect:
+The policy may also induce the permanent exit of the highest-risk or
+least profitable facilities, further reducing the stock of leak-prone
+tanks. To estimate the combined impact of these channels, I employ a
+difference-in-differences specification analogous to the one used for
+closure decisions. The model is estimated on the same sample of
+single-walled tanks operating before 1999 to isolate the policy's effect
+on the incumbent, high-risk cohort:
+
+\[ 
+\text{Reported Leak}_{i,t} = \beta \cdot \text{Texas}_{i} \times \text{Post1999}_{t} + \sum_{a=1}^{N} \gamma_a \cdot \mathbf{1}[\text{AgeBin}_a]_{i,t} + \alpha_i + \alpha_t + \epsilon_{i,t} 
+\]
+
+Here, the dependent variable, \(\text{Reported Leak}_{i,t}\), is a
+binary indicator equal to one if facility \(i\) reported a leak in year
+\(t\). The coefficient of interest, \(\beta\), captures the average
+change in the probability of a reported leak for Texas facilities after
+the policy transition, relative to control states. The model includes a
+full set of facility (\(\alpha_i\)) and year (\(\alpha_t\)) fixed
+effects to control for time-invariant facility characteristics and
+common time shocks, respectively. It also includes flexible controls for
+tank age (\(\mathbf{1}[\text{AgeBin}a]{i,t}\)) to account for the
+natural lifecycle of leak risk. A negative and significant estimate for
+\(\beta\) would provide strong evidence that risk-based insurance
+pricing was successful in reducing environmental damages.
+
+\begin{table}
+
+\caption{\label{tbl-leak_results}\textbf{Policy effects on single-walled
+facility reported leak rates}.}
+
+\centering{
+
+  \centering
+  \begin{tabular}{lcc}
+    \tabularnewline \midrule \midrule
+    \textbf{Dependent Variable:} & \multicolumn{2}{c}{\textbf{Reported Leak  (0/1)}}\\
+    \textbf{Model:}              & (1)                   & (2)\\
+    \midrule
+    Texas × Post-1999            & -0.0097$^{***}$       & -0.0124$^{***}$\\   
+                        & (0.0030)              & (0.0032)\\
+    \midrule
+    Age Bin Controls             & No                    & Yes\\
+    \midrule
+    \textbf{Fixed-effects}\\
+    Year FE                      & Yes                   & Yes\\
+    Facility FE                  & Yes                   & Yes\\
+  \midrule \midrule
+    \multicolumn{3}{p{0.95\textwidth}}{\small \textit{Notes:} This table reports difference-in-differences estimates of the effect of Texas' 1999 transition from public to private UST insurance on reported leak rates for single-walled tank facilities operating before 1999. All models include facility and year fixed effects; model (2) adds controls for tank age. The results show that Texas facilities experienced a 0.97 to 1.24 percentage point reduction in the annual probability of a reported leak after the policy change. This suggests that risk-based insurance pricing was effective in reducing environmental incidents among high-risk facilities. Standard errors (in parentheses) are clustered at the state level. Significance: $^{***}p<0.01$, $^{**}p<0.05$, $^{*}p<0.1$.}
+  \end{tabular}
+
+}
+
+\end{table}%
+
+The results in Table~\ref{tbl-leak_results} show that the transition to
+risk-based insurance pricing had a statistically significant and
+negative impact on the probability of reported leaks among single-walled
+tanks. The coefficient estimates of -0.0097 in column (1) and -0.0124 in
+column (2) indicate that the policy reduced the annual probability of a
+reported leak by approximately 0.97\% to 1.24\% relative to control
+states. This reduction is economically meaningful, especially given the
+baseline leak rate of around 1.13\% for single-walled tanks in the
+pre-policy period. The inclusion of age bin controls in column (2) does
+not materially change the magnitude or significance of the treatment
+effect, suggesting that the policy's impact is robust to accounting for
+differential leak rates across tank ages.
+
+\section{Dynamic Discrete Choice
+Model}\label{dynamic-discrete-choice-model}
+
+In this section, I develop a dynamic structural model of the facility
+owner's decision problem. The framework follows the optimal stopping
+literature where agents weigh the immediate returns of operation against
+the liability risks of aging capital Rust
+(\citeproc{ref-rust_optimal_1987}{1987}).
+
+\subsection{3.1 The Agent's Problem}\label{the-agents-problem}
+
+I model the behavior of a risk-neutral facility owner operating a single
+underground storage tank in an infinite horizon setting. Time is
+discrete and indexed by \(t=1, 2, \dots, \infty\). In each period, the
+agent observes the state of the facility, \(x_t\), and a vector of
+idiosyncratic payoff shocks, \(\varepsilon_t\). Conditional on these
+states, the agent chooses a binary action
+\(d_t \in \{Maintain, Close\}\) to maximize the expected present
+discounted value of future payoffs. The discount factor is denoted by
+\(\beta \in (0, 1)\).
+
+\subsection{State Space and
+Transitions}\label{state-space-and-transitions}
+
+The observable state vector \(x_t = (A_t, w_t, \rho_t)\) characterizes
+the facility's physical and regulatory environment. The variable
+\(A_t \in \{1, \dots, 9\}\) represents the age of the tank, discretized
+into five-year bins, where \(A=9\) is an absorbing state for tanks older
+than 40 years. The variable \(w_t \in \{Single, Double\}\) denotes the
+tank's wall type, which is fixed over time. Finally,
+\(\rho_t \in \{FF, RB\}\) indicates the insurance regime, where \(FF\)
+represents the flat-fee public fund and \(RB\) represents the risk-based
+private market.
+
+The state transition process is governed by the facility's choice. If
+the agent chooses to close the facility (\(d_t = Close\)), the process
+terminates. If the agent chooses to maintain the facility
+(\(d_t = Maintain\)), the tank ages stochastically. I define the
+transition probability \(F(x_{t+1} | x_t, d_t)\) such that wall type and
+regime are persistent, while age follows a stochastic process:
+
+\[
+A_{t+1} = \begin{cases} 
+A_t + 1 & \text{with probability } \pi_{up}(A_t) \\
+A_t & \text{with probability } 1 - \pi_{up}(A_t)
+\end{cases}
+\]
+
+This stochastic aging process captures the uncertainty in asset
+depreciation and allows the model to match the empirical duration of
+tank active life.
+
+\subsection{Flow Payoffs}\label{flow-payoffs}
+
+The period payoff depends on the chosen action and the structural
+parameters governing revenue, costs, and risk preferences. Payoffs are
+normalized such that the net revenue from operation is the numeraire.
+
+If the agent chooses to \textbf{Maintain}, the flow utility is specified
+as:
+
+\[
+u(x_t, Maintain) = 1 + \gamma_{price} \cdot P(x_t) - \gamma_{risk} \cdot h(x_t) \cdot L(x_t)
+\]
+
+The first term, \(1\), represents the normalized annual net revenue. The
+second term captures the disutility of insurance premiums, where
+\(P(x_t)\) is the observed premium and \(\gamma_{price}\) is the price
+sensitivity parameter. The third term represents the internalized cost
+of environmental risk, where \(h(x_t)\) is the engineering hazard rate
+of a leak, \(L(x_t)\) is the expected remediation cost, and
+\(\gamma_{risk}\) is a scaling parameter. A value of
+\(\gamma_{risk} < 1\) would imply moral hazard, where firms undervalue
+the true expected liability.
+
+If the agent chooses to \textbf{Close}, the facility exits the market
+and the agent receives a terminal scrap value:
+
+\[
+u(x_t, Close) = \kappa
+\]
+
+The parameter \(\kappa\) captures the liquidation value of the land and
+equipment, net of any decommissioning costs. This value is assumed to be
+constant across states.
+
+\subsection{The Value Function}\label{the-value-function}
+
+The agent's optimization problem can be represented by the Bellman
+equation. Assuming the idiosyncratic shocks \(\varepsilon_t\) follow a
+Type I Extreme Value distribution with scale parameter \(\sigma\), the
+ex-ante value function \(V(x_t)\) is given by:
+
+\[
+V(x_t) = \int \max_{d \in \{M, C\}} \left\{ v(x_t, d) + \varepsilon_t(d) \right\} dG(\varepsilon)
+\]
+
+where \(v(x_t, d)\) represents the conditional choice-specific value
+function:
+
+\[
+v(x_t, d) = u(x_t, d) + \beta \sum_{x_{t+1}} V(x_{t+1}) F(x_{t+1} | x_t, d)
+\]
+
+This structure allows for the estimation of the structural parameters
+\(\theta = (\kappa, \gamma_{price}, \gamma_{risk})\) using a Nested
+Pseudo-Likelihood (NPL) estimator (Aguirregabiria \& Mira, 2007).
+
+\subsection{Identification}\label{identification}
+
+The identification of the structural parameters
+\(\theta = (\kappa, \gamma_{price}, \gamma_{risk})\) relies on mapping
+distinct sources of data variation to specific model primitives. While
+the parameters are estimated jointly via the Nested Pseudo-Likelihood
+algorithm, we can heuristically characterize the variation that
+identifies each term.
+
+The scrap value, \(\kappa\), is identified by the unconditional
+probability of facility exit. In the optimal stopping framework,
+\(\kappa\) acts as the reservation value; therefore, a higher average
+exit rate across all states implies a higher relative scrap value,
+holding flow profits constant. Identification requires that the baseline
+exit rate is not driven solely by unobserved heterogeneity, which we
+address through the inclusion of facility-level fixed effects in the
+reduced-form steps.
+
+The price sensitivity parameter, \(\gamma_{price}\), is identified by
+the response of exit rates to cross-sectional variation in insurance
+premiums. The transition from the flat-fee Public Fund (FF) to the
+risk-based private market (RB) generates exogenous variation in
+\(P(x_t)\) that is independent of the facility's engineering risk.
+Specifically, under the FF regime, premiums are constant
+(\(\frac{\partial P}{\partial A} = 0\)), whereas under the RB regime,
+premiums rise with age (\(\frac{\partial P}{\partial A} > 0\)). The
+covariance between these policy-induced price shocks and subsequent
+closure decisions isolates the agent's marginal disutility of payment.
+
+The risk internalization parameter, \(\gamma_{risk}\), is identified by
+the gradient of exit rates with respect to the leak hazard \(h(x_t)\),
+distinct from the premium channel. While premiums in the private market
+are correlated with risk, the correlation is not perfect due to
+deductible structures and coverage limits. If firms face liability costs
+beyond the premium (e.g., deductibles or reputational harm), they will
+exit high-risk states at a rate faster than predicted by premium costs
+alone. This residual sensitivity of the exit rule to the engineering
+hazard rate \(h(A_t)\) identifies \(\gamma_{risk}\).
+
+\section{Discussion}\label{discussion}
+
+The empirical results present a clear and compelling narrative about the
+power of market-based environmental policy. The transition to
+risk-adjusted insurance premiums in Texas prompted a significant and
+rational response from the owners of the highest-risk USTs. Faced with
+insurance costs that reflected the true environmental hazard of their
+aging, single-walled tanks, owners accelerated their closure.
+Critically, this did not lead to a mass exodus from the market. Instead,
+the policy spurred investment in safer technology, as facilities were
+more likely to replace their risky tanks rather than shut down entirely.
+This finding directly addresses a common concern that stringent
+environmental pricing will simply drive firms out of business,
+demonstrating instead that it can be a powerful catalyst for technology
+adoption.
+
+This behavioral shift from retaining old, risky assets to investing in
+new, safer ones translated directly into improved environmental
+outcomes. The nearly one-percentage-point reduction in the annual leak
+rate for this high-risk cohort is not only statistically significant but
+also economically meaningful, representing a near-elimination of the
+pre-policy baseline risk. This provides strong causal evidence that
+aligning private insurance costs with public environmental risk can
+effectively internalize externalities. The success of the Texas model
+offers a clear lesson for the many states still relying on flat-fee
+public funds, which mute price signals and subsidize the continued
+operation of the riskiest facilities.
+
+The findings underscore that when risk is observable and can be priced,
+insurance markets can function as a powerful regulatory tool. The stark
+difference in leak probabilities between single- and double-walled
+tanks, which grows with age, provided a clear margin for insurers to
+price on. By doing so, the private market created a persistent financial
+incentive for risk mitigation that achieved tangible environmental
+benefits, validating decades of economic theory on liability and
+insurance design.
+
+\section{Conclusion}\label{conclusion}
+
+This paper provides the first facility-level causal evidence on the
+impact of transitioning from a flat-fee public UST insurance fund to a
+risk-rated private market. Using a difference-in-differences design that
+leverages Texas's 1999 policy shift, the analysis demonstrates that
+forcing firms to bear the expected cost of their environmental risk
+profile has profound effects. The introduction of risk-based pricing led
+to an immediate and sustained increase in the closure of high-risk,
+single-walled tanks. This response was characterized not by market exit,
+but by technology upgrading, as firms chose to replace their obsolete
+tanks with safer alternatives. Ultimately, this behavioral change
+resulted in a substantial and significant reduction in reported
+environmental leaks.
+
+The success of this price-based mechanism in reducing environmental risk
+invites a crucial policy comparison. While this study highlights the
+effectiveness of aligning market incentives with social costs, an
+important avenue for future work is to contrast this approach with
+traditional command-and-control regulations. For instance, comparing the
+effects of risk-based pricing with the impact of vintage-differentiated
+regulations (VDRs) or direct technology mandates could illuminate the
+relative cost-effectiveness and efficiency of these different policy
+instruments Shavell (\citeproc{ref-shavell_chapter_2007}{2007}). Such
+analysis would provide regulators with a more complete understanding of
+the optimal policy mix for managing the significant environmental
+hazards posed by aging infrastructure in the U.S. and beyond.
+
+\clearpage
+
+\section{References}\label{references}
+
+\phantomsection\label{refs}
+\begin{CSLReferences}{1}{0}
+\bibitem[\citeproctext]{ref-astswmo_archive}
+ASTSWMO. 2025. {``Annual State Fund Survey Results --- Archive.''} 2025.
+\url{https://astswmo.org/annual-state-fund-survey-results/}.
+
+\bibitem[\citeproctext]{ref-boomhower_drilling_2019}
+Boomhower, Judson. 2019. {``Drilling Like There's No Tomorrow:
+Bankruptcy, Insurance, and Environmental Risk.''} \emph{American
+Economic Review} 109 (2): 391--426.
+\url{https://doi.org/10.1257/aer.20160346}.
+
+\bibitem[\citeproctext]{ref-boyd_retroactive_1997}
+Boyd, James, and Howard Kunreuther. 1997. {``Retroactive Liability or
+the Public Purse?''} \emph{Journal of Regulatory Economics} 11 (1):
+79--90. \url{https://doi.org/10.1023/A:1007954314303}.
+
+\bibitem[\citeproctext]{ref-brown_how_2014}
+Brown, Jason, Mark Duggan, Ilyana Kuziemko, and William Woolston. 2014.
+{``How Does Risk Selection Respond to Risk Adjustment? New Evidence from
+the Medicare Advantage Program.''} \emph{American Economic Review} 104
+(10): 3335--64. \url{https://doi.org/10.1257/aer.104.10.3335}.
+
+\bibitem[\citeproctext]{ref-csi2021}
+Containment Solutions, Inc. 2021. {``PG 11000AC Petroleum Tank Price
+List, Effective January 1 2021.''} Manufacturer price catalogue.
+\url{https://www.containmentsolutions.com}.
+
+\bibitem[\citeproctext]{ref-einav_io_2021}
+Einav, Liran, Amy Finkelstein, and Neale Mahoney. 2021. {``The {IO} of
+Selection Markets.''} \emph{{NBER} Working Papers}, July.
+\url{https://ideas.repec.org//p/nbr/nberwo/29039.html}.
+
+\bibitem[\citeproctext]{ref-einav_contract_2012}
+Einav, Liran, Mark Jenkins, and Jonathan Levin. 2012. {``Contract
+Pricing in Consumer Credit Markets.''} \emph{Econometrica} 80 (4):
+1387--1432. \url{https://doi.org/10.3982/ECTA7677}.
+
+\bibitem[\citeproctext]{ref-einav_impact_2013}
+---------. 2013. {``The Impact of Credit Scoring on Consumer Lending.''}
+\emph{The {RAND} Journal of Economics} 44 (2): 249--74.
+\url{https://doi.org/10.1111/1756-2171.12019}.
+
+\bibitem[\citeproctext]{ref-epa_underground_2024}
+EPA. 2024. {``Underground Storage Tank Program Facts.''}
+\emph{Underground Storage Tank Program Facts}, May, 2.
+\url{https://www.epa.gov/system/files/documents/2024-05/ust-programfacts-may2024.pdf}.
+
+\bibitem[\citeproctext]{ref-gruenspecht_differentiated_1982}
+Gruenspecht, Howard K. 1982. {``Differentiated Regulation: The Case of
+Auto Emissions Standards.''} \emph{The American Economic Review} 72 (2):
+328--31. \url{https://www.jstor.org/stable/1802352}.
+
+\bibitem[\citeproctext]{ref-guignet_what_2013}
+Guignet, Dennis. 2013. {``What Do Property Values Really Tell Us? A
+Hedonic Study of Underground Storage Tanks.''} \emph{Land Economics} 89
+(2): 211--26. \url{https://doi.org/10.3368/le.89.2.211}.
+
+\bibitem[\citeproctext]{ref-guignet_sell_2014}
+---------. 2014. {``To Sell or Not to Sell: The Impacts of Pollution on
+Home Transactions.''} \emph{National Center for Environmental
+Economics-{NCEE} Working Papers}, January.
+\url{https://ideas.repec.org//p/ags/nceewp/280917.html}.
+
+\bibitem[\citeproctext]{ref-guignet_contamination_2018}
+Guignet, Dennis, Robin Jenkins, Matthew Ranson, and Patrick J. Walsh.
+2018. {``Contamination and Incomplete Information: Bounding Implicit
+Prices Using High-Profile Leaks.''} \emph{Journal of Environmental
+Economics and Management} 88 (March): 259--82.
+\url{https://doi.org/10.1016/j.jeem.2017.12.003}.
+
+\bibitem[\citeproctext]{ref-guignet_impacts_2018}
+Guignet, Dennis, and Adan Martinez-Cruz. 2018. {``The Impacts of
+Underground Petroleum Releases on a Homeowner's Decision to Sell: A
+Difference-in-Differences Approach.''} \emph{Regional Science and Urban
+Economics} 69: 11--24.
+\url{https://doi.org/10.1016/j.regsciurbeco.2017.12.006}.
+
+\bibitem[\citeproctext]{ref-gao1987}
+{``Hazardous Materials: Upgrading of Underground Storage Tanks Can Be
+Improved to Avoid Costly Cleanups.''} 1992. NSIAD-92-117. U.S.
+Government Accountability Office.
+\url{https://www.gao.gov/assets/nsiad-92-117.pdf}.
+
+\bibitem[\citeproctext]{ref-de_janvry_supply-_2010}
+Janvry, Alain de, Craig McIntosh, and Elisabeth Sadoulet. 2010. {``The
+Supply- and Demand-Side Impacts of Credit Market Information.''}
+\emph{Journal of Development Economics} 93 (2): 173--88.
+\url{https://doi.org/10.1016/j.jdeveco.2009.09.008}.
+
+\bibitem[\citeproctext]{ref-liberman_equilibrium_2018}
+Liberman, Andres, Christopher Neilson, Luis Opazo, and Seth Zimmerman.
+2018. {``The Equilibrium Effects of Information Deletion: Evidence from
+Consumer Credit Markets.''} \emph{{NBER} Working Papers}, September.
+\url{https://ideas.repec.org//p/nbr/nberwo/25097.html}.
+
+\bibitem[\citeproctext]{ref-marcus_going_2021}
+Marcus, Michelle. 2021. {``Going Beneath the Surface: Petroleum
+Pollution, Regulation, and Health.''} \emph{American Economic Journal:
+Applied Economics} 13 (1): 72--104.
+\url{https://doi.org/10.1257/app.20190130}.
+
+\bibitem[\citeproctext]{ref-mcwilliams_new_2012}
+McWilliams, J. Michael, John Hsu, and Joseph P. Newhouse. 2012. {``New
+Risk-Adjustment System Was Associated with Reduced Favorable Selection
+in Medicare Advantage.''} \emph{Health Affairs (Project Hope)} 31 (12):
+2630--40. \url{https://doi.org/10.1377/hlthaff.2011.1344}.
+
+\bibitem[\citeproctext]{ref-nelson_private_2025}
+Nelson, Scott T. 2025. {``Private Information and Price Regulation in
+the {US} Credit Card Market.''} \emph{Econometrica} Forthcoming
+(February).
+
+\bibitem[\citeproctext]{ref-polinsky_strict_1980}
+Polinsky, A. Mitchell. 1980. {``Strict Liability Vs. Negligence in a
+Market Setting.''} \emph{The American Economic Review} 70 (2): 363--67.
+\url{https://www.jstor.org/stable/1815499}.
+
+\bibitem[\citeproctext]{ref-rust_optimal_1987}
+Rust, John. 1987. {``Optimal Replacement of {GMC} Bus Engines: An
+Empirical Model of Harold Zurcher.''} \emph{Econometrica} 55 (5):
+999--1033. \url{https://doi.org/10.2307/1911259}.
+
+\bibitem[\citeproctext]{ref-shavell_liability_1982}
+Shavell, Steven. 1982. {``On Liability and Insurance.''} \emph{The Bell
+Journal of Economics} 13 (1): 120--32.
+\url{https://doi.org/10.2307/3003434}.
+
+\bibitem[\citeproctext]{ref-shavell_model_1984}
+---------. 1984a. {``A Model of the Optimal Use of Liability and Safety
+Regulation.''} \emph{The {RAND} Journal of Economics} 15 (2): 271--80.
+\url{https://doi.org/10.2307/2555680}.
+
+\bibitem[\citeproctext]{ref-shavell_liability_1984}
+---------. 1984b. {``Liability for Harm Versus Regulation of Safety.''}
+\emph{The Journal of Legal Studies} 13 (2): 357--74.
+\url{https://www.jstor.org/stable/724240}.
+
+\bibitem[\citeproctext]{ref-shavell_chapter_2007}
+---------. 2007. {``Chapter 2 Liability for Accidents.''} In
+\emph{Handbook of Law and Economics}, 1:139--82. Elsevier.
+\url{https://doi.org/10.1016/S1574-0730(07)01002-X}.
+
+\bibitem[\citeproctext]{ref-walsh_contaminated_2017}
+Walsh, Patrick, and Preston Mui. 2017. {``Contaminated Sites and
+Information in Hedonic Models: An Analysis of a {NJ} Property Disclosure
+Law.''} \emph{Resource and Energy Economics} 50 (November): 1--14.
+\url{https://doi.org/10.1016/j.reseneeco.2017.06.005}.
+
+\bibitem[\citeproctext]{ref-xerxes2018}
+Xerxes Corporation. 2018. {``Xerxes Underground Storage Tanks and
+Accessories Price List.''} Manufacturer price catalogue.
+\url{https://www.xerxes.com}.
+
+\bibitem[\citeproctext]{ref-yin_environmental_2007}
+Yin, Haitao, Howard C. Kunreuther, and Matthew W. White. 2007. {``Do
+Environmental Regulations Cause Firms to Exit the Market? Evidence from
+Underground Storage Tank ({UST}) Regulations.''} \emph{{SSRN} Electronic
+Journal}. \url{https://doi.org/10.2139/ssrn.1265611}.
+
+\bibitem[\citeproctext]{ref-yin_risk-based_2011}
+Yin, Haitao, Howard Kunreuther, and Matthew W. White. 2011.
+{``Risk-Based Pricing and Risk-Reducing Effort: Does the Private
+Insurance Market Reduce Environmental Accidents?''} \emph{Journal of Law
+and Economics} 54 (2): 325--63.
+\url{https://ideas.repec.org//a/ucp/jlawec/doi10.1086-655804.html}.
+
+\bibitem[\citeproctext]{ref-yin_can_2011}
+Yin, Haitao, Alex Pfaff, and Howard Kunreuther. 2011. {``Can
+Environmental Insurance Succeed Where Other Strategies Fail? The Case of
+Underground Storage Tanks.''} \emph{Risk Analysis} 31 (1): 12--24.
+\url{https://doi.org/10.1111/j.1539-6924.2010.01479.x}.
+
+\bibitem[\citeproctext]{ref-zabel_hedonic_2012}
+Zabel, Jeffrey E., and Dennis Guignet. 2012. {``A Hedonic Analysis of
+the Impact of {LUST} Sites on House Prices.''} \emph{Resource and Energy
+Economics} 34 (4): 549--64.
+\url{https://doi.org/10.1016/j.reseneeco.2012.05.006}.
+
+\end{CSLReferences}
+
+
+
+\end{document}
