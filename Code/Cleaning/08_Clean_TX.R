@@ -14,8 +14,19 @@
 #   TX_Harmonized_UST_tanks.csv - Tank-level inventory (LA-compatible schema)
 #   TX_Harmonized_LUST.csv      - LUST incident records (LA-compatible schema)
 #
+# Changelog (2026-02):
+#   [FIX 1] Regulatory filter: Switched from facility-level UST_FR_REQUIRED to
+#           tank-level REG_STATUS == "FULLY REGULATED" (per PST Data Spec).
+#   [FIX 2] Table linkage: Compartment table now joined on UST_ID (not
+#           FACILITY_ID), which was causing ~60% data loss.
+#   [FIX 3] Substance aggregation: Deduplication now operates on individual
+#           substance strings (unique + sort) before collapsing.
+#   [FIX 4] Wall classification: Rule 11 (Concrete → Single_Walled) confirmed
+#           correct. Added Rules 10-12; Unknown rate reduced from 45.5% → 10.5%.
+#   [FIX 5] Output schema: Added classification_confidence to harmonized output.
+#
 # Author: UST Research Pipeline
-# Date: 2026-01
+# Date: 2026-01 (Updated 2026-02)
 #
 # Reference: Louisiana schema from 02_Clean_LA.R
 ###############################################################################
@@ -211,68 +222,195 @@ standardize_numeric_id <- function(dt, col_name) {
   invisible(dt)
 }
 
-#' Classify tank wall types
-#' Uses Texas-specific flags: TANK_SINGLE, TANK_DOUBLE
+
+#' Classify tank wall types using Texas 12-Rule Hierarchy
+#' CORRECTED VERSION: Rule 11 classifies Concrete as Single_Walled (not Secondary_Contained)
+#'
+#' Rules 1-9:  Original logic (unchanged)
+#' Rule 10:    Old steel (pre-2000) without CP → Single_Walled [Low confidence]
+#'             Impact: ~65,678 tanks (34.7% of database)
+#' Rule 11:    Concrete → Single_Walled [Medium confidence]
+#'             Concrete is a material type, not a containment configuration.
+#'             Impact: ~482 tanks
+#' Rule 12:    Coated steel → Single_Walled [Medium-Low confidence]
+#'             Impact: ~4 tanks
+#' Net result: Unknown rate drops from 45.5% → ~10.5%
 #'
 #' @param data data.table with tank construction flags
-#' @return data.table with wall type classification columns
+#' @return data.table with wall type classification columns added
 classify_tank_walls <- function(data) {
   result <- copy(data)
   
-  # ── Texas-Specific Wall Type Logic ─────────────────────────────────────────
-  # TANK_SINGLE and TANK_DOUBLE are Y/N flags from the UST file
+  # ── Regulatory Constants ───────────────────────────────────────────────────
+  TEXAS_SECONDARY_DATE <- as.Date("2009-01-01")
+  FRP_CUTOFF_DATE      <- as.Date("1990-01-01")
+  MODERN_STEEL_CUTOFF  <- as.Date("2000-01-01")
   
+  # Ensure INSTALL_DATE is present
+  if(!"INSTALL_DATE" %in% names(result)) {
+    warning("INSTALL_DATE missing for classification. Logic will degrade.")
+  }
+
+  # ── Helper Flags ───────────────────────────────────────────────────────────
   result[, `:=`(
-    # Single-walled: TANK_SINGLE = 'Y'
-    single_walled = as.integer(TANK_SINGLE == "Y"),
+    # Material Types
+    is_steel     = TMAT_STEEL == "Y",
+    is_frp       = TMAT_FRP == "Y",
+    is_composite = TMAT_COMPOSITE == "Y",
+    is_concrete  = TMAT_CONCRETE == "Y",       # for Rule 11
+    is_coated    = TMAT_COATED == "Y",         # for Rule 12
+    is_jacketed  = (TMAT_JACKETED == "Y") | (EXT_CONT_TANK_JACKET == "Y"),
     
-    # Double-walled: TANK_DOUBLE = 'Y'
-    double_walled = as.integer(TANK_DOUBLE == "Y"),
+    # Corrosion Protection
+    has_cp       = (CP_TANK_CATHODIC_FAC == "Y") | (CP_TANK_CATHODIC_FIELD == "Y"),
     
-    # Missing: Both are NA
-    missing_walled = as.integer(is.na(TANK_SINGLE) & is.na(TANK_DOUBLE)),
-    
-    # Unknown: Both are explicitly 'N' (neither single nor double)
-    unknown_walled = as.integer(TANK_SINGLE == "N" & TANK_DOUBLE == "N")
+    # Design Flags (Explicit)
+    design_dbl   = TANK_DES_DOUBLE == "Y",
+    design_sgl   = TANK_DES_SINGLE == "Y"
   )]
   
-  # Handle NAs - set to 0 where NA
-  wall_cols <- c("single_walled", "double_walled", "missing_walled", "unknown_walled")
-  for (col in wall_cols) {
-    result[is.na(get(col)), (col) := 0L]
-  }
+  # ── 12-Rule Classification Hierarchy ───────────────────────────────────────
+  result[, `:=`(
+    # Track which rule matched (for diagnostics)
+    rule_matched = fcase(
+      # ── Original Rules 1-9 (unchanged) ──
+      !is.na(INSTALL_DATE) & INSTALL_DATE >= TEXAS_SECONDARY_DATE, "Rule 1: Post-2009",
+      design_dbl == TRUE,                                            "Rule 2: Design Double",
+      design_sgl == TRUE,                                            "Rule 3: Design Single",
+      is_jacketed == TRUE,                                           "Rule 4: Jacketed",
+      is_composite == TRUE,                                          "Rule 5: Composite",
+      is_steel == TRUE & has_cp == TRUE & !is.na(INSTALL_DATE) &
+        INSTALL_DATE >= MODERN_STEEL_CUTOFF,                         "Rule 6: Modern Steel+CP",
+      is_steel == TRUE & has_cp == TRUE,                             "Rule 7: Older Steel+CP",
+      is_frp == TRUE & !is.na(INSTALL_DATE) &
+        INSTALL_DATE >= FRP_CUTOFF_DATE,                             "Rule 8: Modern FRP",
+      
+      # ── New Rules 10-12: reduce Unknown 45.5% → 10.5% ──
+      # Rule 10: Old bare steel (pre-2000) without cathodic protection
+      # 99.8% are pre-1990; bare steel without jacketing is physically single-walled
+      is_steel == TRUE & has_cp == FALSE & !is.na(INSTALL_DATE) &
+        INSTALL_DATE < MODERN_STEEL_CUTOFF,                          "Rule 10: Old Steel-No-CP",
+      
+      # Rule 11: Concrete tanks
+      # Concrete is a MATERIAL TYPE (like steel/FRP), not a containment configuration.
+      # These tanks lack any double-wall indicators, so they are single-wall concrete.
+      is_concrete == TRUE,                                            "Rule 11: Concrete",
+      
+      # Rule 12: Coated steel
+      # Surface coating is corrosion protection, not secondary containment.
+      is_coated == TRUE,                                              "Rule 12: Coated Steel",
+      
+      # Rule 13: Remaining unknowns (~19,815 tanks with no material flags)
+      default = "Rule 13: Unknown"
+    ),
+    
+    # ── Wall class ────────────────────────────────────────────────────────────
+    wall_class = fcase(
+      # Original Rules 1-9
+      !is.na(INSTALL_DATE) & INSTALL_DATE >= TEXAS_SECONDARY_DATE,   "Double",
+      design_dbl == TRUE,                                             "Double",
+      design_sgl == TRUE,                                             "Single",
+      is_jacketed == TRUE,                                            "Double",
+      is_composite == TRUE,                                           "Double",
+      is_steel == TRUE & has_cp == TRUE & !is.na(INSTALL_DATE) &
+        INSTALL_DATE >= MODERN_STEEL_CUTOFF,                          "Single",
+      is_steel == TRUE & has_cp == TRUE,                              "Single",
+      is_frp == TRUE & !is.na(INSTALL_DATE) &
+        INSTALL_DATE >= FRP_CUTOFF_DATE,                              "Double",
+      
+      # New Rules 10-12 (all → Single)
+      is_steel == TRUE & has_cp == FALSE & !is.na(INSTALL_DATE) &
+        INSTALL_DATE < MODERN_STEEL_CUTOFF,                           "Single",
+      is_concrete == TRUE,                                            "Single",
+      is_coated == TRUE,                                              "Single",
+      
+      default = "Unknown"
+    ),
+    
+    # ── Confidence level ──────────────────────────────────────────────────────
+    classification_confidence = fcase(
+      # Very High: Post-2009 regulatory mandate (30 TAC § 334.45(d)(1)(E))
+      !is.na(INSTALL_DATE) & INSTALL_DATE >= TEXAS_SECONDARY_DATE,   "Very High",
+      # High: Explicit design flags entered by facility operators
+      design_dbl == TRUE | design_sgl == TRUE,                        "High",
+      # Medium-High: Physical evidence of construction type
+      is_jacketed == TRUE | is_composite == TRUE,                     "Medium-High",
+      # Medium: Material + protection combination strongly implies wall type
+      (is_steel == TRUE & has_cp == TRUE) |
+        (is_frp == TRUE & !is.na(INSTALL_DATE) &
+           INSTALL_DATE >= FRP_CUTOFF_DATE) |
+        is_concrete == TRUE,                                           "Medium",
+      # Low: Inferred from era and material (reasonable but not direct evidence)
+      is_steel == TRUE & has_cp == FALSE & !is.na(INSTALL_DATE) &
+        INSTALL_DATE < MODERN_STEEL_CUTOFF,                           "Low",
+      # Medium-Low: Surface coating implies single-wall but limited direct evidence
+      is_coated == TRUE,                                              "Medium-Low",
+      # Very Low: No material flags available; cannot classify
+      default = "Very Low"
+    )
+  )]
   
-  # Consolidate missing and unknown for harmonization
-  result[, unknown_walled := pmax(unknown_walled, missing_walled, na.rm = TRUE)]
+  # ── Map to binary output columns ──────────────────────────────────────────
+  result[, `:=`(
+    single_walled  = as.integer(wall_class == "Single"),
+    double_walled  = as.integer(wall_class == "Double"),
+    unknown_walled = as.integer(wall_class == "Unknown")
+  )]
   
-  # ── Summary ────────────────────────────────────────────────────────────────
-  message("\nTank wall classification summary:")
+  # Cleanup helper columns
+  cols_to_remove <- c("is_steel", "is_frp", "is_composite", "is_concrete",
+                      "is_coated", "is_jacketed", "has_cp", "design_dbl",
+                      "design_sgl", "wall_class")
+  result[, (cols_to_remove) := NULL]
+  
+  # ── Summaries ──────────────────────────────────────────────────────────────
+  message("\nTank wall classification summary (12-Rule Enhanced):")
   summary_dt <- result[, .(
     total       = .N,
     single_wall = sum(single_walled),
     double_wall = sum(double_walled),
-    unknown     = sum(unknown_walled)
+    unknown     = sum(unknown_walled),
+    unknown_pct = round(sum(unknown_walled) / .N * 100, 1)
   )]
   print(summary_dt)
+  
+  message("\nClassification by rule:")
+  rule_summary <- result[, .N, by = rule_matched][order(-N)]
+  rule_summary[, pct := round(N / sum(N) * 100, 1)]
+  print(rule_summary)
+  
+  message("\nClassification confidence distribution:")
+  conf_summary <- result[, .N, by = classification_confidence][
+    order(factor(classification_confidence,
+                 levels = c("Very High", "High", "Medium-High", "Medium",
+                            "Medium-Low", "Low", "Very Low")))
+  ]
+  conf_summary[, pct := round(N / sum(N) * 100, 1)]
+  print(conf_summary)
   
   return(result)
 }
 
+
 #' Map Texas tank status to standardized categories
+#' ENHANCED: Includes mapping for "PERM FILLED IN PLACE"
 #'
 #' @param status_code Raw Texas status string
 #' @return Standardized status: "Open", "Closed", "Temporary", or NA
 standardize_tank_status <- function(status_code) {
   status_upper <- toupper(trimws(status_code))
   
-  # Texas status codes mapping
-  case_when(
-    status_upper %in% c("IN USE", "IN-USE", "ACTIVE") ~ "Open",
-    status_upper %in% c("REMOVED", "CLOSED", "PERMANENTLY CLOSED", 
-                        "REMOVED FROM GROUND", "CLOSURE IN PLACE") ~ "Closed",
-    status_upper %in% c("TEMPORARILY CLOSED", "TEMP CLOSURE", 
-                        "TEMPORARILY OUT OF SERVICE") ~ "Temporary",
-    TRUE ~ NA_character_
+  fcase(
+    status_upper %in% c("IN USE", "IN-USE", "ACTIVE"), "Open",
+    
+    # Enhanced: Added PERM FILLED IN PLACE based on diagnostics
+    status_upper %in% c("REMOVED", "CLOSED", "PERMANENTLY CLOSED",
+                        "REMOVED FROM GROUND", "CLOSURE IN PLACE",
+                        "PERM FILLED IN PLACE"), "Closed",
+                        
+    status_upper %in% c("TEMPORARILY CLOSED", "TEMP CLOSURE",
+                        "TEMPORARILY OUT OF SERVICE"), "Temporary",
+    default = NA_character_
   )
 }
 
@@ -310,34 +448,62 @@ FAC_NAMES <- c(
 
 # ── PST_UST.TXT Specification ────────────────────────────────────────────────
 UST_WIDTHS <- c(
-  8, 8, 6, 10, 2, 10, 10, 8, 30, 10, 1, 30, 10, 1, 1,
-  1, 1, 1, 1, 1, 1, 1, 1, 1,
-  1, 1, 1, 1, 1, 1,
-  1, 1, 1, 1, 1,
-  1, 1, 1,
-  1, 1, 1, 1,
-  1,
-  rep(1, 16),
-  1, 1, 10
+  # Core fields (Bytes 1-143)
+  8, 8, 6, 10, 2, 10, 10, 8, 30, 10, 1, 30, 10, 
+  # Tank/Pipe Design & Containment (Bytes 144-153)
+  1, 1, 1, 1,      # Tank/Pipe Single/Double
+  1, 1, 1,         # Tank Ext Cont (Jacket, Syn, Vault)
+  1, 1, 1,         # Pipe Ext Cont (Jacket, Syn, Vault)
+  # Materials & Hardware (Bytes 154-168)
+  1,               # Pipe Type
+  1, 1, 1, 1, 1, 1,# Tank Mat (Steel, FRP, Comp, Conc, Jacketed, Coated)
+  1, 1, 1, 1, 1,   # Pipe Mat (Steel, FRP, Conc, Jacketed, Flex)
+  1, 1, 1,         # Pipe Hardware (Shear, Swing, Flex)
+  # Corrosion Protection - TANK (Bytes 169-176)
+  1, 1, 1, 1, 1, 1, 1, 1,
+  # Corrosion Protection - PIPING (Bytes 177-184)
+  1, 1, 1, 1, 1, 1, 1, 1,
+  # Compliance & Variance (Bytes 185-188)
+  1, 1,            # Tank/Pipe CP Compliance
+  1, 1,            # Tank/Pipe CP Variance
+  # Operational Status & Signature (Bytes 189-201)
+  1,               # TOS (Temp Out of Service) Compliance
+  1,               # Tech Compliance
+  1,               # Tank Tested
+  10               # Install Sig Date
 )
 
 UST_NAMES <- c(
+  # Core fields
   "UST_ID", "FACILITY_ID_PAD", "AI", "TANK_ID", "COMPARTS",
   "INSTALL_DATE", "REG_DATE", "CAPACITY", "STATUS", "STATUS_DATE",
-  "EMPTY", "REG_STATUS", "TANK_INT_PROT_DATE", "TANK_SINGLE", "TANK_DOUBLE",
-  "PIP_SINGLE", "PIP_DOUBLE",
-  "EXT_CONT_JACKET", "EXT_CONT_SYN_LNR", "EXT_CONT_VAULT",
-  "EXT_CONT_PIP_JACKET", "EXT_CONT_PIP_SYN_LNR", "EXT_CONT_PIP_VAULT",
+  "EMPTY", "REG_STATUS", "TANK_INT_PROT_DATE", 
+  # Tank/Pipe Design
+  "TANK_DES_SINGLE", "TANK_DES_DOUBLE", "PIP_DES_SINGLE", "PIP_DES_DOUBLE",
+  # External Containment
+  "EXT_CONT_TANK_JACKET", "EXT_CONT_TANK_SYN", "EXT_CONT_TANK_VAULT",
+  "EXT_CONT_PIP_JACKET", "EXT_CONT_PIP_SYN", "EXT_CONT_PIP_VAULT",
+  # Pipe Type & Materials
   "PIPE_TYPE",
-  "TANK_MAT_STEEL", "TANK_MAT_FRP", "TANK_MAT_COMPOSITE",
-  "TANK_MAT_CONCRETE", "TANK_MAT_JACKETED", "TANK_MAT_COATED",
-  "PIP_MAT_STEEL", "PIP_MAT_FRP", "PIP_MAT_CONCRETE",
-  "PIP_MAT_JACKETED", "PIP_MAT_FLEX",
-  "PIP_VALVE_SHEAR", "PIP_SWING_JOINT", "PIP_FLEX_CONN",
-  "CORR_TANK_CP", "CORR_PIPE_CP", "CORR_TANK_VARIANCE", "CORR_PIPE_VARIANCE",
-  "TOS_COMPLY",
-  paste0("UNUSED_FLAG_", 1:16),
-  "TECH_COMPLY", "TANK_TESTED_FLAG", "INSTALL_SIG_DATE"
+  "TMAT_STEEL", "TMAT_FRP", "TMAT_COMPOSITE", "TMAT_CONCRETE", "TMAT_JACKETED", "TMAT_COATED",
+  "PMAT_STEEL", "PMAT_FRP", "PMAT_CONCRETE", "PMAT_JACKETED", "PMAT_FLEX",
+  "PHARD_SHEAR", "PHARD_SWING", "PHARD_FLEX",
+  # Corrosion Protection - TANK (169-176)
+  "CP_TANK_DIELECTRIC", "CP_TANK_CATHODIC_FAC", "CP_TANK_CATHODIC_FIELD", 
+  "CP_TANK_COMPOSITE", "CP_TANK_COATED", "CP_TANK_FRP", 
+  "CP_TANK_JACKETED", "CP_TANK_NOT_REQ",
+  # Corrosion Protection - PIPING (177-184)
+  "CP_PIP_DIELECTRIC", "CP_PIP_CATHODIC_FAC", "CP_PIP_CATHODIC_FIELD",
+  "CP_PIP_FRP", "CP_PIP_FLEX", "CP_PIP_ISOLATED", 
+  "CP_PIP_DUAL", "CP_PIP_NOT_REQ",
+  # Compliance & Variance
+  "COMPLY_CP_TANK", "COMPLY_CP_PIPE",
+  "VAR_CP_TANK", "VAR_CP_PIPE",
+  # Final Status
+  "COMPLY_TOS",       # Byte 189 (Temporarily Out of Service)
+  "COMPLY_TECH",      # Byte 190
+  "TANK_TESTED_FLAG", # Byte 191
+  "INSTALL_SIG_DATE"
 )
 
 # ── PST_UST_COMPRT.TXT Specification ─────────────────────────────────────────
@@ -364,6 +530,16 @@ COMPRT_NAMES <- c(
   "STAGE1_VAPOR_RECOVERY", "STAGE1_INSTALL_DATE"
 )
 
+# ── PST_CONST_NOTIF.TXT (Added for Date Rescue) ──────────────────────────────
+PST_CONST_NOTIF_SPEC <- list(
+  col_widths = c(8,8,6,10,10,1,1,1,1,1,1,1,1,1,1,15,1,1,10,10,15,15,28,100,60,35,203,25,23,250),
+  col_names = c("NOC_ID","FACILITY_ID_PAD","AI","APP_REC_DATE","SCHED_CONST_DATE","WORK_UST_IMPROVE",
+                "WORK_UST_INSTALL","WORK_UST_REMOVE","WORK_UST_REPAIR","WORK_UST_RETURN","WORK_UST_REPLACE",
+                "WORK_UST_ABANDON","WORK_UST_STAGE1","WORK_AST_INSTALL","WORK_AST_STAGE1","HIST_TRACK_NUM",
+                "WAIVER_FLAG","LATE_FLAG","FORM_REC_DATE","SIG_DATE","SIG_FN","SIG_MN","SIG_LN","SIG_COMPANY",
+                "SIG_TITLE","SIG_ROLE","OWNER_NAMES_CONST","OWNER_CNS_CONST","OWNER_ARS_CONST","GEN_DESC")
+)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 3: Load Raw Data
@@ -376,7 +552,6 @@ message(strrep("=", 79), "\n")
 # ── Load Facility File ───────────────────────────────────────────────────────
 fac_path <- file.path(RAW_DIR, "pst_fac.txt")
 fac <- load_fixed_width(fac_path, FAC_WIDTHS, FAC_NAMES)
-# Facility IDs are often clean, but standardization is safer
 standardize_numeric_id(fac, "FACILITY_ID")
 
 # ── Load UST File ────────────────────────────────────────────────────────────
@@ -394,51 +569,76 @@ standardize_numeric_id(ust, "FACILITY_ID")
 comprt_path <- file.path(RAW_DIR, "pst_ust_comprt.txt")
 compartment <- load_fixed_width(comprt_path, COMPRT_WIDTHS, COMPRT_NAMES)
 
-# Standardize IDs to match UST table
+# Standardize UST_ID to match UST table.
+# NOTE: FACILITY_ID in the compartment file is unreliable and is NOT used for
+# filtering (see FIX 2). Only UST_ID linkage is valid.
 standardize_numeric_id(compartment, "UST_ID")
-standardize_numeric_id(compartment, "FACILITY_ID")
 
-# DIAGOSTIC: Check intersection
+# Diagnostic: Check intersection before any filtering
 common_ids <- length(intersect(ust$UST_ID, compartment$UST_ID))
-message("Diagnostic: ", common_ids, " UST_IDs match between UST and Compartment files.")
+message("Diagnostic: ", common_ids, " UST_IDs match between UST and Compartment files (pre-filter).")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 4: Filter Non-Federally Regulated Facilities
+# SECTION 4: Filter to Federally Regulated Tanks
+# ══════════════════════════════════════════════════════════════════════════════
+# [FIX 1] Use tank-level REG_STATUS, NOT facility-level UST_FR_REQUIRED.
+#
+# Rationale: UST_FR_REQUIRED is a facility-level flag that can be set even when
+# only a subset of tanks at that facility are federally regulated. Filtering on
+# REG_STATUS == "FULLY REGULATED" at the tank level is precise and correct per
+# the PST Data Specifications.
+#
+# [FIX 2] Compartment table is now filtered by UST_ID (not FACILITY_ID).
+# FACILITY_ID in the compartment file is unreliable and caused ~60% data loss.
 # ══════════════════════════════════════════════════════════════════════════════
 
 message("\n", strrep("=", 79))
-message("SECTION 4: Filtering Non-Federally Regulated Facilities")
+message("SECTION 4: Filtering to Fully Regulated Tanks (Tank-Level REG_STATUS)")
 message(strrep("=", 79), "\n")
 
-# Identify federally-regulated facilities
-# UST_FR_REQUIRED = 'Y' indicates federal regulation applies
-fac[, UST_FR_REQUIRED := UST_FR_REQUIRED == "Y"]
+# Diagnostic: Show REG_STATUS distribution before filtering
+message("REG_STATUS distribution (raw):")
+print(ust[, .N, by = REG_STATUS][order(-N)])
 
-n_total_fac <- nrow(fac)
-n_fr_required <- sum(fac$UST_FR_REQUIRED, na.rm = TRUE)
-
-message("Total facilities: ", format(n_total_fac, big.mark = ","))
-message("FR-required facilities: ", format(n_fr_required, big.mark = ","))
-message("Non-FR facilities (to be dropped): ", format(n_total_fac - n_fr_required, big.mark = ","))
-
-# Keep only FR-required facilities
-fac_fr <- fac[UST_FR_REQUIRED == TRUE]
-
-# Get list of FR-required facility IDs for filtering other tables
-fr_facility_ids <- fac_fr$FACILITY_ID
-
-# Filter UST table
+# Filter UST table to fully regulated tanks only
 n_ust_before <- nrow(ust)
-ust <- ust[FACILITY_ID %in% fr_facility_ids]
-message("\nUST records: ", format(n_ust_before, big.mark = ","), " -> ", 
-        format(nrow(ust), big.mark = ","))
+ust <- ust[REG_STATUS == "FULLY REGULATED"]
+n_ust_after  <- nrow(ust)
 
-# Filter compartment table
+message("\nUST records after REG_STATUS filter: ",
+        format(n_ust_before, big.mark = ","), " -> ",
+        format(n_ust_after,  big.mark = ","),
+        " (", round((n_ust_before - n_ust_after) / n_ust_before * 100, 1),
+        "% removed)")
+
+# Derive the set of valid UST IDs and facility IDs from regulated tanks.
+# valid_ust_ids   → used to filter compartment table (FIX 2)
+# fr_facility_ids → used to filter LUST data in Section 9
+valid_ust_ids   <- ust$UST_ID
+fr_facility_ids <- unique(ust$FACILITY_ID)
+
+message("Regulated tanks span ", format(length(fr_facility_ids), big.mark = ","),
+        " unique facilities.")
+
+# [FIX 2] Filter compartment table by UST_ID (not FACILITY_ID)
 n_comprt_before <- nrow(compartment)
-compartment <- compartment[FACILITY_ID %in% fr_facility_ids]
-message("Compartment records: ", format(n_comprt_before, big.mark = ","), " -> ", 
-        format(nrow(compartment), big.mark = ","))
+compartment <- compartment[UST_ID %in% valid_ust_ids]
+n_comprt_after  <- nrow(compartment)
+
+message("\nCompartment records after UST_ID filter: ",
+        format(n_comprt_before, big.mark = ","), " -> ",
+        format(n_comprt_after,  big.mark = ","),
+        " (", round((n_comprt_before - n_comprt_after) / n_comprt_before * 100, 1),
+        "% removed)")
+
+# Diagnostic: Verify linkage quality
+linked_ust_ids <- length(intersect(ust$UST_ID, compartment$UST_ID))
+message("\nDiagnostic: ", format(linked_ust_ids, big.mark = ","),
+        " of ", format(n_ust_after, big.mark = ","),
+        " regulated USTs have compartment data (",
+        round(linked_ust_ids / n_ust_after * 100, 1), "%).")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 5: Process UST Data
@@ -459,72 +659,127 @@ ust[, `:=`(
 ust[, CAPACITY := as.numeric(gsub("[^0-9.]", "", CAPACITY))]
 
 # ── Standardize Tank Status ──────────────────────────────────────────────────
-# Create a mapping of Texas statuses to standardized categories
 message("\nTank status distribution (raw):")
 print(ust[, .N, by = STATUS][order(-N)])
 
-ust[, tank_status := fcase(
-  toupper(STATUS) %in% c("IN USE", "IN-USE", "ACTIVE"), "Open",
-  toupper(STATUS) %in% c("REMOVED", "CLOSED", "PERMANENTLY CLOSED", 
-                         "REMOVED FROM GROUND", "CLOSURE IN PLACE"), "Closed",
-  toupper(STATUS) %in% c("TEMPORARILY CLOSED", "TEMP CLOSURE", 
-                         "TEMPORARILY OUT OF SERVICE"), "Temporary",
-  default = NA_character_
-)]
+ust[, tank_status := standardize_tank_status(STATUS)]
 
 message("\nTank status distribution (standardized):")
 print(ust[, .N, by = tank_status][order(-N)])
+
+# ── Date Rescue (Conditional) ────────────────────────────────────────────────
+n_missing_install <- sum(is.na(ust$INSTALL_DATE))
+
+if (n_missing_install > 0) {
+  message("\n--- Initiating Construction Notification Date Rescue ---")
+  notif_path <- file.path(RAW_DIR, "pst_const_notif.txt")
+  
+  if (file.exists(notif_path)) {
+    notif <- load_fixed_width(notif_path, PST_CONST_NOTIF_SPEC$col_widths, PST_CONST_NOTIF_SPEC$col_names)
+    
+    notif[, `:=`(
+      FACILITY_ID = trimws(substr(FACILITY_ID_PAD, 1, 6)),
+      const_date  = suppressWarnings(lubridate::mdy(SCHED_CONST_DATE))
+    )]
+    
+    install_evidence <- notif[
+      WORK_UST_INSTALL == "Y" & !is.na(const_date),
+      .(earliest_const_date = min(const_date, na.rm = TRUE)),
+      by = FACILITY_ID
+    ]
+    
+    ust <- merge(ust, install_evidence, by = "FACILITY_ID", all.x = TRUE)
+    ust[is.na(INSTALL_DATE) & !is.na(earliest_const_date),
+        INSTALL_DATE := earliest_const_date]
+    
+    message("Rescued dates for ",
+            sum(!is.na(ust$earliest_const_date) & !is.na(ust$INSTALL_DATE)),
+            " records.")
+    ust[, earliest_const_date := NULL]
+  } else {
+    message("Construction Notification file not found. Skipping rescue.")
+  }
+} else {
+  message("\nSkipping Construction Notification Date Rescue: INSTALL_DATE is 100% populated.")
+}
 
 # ── Classify Wall Types ──────────────────────────────────────────────────────
 ust <- classify_tank_walls(ust)
 
 
-
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 6: Processing Compartment Data (Substances)
+# ══════════════════════════════════════════════════════════════════════════════
+# [FIX 3] Substance deduplication now operates on individual substance strings.
+#
+# Old approach: concatenated all three substance columns per row into a single
+# string, then applied unique() to the full strings. This meant "GASOLINE; ;
+# DIESEL" and "DIESEL; GASOLINE; " were treated as different strings.
+#
+# New approach: gather all individual substance values across all rows for a
+# given UST_ID, remove blanks/NAs, apply unique() + sort(), then collapse.
+# This correctly deduplicates across duplicate compartment rows.
 # ══════════════════════════════════════════════════════════════════════════════
 
 message("\n", strrep("=", 79))
 message("SECTION 6: Processing Compartment Data (Substances)")
 message(strrep("=", 79), "\n")
 
-# Combine substance columns
-compartment[, substances := {
-  tmp <- paste(SUBSTANCE_STORED_1, SUBSTANCE_STORED_2, SUBSTANCE_STORED_3, sep = "; ")
-  tmp <- gsub("^; |; $|; ; ", "", tmp)  # Clean up separators
-  tmp <- gsub("^\\s*$", NA_character_, tmp)  # Empty to NA
-  tmp
-}]
+# Diagnostic: Check for duplicate compartment rows before aggregation
+n_comprt_rows   <- nrow(compartment)
+n_comprt_unique <- uniqueN(compartment, by = c("UST_ID", "COMPRT_ID"))
+message("Compartment rows: ", format(n_comprt_rows, big.mark = ","),
+        " | Unique UST_ID + COMPRT_ID combos: ",
+        format(n_comprt_unique, big.mark = ","),
+        " | Duplicate rows: ",
+        format(n_comprt_rows - n_comprt_unique, big.mark = ","))
 
-# Aggregate to UST level (one row per UST_ID)
-# Note: aggregating by UST_ID is sufficient; FACILITY_ID is redundant for the join key
-compartment_agg <- compartment[, .(
-  substances = paste(unique(na.omit(substances)), collapse = "; ")
-), by = .(UST_ID)] 
+# [FIX 3] Aggregate substances to UST level with proper deduplication.
+# For each UST_ID, collect ALL substance strings from ALL rows and ALL columns,
+# strip blanks/NAs, deduplicate, sort for consistency, then collapse.
+compartment_agg <- compartment[, {
+  # Gather all substance values across the three columns and all compartment rows
+  all_subs <- c(SUBSTANCE_STORED_1, SUBSTANCE_STORED_2, SUBSTANCE_STORED_3)
+  # Trim whitespace and remove blanks/NAs
+  all_subs <- trimws(all_subs)
+  all_subs <- all_subs[!is.na(all_subs) & all_subs != ""]
+  # Deduplicate and sort for consistency
+  all_subs <- sort(unique(all_subs))
+  # Collapse to a single semi-colon delimited string (NA if none found)
+  if (length(all_subs) == 0) {
+    .(substances = NA_character_)
+  } else {
+    .(substances = paste(all_subs, collapse = "; "))
+  }
+}, by = .(UST_ID)]
+
+message("Compartment aggregation: ", format(n_comprt_rows, big.mark = ","),
+        " rows collapsed to ", format(nrow(compartment_agg), big.mark = ","),
+        " UST-level records.")
 
 # Classify substances
 compartment_agg <- classify_substances(compartment_agg)
 
 # Merge substance classifications back to UST data
-# Note: We use UST_ID only.
-substance_cols <- c("UST_ID", "is_gasoline", "is_diesel", 
+substance_cols <- c("UST_ID", "is_gasoline", "is_diesel",
                     "is_oil_kerosene", "is_jet_fuel", "is_other")
 
-# Force character join just in case
 ust[, UST_ID := as.character(UST_ID)]
 compartment_agg[, UST_ID := as.character(UST_ID)]
 
 ust <- merge(ust, compartment_agg[, ..substance_cols], by = "UST_ID", all.x = TRUE)
 
-# Fill missing substance flags with 0
+# Fill missing substance flags with 0 (tanks with no compartment records)
 for (col in c("is_gasoline", "is_diesel", "is_oil_kerosene", "is_jet_fuel", "is_other")) {
   ust[is.na(get(col)), (col) := 0L]
 }
 
 # Diagnostic: Check populate rate
-populated <- nrow(ust[is_gasoline == 1 | is_diesel == 1 | is_oil_kerosene == 1 | is_jet_fuel == 1 | is_other == 1])
-message("Diagnostic: ", populated, " tanks have substance info populated after merge.")
-
+populated <- nrow(ust[is_gasoline == 1 | is_diesel == 1 |
+                      is_oil_kerosene == 1 | is_jet_fuel == 1 | is_other == 1])
+message("Diagnostic: ", format(populated, big.mark = ","),
+        " tanks have substance info populated after merge (",
+        round(populated / nrow(ust) * 100, 1), "%).")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -536,15 +791,21 @@ message("SECTION 7: Merging Facility Information")
 message(strrep("=", 79), "\n")
 
 # Select relevant facility columns
-fac_cols <- fac_fr[, .(FACILITY_ID, FACILITY_NAME, SITE_COUNTY)]
+fac_cols <- fac[, .(FACILITY_ID, FACILITY_NAME, SITE_COUNTY)]
 
-# Merge to UST data
+# Merge to UST data (all.x = TRUE keeps all regulated tanks even if facility
+# record is missing, which should not happen but is defensive)
 ust <- merge(ust, fac_cols, by = "FACILITY_ID", all.x = TRUE)
 
-message("Merged facility info to ", nrow(ust), " UST records")
+message("Merged facility info to ", format(nrow(ust), big.mark = ","), " UST records.")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 8: Create Harmonized Output (LA Schema)
+# ══════════════════════════════════════════════════════════════════════════════
+# [FIX 5] Added classification_confidence to the harmonized output.
+#         This field is produced by classify_tank_walls() and documents the
+#         evidentiary basis for each tank's wall-type assignment.
 # ══════════════════════════════════════════════════════════════════════════════
 
 message("\n", strrep("=", 79))
@@ -553,66 +814,74 @@ message(strrep("=", 79), "\n")
 
 # ── Determine closure dates ──────────────────────────────────────────────────
 ust[, is_closed_removed := tank_status == "Closed"]
-ust[, tank_closed_date := fifelse(is_closed_removed == TRUE, STATUS_DATE, as.Date(NA))]
+ust[, tank_closed_date  := fifelse(is_closed_removed == TRUE, STATUS_DATE, as.Date(NA))]
 
 # ── Build harmonized output ──────────────────────────────────────────────────
-# Schema matches Louisiana: 02_Clean_LA.R output columns
 TX_Harmonized_UST_tanks <- ust[, .(
-  # Identifiers
+  # ── Identifiers ─────────────────────────────────────────────────────────
   facility_id   = as.character(FACILITY_ID),
   facility_name = str_to_title(trimws(gsub("[^[:alnum:] ]", "", FACILITY_NAME))),
   tank_id       = as.character(TANK_ID),
   state         = "TX",
   
-  # Dates
+  # ── Dates ───────────────────────────────────────────────────────────────
   tank_installed_date = INSTALL_DATE,
   tank_closed_date    = tank_closed_date,
   
-  # Status (Texas-localized codes preserved)
+  # ── Status ──────────────────────────────────────────────────────────────
   tank_status = tank_status,
   
-  # Capacity
+  # ── Capacity ────────────────────────────────────────────────────────────
   capacity = CAPACITY,
   
-  # Wall Types (binary)
-  single_walled  = as.integer(single_walled),
-  double_walled  = as.integer(double_walled),
-  unknown_walled = as.integer(unknown_walled),
+  # ── Wall Types (binary + confidence) ────────────────────────────────────
+  single_walled             = as.integer(single_walled),
+  double_walled             = as.integer(double_walled),
+  unknown_walled            = as.integer(unknown_walled),
+  # [FIX 5] classification_confidence: documents the evidence basis per tank.
+  # Values: "Very High", "High", "Medium-High", "Medium", "Medium-Low",
+  #         "Low", "Very Low"
+  classification_confidence = classification_confidence,
   
-  # Substances (binary)
+  # ── Substances (binary) ─────────────────────────────────────────────────
   is_gasoline     = as.integer(is_gasoline),
   is_diesel       = as.integer(is_diesel),
   is_oil_kerosene = as.integer(is_oil_kerosene),
   is_jet_fuel     = as.integer(is_jet_fuel),
   is_other        = as.integer(is_other),
   
-  # Location
+  # ── Location ────────────────────────────────────────────────────────────
   county_name = str_to_title(trimws(SITE_COUNTY))
 )]
 
-# ── Generate Summary Statistics ──────────────────────────────────────────────
+# ── Summary Statistics ───────────────────────────────────────────────────────
 message("\n", strrep("-", 60))
 message("HARMONIZED UST INVENTORY SUMMARY")
 message(strrep("-", 60))
 
-message("\nTotal records: ", format(nrow(TX_Harmonized_UST_tanks), big.mark = ","))
-message("Unique facilities: ", uniqueN(TX_Harmonized_UST_tanks$facility_id))
-message("Unique tanks: ", uniqueN(TX_Harmonized_UST_tanks$tank_id))
+message("\nTotal records:      ", format(nrow(TX_Harmonized_UST_tanks), big.mark = ","))
+message("Unique facilities:  ", uniqueN(TX_Harmonized_UST_tanks$facility_id))
+message("Unique tanks:       ", uniqueN(TX_Harmonized_UST_tanks$tank_id))
 
 message("\nTank Status:")
 print(TX_Harmonized_UST_tanks[, .N, by = tank_status][order(-N)])
 
 message("\nWall Type:")
-message("  Single-walled: ", sum(TX_Harmonized_UST_tanks$single_walled))
-message("  Double-walled: ", sum(TX_Harmonized_UST_tanks$double_walled))
-message("  Unknown:       ", sum(TX_Harmonized_UST_tanks$unknown_walled))
+message("  Single-walled: ", format(sum(TX_Harmonized_UST_tanks$single_walled),  big.mark = ","))
+message("  Double-walled: ", format(sum(TX_Harmonized_UST_tanks$double_walled),  big.mark = ","))
+message("  Unknown:       ", format(sum(TX_Harmonized_UST_tanks$unknown_walled), big.mark = ","),
+        " (", round(sum(TX_Harmonized_UST_tanks$unknown_walled) /
+                    nrow(TX_Harmonized_UST_tanks) * 100, 1), "%)")
+
+message("\nClassification Confidence:")
+print(TX_Harmonized_UST_tanks[, .N, by = classification_confidence][order(-N)])
 
 message("\nSubstances:")
-message("  Gasoline:     ", sum(TX_Harmonized_UST_tanks$is_gasoline))
-message("  Diesel:       ", sum(TX_Harmonized_UST_tanks$is_diesel))
-message("  Oil/Kerosene: ", sum(TX_Harmonized_UST_tanks$is_oil_kerosene))
-message("  Jet Fuel:     ", sum(TX_Harmonized_UST_tanks$is_jet_fuel))
-message("  Other:        ", sum(TX_Harmonized_UST_tanks$is_other))
+message("  Gasoline:     ", format(sum(TX_Harmonized_UST_tanks$is_gasoline),     big.mark = ","))
+message("  Diesel:       ", format(sum(TX_Harmonized_UST_tanks$is_diesel),       big.mark = ","))
+message("  Oil/Kerosene: ", format(sum(TX_Harmonized_UST_tanks$is_oil_kerosene), big.mark = ","))
+message("  Jet Fuel:     ", format(sum(TX_Harmonized_UST_tanks$is_jet_fuel),     big.mark = ","))
+message("  Other:        ", format(sum(TX_Harmonized_UST_tanks$is_other),        big.mark = ","))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -623,34 +892,32 @@ message("\n", strrep("=", 79))
 message("SECTION 9: Processing LUST Data")
 message(strrep("=", 79), "\n")
 
-# Check if LUST file exists
 lust_path <- file.path(RAW_DIR, "TX_LUST.csv")
 
 if (file.exists(lust_path)) {
   TX_LUST_raw <- fread(lust_path)
   
-  # Standardize column names
   if ("facility_id" %in% names(TX_LUST_raw)) {
     setnames(TX_LUST_raw, "facility_id", "FACILITY_ID")
   }
   
   standardize_numeric_id(TX_LUST_raw, "FACILITY_ID")
   
-  # Parse Dates safely
+  # Parse dates
   date_cols <- c("report_date", "nfa_date")
   for (col in date_cols) {
     if (col %in% names(TX_LUST_raw)) {
-      # Try flexible parsing
-      TX_LUST_raw[, (col) := lubridate::parse_date_time(get(col), 
-                                                      orders = c("mdy", "ymd", "mdY", "Ymd"), quiet = TRUE)]
-      TX_LUST_raw[, (col) := as.Date(get(col))]
+        TX_LUST_raw[, (col) := lubridate::parse_date_time(
+          get(col), orders = c("dby", "dBY", "dmy", "dmY", "mdy", "ymd", "mdY", "Ymd"), 
+          quiet = FALSE)]  # drop quiet=TRUE so future failures are visible
+        TX_LUST_raw[, (col) := as.Date(get(col))]
     }
   }
   
-  # Filter to FR-required facilities
+  # Filter to facilities that have at least one regulated UST
+  # (fr_facility_ids derived from regulated tanks in Section 4)
   TX_LUST_raw <- TX_LUST_raw[FACILITY_ID %in% fr_facility_ids]
   
-  # Create harmonized LUST output
   TX_Harmonized_LUST <- TX_LUST_raw[, .(
     facility_id = as.character(FACILITY_ID),
     lust_id     = as.character(LUST_id),
@@ -659,12 +926,11 @@ if (file.exists(lust_path)) {
     state       = "TX"
   )]
   
-  message("Processed ", nrow(TX_Harmonized_LUST), " LUST records")
+  message("Processed ", format(nrow(TX_Harmonized_LUST), big.mark = ","), " LUST records.")
   message("Facilities with LUST: ", uniqueN(TX_Harmonized_LUST$facility_id))
   
 } else {
   message("LUST file not found at: ", lust_path)
-  # Create empty template
   TX_Harmonized_LUST <- data.table(
     facility_id = character(),
     lust_id     = character(),
@@ -674,6 +940,7 @@ if (file.exists(lust_path)) {
   )
 }
 
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 10: Save Outputs
 # ══════════════════════════════════════════════════════════════════════════════
@@ -682,20 +949,19 @@ message("\n", strrep("=", 79))
 message("SECTION 10: Saving Outputs")
 message(strrep("=", 79), "\n")
 
-# Save harmonized UST inventory
-ust_output_path <- file.path(OUTPUT_DIR, "TX_Harmonized_UST_tanks.csv")
+ust_output_path  <- file.path(OUTPUT_DIR, "TX_Harmonized_UST_tanks.csv")
+lust_output_path <- file.path(OUTPUT_DIR, "TX_Harmonized_LUST.csv")
+
 fwrite(TX_Harmonized_UST_tanks, ust_output_path)
 message("Saved: ", ust_output_path)
 
-# Save harmonized LUST
-lust_output_path <- file.path(OUTPUT_DIR, "TX_Harmonized_LUST.csv")
 fwrite(TX_Harmonized_LUST, lust_output_path)
 message("Saved: ", lust_output_path)
 
-# Also save RDS for faster loading
 saveRDS(TX_Harmonized_UST_tanks, file.path(OUTPUT_DIR, "TX_Harmonized_UST_tanks.rds"))
-saveRDS(TX_Harmonized_LUST, file.path(OUTPUT_DIR, "TX_Harmonized_LUST.rds"))
-message("Saved RDS versions")
+saveRDS(TX_Harmonized_LUST,      file.path(OUTPUT_DIR, "TX_Harmonized_LUST.rds"))
+message("Saved RDS versions.")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 11: Validation Diagnostics
@@ -705,42 +971,45 @@ message("\n", strrep("=", 79))
 message("SECTION 11: Validation Diagnostics")
 message(strrep("=", 79), "\n")
 
-# Check for data quality issues
 diagnostics <- list()
 
-# 1. Missing critical fields
-diagnostics$missing_facility_id <- sum(is.na(TX_Harmonized_UST_tanks$facility_id) | 
-                                        TX_Harmonized_UST_tanks$facility_id == "")
-diagnostics$missing_tank_id <- sum(is.na(TX_Harmonized_UST_tanks$tank_id) | 
-                                    TX_Harmonized_UST_tanks$tank_id == "")
+# Missing critical fields
+diagnostics$missing_facility_id  <- sum(is.na(TX_Harmonized_UST_tanks$facility_id) |
+                                         TX_Harmonized_UST_tanks$facility_id == "")
+diagnostics$missing_tank_id      <- sum(is.na(TX_Harmonized_UST_tanks$tank_id) |
+                                         TX_Harmonized_UST_tanks$tank_id == "")
 diagnostics$missing_install_date <- sum(is.na(TX_Harmonized_UST_tanks$tank_installed_date))
-diagnostics$missing_status <- sum(is.na(TX_Harmonized_UST_tanks$tank_status))
+diagnostics$missing_status       <- sum(is.na(TX_Harmonized_UST_tanks$tank_status))
 
-# 2. Wall type consistency
+# Wall type consistency
 diagnostics$both_single_and_double <- sum(
-  TX_Harmonized_UST_tanks$single_walled == 1 & 
+  TX_Harmonized_UST_tanks$single_walled == 1 &
   TX_Harmonized_UST_tanks$double_walled == 1
 )
 
-# 3. No substance info
+# No substance info
 diagnostics$no_substance_info <- sum(
-  TX_Harmonized_UST_tanks$is_gasoline == 0 &
-  TX_Harmonized_UST_tanks$is_diesel == 0 &
+  TX_Harmonized_UST_tanks$is_gasoline     == 0 &
+  TX_Harmonized_UST_tanks$is_diesel       == 0 &
   TX_Harmonized_UST_tanks$is_oil_kerosene == 0 &
-  TX_Harmonized_UST_tanks$is_jet_fuel == 0 &
-  TX_Harmonized_UST_tanks$is_other == 0
+  TX_Harmonized_UST_tanks$is_jet_fuel     == 0 &
+  TX_Harmonized_UST_tanks$is_other        == 0
 )
 
-# Print diagnostics
+# Classification quality
+diagnostics$unknown_rate_pct <- round(
+  sum(TX_Harmonized_UST_tanks$unknown_walled) / nrow(TX_Harmonized_UST_tanks) * 100, 1)
+
 message("Data Quality Diagnostics:")
 message("  Missing facility_id:       ", diagnostics$missing_facility_id)
 message("  Missing tank_id:           ", diagnostics$missing_tank_id)
 message("  Missing install_date:      ", diagnostics$missing_install_date)
 message("  Missing status:            ", diagnostics$missing_status)
 message("  Both single & double wall: ", diagnostics$both_single_and_double)
-message("  No substance info:         ", diagnostics$no_substance_info)
+message("  No substance info:         ", format(diagnostics$no_substance_info, big.mark = ","))
+message("  Unknown wall rate:         ", diagnostics$unknown_rate_pct, "%",
+        "  (target: ~10.5%)")
 
-# Save diagnostics
 diagnostics_dt <- as.data.table(diagnostics)
 fwrite(diagnostics_dt, file.path(OUTPUT_DIR, "01_inventory_diagnostics.csv"))
 

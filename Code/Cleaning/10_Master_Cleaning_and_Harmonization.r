@@ -107,7 +107,7 @@ if(file.exists(epa_path)) {
   id_col <- grep("facility.*id", raw_headers, ignore.case=T, value=T)[1]
   st_col <- grep("state", raw_headers, ignore.case=T, value=T)[1]
   
-  epa_dt <- fread(epa_path, select = c(id_col, st_col, "Latitude", "Longitude"), colClasses = "character")
+  epa_dt <- fread(epa_path)#, select = c(id_col, st_col, "Latitude", "Longitude"), colClasses = "character")
   setnames(epa_dt, c("epa_id", "epa_state_full", "lat_epa", "long_epa"))
   
   state_map <- data.table(epa_state_full = state.name, state_abbr = state.abb)
@@ -116,14 +116,15 @@ if(file.exists(epa_path)) {
   master_tanks[, merge_id := NA_character_]
   
   # A. Prefix State (TX, CO, LA, ME, NJ, NM, TN, AR)
-  group_prefix <- c("TX", "CO", "LA", "ME", "NJ", "NM", "TN", "AR",'PA')
+  group_prefix <- c("TX", "CO", "LA", "ME", "NJ", "NM", "TN", "AR")
   master_tanks[state %in% group_prefix, merge_id := paste0(state, facility_id)]
-  
+  master_tanks[state == "PA" & !is.na(epa_key), merge_id := epa_key]
+
   # B. Michigan (Prefix + Strip Zeros)
   master_tanks[state == "MI", merge_id := paste0("MI", str_remove(facility_id, "^0+"))]
   
   # C. Alabama (Prefix + Last Segment of Permit)
-  master_tanks[state == "AL", merge_id := paste0("AL", as.integer(str_extract(facility_id, "[^-]+$")))]
+master_tanks[state == "AL", merge_id := paste0("AL", gsub("[^0-9]", "", facility_id))]
   
   # Merge
   epa_lookup <- unique(epa_dt[!is.na(lat_epa) & !is.na(long_epa), 
@@ -135,12 +136,29 @@ if(file.exists(epa_path)) {
   master_tanks[, latitude_final := fcoalesce(latitude, lat_epa)]
   master_tanks[, longitude_final := fcoalesce(longitude, long_epa)]
   
+  # --- EPA MERGE DIAGNOSTIC (before dropping lat_epa) ---
+  message("\n--- EPA Merge Diagnostic (by state) ---")
+  diag_states <- c("TX", "CO", "LA", "ME", "NJ", "NM", "TN", "AR", "PA", "MI", "AL")
+  epa_diag <- master_tanks[state %in% diag_states, .(
+    total          = .N,
+    native_lat     = sum(!is.na(latitude)),
+    epa_matched    = sum(!is.na(lat_epa)),
+    final_lat      = sum(!is.na(latitude_final)),
+    pct_covered    = round(sum(!is.na(latitude_final)) / .N * 100, 1),
+    merge_id_sample = merge_id[1]
+  ), by = state][order(state)]
+  print(epa_diag)
+  
+  epa_id_sample <- epa_dt[state_abbr %in% diag_states, .(epa_id_sample = epa_id[1]), by = state_abbr]
+  message("\nEPA ID format sample (for crosscheck against merge_id_sample above):")
+  print(epa_id_sample[order(state_abbr)])
+  # -----------------------------------------------------------
+
   master_tanks[, c("merge_id", "lat_epa", "long_epa") := NULL]
 } else {
   master_tanks[, latitude_final := latitude]
   master_tanks[, longitude_final := longitude]
 }
-
 
 # 3. County & FIPS Backfill Strategy (Cascading) --------------------------
 message("\n--- Step 3: Comprehensive County & FIPS Backfill ---")
@@ -305,14 +323,13 @@ calc_missing <- function(dt) {
     
     # 1. New Required Metrics
     pct_closed_missing_date = {
-      n_closed = sum(tank_status == "Closed", na.rm = TRUE)
+      n_closed <- sum(status_std == "Closed", na.rm = TRUE)
       if(n_closed > 0) {
-        round(sum(tank_status == "Closed" & is.na(tank_closed_date)) / n_closed * 100, 1)
+        round(sum(status_std == "Closed" & is.na(tank_closed_date)) / n_closed * 100, 1)
       } else {
-        0.0
+        NA_real_  # or 0.0 — NA is arguably more honest when no closed tanks exist
       }
-    },
-    
+    },    
     pct_missing_install_date = round(sum(is.na(tank_installed_date)) / .N * 100, 1),
     
     # 2. Existing Geo Metrics (UPDATED TO CHECK FINAL COORDS)
@@ -321,8 +338,12 @@ calc_missing <- function(dt) {
     pct_miss_capacity = round(sum(is.na(capacity)) / .N * 100, 1),
     pct_miss_tank_status = round(sum(is.na(tank_status) | tank_status == "") / .N * 100, 1),
     pct_miss_tank_substance = round(sum(
-      is_gasoline == 0 & is_diesel == 0 & is_oil_kerosene == 0 & is_jet_fuel == 0 & is_other == 0
-    ) / .N * 100, 1),
+      (is.na(is_gasoline) | is_gasoline == 0) &
+      (is.na(is_diesel)   | is_diesel   == 0) &
+      (is.na(is_oil_kerosene) | is_oil_kerosene == 0) &
+      (is.na(is_jet_fuel) | is_jet_fuel == 0) &
+      (is.na(is_other)    | is_other    == 0)
+    ) / .N * 100, 1), 
     pct_miss_tank_type = round(sum(
       is.na(single_walled) | (unknown_walled == 1) | (single_walled == 0 & double_walled == 0)
     ) / .N * 100, 1),

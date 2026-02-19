@@ -11,9 +11,16 @@
 #   Raw pst_fin_assur.txt from Script 00 in: Data/Raw/state_databases/Texas/
 #
 # Outputs:
-#   1. texas_fr_facility_month_panel.csv - Monthly resolution panel
-#   2. texas_fr_facility_year_panel.csv  - December 31 snapshots
-#   3. texas_fr_contracts_clean.csv      - Unique list of cleaned contracts
+#   1. texas_fr_facility_month_panel.csv/.rds - Monthly resolution panel
+#   2. texas_fr_facility_year_panel.csv/.rds  - December 31 snapshots
+#   3. texas_fr_contracts_clean.csv/.rds      - Unique list of cleaned contracts
+#   4. texas_fr_contract_month_panel.csv      - Contract x month detail
+#   5. texas_fr_processed.csv/.rds            - Cleaned contract-level extract
+#   6. zurich_2012_lookup.csv                 - Zurich instrument lookup
+#
+# Panel Skeleton:
+#   Bounded per facility by min(EFF_DATE) to max(EXP_DATE) of observed contracts.
+#   No imputed pre-1999 State Fund override — data only.
 #
 # Event Indicators:
 #   - Insurer/provider switches
@@ -21,7 +28,7 @@
 #   - Coverage gaps and ERP periods
 #
 # Author: UST Research Pipeline
-# Date: 2026-01
+# Date: 2026-02
 ###############################################################################
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -39,12 +46,11 @@ library(here)
 RAW_DIR    <- here("Data", "Raw", "state_databases", "Texas")
 OUTPUT_DIR <- here("Data", "Processed")
 
-# Create directories
 if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
 
 # ── Panel Configuration ──────────────────────────────────────────────────────
-PANEL_START_DATE <- as.Date("1990-01-01")
-PANEL_END_DATE   <- as.Date("2026-12-01")
+# Upper bound for contract expansion — contracts past this date are right-censored
+PANEL_END_DATE <- as.Date("2026-12-01")
 
 # ── Server Configuration ─────────────────────────────────────────────────────
 onserver <- Sys.info()["nodename"] != "localhost"
@@ -57,39 +63,47 @@ if (requireNamespace("parallel", quietly = TRUE)) {
 }
 message("data.table using ", getDTthreads(), " threads")
 
+# ── Quick Write Helper ───────────────────────────────────────────────────────
+quick_write <- function(dt, dir_path, nm) {
+  fwrite(dt, file.path(dir_path, paste0(nm, ".csv")))
+  saveRDS(dt, file.path(dir_path, paste0(nm, ".rds")))
+  message("Saved: ", nm, " (.csv, .rds)")
+  invisible(NULL)
+}
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 1: Helper Functions
 # ══════════════════════════════════════════════════════════════════════════════
 
-#' Load and parse fixed-width file
+#' Load and parse fixed-width file from local path
 load_fixed_width <- function(filepath, col_widths, col_names) {
   if (!file.exists(filepath)) {
     stop("File not found: ", filepath)
   }
-  
+
   message("Loading: ", basename(filepath))
   raw <- readLines(filepath, warn = FALSE)
-  
+
   starts <- cumsum(c(1, col_widths[-length(col_widths)]))
   ends   <- cumsum(col_widths)
-  
+
   split_row <- function(row) {
     mapply(substr, row, starts, ends, USE.NAMES = FALSE)
   }
-  
-  mat <- t(vapply(raw, split_row, 
+
+  mat <- t(vapply(raw, split_row,
                   FUN.VALUE = character(length(col_widths)),
                   USE.NAMES = FALSE))
-  
+
   dt <- as.data.table(mat)
   setnames(dt, col_names)
   dt[, (col_names) := lapply(.SD, trimws), .SDcols = col_names]
-  
+
   message("  Loaded ", nrow(dt), " records")
   return(dt[])
 }
 
-#' Clean ID column
+#' Clean ID column: trim whitespace, coerce to character
 clean_id_column <- function(dt, col_name) {
   if (col_name %in% names(dt)) {
     dt[, (col_name) := trimws(as.character(get(col_name)))]
@@ -97,13 +111,14 @@ clean_id_column <- function(dt, col_name) {
   invisible(dt)
 }
 
-#' Fix malformed dates (e.g., "02 01" -> 2001, "007" -> 2007)
+#' Fix malformed dates (e.g., year = 0201 -> 2001, year = 007 -> 2007)
+#' If only one of EFF/EXP is malformed, assumes a 1-year term from the good date.
+#' Returns dt with date_fix_flag for rows that could not be rescued.
 fix_malformed_fa_dates <- function(dt, eff_col = "EFF_DATE", exp_col = "EXP_DATE") {
-  
+
   fix_year <- function(d) {
     out <- d
     bad <- !is.na(out) & (year(out) < 1900 | year(out) > 2100)
-    
     if (any(bad)) {
       y_bad <- year(out[bad])
       out[bad] <- as.Date(sprintf(
@@ -115,9 +130,9 @@ fix_malformed_fa_dates <- function(dt, eff_col = "EFF_DATE", exp_col = "EXP_DATE
     }
     out
   }
-  
+
   dt_work <- copy(dt)
-  
+
   # Ensure Date class
   if (!inherits(dt_work[[eff_col]], "Date")) {
     dt_work[, (eff_col) := as.Date(get(eff_col))]
@@ -125,46 +140,56 @@ fix_malformed_fa_dates <- function(dt, eff_col = "EFF_DATE", exp_col = "EXP_DATE
   if (!inherits(dt_work[[exp_col]], "Date")) {
     dt_work[, (exp_col) := as.Date(get(exp_col))]
   }
-  
+
   # Tag bad rows
   dt_work[, `:=`(
     bad_eff = !is.na(get(eff_col)) & (year(get(eff_col)) < 1900 | year(get(eff_col)) > 2100),
     bad_exp = !is.na(get(exp_col)) & (year(get(exp_col)) < 1900 | year(get(exp_col)) > 2100)
   )]
-  
+
   n_originally_bad <- dt_work[bad_eff == TRUE | bad_exp == TRUE, .N]
-  
+
   # If only one is bad, assume 1-year term
   dt_work[bad_eff == TRUE & bad_exp == FALSE, (eff_col) := get(exp_col) - years(1)]
   dt_work[bad_exp == TRUE & bad_eff == FALSE, (exp_col) := get(eff_col) + years(1)]
-  
+
   # Apply year fixing
   dt_work[bad_eff == TRUE, (eff_col) := fix_year(get(eff_col))]
   dt_work[bad_exp == TRUE, (exp_col) := fix_year(get(exp_col))]
-  
+
   # Flag unrescued
   dt_work[, date_fix_flag := (bad_eff | bad_exp) & (is.na(get(eff_col)) | is.na(get(exp_col)))]
   dt_work[, c("bad_eff", "bad_exp") := NULL]
-  
+
   n_still_bad <- dt_work[date_fix_flag == TRUE, .N]
-  
-  message("Date fixing: ", n_originally_bad, " malformed -> ", 
+
+  message("Date fixing: ", n_originally_bad, " malformed -> ",
           n_originally_bad - n_still_bad, " fixed, ", n_still_bad, " unrescued")
-  
+
   return(dt_work)
 }
 
 #' Collapse contract-level rows to facility-month level
-#' @param dt data.table with all contracts for ONE facility in ONE year-month
-#' @return single-row data.table with aggregated flags
+#'
+#' Takes all contracts for ONE facility in ONE year-month and returns a single
+#' row with aggregated coverage, flags, transition/overlap indicators.
+#'
+#' Column expectations on input dt:
+#'   start_day, end_day          — day-level edges within the month
+#'   FIN_ASSUR_ID                — contract identifier
+#'   DETAIL_TYPE, CATEGORY       — mechanism classification
+#'   ISSUER_NAME                 — insurer/provider name
+#'   COVER_OCC, COVER_AGG        — coverage amounts (numeric)
+#'   PREMIUM_PREPAID, PROOF_OF_FA, FP_CORR_MET, TP_FA_MET — logical flags
+#'   USE_PRIVATE, USE_SELF       — convenience booleans
 collapse_to_facility_month <- function(dt) {
   dt <- copy(dt)
-  n <- nrow(dt)
-  
-  # Aggregates
+  n  <- nrow(dt)
+
+  # ── Aggregates ─────────────────────────────────────────────────────────────
   agg <- list(
     DETAIL_TYPE     = paste(sort(unique(dt$DETAIL_TYPE)), collapse = "; "),
-    CATEGORY        = paste(sort(unique(dt$CATEGORY)), collapse = "; "),
+    CATEGORY        = paste(sort(unique(dt$CATEGORY)),    collapse = "; "),
     ISSUER_NAME     = paste(sort(unique(dt$ISSUER_NAME)), collapse = " | "),
     max_COVER_OCC   = if (all(is.na(dt$COVER_OCC))) NA_real_ else max(dt$COVER_OCC, na.rm = TRUE),
     max_COVER_AGG   = if (all(is.na(dt$COVER_AGG))) NA_real_ else max(dt$COVER_AGG, na.rm = TRUE),
@@ -177,19 +202,21 @@ collapse_to_facility_month <- function(dt) {
     uses_private    = any(dt$USE_PRIVATE, na.rm = TRUE),
     uses_self       = any(dt$USE_SELF, na.rm = TRUE)
   )
-  
-  # Detect overlap/transition
+
+  # ── Detect overlap / transition ────────────────────────────────────────────
   if (n == 1L) {
     transition_month   <- FALSE
     multiple_contracts <- FALSE
     active_ids         <- dt$FIN_ASSUR_ID[1]
+
   } else if (n == 2L) {
     ord <- order(dt$start_day)
-    s <- as.numeric(dt$start_day[ord])
-    e <- as.numeric(dt$end_day[ord])
+    s   <- as.numeric(dt$start_day[ord])
+    e   <- as.numeric(dt$end_day[ord])
     overlaps <- s[2] <= e[1]
-    
+
     if (!overlaps) {
+      # Clean hand-off: two non-overlapping contracts in same month
       transition_month   <- TRUE
       multiple_contracts <- FALSE
       active_ids         <- dt$FIN_ASSUR_ID[which.max(dt$start_day)]
@@ -198,12 +225,14 @@ collapse_to_facility_month <- function(dt) {
       multiple_contracts <- TRUE
       active_ids         <- paste(sort(unique(dt$FIN_ASSUR_ID)), collapse = " | ")
     }
+
   } else {
+    # 3+ contracts — flag as multiple, check for any non-overlap
     transition_month   <- FALSE
     multiple_contracts <- TRUE
     active_ids         <- paste(sort(unique(dt$FIN_ASSUR_ID)), collapse = " | ")
   }
-  
+
   data.table(
     DETAIL_TYPE         = agg$DETAIL_TYPE,
     CATEGORY            = agg$CATEGORY,
@@ -234,6 +263,7 @@ FA_WIDTHS <- c(
   5, 3, 7, 5, 30, 10, 10, 30, 30,
   1, 1, 1, 1, 1
 )
+stopifnot(sum(FA_WIDTHS) == 278)
 
 FA_NAMES <- c(
   "FIN_ASSUR_ID", "FACILITY_ID_PAD", "FACILITY_AI", "FORM_REC_DATE",
@@ -255,26 +285,33 @@ message(strrep("=", 79), "\n")
 fa_path <- file.path(RAW_DIR, "pst_fin_assur.txt")
 fa <- load_fixed_width(fa_path, FA_WIDTHS, FA_NAMES)
 
-# Extract FACILITY_ID
+# Extract FACILITY_ID (first 6 chars of padded field)
 fa[, FACILITY_ID := trimws(substr(FACILITY_ID_PAD, 1, 6))]
 clean_id_column(fa, "FACILITY_ID")
 clean_id_column(fa, "FIN_ASSUR_ID")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 4: Parse and Clean Dates
+# SECTION 4: Parse and Clean Dates, Flags, Amounts
 # ══════════════════════════════════════════════════════════════════════════════
 
 message("\n", strrep("=", 79))
-message("SECTION 4: Parsing and Cleaning Dates")
+message("SECTION 4: Parsing and Cleaning Dates, Flags, Amounts")
 message(strrep("=", 79), "\n")
 
-# Convert Y/N flags
-flag_cols <- c("PREMIUM_PREPAID", "FP_CORR_MET", "TP_FA_MET", "PROOF_OF_FA", "MEETS_FLAG", "MULTI_MECH_TYPES")
+# ── Convert Y/N flags to logical ─────────────────────────────────────────────
+flag_cols <- c("PREMIUM_PREPAID", "FP_CORR_MET", "TP_FA_MET",
+               "PROOF_OF_FA", "MEETS_FLAG", "MULTI_MECH_TYPES")
 for (col in flag_cols) {
   fa[, (col) := get(col) == "Y"]
 }
 
-# Parse dates
+# ── Track blank coverage before coercion (from old script) ───────────────────
+fa[, `:=`(
+  COVER_OCC_is_blank = trimws(COVER_OCC) == "",
+  COVER_AGG_is_blank = trimws(COVER_AGG) == ""
+)]
+
+# ── Parse dates ──────────────────────────────────────────────────────────────
 fa[, `:=`(
   EFF_DATE = mdy(COVER_EFF),
   EXP_DATE = mdy(COVER_EXP)
@@ -283,7 +320,7 @@ fa[, `:=`(
 # Fix malformed dates
 fa <- fix_malformed_fa_dates(fa, "EFF_DATE", "EXP_DATE")
 
-# Parse coverage amounts
+# ── Parse coverage amounts ───────────────────────────────────────────────────
 fa[, `:=`(
   COVER_OCC_clean = gsub("[^0-9.]", "", COVER_OCC),
   COVER_AGG_clean = gsub("[^0-9.]", "", COVER_AGG)
@@ -304,7 +341,7 @@ message(strrep("=", 79), "\n")
 
 fa[, MECH_TYPE_upper := toupper(trimws(MECH_TYPE))]
 
-# Lookup table for mechanism types
+# ── Lookup table ─────────────────────────────────────────────────────────────
 mech_lookup <- data.table(
   MECH_TYPE_upper = c(
     "INSURANCE OR RISK RETENTION", "FINANCIAL TEST", "LOCAL GOV FIN TEST",
@@ -325,23 +362,31 @@ mech_lookup <- data.table(
 
 fa <- merge(fa, mech_lookup, by = "MECH_TYPE_upper", all.x = TRUE)
 
-# Handle PST Remediation Fund (State Fund)
-fa[MECH_TYPE_upper == "TRUST FUND" & 
+# ── Handle PST Remediation Fund (State Fund) ─────────────────────────────────
+fa[MECH_TYPE_upper == "TRUST FUND" &
    grepl("PST REMEDIATION FUND", MECH_TYPE_OTHER, ignore.case = TRUE),
    `:=`(DETAIL_TYPE = "State Insurance", CATEGORY = "State Fund")]
 
-fa[MECH_TYPE_upper == "OTHER" & 
+fa[MECH_TYPE_upper == "OTHER" &
    grepl("PST REMEDIATION FUND", MECH_TYPE_OTHER, ignore.case = TRUE),
    `:=`(DETAIL_TYPE = "State Insurance", CATEGORY = "State Fund")]
 
 # Fill unmatched
 fa[is.na(DETAIL_TYPE), DETAIL_TYPE := "Other or Unspecified"]
-fa[is.na(CATEGORY), CATEGORY := "Other or Unspecified"]
+fa[is.na(CATEGORY),    CATEGORY    := "Other or Unspecified"]
 
-# Create convenience flags
+# ── Convenience flags ────────────────────────────────────────────────────────
 fa[, `:=`(
   USE_PRIVATE = CATEGORY == "Insurance",
   USE_SELF    = CATEGORY == "Self-Insurance"
+)]
+
+# ── Mechanism type dummies (from old script) ─────────────────────────────────
+mech_levels <- mech_lookup$MECH_TYPE_upper
+dummy_names <- paste0("MECH_", gsub("[^A-Z0-9]", "_", mech_levels))
+fa[, (dummy_names) := lapply(
+  mech_levels,
+  function(lvl) as.integer(MECH_TYPE_upper == lvl)
 )]
 
 message("\nMechanism type distribution:")
@@ -350,7 +395,7 @@ print(fa[, .N, by = .(CATEGORY, DETAIL_TYPE)][order(-N)])
 fa[, MECH_TYPE_upper := NULL]
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 6: Create Clean Contract Inventory
+# SECTION 6: Create Clean Contract Inventory & Processed Extract
 # ══════════════════════════════════════════════════════════════════════════════
 
 message("\n", strrep("=", 79))
@@ -370,11 +415,14 @@ fa_contracts_clean <- fa[, .(
   POLICY_MECH_NUM,
   COVER_OCC,
   COVER_AGG,
+  COVER_OCC_is_blank,
+  COVER_AGG_is_blank,
   PREMIUM_PREPAID,
   FP_CORR_MET,
   TP_FA_MET,
   PROOF_OF_FA,
   MEETS_FLAG,
+  MULTI_MECH_TYPES,
   USE_PRIVATE,
   USE_SELF,
   date_fix_flag
@@ -383,49 +431,96 @@ fa_contracts_clean <- fa[, .(
 message("Clean contract inventory: ", nrow(fa_contracts_clean), " contracts")
 message("Unique facilities: ", uniqueN(fa_contracts_clean$FACILITY_ID))
 
+# ── Processed extract with renamed columns (from old script) ─────────────────
+fa_processed <- fa[, .(
+  FIN_ASSUR_ID, FACILITY_ID, FORM_REC_DATE, EFF_DATE, EXP_DATE,
+  MECH_TYPE, MECH_TYPE_OTHER, DETAIL_TYPE, CATEGORY, MULTI_MECH_TYPES,
+  MEETS_FLAG, ISSUER_NAME, POLICY_MECH_NUM, COVER_OCC, COVER_AGG,
+  COVER_OCC_is_blank, COVER_AGG_is_blank, USE_PRIVATE, USE_SELF
+)]
+
+setnames(fa_processed,
+         c("FORM_REC_DATE", "MECH_TYPE_OTHER", "MULTI_MECH_TYPES", "POLICY_MECH_NUM"),
+         c("FORM_DATE",     "MECH_TYPE_OTHR",  "MULTI_MECH",       "POLICY_NUM"),
+         skip_absent = TRUE)
+
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 7: Expand Contracts to Monthly Observations
+# SECTION 7: Expand Contracts to Monthly Observations (Non-Equi Join)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Strategy: Instead of calling seq() per contract row (O(N_contracts * avg_months)),
+# we build a single monthly grid and use data.table's non-equi join to match each
+# contract to its active months in one vectorised pass.
+#
 # ══════════════════════════════════════════════════════════════════════════════
 
 message("\n", strrep("=", 79))
-message("SECTION 7: Expanding Contracts to Monthly Level")
+message("SECTION 7: Expanding Contracts to Monthly Level (non-equi join)")
 message(strrep("=", 79), "\n")
 
-# Filter valid contracts
+# ── Step 1: Filter valid contracts and compute month-level bounds ────────────
 fa_valid <- fa[!is.na(EFF_DATE) & !is.na(EXP_DATE) & EFF_DATE <= EXP_DATE]
 message("Valid contracts for expansion: ", nrow(fa_valid))
 
-# Expand each contract to monthly observations
-fa_monthly_contract <- fa_valid[, {
-  mo_seq <- seq(
-    floor_date(EFF_DATE, "month"),
-    floor_date(pmin(EXP_DATE, PANEL_END_DATE), "month"),
-    by = "month"
-  )
-  
-  month_starts <- floor_date(mo_seq, "month")
-  month_ends   <- ceiling_date(mo_seq, "month") - days(1)
-  
+fa_valid[, `:=`(
+  month_start = floor_date(EFF_DATE, "month"),
+  month_end   = floor_date(pmin(EXP_DATE, PANEL_END_DATE), "month")
+)]
+
+# ── Step 2: Build master monthly grid spanning all contract activity ─────────
+grid_min <- fa_valid[, min(month_start)]
+grid_max <- fa_valid[, max(month_end)]
+
+monthly_grid <- data.table(
+  month_date = seq(grid_min, grid_max, by = "month")
+)
+monthly_grid[, `:=`(
+  YEAR          = year(month_date),
+  MONTH         = month(month_date),
+  grid_mo_start = month_date,
+  grid_mo_end   = ceiling_date(month_date, "month") - days(1)
+)]
+
+message("Monthly grid: ", grid_min, " to ", grid_max,
+        " (", nrow(monthly_grid), " months)")
+
+# ── Step 3: Non-equi join — match each contract to its active months ─────────
+#   Join condition: contract's month_start <= grid month AND
+#                   contract's month_end   >= grid month
+#
+#   NOTE: data.table non-equi join overwrites the join columns in x with
+#   values from i. We use x./i. prefixes and rename after.
+
+fa_monthly_contract <- fa_valid[
+  monthly_grid,
+  on = .(month_start <= month_date, month_end >= month_date),
+  nomatch = 0L,
+  allow.cartesian = TRUE,
   .(
-    YEAR      = year(mo_seq),
-    MONTH     = month(mo_seq),
-    EFF_DATE  = EFF_DATE,
-    EXP_DATE  = EXP_DATE,
-    start_day = pmax(EFF_DATE, month_starts),
-    end_day   = pmin(EXP_DATE, month_ends),
-    DETAIL_TYPE,
-    CATEGORY,
-    ISSUER_NAME,
-    COVER_OCC,
-    COVER_AGG,
-    PREMIUM_PREPAID,
-    PROOF_OF_FA,
-    FP_CORR_MET,
-    TP_FA_MET,
-    USE_PRIVATE,
-    USE_SELF
+    FACILITY_ID  = x.FACILITY_ID,
+    FIN_ASSUR_ID = x.FIN_ASSUR_ID,
+    YEAR         = i.YEAR,
+    MONTH        = i.MONTH,
+    EFF_DATE     = x.EFF_DATE,
+    EXP_DATE     = x.EXP_DATE,
+    start_day    = pmax(x.EFF_DATE, i.grid_mo_start),
+    end_day      = pmin(x.EXP_DATE, i.grid_mo_end),
+    DETAIL_TYPE  = x.DETAIL_TYPE,
+    CATEGORY     = x.CATEGORY,
+    ISSUER_NAME  = x.ISSUER_NAME,
+    COVER_OCC    = x.COVER_OCC,
+    COVER_AGG    = x.COVER_AGG,
+    PREMIUM_PREPAID = x.PREMIUM_PREPAID,
+    PROOF_OF_FA  = x.PROOF_OF_FA,
+    FP_CORR_MET  = x.FP_CORR_MET,
+    TP_FA_MET    = x.TP_FA_MET,
+    USE_PRIVATE  = x.USE_PRIVATE,
+    USE_SELF     = x.USE_SELF
   )
-}, by = .(FACILITY_ID, FIN_ASSUR_ID)]
+]
+
+# ── Step 4: Clean up temporary columns from fa_valid ─────────────────────────
+fa_valid[, c("month_start", "month_end") := NULL]
 
 message("Contract-month records: ", format(nrow(fa_monthly_contract), big.mark = ","))
 
@@ -437,9 +532,8 @@ message("\n", strrep("=", 79))
 message("SECTION 8: Collapsing to Facility-Month Level")
 message(strrep("=", 79), "\n")
 
-# Collapse using the helper function
-fa_monthly <- fa_monthly_contract[, 
-  collapse_to_facility_month(.SD), 
+fa_monthly <- fa_monthly_contract[,
+  collapse_to_facility_month(.SD),
   by = .(FACILITY_ID, YEAR, MONTH)
 ]
 
@@ -447,6 +541,42 @@ message("Facility-month records: ", format(nrow(fa_monthly), big.mark = ","))
 
 # Verify uniqueness
 stopifnot(anyDuplicated(fa_monthly[, .(FACILITY_ID, YEAR, MONTH)]) == 0)
+
+# ── Dummy-encode categorical columns (from old script) ───────────────────────
+message("\nCreating dummy-encoded columns for ISSUER_NAME, CATEGORY, DETAIL_TYPE...")
+
+dummy_src_cols <- c("ISSUER_NAME", "CATEGORY", "DETAIL_TYPE")
+
+dummy_long <- melt(
+  fa_monthly,
+  id.vars      = c("FACILITY_ID", "YEAR", "MONTH"),
+  measure.vars = dummy_src_cols,
+  variable.name = "var",
+  value.name    = "val"
+)[!is.na(val) & val != ""]
+
+fa_dummies <- dcast(
+  dummy_long,
+  FACILITY_ID + YEAR + MONTH ~ paste0(var, "_", gsub("[^A-Za-z0-9]", "_", val)),
+  fun.aggregate = length,
+  value.var     = "val"
+)
+
+fa_monthly <- merge(
+  fa_monthly,
+  fa_dummies,
+  by = c("FACILITY_ID", "YEAR", "MONTH"),
+  all.x = TRUE
+)
+
+# Fill NA dummies with 0
+new_dummy_cols <- setdiff(names(fa_dummies), c("FACILITY_ID", "YEAR", "MONTH"))
+fa_monthly[, (new_dummy_cols) := lapply(.SD, function(x) {
+  x[is.na(x)] <- 0L
+  x
+}), .SDcols = new_dummy_cols]
+
+message("  Created ", length(new_dummy_cols), " dummy columns")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 9: Create Full Panel with Gap Detection
@@ -456,37 +586,36 @@ message("\n", strrep("=", 79))
 message("SECTION 9: Creating Full Panel with Gap Detection")
 message(strrep("=", 79), "\n")
 
-# Get all facility IDs
-all_facilities <- unique(fa$FACILITY_ID)
+# ── Build per-facility bounds from observed contract dates ───────────────────
+facility_bounds <- fa_valid[, .(
+  first_month = floor_date(min(EFF_DATE), "month"),
+  last_month  = floor_date(pmin(max(EXP_DATE), PANEL_END_DATE), "month")
+), by = FACILITY_ID]
 
-# Create complete facility-month skeleton
-panel_skeleton <- CJ(
-  FACILITY_ID = all_facilities,
-  month_date  = seq(floor_date(PANEL_START_DATE, "month"),
-                    floor_date(PANEL_END_DATE, "month"),
-                    by = "month")
-)
-panel_skeleton[, `:=`(
-  YEAR  = year(month_date),
-  MONTH = month(month_date)
-)]
-panel_skeleton[, month_date := NULL]
+message("Facilities with valid contracts: ", nrow(facility_bounds))
+
+# ── Build panel skeleton bounded by each facility's contract window ──────────
+panel_skeleton <- facility_bounds[, {
+  mo_seq <- seq(first_month, last_month, by = "month")
+  .(YEAR = year(mo_seq), MONTH = month(mo_seq))
+}, by = FACILITY_ID]
 
 message("Panel skeleton: ", format(nrow(panel_skeleton), big.mark = ","), " facility-months")
 
-# Merge with FA data
+# ── Merge with FA data ──────────────────────────────────────────────────────
 setkey(panel_skeleton, FACILITY_ID, YEAR, MONTH)
 setkey(fa_monthly, FACILITY_ID, YEAR, MONTH)
 
-fa_panel <- merge(panel_skeleton, fa_monthly, 
-                  by = c("FACILITY_ID", "YEAR", "MONTH"), 
+fa_panel <- merge(panel_skeleton, fa_monthly,
+                  by = c("FACILITY_ID", "YEAR", "MONTH"),
                   all.x = TRUE)
 
 # ── Calculate ERP (Extended Reporting Period) ────────────────────────────────
-# ERP = 6 months after contract expiry where facility has tail coverage
+# ERP = 6 months after contract expiry.
+# Flagged independently of successor coverage — user will determine
+# legal applicability downstream.
 message("\nCalculating ERP periods...")
 
-# Get expired contracts
 expired_contracts <- fa_contracts_clean[!is.na(EXP_DATE), .(
   FACILITY_ID,
   FIN_ASSUR_ID,
@@ -495,20 +624,19 @@ expired_contracts <- fa_contracts_clean[!is.na(EXP_DATE), .(
   erp_end   = floor_date(EXP_DATE + months(6), "month")
 )]
 
-# Expand to monthly ERP observations
-erp_monthly <- expired_contracts[, {
-  if (erp_start <= erp_end) {
+erp_monthly <- expired_contracts[
+  !is.na(erp_start) & !is.na(erp_end) & erp_start <= erp_end,
+  {
     erp_months <- seq(erp_start, erp_end, by = "month")
     .(YEAR = year(erp_months), MONTH = month(erp_months), erp_coverage = TRUE)
-  }
-}, by = .(FACILITY_ID, FIN_ASSUR_ID)]
+  },
+  by = .(FACILITY_ID, FIN_ASSUR_ID)
+]
 
-# Aggregate to facility-month
 erp_facility_monthly <- erp_monthly[, .(
   erp_reporting_month = any(erp_coverage, na.rm = TRUE)
 ), by = .(FACILITY_ID, YEAR, MONTH)]
 
-# Merge ERP
 fa_panel <- merge(fa_panel, erp_facility_monthly,
                   by = c("FACILITY_ID", "YEAR", "MONTH"),
                   all.x = TRUE)
@@ -516,7 +644,6 @@ fa_panel[is.na(erp_reporting_month), erp_reporting_month := FALSE]
 
 # ── Identify Coverage Gaps ───────────────────────────────────────────────────
 fa_panel[is.na(fr_covered), fr_covered := FALSE]
-
 fa_panel[, coverage_gap_month := (!fr_covered) & (!erp_reporting_month)]
 
 # Set sentinel values for gap months
@@ -526,15 +653,14 @@ fa_panel[coverage_gap_month == TRUE, `:=`(
   CATEGORY    = "NO COVERAGE"
 )]
 
-# ── Pre-1999: State Fund Era ─────────────────────────────────────────────────
-# Before 1999, Texas had mandatory State Fund coverage
-fa_panel[YEAR < 1999, `:=`(
-  ISSUER_NAME = "State Fund",
-  DETAIL_TYPE = "State Insurance",
-  CATEGORY    = "State Fund",
-  fr_covered  = TRUE,
-  coverage_gap_month = FALSE
-)]
+# Fill NA dummy columns with 0 for gap months (they were NA from the left join)
+if (length(new_dummy_cols) > 0) {
+  fa_panel[is.na(get(new_dummy_cols[1])),
+           (new_dummy_cols) := lapply(.SD, function(x) {
+             x[is.na(x)] <- 0L
+             x
+           }), .SDcols = new_dummy_cols]
+}
 
 message("\nCoverage gaps: ", fa_panel[coverage_gap_month == TRUE, .N], " facility-months")
 message("ERP months: ", fa_panel[erp_reporting_month == TRUE, .N], " facility-months")
@@ -549,39 +675,39 @@ message(strrep("=", 79), "\n")
 
 setkey(fa_panel, FACILITY_ID, YEAR, MONTH)
 
-# Calculate previous month values
+# ── Lag values ───────────────────────────────────────────────────────────────
 fa_panel[, `:=`(
-  prev_issuer       = shift(ISSUER_NAME, type = "lag"),
-  prev_category     = shift(CATEGORY, type = "lag"),
-  prev_detail_type  = shift(DETAIL_TYPE, type = "lag"),
+  prev_issuer       = shift(ISSUER_NAME,       type = "lag"),
+  prev_category     = shift(CATEGORY,          type = "lag"),
+  prev_detail_type  = shift(DETAIL_TYPE,       type = "lag"),
   prev_coverage_gap = shift(coverage_gap_month, type = "lag")
 ), by = FACILITY_ID]
 
-# Detect changes
+# ── Detect changes ───────────────────────────────────────────────────────────
 fa_panel[, `:=`(
-  issuer_changed = !is.na(prev_issuer) & !is.na(ISSUER_NAME) & ISSUER_NAME != prev_issuer,
-  mech_changed   = !is.na(prev_category) & !is.na(CATEGORY) & CATEGORY != prev_category,
-  detail_type_changed = !is.na(prev_detail_type) & !is.na(DETAIL_TYPE) & DETAIL_TYPE != prev_detail_type
+  issuer_changed      = !is.na(prev_issuer)      & !is.na(ISSUER_NAME) & ISSUER_NAME != prev_issuer,
+  mech_changed        = !is.na(prev_category)     & !is.na(CATEGORY)    & CATEGORY    != prev_category,
+  detail_type_changed = !is.na(prev_detail_type)  & !is.na(DETAIL_TYPE) & DETAIL_TYPE != prev_detail_type
 )]
 
-# Derived indicators
+# ── Derived transition indicators ────────────────────────────────────────────
 fa_panel[, `:=`(
   contract_changed = issuer_changed | mech_changed | detail_type_changed,
-  
+
   # Transition to self-insurance
-  changed_to_self_insure = mech_changed & 
+  changed_to_self_insure = mech_changed &
     grepl("Self-Insurance", CATEGORY, ignore.case = TRUE) &
     !is.na(prev_category) &
     !grepl("Self-Insurance", prev_category, ignore.case = TRUE),
-  
+
   # Transition to private insurance
   changed_to_insurance = mech_changed &
     grepl("^Insurance$", CATEGORY, ignore.case = TRUE) &
     !is.na(prev_category) &
     !grepl("^Insurance$", prev_category, ignore.case = TRUE),
-  
+
   # Transition to/from coverage gap
-  changed_to_no_coverage   = coverage_gap_month == TRUE & !is.na(prev_coverage_gap) & prev_coverage_gap == FALSE,
+  changed_to_no_coverage   = coverage_gap_month == TRUE  & !is.na(prev_coverage_gap) & prev_coverage_gap == FALSE,
   changed_from_no_coverage = coverage_gap_month == FALSE & !is.na(prev_coverage_gap) & prev_coverage_gap == TRUE
 )]
 
@@ -591,16 +717,17 @@ fa_panel[, c("prev_issuer", "prev_category", "prev_detail_type", "prev_coverage_
 # ── Summary of Changes ───────────────────────────────────────────────────────
 message("\nChange indicator summary:")
 change_summary <- fa_panel[, .(
-  total_facility_months   = .N,
-  coverage_gaps           = sum(coverage_gap_month, na.rm = TRUE),
-  erp_months              = sum(erp_reporting_month, na.rm = TRUE),
-  issuer_changes          = sum(issuer_changed, na.rm = TRUE),
-  mechanism_changes       = sum(mech_changed, na.rm = TRUE),
-  contract_changes        = sum(contract_changed, na.rm = TRUE),
-  transitions_to_self     = sum(changed_to_self_insure, na.rm = TRUE),
+  total_facility_months    = .N,
+  covered_months           = sum(fr_covered, na.rm = TRUE),
+  coverage_gaps            = sum(coverage_gap_month, na.rm = TRUE),
+  erp_months               = sum(erp_reporting_month, na.rm = TRUE),
+  issuer_changes           = sum(issuer_changed, na.rm = TRUE),
+  mechanism_changes        = sum(mech_changed, na.rm = TRUE),
+  contract_changes         = sum(contract_changed, na.rm = TRUE),
+  transitions_to_self      = sum(changed_to_self_insure, na.rm = TRUE),
   transitions_to_insurance = sum(changed_to_insurance, na.rm = TRUE),
-  transitions_to_gaps     = sum(changed_to_no_coverage, na.rm = TRUE),
-  transitions_from_gaps   = sum(changed_from_no_coverage, na.rm = TRUE)
+  transitions_to_gaps      = sum(changed_to_no_coverage, na.rm = TRUE),
+  transitions_from_gaps    = sum(changed_from_no_coverage, na.rm = TRUE)
 )]
 print(change_summary)
 
@@ -612,32 +739,7 @@ message("\n", strrep("=", 79))
 message("SECTION 11: Creating Facility-Year Panel (Dec 31 Snapshots)")
 message(strrep("=", 79), "\n")
 
-# December snapshots
-fa_year_panel <- fa_panel[MONTH == 12, .(
-  FACILITY_ID,
-  YEAR,
-  
-  # Contract characteristics at year-end
-  ISSUER_NAME,
-  DETAIL_TYPE,
-  CATEGORY,
-  active_FIN_ASSUR_ID,
-  max_COVER_OCC,
-  max_COVER_AGG,
-  
-  # Flags
-  fr_covered,
-  coverage_gap_month,
-  erp_reporting_month,
-  uses_private,
-  uses_self,
-  
-  # Annual event counts (aggregate from monthly)
-  annual_issuer_changes    = 0L,  # Will compute below
-  annual_contract_changes  = 0L
-)]
-
-# Calculate annual event counts
+# ── Annual event counts (computed from all months) ───────────────────────────
 annual_events <- fa_panel[, .(
   annual_issuer_changes   = sum(issuer_changed, na.rm = TRUE),
   annual_contract_changes = sum(contract_changed, na.rm = TRUE),
@@ -645,8 +747,30 @@ annual_events <- fa_panel[, .(
   annual_coverage_months  = sum(fr_covered, na.rm = TRUE)
 ), by = .(FACILITY_ID, YEAR)]
 
+# ── December snapshot ────────────────────────────────────────────────────────
+fa_year_panel <- fa_panel[MONTH == 12, .(
+  FACILITY_ID,
+  YEAR,
+
+  # Contract characteristics at year-end
+  ISSUER_NAME,
+  DETAIL_TYPE,
+  CATEGORY,
+  active_FIN_ASSUR_ID,
+  max_COVER_OCC,
+  max_COVER_AGG,
+
+  # Flags
+  fr_covered,
+  coverage_gap_month,
+  erp_reporting_month,
+  uses_private,
+  uses_self
+)]
+
+# Merge annual events
 fa_year_panel <- merge(
-  fa_year_panel[, -c("annual_issuer_changes", "annual_contract_changes")],
+  fa_year_panel,
   annual_events,
   by = c("FACILITY_ID", "YEAR"),
   all.x = TRUE
@@ -688,25 +812,22 @@ message("SECTION 13: Saving Outputs")
 message(strrep("=", 79), "\n")
 
 # 1. Facility-Month Panel
-fwrite(fa_panel, file.path(OUTPUT_DIR, "texas_fr_facility_month_panel.csv"))
-saveRDS(fa_panel, file.path(OUTPUT_DIR, "texas_fr_facility_month_panel.rds"))
-message("Saved: texas_fr_facility_month_panel (.csv, .rds)")
+quick_write(fa_panel, OUTPUT_DIR, "texas_fr_facility_month_panel")
 
 # 2. Facility-Year Panel
-fwrite(fa_year_panel, file.path(OUTPUT_DIR, "texas_fr_facility_year_panel.csv"))
-saveRDS(fa_year_panel, file.path(OUTPUT_DIR, "texas_fr_facility_year_panel.rds"))
-message("Saved: texas_fr_facility_year_panel (.csv, .rds)")
+quick_write(fa_year_panel, OUTPUT_DIR, "texas_fr_facility_year_panel")
 
 # 3. Clean Contract Inventory
-fwrite(fa_contracts_clean, file.path(OUTPUT_DIR, "texas_fr_contracts_clean.csv"))
-saveRDS(fa_contracts_clean, file.path(OUTPUT_DIR, "texas_fr_contracts_clean.rds"))
-message("Saved: texas_fr_contracts_clean (.csv, .rds)")
+quick_write(fa_contracts_clean, OUTPUT_DIR, "texas_fr_contracts_clean")
 
 # 4. Contract-Month Panel (for detailed analysis)
 fwrite(fa_monthly_contract, file.path(OUTPUT_DIR, "texas_fr_contract_month_panel.csv"))
 message("Saved: texas_fr_contract_month_panel.csv")
 
-# 5. Zurich 2012 Lookup
+# 5. Processed contract-level extract (from old script)
+quick_write(fa_processed, OUTPUT_DIR, "texas_fr_processed")
+
+# 6. Zurich 2012 Lookup
 fwrite(zurich_2012_lookup, file.path(OUTPUT_DIR, "zurich_2012_lookup.csv"))
 message("Saved: zurich_2012_lookup.csv")
 
@@ -722,7 +843,10 @@ message("  1. texas_fr_facility_month_panel - ", format(nrow(fa_panel), big.mark
 message("  2. texas_fr_facility_year_panel  - ", format(nrow(fa_year_panel), big.mark = ","), " records")
 message("  3. texas_fr_contracts_clean      - ", format(nrow(fa_contracts_clean), big.mark = ","), " contracts")
 message("  4. texas_fr_contract_month_panel - ", format(nrow(fa_monthly_contract), big.mark = ","), " records")
-message("  5. zurich_2012_lookup            - ", format(nrow(zurich_2012_lookup), big.mark = ","), " facilities")
+message("  5. texas_fr_processed            - ", format(nrow(fa_processed), big.mark = ","), " contracts")
+message("  6. zurich_2012_lookup            - ", format(nrow(zurich_2012_lookup), big.mark = ","), " facilities")
+
+message("\nPanel skeleton bounds: per-facility min(EFF_DATE) to min(max(EXP_DATE), ", PANEL_END_DATE, ")")
 
 message("\nKey columns for linkage with inventory (01_clean_texas_inventory.R):")
 message("  - FACILITY_ID (character, trimmed)")

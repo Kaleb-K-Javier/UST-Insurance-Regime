@@ -71,16 +71,18 @@ master_tanks <- fread(here("Data", "Processed", "Master_Harmonized_UST_Tanks.csv
 log_step("Loading Master Harmonized LUST...", 0)
 master_lust <- fread(here("Data", "Processed", "Master_Harmonized_LUST.csv"))
 
-# 1.3 Load Texas FR Data (Auxiliary) - KEEP IN MEMORY FOR LATER
+# ==============================================================================
+# SECTION 1.3: LOAD TEXAS FR DATA (CORRECTED)
+# ==============================================================================
 log_step("Loading Texas FR Auxiliary Data...", 0)
 
-# FA Monthly - ENHANCED: Dynamically detect ALL issuer and dummy columns
-fa_monthly <- fread(here("Data", "Raw", "fa_monthly.csv"))
+# FIX 1: Point to Data/Processed and use correct filename 'texas_fr_facility_month_panel.csv'
+fa_monthly <- fread(here("Data", "Processed", "texas_fr_facility_month_panel.csv"))
 
-# Define base columns to ALWAYS keep
+# FIX 2: Remove 'dropped_by_zurich' from base cols (it is calculated later in this script)
 fa_base_cols <- c("FACILITY_ID", "YEAR", "MONTH", "DETAIL_TYPE", "CATEGORY", 
                   "uses_private", "uses_self", "fr_covered", 
-                  "transition_month", "multiple_contracts", "dropped_by_zurich") 
+                  "transition_month", "multiple_contracts") 
 
 # Dynamically identify variable groups
 fa_issuer_cols <- grep("^ISSUER_NAME", names(fa_monthly), value = TRUE)
@@ -93,24 +95,17 @@ fa_keep <- unique(c(fa_base_cols, fa_issuer_cols, fa_cat_dummies, fa_det_dummies
 fa_keep <- intersect(fa_keep, names(fa_monthly)) # Safety check
 fa_monthly <- fa_monthly[, .SD, .SDcols = fa_keep]
 
-log_step(sprintf("FA monthly: %s rows (with %d issuer cols, %d dummies)", 
-                 format(nrow(fa_monthly), big.mark=","), 
-                 length(fa_issuer_cols), 
-                 length(c(fa_cat_dummies, fa_det_dummies))), 1)
+log_step(sprintf("FA monthly: %s rows loaded", format(nrow(fa_monthly), big.mark=",")), 1)
 
-# Zurich Lookup
-zurich_2012_lookup <- fread(here("Data", "Raw", "zurich_2012_lookup.csv"))
+# FIX 1b: Load Zurich lookup from Processed
+zurich_2012_lookup <- fread(here("Data", "Processed", "zurich_2012_lookup.csv"))
 
 log_step("Data loading complete.", 1)
 
-#==============================================================================
-# SECTION 2: DATA CLEANING & PANEL PREP
-#==============================================================================
-cat("\n========================================\n")
-cat("SECTION 2: CLEANING & FILTERING\n")
-cat("========================================\n\n")
 
-# 2.1 Standardize IDs & Create Panel ID
+# ==============================================================================
+# SECTION 2.1: STANDARDIZE IDs (CORRECTED)
+# ==============================================================================
 log_step("Creating composite panel_id...", 0)
 
 # Master Tanks
@@ -128,18 +123,63 @@ master_lust[, `:=`(
 )]
 master_lust[, panel_id := paste(facility_id, state, sep = "_")]
 
-# FA Monthly - Standardize IDs to match harmonized data
-log_step("Standardizing FA Monthly IDs (Stripping zeros + 'TX' suffix)...", 1)
-fa_monthly[, clean_id := str_remove(toupper(trimws(as.character(FACILITY_ID))), "^0+")]
+# FA Monthly - FIX 3: Do NOT strip leading zeros. Match Master Tanks logic exactly.
+log_step("Standardizing FA Monthly IDs...", 1)
+fa_monthly[, clean_id := toupper(trimws(as.character(FACILITY_ID)))] 
 fa_monthly[, `:=`(
   facility_id = clean_id,
   panel_id    = paste(clean_id, "TX", sep = "_") 
 )]
 fa_monthly[, clean_id := NULL]
 
-# Zurich Lookup
-log_step("Standardizing Zurich IDs (Stripping zeros + 'TX' suffix)...", 1)
-zurich_2012_lookup[, clean_id := str_remove(toupper(trimws(as.character(FACILITY_ID))), "^0+")]
+# Zurich Lookup - FIX 3b: Do NOT strip leading zeros.
+log_step("Standardizing Zurich IDs...", 1)
+zurich_2012_lookup[, clean_id := toupper(trimws(as.character(FACILITY_ID)))]
+zurich_2012_lookup[, `:=`(
+  facility_id = clean_id,
+  panel_id    = paste(clean_id, "TX", sep = "_")
+)]
+zurich_2012_lookup[, clean_id := NULL]
+
+#==============================================================================
+# SECTION 2: DATA CLEANING & PANEL PREP
+#==============================================================================
+cat("\n========================================\n")
+cat("SECTION 2: CLEANING & FILTERING\n")
+cat("========================================\n\n")
+
+# ==============================================================================
+# SECTION 2.1: STANDARDIZE IDs (CORRECTED)
+# ==============================================================================
+log_step("Creating composite panel_id...", 0)
+
+# Master Tanks
+master_tanks[, `:=`(
+  facility_id = toupper(trimws(as.character(facility_id))),
+  tank_id     = toupper(trimws(as.character(tank_id))),
+  state       = toupper(trimws(as.character(state)))
+)]
+master_tanks[, panel_id := paste(facility_id, state, sep = "_")]
+
+# Master LUST
+master_lust[, `:=`(
+  facility_id = toupper(trimws(as.character(facility_id))),
+  state       = toupper(trimws(as.character(state)))
+)]
+master_lust[, panel_id := paste(facility_id, state, sep = "_")]
+
+# FA Monthly - FIX 3: Do NOT strip leading zeros. Match Master Tanks logic exactly.
+log_step("Standardizing FA Monthly IDs...", 1)
+fa_monthly[, clean_id := toupper(trimws(as.character(FACILITY_ID)))] 
+fa_monthly[, `:=`(
+  facility_id = clean_id,
+  panel_id    = paste(clean_id, "TX", sep = "_") 
+)]
+fa_monthly[, clean_id := NULL]
+
+# Zurich Lookup - FIX 3b: Do NOT strip leading zeros.
+log_step("Standardizing Zurich IDs...", 1)
+zurich_2012_lookup[, clean_id := toupper(trimws(as.character(FACILITY_ID)))]
 zurich_2012_lookup[, `:=`(
   facility_id = clean_id,
   panel_id    = paste(clean_id, "TX", sep = "_")
