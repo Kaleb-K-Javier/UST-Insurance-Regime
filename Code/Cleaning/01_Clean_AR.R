@@ -297,11 +297,13 @@ if(file.exists(fips_path)) {
 
 # LUST Harmonization
 AR_LUST_SD <- ust_lust_table[, .(
-  facility_id = as.character(Facility_ID),
-  LUST_id = as.character(LUST_ID),
-  report_date = ReleaseConfirmedDate,
-  nfa_date = NFAIssuedDate,
-  state = "AR"
+  facility_id  = as.character(Facility_ID),
+  LUST_id      = as.character(LUST_ID),
+  # Strip ISO 8601 timestamp suffix ("T00:00:00Z") before parsing
+  # Raw values from Access DB look like: "1996-07-11T00:00:00Z"
+  report_date  = as.Date(str_extract(as.character(ReleaseConfirmedDate), "^[0-9]{4}-[0-9]{2}-[0-9]{2}")),
+  nfa_date     = as.Date(str_extract(as.character(NFAIssuedDate),         "^[0-9]{4}-[0-9]{2}-[0-9]{2}")),
+  state        = "AR"
 )]
 
 # Final Column Selection (Strict match to LA script)

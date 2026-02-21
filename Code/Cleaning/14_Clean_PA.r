@@ -288,7 +288,7 @@ if(file.exists(linkage_file) & file.exists(epa_path)) {
     mutate(
       efacts_clean = na_if(trimws(efacts_facility_id), "NA"),
       site_clean   = na_if(trimws(site_id), "NA"),
-      epa_numeric  = coalesce(efacts_clean, site_clean)
+      epa_numeric = coalesce(site_clean, efacts_clean)
     ) %>%
     filter(!is.na(epa_numeric)) %>%
     select(facility_id, epa_numeric) %>%

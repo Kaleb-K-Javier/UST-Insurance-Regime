@@ -88,7 +88,7 @@ fa_base_cols <- c("FACILITY_ID", "YEAR", "MONTH", "DETAIL_TYPE", "CATEGORY",
 fa_issuer_cols <- grep("^ISSUER_NAME", names(fa_monthly), value = TRUE)
 fa_cat_dummies <- grep("^CATEGORY_", names(fa_monthly), value = TRUE)
 fa_det_dummies <- grep("^DETAIL_TYPE_", names(fa_monthly), value = TRUE)
-fa_cover_vars  <- grep("^COVER_", names(fa_monthly), value = TRUE)
+fa_cover_vars  <- grep("COVER_", names(fa_monthly), value = TRUE)
 
 # Combine and subset
 fa_keep <- unique(c(fa_base_cols, fa_issuer_cols, fa_cat_dummies, fa_det_dummies, fa_cover_vars))
@@ -102,44 +102,6 @@ zurich_2012_lookup <- fread(here("Data", "Processed", "zurich_2012_lookup.csv"))
 
 log_step("Data loading complete.", 1)
 
-
-# ==============================================================================
-# SECTION 2.1: STANDARDIZE IDs (CORRECTED)
-# ==============================================================================
-log_step("Creating composite panel_id...", 0)
-
-# Master Tanks
-master_tanks[, `:=`(
-  facility_id = toupper(trimws(as.character(facility_id))),
-  tank_id     = toupper(trimws(as.character(tank_id))),
-  state       = toupper(trimws(as.character(state)))
-)]
-master_tanks[, panel_id := paste(facility_id, state, sep = "_")]
-
-# Master LUST
-master_lust[, `:=`(
-  facility_id = toupper(trimws(as.character(facility_id))),
-  state       = toupper(trimws(as.character(state)))
-)]
-master_lust[, panel_id := paste(facility_id, state, sep = "_")]
-
-# FA Monthly - FIX 3: Do NOT strip leading zeros. Match Master Tanks logic exactly.
-log_step("Standardizing FA Monthly IDs...", 1)
-fa_monthly[, clean_id := toupper(trimws(as.character(FACILITY_ID)))] 
-fa_monthly[, `:=`(
-  facility_id = clean_id,
-  panel_id    = paste(clean_id, "TX", sep = "_") 
-)]
-fa_monthly[, clean_id := NULL]
-
-# Zurich Lookup - FIX 3b: Do NOT strip leading zeros.
-log_step("Standardizing Zurich IDs...", 1)
-zurich_2012_lookup[, clean_id := toupper(trimws(as.character(FACILITY_ID)))]
-zurich_2012_lookup[, `:=`(
-  facility_id = clean_id,
-  panel_id    = paste(clean_id, "TX", sep = "_")
-)]
-zurich_2012_lookup[, clean_id := NULL]
 
 #==============================================================================
 # SECTION 2: DATA CLEANING & PANEL PREP
@@ -249,8 +211,7 @@ active_panel_tanks <- master_tanks[valid_panel_tank == TRUE]
 log_step(sprintf("  Tanks active within 1970-2025 window: %s", 
                  format(nrow(active_panel_tanks), big.mark=",")), 1)
 
-#=====================================================
-=========================
+#==============================================================================
 # SECTION 3: CREATE FACILITY-MONTH BACKBONE
 #==============================================================================
 cat("\n========================================\n")
@@ -556,36 +517,28 @@ log_step("  December FR snapshot created", 1)
 # B. Annual Flows (FR Events During the Year)
 # -------------------------------------------------------------------------
 # This captures: What FR activity/changes occurred during the year?
-
 fa_annual_flows <- fa_monthly[, .(
-  # Coverage metrics
-  months_covered = sum(!is.na(CATEGORY) & CATEGORY != "None", na.rm = TRUE),
+  # Use fr_covered flag directly — set by Script 02 to FALSE for gap months
+  months_covered   = sum(fr_covered == TRUE,  na.rm = TRUE),
   months_with_data = .N,
   
-  # Coverage type shares (for comparison)
   share_private = mean(uses_private, na.rm = TRUE),
-  share_self = mean(uses_self, na.rm = TRUE),
+  share_self    = mean(uses_self,    na.rm = TRUE),
   
-  # Transitions and gaps
   n_transitions = sum(transition_month, na.rm = TRUE),
   any_transition = as.integer(max(transition_month, na.rm = TRUE) > 0),
-  n_gap_months = sum(is.na(CATEGORY) | CATEGORY == "None", na.rm = TRUE),
+  # Use fr_covered == FALSE instead of CATEGORY == "None"
+  n_gap_months  = sum(fr_covered == FALSE, na.rm = TRUE),
   
-  # Modal values (most common during year)
   modal_detail_type = {
-    valid_types <- DETAIL_TYPE[!is.na(DETAIL_TYPE) & DETAIL_TYPE != ""]
-    if(length(valid_types) > 0) {
-      tbl <- table(valid_types)
-      names(which.max(tbl))
-    } else NA_character_
+    # Exclude gap-month sentinel values
+    valid_types <- DETAIL_TYPE[!is.na(DETAIL_TYPE) & DETAIL_TYPE != "" & DETAIL_TYPE != "NO COVERAGE"]
+    if (length(valid_types) > 0) names(which.max(table(valid_types))) else NA_character_
   },
   
   modal_category = {
-    valid_cats <- CATEGORY[!is.na(CATEGORY) & CATEGORY != "None"]
-    if(length(valid_cats) > 0) {
-      tbl <- table(valid_cats)
-      names(which.max(tbl))
-    } else NA_character_
+    valid_cats <- CATEGORY[!is.na(CATEGORY) & CATEGORY != "NO COVERAGE"]
+    if (length(valid_cats) > 0) names(which.max(table(valid_cats))) else NA_character_
   }
 ), by = .(panel_id, YEAR)]
 
@@ -601,6 +554,7 @@ log_step("  Annual FR flows created", 1)
 # -------------------------------------------------------------------------
 # C. Merge FR Stocks and Flows to Annual Panel
 # -------------------------------------------------------------------------
+annual[, panel_year := YEAR]   # YEAR already exists from annual_flows / december
 
 # Merge December snapshot
 annual <- merge(annual, fa_december, 
@@ -685,34 +639,36 @@ log_step("  Treatment variable created", 1)
 # -------------------------------------------------------------------------
 setorder(annual, panel_id, panel_year)
 
+# §6.2G — replace the fr_issuer_change line inside the := block with:
+
+# Calculate YoY changes (guard issuer col separately)
 annual[, `:=`(
-  # Coverage status change (gained or lost coverage)
   fr_coverage_change = as.integer(
     fr_covered_dec != shift(fr_covered_dec, 1, type = "lag")
   ),
-  
-  # Coverage type change (switched between private, self, etc.)
   fr_type_change = as.integer(
-    DETAIL_TYPE_dec != shift(DETAIL_TYPE_dec, 1, type = "lag") &
     !is.na(DETAIL_TYPE_dec) & DETAIL_TYPE_dec != "None" &
-    !is.na(shift(DETAIL_TYPE_dec, 1, type = "lag")) & 
-    shift(DETAIL_TYPE_dec, 1, type = "lag") != "None"
-  ),
-  
-  # Issuer change (switched insurance provider)
-  fr_issuer_change = as.integer(
-    exists("ISSUER_NAME_dec") &&
-    ISSUER_NAME_dec != shift(ISSUER_NAME_dec, 1, type = "lag") &
-    !is.na(ISSUER_NAME_dec) & ISSUER_NAME_dec != "None" &
-    !is.na(shift(ISSUER_NAME_dec, 1, type = "lag")) & 
-    shift(ISSUER_NAME_dec, 1, type = "lag") != "None"
+    !is.na(shift(DETAIL_TYPE_dec, 1, type = "lag")) &
+    shift(DETAIL_TYPE_dec, 1, type = "lag") != "None" &
+    DETAIL_TYPE_dec != shift(DETAIL_TYPE_dec, 1, type = "lag")
   )
 ), by = panel_id]
 
-# Fill NAs for first year observations
+# Issuer change — only compute if column exists
+if ("ISSUER_NAME_dec" %in% names(annual)) {
+  annual[, fr_issuer_change := as.integer(
+    !is.na(ISSUER_NAME_dec) & ISSUER_NAME_dec != "None" &
+    !is.na(shift(ISSUER_NAME_dec, 1, type = "lag")) &
+    shift(ISSUER_NAME_dec, 1, type = "lag") != "None" &
+    ISSUER_NAME_dec != shift(ISSUER_NAME_dec, 1, type = "lag")
+  ), by = panel_id]
+} else {
+  annual[, fr_issuer_change := 0L]
+}
+
 annual[is.na(fr_coverage_change), fr_coverage_change := 0]
-annual[is.na(fr_type_change), fr_type_change := 0]
-annual[is.na(fr_issuer_change), fr_issuer_change := 0]
+annual[is.na(fr_type_change),     fr_type_change     := 0]
+annual[is.na(fr_issuer_change),   fr_issuer_change   := 0]
 
 log_step("  YoY FR changes calculated", 1)
 
@@ -730,9 +686,8 @@ log_step("Annual FR merge complete.", 1)
 
 
 # 6.3 Calculate YoY Changes
-setorder(annual, panel_id, YEAR)
+setorder(annual, panel_id, panel_year)
 annual[, `:=`(
-  panel_year = YEAR,
   capacity_change_year = total_capacity_dec - shift(total_capacity_dec, 1, type = "lag"),
   net_tank_change      = active_tanks_dec - shift(active_tanks_dec, 1, type = "lag")
 ), by = panel_id]
