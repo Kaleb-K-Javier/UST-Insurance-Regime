@@ -19,6 +19,7 @@ library(data.table)
 library(tidyverse)
 library(here)
 library(stringr)
+library(janitor)
 
 processed_dir <- here("Data", "Processed")
 if (!dir.exists(processed_dir)) dir.create(processed_dir, recursive = TRUE)
@@ -227,15 +228,22 @@ if (has_sf) {
                county_fips := name_fips_map[.SD, ref_fips, on = .(state, clean_name = temp_clean_name)]]
 }
 
+
 # Pass 2: Zip code → county/FIPS
 if (has_zip_ref) {
   message("Pass 2: Filling Missing Data via Zip Code...")
-  if ("zip"      %in% names(master_tanks)) master_tanks[, zip5 := str_sub(trimws(zip),      1, 5)]
-  if ("zip_code" %in% names(master_tanks)) master_tanks[, zip5 := str_sub(trimws(zip_code), 1, 5)]
+  
+  master_tanks[, zip5 := NA_character_]
+  zip_col <- grep("^zip$|^zip_code$", names(master_tanks), ignore.case = TRUE, value = TRUE)[1]
+  
+  if (!is.na(zip_col)) {
+    master_tanks[, zip5 := str_sub(trimws(get(zip_col)), 1, 5)]
+  }
+  
   master_tanks <- merge(master_tanks, zip_map, by = "zip5", all.x = TRUE)
   master_tanks[is.na(county_name) | county_name == "", county_name := zip_county]
   master_tanks[is.na(county_fips) | county_fips == "", county_fips := zip_fips]
-  master_tanks[, c("zip_county", "zip_fips") := NULL]
+  master_tanks[, c("zip_county", "zip_fips", "zip5") := NULL]
 }
 
 # Pass 3: Spatial join for anything still missing
@@ -322,7 +330,7 @@ calc_missing <- function(dt) {
     pct_miss_capacity = round(sum(is.na(capacity)) / .N * 100, 1),
     
     pct_miss_tank_status = round(
-      sum(is.na(tank_status) | tank_status == "") / .N * 100, 1),
+      sum(is.na(status_std) | status_std == "") / .N * 100, 1),
     
     pct_miss_tank_substance = round(sum(
       (is.na(is_gasoline)     | is_gasoline     == 0) &

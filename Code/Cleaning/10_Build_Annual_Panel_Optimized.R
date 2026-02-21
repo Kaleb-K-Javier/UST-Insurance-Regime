@@ -815,7 +815,10 @@ if(!exists("master_tanks_full")) {
 }
 
 log_step(sprintf("✓ Baseline created in %.1f seconds", 
+
                  difftime(Sys.time(), baseline_start, units="secs")), 1)
+
+
 
 #==============================================================================
 # SECTION 8: WIDE ISSUER DATA (TEXAS ONLY)
@@ -1016,7 +1019,7 @@ annual[, `:=`(
 
 # Leak Classification Aliases
 annual[, `:=`(
-  lust_within_90d_of_closure = tank_closure_revealed,
+  lust_within_90d_of_closure = tank_closure_revealed_wide ,
   leak_found_by_closure = tank_closure_revealed,
   leak_not_found_by_exit = as.integer(exit_flag == 1 & leak_year == 0)
 )]
