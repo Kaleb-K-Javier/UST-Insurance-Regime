@@ -356,6 +356,7 @@ print(report)
 # 5. Save -----------------------------------------------------------------
 master_tanks[, latitude  := latitude_final]
 master_tanks[, longitude := longitude_final]
+master_tanks[, tank_status := status_std]
 master_tanks[, c("latitude_final", "longitude_final", "status_std") := NULL]
 
 fwrite(master_tanks, file.path(processed_dir, "Master_Harmonized_UST_Tanks.csv"))
