@@ -69,39 +69,385 @@ This paper also contributes to the literature on U.S. UST policy. While much of 
 This research is most closely related to studies of a similar insurance market reform in Michigan by @yin_can_2011, @yin_risk-based_2011, and @yin_environmental_2007. That body of work finds that transitioning to risk-based insurance reduced the number of small firms and reported leaks. However, those analyses relied on aggregate or cross-sectional data, which cannot control for unobserved facility-level heterogeneity and may be susceptible to omitted variable bias.This research is most closely related to studies of a similar insurance market reform in Michigan by @yin_can_2011, @yin_risk-based_2011, and @yin_environmental_2007. That body of work finds that transitioning to risk-based insurance reduced the number of small firms and reported leaks. However, those analyses relied on aggregate or cross-sectional data, which cannot control for unobserved facility-level heterogeneity and may be susceptible to omitted variable bias. This paper advances on prior work by adopting an empirical strategy similar to other modern studies of environmental liability (@boomhower_drilling_2019). By using a rich, facility-level panel dataset, I can implement difference-in-differences models that control for unobserved facility characteristics and common time shocks, providing more credible causal estimates of how firms adjust their technology, replacement, and exit decisions in response to cost-based pricing.
 
 
+ # Institutional Background
+
+##  Underground Storage Tanks: Physical Characteristics and Environmental Risk
+
+The construction technology of a UST system is the primary determinant of its
+environmental risk profile and the observable margin on which actuarial pricing
+differentiates. The U.S. Environmental Protection Agency defines a UST system as
+any tank and connected underground piping with at least 10% of its volume below
+the surface [@epa_underground_2024]. The critical physical distinction within this capital
+stock is between single-walled systems, bare steel or fiberglass shells with no
+interstitial containment layer, and double-walled systems, which incorporate a
+secondary wall and continuous interstitial monitoring space. This construction
+choice is economically consequential at the point of installation and is
+effectively irreversible thereafter. In Texas, from 1998 to 2021, only 0.003%
+of active facilities ever retrofitted tank construction prior to terminal
+closure, confirming that investment decisions are concentrated at the extensive
+margins of initial installation and final exit. A facility's wall type is
+therefore a fixed, observable, and verifiable risk characteristic, precisely the
+conditions required for an actuarially feasible pricing margin.
+
+Single-walled construction is cheaper to install but exhibits substantially
+higher failure rates than double-walled alternatives. Historical industry
+surveys document a persistent price differential: a 1987 GAO survey priced a
+standard 10,000-gallon single-walled unit at approximately \$23,000 versus
+\$39,000 for a comparable double-walled unit, a 67% premium that contemporaneous
+manufacturer filings confirm has persisted (@gao1987, @csi2021, @xerxes2018). This cost-safety trade-off is borne out empirically in the
+cross-validation estimates reported in Section [INSERT]: single-walled tanks
+exhibit a higher probability of a confirmed release than double-walled tanks at
+every age bracket, with the hazard gap widening after 15 years of operation. The
+existence of this predictable, observable, and quantifiable risk differential is
+what makes risk-based pricing both technically feasible for a private underwriter
+and potentially welfare-improving relative to a uniform-premium public fund.
+
+##  The Federal Regulatory Framework and the 1998 Upgrade Deadline
+
+Federal regulation of USTs originates in the 1984 Hazardous and Solid Waste
+Amendments (HSWA) to the Resource Conservation and Recovery Act, which directed
+the EPA to establish comprehensive technical and financial standards for tank
+systems. The EPA finalized these technical standards in 40 CFR Part 280 in 1988,
+requiring all non-compliant tanks, those lacking corrosion protection, spill and
+overfill controls, and release detection, to be upgraded, replaced, or closed by
+a uniform federal compliance deadline of December 22, 1998 [@us_epa_milestones_2021; @EPA2017USTCompendium]. In the years
+immediately preceding this deadline, the average annual facility-level closure
+rate reached [INSERT]% (SE = [INSERT]), reflecting a large-scale, industry-wide
+retirement of the oldest and most non-compliant portion of the capital stock.
+Following the deadline, the closure rate fell to [INSERT]% per year
+(SE = [INSERT]), producing a persistently aging legacy fleet. In 1994,
+single-walled tanks constituted [INSERT]% of the active stock; by 2019, this
+share had declined only to [INSERT]%, with the average active tank age increasing
+from [INSERT] years in 1994 to [INSERT] years in 2019. This post-deadline
+slowdown in capital turnover is an institutional feature of the stock the
+empirical analysis examines, and the December 22, 1998 federal mandate date is
+directly relevant to the identification strategy for reasons described in
+Section 2.4.
+
+##  Financial Responsibility and the State Trust Fund Regime
+
+The 1988 Financial Responsibility Rule (40 CFR Part 280, Subpart H) mandates
+that every UST owner demonstrate the financial capacity to fund corrective action
+and satisfy third-party liability claims, with minimum required coverage of \$1
+million per occurrence [@noauthor_dollars_2018]. In the late 1980s, the nascent private environmental
+insurance market was unable to supply this coverage at affordable cost to the
+population of small, single-site operators that constitute the majority of UST
+owners. To prevent widespread non-compliance, many states established public
+trust funds financed by annual tank registration fees or fuel tax revenues,
+functioning as a publicly administered insurer of last resort. A defining feature
+of these funds is their premium structure: annual fees are set on a uniform,
+per-tank basis, invariant to any observable facility risk characteristic such as
+wall type, tank age, or leak detection technology. States retaining public funds
+consistently report that these funds cover 90% to 100% of all active facilities,
+as documented by the Association of State and Territorial Solid Waste Management
+Officials [@astswmo_archive]. This near-complete market saturation is the
+predicted equilibrium outcome: because the subsidized uniform-premium contract is
+priced below any risk-differentiated private alternative for high-risk
+facilities, private insurers are structurally unable to compete for the portion
+of the market with above-average risk. The resulting uniform-premium pooling
+equilibrium is the institutional baseline against which Texas's transition is
+evaluated.
+
+##  Texas's Policy Transition: Treatment Exogeneity
+
+Texas's departure from the public fund model constitutes a sharp,
+administratively determined policy discontinuity whose timing was driven by
+fiscal insolvency rather than any observable change in the statewide distribution
+of facility-level risk. Texas established the Petroleum Storage Tank Remediation
+Fund (PSTRF) in 1989 under the Texas Water Code. By 1995, actuarial assessments
+confirmed that the fund's liabilities, driven by the accumulating backlog of
+legacy remediation claims, were structurally unsustainable. In response, the
+74th Texas Legislature enacted House Bill 2587, which mandated the sunset of the
+PSTRF [@HB2587_analysis_1995]. The legislature set the fund closure cutoff at December 22, 1998, the
+same calendar date as the federal EPA upgrade deadline codified in 40 CFR
+§280.21. The alignment of these two dates is not coincidental: the legislature
+explicitly selected the federal mandate date as the administrative anchor for the
+PSTRF cutoff, ensuring the fund would cease accepting new claims at precisely the
+moment when the largest cohort of non-compliant tanks was required to be
+addressed [@TexWaterCode_26_3512]. Effective December 22, 1998, all
+Texas UST owners were required to secure private insurance or qualify for
+self-insurance by demonstrating sufficient financial assets. This dual
+determination, fiscal insolvency driving the legislative mandate and an existing
+federal deadline providing the administrative anchor for the precise cutoff date,
+supports the identifying assumption that the policy transition is orthogonal to
+facility-level pre-treatment trends in Texas. The parallel pre-trends test in
+Section [INSERT] provides the empirical corroboration of this assumption.
+
+##  The Post-Transition Private Market in Texas
+
+The private insurance market that absorbed the Texas UST population after
+December 1998 prices observable facility risk directly, generating the
+cross-sectional and intertemporal premium variation that identifies firm
+behavioral responses. From 2007 to 2021, the period for which granular financial
+responsibility administrative data are available from the Texas Commission on
+Environmental Quality (TCEQ), an average of 89.8% of active retail UST
+facilities in Texas satisfied their financial responsibility obligation through
+commercial private insurance. The remaining 10.2% relied on self-insurance
+mechanisms, available exclusively to large, financially capitalized owners who
+can satisfy stringent asset tests. The private market is dominated by a small
+number of specialist environmental insurers; Mid-Continent Casualty Company
+(NAIC 23418) operated as the primary underwriter for Texas UST risks throughout
+this period. Its actuarial rate filings, obtained from the System for Electronic
+Rates and Forms Filing (SERFF) for the periods 2006--2014, 2014--2019,
+2019--2021, and 2021 onward, provide the rating algorithm underlying the premium
+reconstruction described in Section [INSERT]. A key structural feature confirmed
+in these rate filings is that premiums are a strictly increasing function of tank
+age and a strictly positive function of single-walled construction, while the
+per-tank rate is invariant to facility size. This pricing structure means that a
+Texas owner of an aging single-walled tank faces a marginal cost of continued
+operation that increases deterministically over time, the mechanism the dynamic
+model in Section [INSERT] formalizes.
+
+##  Control Group Definition and Institutional Restrictions
+
+The control group comprises [INSERT] states that retained public uniform-premium
+trust funds continuously throughout the study window of 1985 to 2020, subject to
+three institutional complications that require explicit treatment. First, New
+Jersey enacted a private insurance mandate effective May 19, 2003 (N.J.A.C.
+7:14B-15.1), effectively becoming a treated unit after that date. New Jersey is
+therefore excluded from the control group entirely, rather than restricted to
+pre-2003 observations, to avoid contaminating the control pool with a state
+undergoing a similar policy transition. Second, Tennessee did not establish an
+operational state trust fund until July 1, 2008 (Public Chapter 794). Prior to
+that date, Tennessee UST owners operated under a private insurance environment
+analogous to post-transition Texas. A diagnostic analysis of Tennessee's LUST
+reporting confirms zero confirmed leaks recorded in the administrative data prior
+to 2008, consistent with an institutional artifact in which LUST reporting was
+administratively tied to fund participation. Tennessee is therefore retained in
+closure and exit specifications but excluded from all leak-outcome
+specifications, where pre-2008 observations would introduce a structural
+zero-reporting bias. Third, Maryland has never operated a state financial
+assurance fund [@astswmo_archive]. Maryland is retained in the analysis sample but
+flagged for robustness checks in which it is excluded, reported in Appendix
+[INSERT]. With these three restrictions applied, [INSERT] states provide the
+valid uniform-premium counterfactual against which Texas's behavioral response is
+identified.
 
 
 
-# Setting and Data
+# Data
 
-## The Policy and Technical Landscape of U.S. Underground Storage Tanks
+##  Panel Architecture and Source Layers
 
-An underground storage tank (UST) is defined by the U.S. Environmental Protection Agency as any tank, including its connected underground piping, with at least 10% of its volume below ground (@epa_underground_2024). Most UST facilities house multiple tanks on a single site and typically contain hazardous substances like petroleum. Importantly, the majority of these facilities are retail gas stations. In Texas, for example, an annual average of 75% of active facilities during the sample period are retail gas stations. The next largest category is fleet refueling firms (20%), with the remainder comprising airports, marinas, industrial plants, and municipal properties. These shares are consistent with national averages, where retail gas stations account for approximately 75% of all UST facilities (@epa_underground_2024).
+The empirical analysis rests on a facility-year panel constructed by
+horizontally merging three distinct administrative data layers. The first layer
+is the behavioral backbone: a harmonized facility-year panel compiled from raw
+state-level UST administrative inventories and EPA summary files covering Texas
+and the [INSERT] control states from 1985 through 2020. This layer records, for
+each facility-year, the occurrence of tank closures, market exits, system
+retrofits, and confirmed leak incidents. The second layer is a tank-level
+physical inventory recording the installation date, closure date, wall
+construction type, capacity, fuel type, and current operational status for every
+individual tank associated with each facility. The third layer comprises
+financial data: private insurance premium estimates for Texas facilities,
+reconstructed from actuarial rate filings, and realized cleanup cost records for
+a subset of control states. The unit of observation throughout is the
+facility-year, and a unique panel identifier constructed from the
+state-standardized facility code and two-letter state abbreviation serves as the
+merge key across all three layers.
 
-The primary technical distinction between USTs is their construction: either single-walled or double-walled. This initial technology choice is critical because, in practice, facility owners rarely invest in incremental upgrades once a tank is operational. Comprehensive data on such improvements are sparse, but evidence from Texas, where pricing incentives to upgrade have been strongest, is telling. From 1998 to 2021, only 0.003% of facilities ever upgraded their tanks. Instead, investment decisions are concentrated at two points: initial installation and subsequent closure with tank replacement, or complete exit from the market. This resistance to midlife retrofits underscores their high cost and reflects the perverse incentives created by vintage-differentiated minimum performance standards, which often grandfather in older, less safe technologies.^[For example, 30 Tex. Admin. Code §334.45(d)(E)(i) requires that new tanks and piping (installed on or after Jan. 1, 2009) “must incorporate secondary containment”. In other words, only newly installed UST systems must have dual containment, whereas older tanks (installed before that date) are not retroactively required to do so. Furthermore, the Texas code defines a new UST system as one whose installation “commenced after December 22, 1988.” Every state has similar language, effectively grandfathering in older tanks and creating a vintage-differentiated regulation that discourages retrofits @gruenspecht_differentiated_1982]
+##  Sample Construction and Attrition
 
-A facility’s choice of UST construction carries significant economic and environmental consequences. Single-walled tanks are markedly cheaper to build but leak far more often than double-walled designs. Retail catalogues and direct correspondence with a major manufacturer indicate that single-walled fiberglass tanks sell for roughly one-half to one-third the price of comparable double-walled units.^[Direct correspondence with one of the largest UST manufacturers confirm that single-walled tank costs remains roughly one-half to two-thirds the price of an otherwise comparable double-walled tank. The sales team (speaking under a promise of anonymity) explained that they update list prices to reflect general input-cost inflation, i.e with general input costs, but the manufacturer deliberately keeps the percentage surcharge for secondary containment almost unchanged. Historical evidence echoes this pattern. An industry survey reported by the U.S. GAO priced a new 10 000-gallon fiberglass tank in 1987 at about $23 000 for single wall versus $39 000 for double wall, a 67 percent premium that has persisted for decades (@gao1987). A January 2021 Containment Solutions guide lists double-walled fiberglass tanks from $162 270 (15 000 gal) to $462 425 (50 000 gal); although the catalogue no longer offers single-wall primaries, accessory pages show one-third lower prices for single-wall collars and sumps, implying a similar shell-level surcharge (@csi2021). A 2018 Xerxes list quotes single-wall prices of $19 382 (10 000 gal) and $174 690 (50 000 gal), while the matching double-wall prices are $47 497 and $326 671, confirming a 60–90 percent differential in that year (@xerxes2018). All figures cover the tank itself; installation labour, required release-detection equipment, and other site-specific costs are additional.] This cost-safety trade-off is borne out empirically. As shown in @fig-leak-risk, facilities equipped with single-walled systems are significantly more likely to report releases than their double-walled peers at every age.
+I construct the estimation sample through four sequential filters, each
+motivated by a distinct identification requirement. Table B.2 reports the
+facility count and facility-year count remaining at each stage.
 
-The evolution of the nation's UST stock has been heavily shaped by the 1998 federal deadline requiring the closure or upgrade of all non-compliant tanks. In the years leading up to this deadline, the average annual closure rate was a substantial 25.56% (SE = 9.91). Following this large-scale removal of older tanks, the turnover rate dropped dramatically; from 1999 onward, the average annual closure rate fell to just 3.29% (SE = 3.12). This slow post-deadline replacement cycle has led to a persistently old and high-risk tank population. In 1994, single-wall tanks constituted 56.2% of all active tanks, and while this share has declined, they still represented 47.8% of the active stock in 2019. This persistence is reflected in the age of the tanks, with the average age of an active tank steadily increasing from 13.3 years in 1994 to 30.7 years in 2019. Across the entire sample, single-wall tanks are significantly older, with an average age of 22.5 years, compared to 11.7 years for double-wall tanks. While the 1998 deadline removed a large cohort of the riskiest tanks, the subsequent low turnover rate has resulted in a significant and aging stock of high-risk USTs remaining in operation today.
+The first filter restricts the panel to the study window of 1985 through 2020,
+the interval over which administrative data coverage is sufficiently continuous
+across both the treated and control states to support pre-trend estimation and
+post-treatment tracking. The second filter restricts the sample to Texas and
+the [INSERT] control states defined in Section 2.6, having already excluded New
+Jersey as a treated unit and applied the Tennessee and Maryland institutional
+restrictions described there.
 
-Given the significant cleanup costs from leaks, federal regulations require UST owners to demonstrate financial responsibility, typically by securing $1 million in coverage. In the early 1990s, with the private insurance market for this risk still nascent, many states established UST Trust Funds to provide publicly managed insurance pools. However, unlike traditional insurance, these public funds typically operated on a flat-fee basis, charging uniform premiums regardless of facility-specific risk. While this approach ensures remediation costs are covered, it creates a significant price externality. By pooling diverse risks under one price, these funds distort incentives for risk mitigation and crowd out the private insurance market. In states with such funds, they consistently cover 90-100% of all facilities, an unsurprising outcome given that the subsidized, flat-fee contracts are difficult for any private, risk-based insurer to compete against.^[Surveys from the Association of State and Territorial Solid Waste Management Officials (@astswmo_archive) show that between 2000 and 2021 consistently show that in states with public funds, these funds cover 90-100% of facilities. This holds true even in state fund states that permit owners to use private insurance, indicating the state fund is the dominant instrument.]
+The third filter retains only incumbent facilities, defined as those first
+observed in the administrative records prior to the December 22, 1998 statutory
+treatment date. This restriction serves two purposes: it ensures that all
+facilities in the analysis sample faced the policy shock as an unanticipated
+constraint rather than an entry condition, and it eliminates any post-announcement
+compositional change in the market that would otherwise confound the treatment
+effect estimates.
 
-Six states have since transitioned away from this public model to private insurance markets, with Texas transitioning in 1999. This shift provides the setting for this paper's analysis. In Texas, from 2007 to 2021, an average of 89.8% of retail UST facilities met their financial responsibility requirements using private insurance. The remaining 10.2% relied on other mechanisms, predominantly self-insurance, a path available only to large owners who can meet stringent financial asset tests. Crucially, this private insurance market appears to incorporate facility risk. On average, 69.4% of these privately insured facilities were comprised of at least one single-wall tank. This indicates that higher-risk facilities are not excluded from the market but instead select into private insurance, where they face risk-adjusted premiums that reflect their specific operational characteristics.
+The fourth filter excludes facilities for which critical tank-level date records
+are missing. A facility is excluded if any of its constituent tanks lacks an
+installation date, or if any tank recorded as closed lacks a closure date. This
+exclusion is applied at the facility level rather than the tank level because
+a missing date on a single tank would otherwise silently contaminate the closure
+timing and age-at-closure variables for the entire facility. The scale and
+distributional balance of this exclusion across the Texas and control groups are
+reported in Table B.3. I estimate a logistic regression of the missing-date
+indicator on the Texas treatment indicator to test for differential attrition
+across groups. The resulting balance test yields $p =$ [INSERT], [INSERT:
+confirming balance or flagging imbalance and directing reader to IPW robustness
+in Appendix B.4].
 
-In summary, the U.S. is managing a large and aging stock of underground storage tanks where construction type is a strong predictor of leak risk. The prevailing insurance regime, either a flat-fee public fund or a cost-based pricing private market, critically shapes the incentives for managing these risks. To empirically test how insurance design affects firm behavior, the following sections detail the data and causal methodology used to analyze Texas's transition to a private insurance market.
+##  Primary Outcome Variables
+
+Three binary outcome variables are constructed at the facility-year level from
+the behavioral backbone. The primary outcome, $\text{Closure}_{it}$, equals one
+if facility $i$ recorded at least one tank closure event in calendar year $t$.
+Among facility-years in which $\text{Closure}_{it} = 1$, I construct two
+mutually exclusive conditional outcomes: $\text{Exit} \mid \text{Closure}_{it}$,
+equal to one if the facility permanently exited the market in year $t$, and
+$\text{Replace} \mid \text{Closure}_{it}$, equal to one if the facility closed a
+tank but remained operational, implying on-site replacement. The environmental
+outcome, $\text{Leak}_{it}$, equals one if facility $i$ reported a confirmed
+release to state regulators in year $t$, drawn from the harmonized Leaking
+Underground Storage Tank (LUST) incident records. I additionally construct a
+count variable recording the total number of confirmed releases per facility-year,
+expressed per 1,000 facility-years for descriptive reporting. All outcome
+variables are defined at the facility-year level by aggregating the underlying
+monthly records to an annual frequency.
+
+For the event study specifications, I define relative event time as
+$k = \text{year} - 1998$, indexed to the statutory treatment year such that
+$k = 0$ corresponds to calendar year 1998, $k = -1$ is the omitted baseline
+category, and post-treatment effects are identified for $k \geq 1$. The event
+study window spans 1985 to 2018, yielding a maximum of [INSERT] pre-treatment
+periods and [INSERT] post-treatment periods.
+
+##  The 1998 Cross-Section and Tank-Level Stock Variables
+
+I construct a cross-sectional snapshot of the active tank stock as of December
+22, 1998 by retaining all tanks that satisfy two conditions: an installation date
+on or before December 22, 1998, and a closure date either missing or strictly
+after December 22, 1998. This cross-section records the physical characteristics
+of the capital stock at the moment of the policy shock and serves two functions.
+First, it supplies the stock-level covariates, including tank age as of the
+treatment date and wall construction type, that enter the regression
+specifications as controls and define the main analysis subsamples. Tank age as
+of the treatment date is computed as the elapsed time between installation date
+and December 22, 1998, expressed in years. Second, it provides the basis for the
+1998 summary statistics reported in Panel A of Table 1. On the treatment date,
+[INSERT] tanks across [INSERT] facilities were active in the analysis sample,
+comprising [INSERT] tanks in Texas and [INSERT] tanks across the [INSERT]
+control states.
+
+The pre-1988 vintage indicator equals one for tanks installed on or before
+December 22, 1988, the federal mandate cutoff codified in 40 CFR §280.21. This
+cutoff defines the main estimation subsample: the difference-in-differences and
+event study regressions reported in Section [INSERT] are restricted to
+single-walled tanks installed before December 22, 1988, the cohort that carried
+the highest observable risk and for which the premium differential between the
+uniform-premium regime and the risk-based regime is largest. The Texas phased
+mandate schedule, which imposed earlier compliance deadlines on pre-1988 tanks
+according to their installation vintage under 30 TAC Chapter 334, is documented
+in Table A1. I assign each pre-1988 Texas tank its cohort-specific mandate
+deadline and compute years past the applicable deadline as of December 22, 1998,
+the mandate exposure variable reported in Table 2.
+
+## Private Insurance Premium Reconstruction
+
+Private insurers do not publicly disclose individual policy premiums. I
+reconstruct the premium schedule that Texas facilities faced in the
+post-transition period by building a bottom-up actuarial rating engine from the
+rate filings of Mid-Continent Casualty Company (NAIC 23418). I obtain rate
+manuals filed with the System for Electronic Rates and Forms Filing (SERFF)
+covering four regulatory periods: 2006--2014, 2014--2019, 2019--2021, and 2021
+onward. These filings provide the complete pricing algorithm, including base
+rates, Increased Limit Factors (ILF), and all secondary risk loads applied to
+observable facility characteristics.
+
+I estimate the monthly premium $P_{ijt}$ for tank $j$ at facility $i$ in month
+$t$ as:
+
+$$
+P_{ijt} = \text{Base}_{t} \times \text{ILF}_{it} \times
+\left(1 + \sum_{k} \lambda_{k,t} \mathbf{X}_{ijt}\right)
+$$
+
+where $\text{Base}_{t}$ is the per-tank base rate active in filing period $t$,
+$\text{ILF}_{it}$ is the Increased Limit Factor adjusting for the elected
+coverage limit, defaulting to the statutory \$1 million per occurrence minimum
+where unspecified, and $\mathbf{X}_{ijt}$ is a vector of observable risk
+characteristics including tank age bin, wall construction type, piping type, and
+installed leak detection technology. The parameters $\lambda_{k,t}$ are the
+secondary risk loads, additive percentage credits or debits, assigned to each
+characteristic in filing period $t$.
+
+Three implementation assumptions are required. First, I hold the base rate
+constant within each filing period at its filed value, consistent with the
+filing terms. Second, for risk characteristics unobserved in the administrative
+records, including aquifer proximity and flood zone classification, I set the
+corresponding risk load to zero, yielding a conservative estimate of the true
+premium. Third, the rate filings permit underwriters to apply schedule rating
+adjustments of $\pm$40% at their discretion; I use the base manual premium as
+the price signal and treat discretionary adjustments as mean-zero errors across
+the population, an assumption evaluated against the distribution of observed
+financial responsibility filings in the TCEQ records.
+
+Granular premium microdata are available beginning in 2006. The period from
+January 1999 through December 2005 represents a transition window in which the
+private market was operational but individual premium records are not observed.
+For this window, I assume stationarity of the conditional premium distribution
+relative to the 2006 filing period and apply an aggregate inflation deflator to
+recover real premium levels. This imputation implies that the structural
+estimates of price sensitivity $\gamma_{\text{price}}$ in Section [INSERT] are
+identified primarily from post-2006 variation; robustness to the 1999--2005
+imputation is evaluated in Appendix [INSERT].
+
+## Cleanup Cost Distribution for the Control Group
+
+The control group operates under a uniform-premium public fund regime in which
+remediation costs are realized ex-post rather than priced ex-ante. To
+parameterize the severity of environmental failure, the term $L(x_t)$ in the
+structural model of Section [INSERT], I link the administrative facility
+identifiers to the payment ledgers of state trust funds in Colorado, Louisiana,
+New Mexico, Tennessee, and Utah [@noauthor_petroleum_nodate; @noauthor_underground_nodate]. This five-state subset provides the empirical
+distribution of realized cleanup costs conditional on a confirmed release. All
+cost figures are deflated to 2023 dollars using the Bureau of Labor Statistics
+CPI for urban consumers. The realized cost distribution is characterized by
+extreme positive skewness and rejects normality in favor of a heavy-tailed
+log-normal structure. The median cleanup cost represents the typical remediation
+event, while the mean is elevated by a small number of catastrophic outcomes in
+which contamination plumes migrate off-site and trigger third-party liability.
+This heavy tail is a structural feature of UST liability rather than an artifact
+of specific state administrative procedures: the upper tail of the cost
+distribution is a consistent feature across all five sampled fund states, as
+documented in Figure [INSERT]. For control states without verifiable claims
+data, I extrapolate the conditional cost function from the five-state sample
+using observable facility characteristics as predictors and assume stationarity
+of the cost distribution over time within each state, adjusting for aggregate
+inflation.
+
+##  Descriptive Statistics
+
+Table 1 reports summary statistics in two panels. Panel A characterizes the 1998
+cross-section, the stock of active tanks on the treatment date, separately for
+Texas and the control group. Panel B reports pre-period flow averages over 1989
+to 1997, the eight calendar years immediately preceding the treatment year.
+Calendar year 1998 is excluded from the pre-period flow calculations to avoid
+contamination from anticipatory behavior in the final pre-treatment year.
+
+Panel A documents the comparability of the capital stock on the treatment date.
+In Texas, the [INSERT] active tanks had a mean age of [INSERT] years
+(SD = [INSERT]), [INSERT]% were installed before December 22, 1988, and
+[INSERT]% were single-walled. The corresponding figures for the control group
+are [INSERT] years (SD = [INSERT]), [INSERT]%, and [INSERT]%. The facility-level
+average of [INSERT] tanks per Texas facility versus [INSERT] tanks per control
+facility reflects Texas's concentration of larger retail operations and is
+absorbed by facility fixed effects in all regression specifications.
+
+Panel B documents pre-treatment behavioral comparability across the two groups.
+The average annual closure rate over 1989--1997 was [INSERT]% in Texas and
+[INSERT]% in the control group. The annual leak incidence rate was [INSERT] per
+1,000 facility-years in Texas and [INSERT] per 1,000 facility-years in the
+control group. Table 1B decomposes these pre-period rates by installation cohort,
+separating post-1988-only facilities, pre-1988-only facilities, and mixed
+facilities, and confirms that the pre-treatment leak incidence for the main
+estimation subsample is [INSERT: describe direction and magnitude relative to the
+full sample].
+
+The pre-period parallel trends supporting the difference-in-differences design
+are visualized in Figure 4 for closure rates and in Figure B-1 of the Appendix
+for the full four-outcome panel. A joint pre-trend test, estimated by regressing
+the closure outcome on interactions of event-time indicators with the Texas
+indicator over 1990--1997 with the omitted category at $k = -1$, yields
+$p =$ [INSERT], failing to reject the null hypothesis of parallel pre-trends
+across [INSERT] pre-treatment periods.
 
 
-\clearpage
 
-# Setting, Data, and Institutional Background
-
-## The Technical and Regulatory Landscape of U.S. Underground Storage Tanks
-
-The physical setting of this analysis concerns the U.S. Environmental Protection Agency (EPA) definition of an underground storage tank (UST) system: any tank and connected underground piping with at least 10% of its volume beneath the surface (@epa_underground_2024). These facilities are predominantly retail gas stations, which account for approximately 75% of active sites in both the national average and the Texas-specific sample. The remainder comprises fleet refueling depots (20%) and a mix of industrial, aviation, and municipal facilities.
-
-The primary source of heterogeneity in this capital stock is the tank construction technology.  The critical distinction lies between single-walled systems—essentially bare steel or fiberglass shells—and double-walled systems, which incorporate an interstitial space for leak detection. This initial technology choice is economically critical because facility owners rarely invest in incremental upgrades once a tank is operational. From 1998 to 2021, only 0.003% of Texas facilities ever retrofitted their tanks prior to a terminal closure event. Investment decisions are consequently concentrated at the extensive margin of entry and exit. This resistance to midlife retrofits reflects high switching costs and the perverse incentives created by vintage-differentiated standards. State regulations typically grandfather in older systems, requiring secondary containment only for new installations initiated after specific cutoff dates, such as December 1988 or January 2009.
-
-The construction type dictates the environmental risk profile. Single-walled tanks are significantly cheaper to install but exhibit higher failure rates. Historical industry data indicates a persistent price differential; a 1987 GAO survey priced single-walled units at approximately $23,000 compared to $39,000 for double-walled equivalents, a 67% premium. Federal regulation explicitly targets this risk through the 1984 Hazardous and Solid Waste Amendments (HSWA), which culminated in a 1998 deadline requiring the closure or upgrade of non-compliant tanks. While the years preceding this deadline saw annual closure rates averaging 25.56% (SE = 9.91), the post-deadline turnover dropped precipitously to 3.29% (SE = 3.12). This collapse in capital turnover resulted in an aging legacy fleet. In 2019, single-walled tanks still constituted 47.8% of the active stock, with an average age of 22.5 years compared to 11.7 years for double-walled units.
 
 ## Financial Responsibility and the Insurance Regime
 
@@ -650,6 +996,39 @@ The success of this price-based mechanism in reducing environmental risk invites
 ::: {#refs}
 :::
 
+
+# Appendix B: Data Appendix
+
+
+
+```{r}
+#| label: tbl-missing-data-unified
+#| echo: false
+#| results: asis
+#| message: false
+#| warning: false
+
+# Establish robust pathing regardless of .qmd location
+table_path <- here::here("Output", "Tables", "TableB_Missing_Data_Unified.tex")
+
+if (file.exists(table_path)) {
+  # Inject raw LaTeX into the Quarto compilation stream
+  cat(readLines(table_path), sep = "\n")
+} else {
+  stop(sprintf("LaTeX table not found at: %s", table_path))
+}
+```
+
+
+The statistical balance of data missingness is evaluated via a facility-level logistic regression model. Let $M_i$ denote a binary indicator equal to 1 if facility $i$ is excluded due to a missing tank installation or closure date, and 0 otherwise. The conditional probability of observing an incomplete administrative record is modeled as a function of treatment assignment, specified in equation (1):
+
+$$
+ \Pr(M_i = 1 | \text{Texas}_i) = \frac{\exp(\alpha + \beta \text{Texas}_i)}{1 + \exp(\alpha + \beta \text{Texas}_i)} 
+$$
+
+where $\text{Texas}_i$ is a dummy variable equal to 1 if facility $i$ is located in the treatment state, and 0 if located in a control state. The coefficient of interest, $\beta$, captures the log-odds of data attrition for treated facilities relative to controls. The maximum likelihood estimation yields a statistically insignificant coefficient on the treatment indicator ($p = 0.5361$). This result confirms the null hypothesis that $ \beta = 0 $, establishing that the probability of exclusion is orthogonal to the regulatory mandate and satisfying the requisite identifying assumption for the primary difference-in-differences estimator.
+
+\clearpage
 
 
 

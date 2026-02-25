@@ -9,7 +9,7 @@ library(tidyverse)
 
 # Set working directory to the folder containing the CSVs
 data_dir <- "c:/Users/kaleb/Box/UST-Insurance/Rate FIllings/Mid-Continent Casualty Company ­– 23418"
-
+# the new file path is : C:\Users\kalebkja\ust_ins_move_to_github\Data\Rate FIllings\Mid-Continent Casualty Company ­– 23418
 # List all relevant CSV files
 csv_files <- list.files(
   path = data_dir,

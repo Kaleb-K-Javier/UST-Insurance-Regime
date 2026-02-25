@@ -1,138 +1,150 @@
 #==============================================================================
-# 02_DiD_Results_Final.R  [AUDITED VERSION — February 2026]
-# Texas UST Insurance Reform: Difference-in-Differences Analysis
+# 02_DiD_Causal_Estimates.R
+# Texas UST Insurance Reform — Causal Evidence from DiD
 #
-# ============================================================================
-# AUDIT LOG (February 20, 2026)
-# Audited against: Comprehensive_Research_Memo_Unified.txt
-#                  Research_Memo_Section_1_3_Descriptives.txt
-#                  10_Build_Annual_Panel_Optimized.R
-#                  10_Master_Cleaning_and_Harmonization.r
-# ============================================================================
-# Location: Code/Analysis/02_DiD_Results_Final.R
+# PURPOSE:
+#   All causal estimation for the JMP paper Section 3 ("Causal Evidence").
+#   Loads analysis-ready .rds files from 01_Descriptive_Analysis.R and produces
+#   publication-ready regression tables and event study figures.
 #
-# Structure:
-#   SECTION 1:  Setup & Configuration
-#   SECTION 2:  Helper Functions (table/Cox saving)
-#   SECTION 3:  Data Loading
-#   SECTION 4:  Data Preparation & Filtering
-#   SECTION 5:  Tank-Level Dataset Construction
-#   SECTION 6:  Diagnostics (Pre-1999 Exit Balance)
-#   SECTION 7:  Descriptive Tables (Tables 1-3)
-#   SECTION 8:  Descriptive Figures (Figures 1-4 + Pre-Trends)
-#   SECTION 9:  Figure 5 — Risk Factor Validation (Facility-Level CV)
-#   SECTION 10: Model 1A — Facility DiD + Event Study
-#   SECTION 11: Model 1B — Facility-Level Cox Survival
-#   SECTION 12: Model 2  — Tank-Level Cox HTE (Two Specs)
-#   SECTION 13: Model 3A — Age at Closure, County FE + Event Study
-#   SECTION 14: Model 3B — Age at Closure, Facility FE (Spanning Sample)
-#   SECTION 15: Model 4  — Revealed Leaks (LPM primary, Logit robustness)
-#   SECTION 16: Models 5A/5B — Operational Leaks, Competing Risks
-#   SECTION 17: Robustness — Regulatory Vintage Controls
-#   SECTION 18: Script Summary
+# PAPER OUTPUTS (JMP table/figure numbering):
+#   Table 3:  Closure/Exit/Replace DiD (6-column, tbl-reg_closure)
+#   Table 4:  Reported Leak DiD (tbl-leak_results)
+#   Table 5:  Survival Analysis (Cox PH)
+#   Table 6:  Revealed Leaks at Closure (LPM)
+#   Table A3: Competing Risks (Cause-Specific Cox, Fine-Gray)
+#   Table A4: Robustness — Regulatory Vintage & Mandate Controls
+#   Table A5: Cohort Splits (Pooled|A|B|C|D)
+#   Figure 6: Closure Event Study
+#   Figure 7: Leak Event Study
+#   Figure A1: Age-at-Closure Event Study
 #
-# Inputs:
-#   Data/Processed/facility_leak_behavior_annual.csv
-#   Data/Processed/Master_Harmonized_UST_Tanks.csv
-#   Data/Processed/Master_Harmonized_LUST.csv
+# STRUCTURE:
+#   §1   Setup & Data Loading
+#   §2   Helper Functions
+#   §3   Model 1A — Closure DiD + Event Study
+#   §4   Model 1C — Exit|Closure and Replace|Closure DiD [NEW]
+#   §5   Model 1B — Facility Cox Survival
+#   §6   Model 2  — Tank Cox HTE
+#   §7   Model 3A — Age at Closure (County FE) + Event Study
+#   §8   Model 3B — Age at Closure (Facility FE)
+#   §9   Model 4  — Revealed Leaks at Closure
+#   §10  Model 6  — Reported Leak DiD + Event Study [NEW]
+#   §11  Models 5A/5B — Competing Risks
+#   §12  Robustness — Regulatory Vintage & Phased Mandate
+#   §13  JMP Publication Tables (unified multi-panel LaTeX)
+#   §14  Script Summary
 #
-# Outputs:
-#   Output/Tables/*.csv, *.tex, *.txt
-#   Output/Figures/*.png
+# INPUTS:
+#   Data/Analysis/analysis_annual_data.rds
+#   Data/Analysis/analysis_tank_inventory.rds
+#   Data/Analysis/analysis_closed_tanks.rds
+#   Data/Analysis/analysis_tanks_1999.rds
+#   Data/Analysis/analysis_pre_period_closures.rds
+#   Data/Analysis/analysis_metadata.rds
 #
-# References:
-#   Comprehensive Research Memo (February 2, 2026)
-#   MacKinnon, Nielsen, Webb (2023): Cluster-robust inference
-#   Roodman et al. (2019): Wild cluster bootstrap
+# PREREQUISITES: Run 01_Descriptive_Analysis.R first.
 #
 # Date: February 2026
 #==============================================================================
 
 
 #==============================================================================
-# SECTION 1: SETUP & CONFIGURATION
+# SECTION 1: SETUP & DATA LOADING
 #==============================================================================
 
-# ----------------------------- BOOTSTRAP SETTINGS ----------------------------
-# Set USE_BOOTSTRAP = FALSE for fast testing, TRUE for final production run.
-USE_BOOTSTRAP <- FALSE   # <-- CHANGE TO TRUE FOR FINAL RUN
-N_BOOTSTRAP   <- 9999    # Replications (999 for testing, 9999 for final)
-# Uses Webb-6 point weights (optimal for G < 20 clusters per MacKinnon et al.)
-# -----------------------------------------------------------------------------
-
-# ----------------------------- STUDY PARAMETERS ------------------------------
-TREATMENT_YEAR  <- 1999L
-TREATMENT_DATE  <- as.IDate("1999-01-01")
-PANEL_START     <- 1985L   # Analysis window start
-PANEL_END       <- 2020L   # Analysis window end
-ES_START        <- 1985L   # Event study window start
-ES_END          <- 2018L   # Event study window end
-STUDY_END_DATE  <- as.IDate("2020-12-31")
-# -----------------------------------------------------------------------------
-
-# ----------------------------- SAMPLE DEFINITION -----------------------------
-# Control states (2-letter abbreviations — matches panel builder output)
-CONTROL_STATES <- c("ME", "NM", "AR", "OK", "LA", "KS", "MT", "ID",
-                    "SD", "AL", "MN", "NC", "IL", "MA", "OH", "PA",
-                    "TN", "VA", "CO")
-# NOTE: State column in panel uses 2-letter abbreviations (e.g. "TX", "ME")
-# -----------------------------------------------------------------------------
-
-# Load packages
 suppressPackageStartupMessages({
   library(data.table)
   library(fixest)
   library(survival)
-  library(cmprsk)           # Fine-Gray competing risks (Model 5B)
-  library(fwildclusterboot) # Wild cluster bootstrap (MacKinnon-Webb)
-  library(ggplot2)
-  library(gridExtra)        # multi-panel figures (Figure 4)
-  library(pROC)             # AUC-ROC for Figure 5B
   library(here)
+  library(ggplot2)
   library(broom)
-  library(scales)
-  library(stringr)
 })
 
-options(scipen = 999)
-set.seed(20260202)
-setDTthreads(14)
+# Optional bootstrap
+if (requireNamespace("fwildclusterboot", quietly = TRUE)) {
+  library(fwildclusterboot)
+  cat("fwildclusterboot loaded for wild cluster bootstrap.\n")
+}
 
-# Output paths
-OUTPUT_TABLES  <- here("Output", "Tables")
-OUTPUT_FIGURES <- here("Output", "Figures")
+# ── Load metadata (constants from Script 01) ──
+ANALYSIS_DIR <- here("Data", "Analysis")
+
+if (!file.exists(file.path(ANALYSIS_DIR, "analysis_metadata.rds")))
+  stop("Run 01_Descriptive_Analysis.R first.\n  Missing: ", ANALYSIS_DIR)
+
+meta <- readRDS(file.path(ANALYSIS_DIR, "analysis_metadata.rds"))
+TREATMENT_YEAR  <- meta$TREATMENT_YEAR
+TREATMENT_DATE  <- meta$TREATMENT_DATE
+PANEL_START     <- meta$PANEL_START
+PANEL_END       <- meta$PANEL_END
+ES_START        <- meta$ES_START
+ES_END          <- meta$ES_END
+STUDY_END_DATE  <- meta$STUDY_END_DATE
+CONTROL_STATES  <- meta$CONTROL_STATES
+OUTPUT_TABLES   <- meta$OUTPUT_TABLES
+OUTPUT_FIGURES  <- meta$OUTPUT_FIGURES
+FEDERAL_MANDATE_DATE <- meta$FEDERAL_MANDATE_DATE
+MANDATE_CUTOFF_DATE  <- meta$MANDATE_CUTOFF_DATE
+incumbent_ids        <- meta$incumbent_ids
+
+# Bootstrap toggle (override from metadata if desired)
+USE_BOOTSTRAP <- FALSE   # <-- CHANGE TO TRUE FOR FINAL RUN
+N_BOOTSTRAP   <- 9999
+
 dir.create(OUTPUT_TABLES,  recursive = TRUE, showWarnings = FALSE)
 dir.create(OUTPUT_FIGURES, recursive = TRUE, showWarnings = FALSE)
 
-# Publication theme
+# ── Publication theme ──
 theme_pub <- function(base_size = 12) {
   theme_minimal(base_size = base_size) +
     theme(
-      plot.title    = element_text(size = rel(1.1), face = "bold",
-                                   margin = margin(0, 0, 10, 0)),
-      plot.subtitle = element_text(size = rel(0.85),
-                                   margin = margin(0, 0, 10, 0)),
-      axis.title    = element_text(face = "bold", size = rel(0.9)),
-      legend.title  = element_text(face = "bold", size = rel(0.9)),
-      legend.position = "bottom",
+      plot.title      = element_text(face = "bold", size = base_size + 2),
+      plot.subtitle   = element_text(color = "grey40", size = base_size),
       panel.grid.minor = element_blank(),
-      panel.border  = element_rect(fill = NA, color = "gray85"),
-      strip.text    = element_text(face = "bold")
+      legend.position  = "bottom"
     )
 }
 theme_set(theme_pub())
 
 cat("====================================================================\n")
-cat("FINAL DiD ANALYSIS: Texas UST Insurance Reform\n")
-cat(sprintf("Analysis window: %d-%d | Event study: %d-%d\n",
-            PANEL_START, PANEL_END, ES_START, ES_END))
-cat(sprintf("Bootstrap: %s (B = %d)\n",
+cat("02_DiD_Causal_Estimates.R\n")
+cat("====================================================================\n")
+cat(sprintf("Analysis: %d to %d | Treatment: %d\n",
+            PANEL_START, PANEL_END, TREATMENT_YEAR))
+cat(sprintf("Bootstrap: %s (%d reps)\n",
             ifelse(USE_BOOTSTRAP, "ENABLED", "DISABLED"), N_BOOTSTRAP))
-cat(sprintf("Control states: %d states\n", length(CONTROL_STATES)))
+cat(sprintf("Control states: %d\n", length(CONTROL_STATES)))
 cat("====================================================================\n\n")
 
+# ── Load analysis-ready datasets ──
+cat("Loading analysis datasets from 01_Descriptive_Analysis.R...\n")
 
-#==============================================================================
+annual_data <- readRDS(file.path(ANALYSIS_DIR, "analysis_annual_data.rds"))
+cat(sprintf("  annual_data:     %s rows, %s facilities\n",
+            format(nrow(annual_data), big.mark = ","),
+            format(uniqueN(annual_data$panel_id), big.mark = ",")))
+
+tank_inventory <- readRDS(file.path(ANALYSIS_DIR, "analysis_tank_inventory.rds"))
+cat(sprintf("  tank_inventory:  %s tanks\n",
+            format(nrow(tank_inventory), big.mark = ",")))
+
+closed_tanks <- readRDS(file.path(ANALYSIS_DIR, "analysis_closed_tanks.rds"))
+cat(sprintf("  closed_tanks:    %s closures\n",
+            format(nrow(closed_tanks), big.mark = ",")))
+
+tanks_1999 <- readRDS(file.path(ANALYSIS_DIR, "analysis_tanks_1999.rds"))
+cat(sprintf("  tanks_1999:      %s tanks\n",
+            format(nrow(tanks_1999), big.mark = ",")))
+
+pre_period_closures <- readRDS(file.path(ANALYSIS_DIR, "analysis_pre_period_closures.rds"))
+cat(sprintf("  pre_period_cls:  %s closures\n",
+            format(nrow(pre_period_closures), big.mark = ",")))
+
+cat("All datasets loaded.\n\n")
+
+
 # SECTION 2: HELPER FUNCTIONS
 #==============================================================================
 
@@ -376,1307 +388,133 @@ plot_event_study <- function(es_model, title, subtitle = "",
   invisible(coefs)
 }
 
+#------------------------------------------------------------------------------
+# 2.4 STANDARDIZED TREATMENT VARIABLE NAMES
+# Used consistently throughout all models. Avoids ad-hoc naming.
+#------------------------------------------------------------------------------
+# Facility-year level (annual_data):
+#   treated    = texas_treated  (1 if TX, 0 otherwise)
+#   post       = post_1999      (1 if panel_year >= 1999)
+#   did_term   = treated * post (interaction)
+# Tank-level (tank_inventory, closed_tanks):
+#   texas      = 1 if state == "TX"
+#   post       = 1 if closure_year >= 1999  (for closed_tanks)
+#   texas_post = texas * post               (for closed_tanks)
+# Cox models: texas (cross-sectional, post is implicit in survival origin)
 
-#==============================================================================
-# SECTION 3: DATA LOADING
-#==============================================================================
-
-cat("\n========================================\n")
-cat("SECTION 3: DATA LOADING\n")
-cat("========================================\n\n")
-
-# 3.1 Facility-Year Panel (from Panel Builder)
-cat("Loading facility-year panel...\n")
-PANEL_PATH <- here("Data", "Processed", "facility_leak_behavior_annual.csv")
-if (!file.exists(PANEL_PATH))
-  stop("Panel not found. Run 10_Build_Annual_Panel_Optimized.R first.\n  Path: ", PANEL_PATH)
-
-annual_data <- fread(PANEL_PATH)
-cat(sprintf("  Loaded: %s facility-years | %s facilities | Years %d-%d\n",
-            format(nrow(annual_data), big.mark = ","),
-            format(uniqueN(annual_data$panel_id), big.mark = ","),
-            min(annual_data$panel_year), max(annual_data$panel_year)))
-
-# 3.2 Tank-Level Inventory (for Models 2, 3, 4, 5)
-cat("\nLoading tank-level inventory...\n")
-TANK_PATH <- here("Data", "Processed", "Master_Harmonized_UST_Tanks.csv")
-if (!file.exists(TANK_PATH))
-  stop("Tank inventory not found. Run harmonization scripts first.\n  Path: ", TANK_PATH)
-
-tank_inventory <- fread(TANK_PATH)
-cat(sprintf("  Loaded: %s tanks\n", format(nrow(tank_inventory), big.mark = ",")))
-
-# 3.3 LUST Data (for leak classification validation)
-cat("\nLoading LUST data...\n")
-LUST_PATH <- here("Data", "Processed", "Master_Harmonized_LUST.csv")
-if (!file.exists(LUST_PATH))
-  stop("LUST data not found. Run harmonization scripts first.\n  Path: ", LUST_PATH)
-
-master_lust <- fread(LUST_PATH)
-cat(sprintf("  Loaded: %s leak incidents\n", format(nrow(master_lust), big.mark = ",")))
-
-
-#==============================================================================
-# SECTION 4: DATA PREPARATION & FILTERING (FACILITY-YEAR PANEL)
-#==============================================================================
-
-cat("\n========================================\n")
-cat("SECTION 4: DATA PREPARATION\n")
-cat("========================================\n\n")
-
-cat("--- Filtering facility-year panel ---\n")
-n0 <- nrow(annual_data)
-
-# Filter 1: Time window
-annual_data <- annual_data[panel_year >= PANEL_START & panel_year <= PANEL_END]
-cat(sprintf("  After time window (%d-%d): %s rows\n",
-            PANEL_START, PANEL_END, format(nrow(annual_data), big.mark = ",")))
-
-# Filter 2: Texas + Control states
-#   IMPORTANT: panel uses 2-letter state abbreviations (TX, ME, NM, etc.)
-annual_data <- annual_data[state == "TX" | state %in% CONTROL_STATES]
-cat(sprintf("  After state filter (TX + %d controls): %s rows\n",
-            length(CONTROL_STATES), format(nrow(annual_data), big.mark = ",")))
-
-# Quick sanity check
-observed_states <- sort(unique(annual_data$state))
-cat(sprintf("  States in sample: %s\n", paste(observed_states, collapse = ", ")))
-
-# Filter 3: Incumbent sample only (facilities active before 1999)
-#   Panel builder creates both is_incumbent (int) and cohort (char) at line 925-926
-annual_data <- annual_data[is_incumbent == 1]
-cat(sprintf("  After incumbent filter: %s rows | %s facilities\n",
-            format(nrow(annual_data), big.mark = ","),
-            format(uniqueN(annual_data$panel_id), big.mark = ",")))
-
-cat(sprintf("\n  Total rows dropped: %s (%.1f%%)\n",
-            format(n0 - nrow(annual_data), big.mark = ","),
-            100 * (n0 - nrow(annual_data)) / n0))
-
-# 4.3 Facility-Level Missing Data Exclusion
-# ─────────────────────────────────────────────────────────────────────────────
-# Per Unified Memo Section 1.3: Drop ENTIRE FACILITY if any tank is missing
-# install_date OR if any CLOSED tank is missing closure_date.
-# Rationale: partial facility histories contaminate within-facility variation
-# (Models 1A, 3B), bias risk classification (Model 2), and violate the
-# non-informative censoring assumption (Models 1B, 2, 4, 5).
+#------------------------------------------------------------------------------
+# 2.5 run_cohort_did()
+# Runs a feols specification across Pooled|A|B|C|D cohort splits.
+# Returns a list of models + headers suitable for save_standard_did_table().
 #
-# NOTE: status_std was dropped before saving Master_Harmonized_UST_Tanks.csv
-# (harmonization script line 359). We reconstruct closed status from tank_status
-# using the same regex pattern the pipeline uses.
-# ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- Facility-Level Missing Data Exclusion (Memo Section 1.3) ---\n")
-
-# Capture incumbent_ids from filtered annual panel (used in Section 5 too)
-incumbent_ids <- unique(annual_data$panel_id)
-
-# Load minimal columns from raw tank file for missingness diagnosis.
-# tank_status is "Closed" or "Open" exactly (04_Master_Build.R writes
-# status_std back as tank_status before saving). No regex needed.
-tank_raw_miss <- fread(TANK_PATH,
-                       select = c("facility_id", "state",
-                                  "tank_installed_date", "tank_closed_date",
-                                  "tank_status"),
-                       colClasses = "character")
-
-tank_raw_miss[, `:=`(
-  facility_id         = toupper(trimws(facility_id)),
-  state               = toupper(trimws(state)),
-  tank_installed_date = as.IDate(tank_installed_date),
-  tank_closed_date    = as.IDate(tank_closed_date),
-  # 04_Master_Build.R writes status_std back as tank_status before saving,
-  # so values are exactly "Closed" or "Open" — no regex reconstruction needed.
-  is_closed_status    = (tank_status == "Closed")
-)]
-tank_raw_miss[, panel_id := paste(facility_id, state, sep = "_")]
-tank_raw_miss <- tank_raw_miss[panel_id %in% incumbent_ids]
-
-# --- DIAGNOSTIC 1: Scale of the problem ---
-miss_install <- unique(tank_raw_miss[is.na(tank_installed_date), panel_id])
-miss_closure <- unique(tank_raw_miss[is_closed_status == TRUE &
-                                      is.na(tank_closed_date), panel_id])
-facilities_to_exclude_miss <- union(miss_install, miss_closure)
-
-n_incum_total <- length(incumbent_ids)
-diag_scale <- data.frame(
-  Metric = c("Incumbent facilities (initial)",
-             "Facilities: missing install_date on any tank",
-             "Facilities: missing closure_date on any closed tank",
-             "Facilities: missing both types",
-             "Total facilities to exclude",
-             "Exclusion rate (%)"),
-  N = c(n_incum_total,
-        length(miss_install),
-        length(miss_closure),
-        length(intersect(miss_install, miss_closure)),
-        length(facilities_to_exclude_miss),
-        round(100 * length(facilities_to_exclude_miss) / n_incum_total, 2))
-)
-cat("Scale of missing data:\n")
-print(diag_scale, row.names = FALSE)
-
-# --- DIAGNOSTIC 2: Balance (TX vs Control) ---
-tank_fac_flag <- tank_raw_miss[, .(
-  has_miss_install = any(is.na(tank_installed_date)),
-  has_miss_closure = any(is_closed_status == TRUE & is.na(tank_closed_date)),
-  group            = fifelse(first(state) == "TX", "Texas", "Control")
-), by = panel_id]
-
-balance_miss <- tank_fac_flag[, .(
-  N_facilities        = .N,
-  N_miss_install      = sum(has_miss_install),
-  Pct_miss_install    = round(100 * mean(has_miss_install), 2),
-  N_miss_closure      = sum(has_miss_closure),
-  Pct_miss_closure    = round(100 * mean(has_miss_closure), 2)
-), by = group]
-cat("\nBalance (TX vs Control):\n")
-print(balance_miss)
-
-# Balance logit test
-tank_fac_flag[, texas := as.integer(group == "Texas")]
-balance_glm <- tryCatch(
-  glm(has_miss_install ~ texas, data = tank_fac_flag, family = binomial),
-  error = function(e) NULL
-)
-if (!is.null(balance_glm)) {
-  p_bal <- summary(balance_glm)$coefficients["texas", "Pr(>|z|)"]
-  cat(sprintf("\nBalance test (missing install_date ~ Texas): p = %.4f\n", p_bal))
-  if (p_bal < 0.10)
-    cat("  ⚠  Imbalanced — consider IPW robustness (Memo Scenario 3)\n") else
-    cat("  ✓  Balanced — proceed with clean drop\n")
-}
-
-# --- APPLY EXCLUSION ---
-annual_data <- annual_data[!panel_id %in% facilities_to_exclude_miss]
-# Re-sync incumbent_ids to the now-clean sample
-incumbent_ids <- unique(annual_data$panel_id)
-
-cat(sprintf("\n  Excluded: %s facilities | Remaining: %s facilities | %s rows\n",
-            format(length(facilities_to_exclude_miss), big.mark = ","),
-            format(uniqueN(annual_data$panel_id),      big.mark = ","),
-            format(nrow(annual_data),                  big.mark = ",")))
-
-# Save appendix tables
-fwrite(as.data.table(diag_scale),
-       file.path(OUTPUT_TABLES, "Appendix_A1_Missing_Data_Scale.csv"))
-fwrite(balance_miss,
-       file.path(OUTPUT_TABLES, "Appendix_A1_Missing_Data_Balance.csv"))
-cat("✓ Saved: Appendix_A1_Missing_Data_Scale.csv\n")
-cat("✓ Saved: Appendix_A1_Missing_Data_Balance.csv\n")
-rm(tank_raw_miss, tank_fac_flag)
-gc()
-
-# 4.2 Create analysis variables
-cat("\n--- Creating analysis variables ---\n")
-
-annual_data[, `:=`(
-  # Core DiD terms (panel builder already creates texas_treated, post_1999)
-  treated     = texas_treated,
-  post        = post_1999,
-  did_term    = texas_treated * post_1999,
-
-  # Primary outcome: any tank closure in year t
-  closure_event = as.integer(n_closures > 0),
-
-  # Relative year (for event studies) — only meaningful for TX
-  rel_year_1999 = panel_year - TREATMENT_YEAR,
-
-  # Convenience
-  county_fips_fac = as.factor(county_fips)
-)]
-
-# Summary
-tx_n  <- uniqueN(annual_data[texas_treated == 1, panel_id])
-ctl_n <- uniqueN(annual_data[texas_treated == 0, panel_id])
-cat(sprintf("  Texas facilities:   %s\n", format(tx_n,  big.mark = ",")))
-cat(sprintf("  Control facilities: %s\n", format(ctl_n, big.mark = ",")))
-cat(sprintf("  Years: %d to %d\n", min(annual_data$panel_year), max(annual_data$panel_year)))
-
-
-#==============================================================================
-# SECTION 5: TANK-LEVEL DATASET CONSTRUCTION
-#==============================================================================
-
-cat("\n========================================\n")
-cat("SECTION 5: TANK-LEVEL DATASETS\n")
-cat("========================================\n\n")
-
-# 5.1 Standardize tank IDs (mirror panel builder logic exactly)
-cat("--- Standardizing tank inventory IDs ---\n")
-tank_inventory[, `:=`(
-  facility_id = toupper(trimws(as.character(facility_id))),
-  tank_id     = toupper(trimws(as.character(tank_id))),
-  state       = toupper(trimws(as.character(state)))
-)]
-tank_inventory[, panel_id := paste(facility_id, state, sep = "_")]
-
-# 5.2 Standardize dates
-tank_inventory[, `:=`(
-  tank_installed_date = as.IDate(tank_installed_date),
-  tank_closed_date    = as.IDate(tank_closed_date)
-)]
-
-# 5.3 Restrict to clean incumbent sample facilities
-# incumbent_ids was established and synced in Section 4.3 after missing-data exclusion
-tank_inventory <- tank_inventory[panel_id %in% incumbent_ids]
-cat(sprintf("  Tanks in clean incumbent sample: %s\n",
-            format(nrow(tank_inventory), big.mark = ",")))
-
-# 5.4 Create tank-level analysis variables
-cat("--- Creating tank-level survival variables ---\n")
-
-tank_inventory[, `:=`(
-  # Age at treatment date (years)
-  age_at_treatment = as.numeric(difftime(
-    TREATMENT_DATE, tank_installed_date, units = "days")) / 365.25,
-
-  # Time to closure from treatment date (years); NA = still active
-  time_to_close = as.numeric(difftime(
-    pmin(tank_closed_date, STUDY_END_DATE, na.rm = TRUE),
-    TREATMENT_DATE, units = "days")) / 365.25,
-
-  # Closure event indicator (closed within study window)
-  event_closure = as.integer(!is.na(tank_closed_date) &
-                              tank_closed_date <= STUDY_END_DATE),
-
-  # Treatment group
-  texas = as.integer(state == "TX"),
-
-  # Risk factors
-  # NOTE: single_walled and double_walled are numeric 0/1 columns in
-  # Master_Harmonized_UST_Tanks.csv (panel builder reads them at line 274).
-  # wall_type ("Single-Walled"/"Double-Walled"/"Mixed") is a FACILITY-YEAR
-  # aggregate created by the panel builder at line 952 for the annual panel —
-  # it does NOT exist in the raw tank file. Use the raw binary columns directly.
-  single_walled    = as.integer(single_walled == 1),
-  double_walled    = as.integer(double_walled == 1),
-  old_at_treatment = as.integer(age_at_treatment > 20),
-
-  # Vintage cohorts per memo definitions
-  vintage = fcase(
-    tank_installed_date <  as.IDate("1980-01-01"), "Pre-1980",
-    tank_installed_date <  as.IDate("1988-12-23"), "1980-1988",
-    tank_installed_date >= as.IDate("1988-12-23"), "1989-1998",
-    default = NA_character_
-  ),
-  old_vintage = as.integer(tank_installed_date < as.IDate("1980-01-01")),
-  pre_deadline = as.integer(tank_installed_date < as.IDate("1988-12-23"))
-)]
-
-# 5.4b Capture pre-period (1990-1998) closures BEFORE survival filter discards them.
-# These are needed for Figure 4 panel (c) — mean age at closure in the pre-period.
-# After the filter below, tank_inventory retains only tanks with time_to_close >= 0
-# (i.e., closed on/after 1999 or never closed), so pre-1999 closures disappear.
-cat("--- Capturing pre-period closures for Figure 4 panel (c) ---\n")
-pre_period_closures <- tank_inventory[
-  !is.na(tank_closed_date) &
-  !is.na(tank_installed_date) &
-  year(tank_closed_date) >= 1990 &
-  year(tank_closed_date) <= 1998,
-  .(
-    closure_year    = year(tank_closed_date),
-    texas           = texas,
-    age_at_closure  = as.numeric(difftime(
-      tank_closed_date, tank_installed_date, units = "days")) / 365.25
-  )
-]
-cat(sprintf("  Pre-period closures captured: %s tanks (%d–%d)\n",
-            format(nrow(pre_period_closures), big.mark = ","),
-            min(pre_period_closures$closure_year),
-            max(pre_period_closures$closure_year)))
-
-# Drop tanks with negative time-to-close (closed before treatment — not in risk set)
-n_tanks_before <- nrow(tank_inventory)
-tank_inventory <- tank_inventory[is.na(time_to_close) | time_to_close >= 0]
-cat(sprintf("  Tanks dropped (closed pre-1999): %s\n",
-            format(n_tanks_before - nrow(tank_inventory), big.mark = ",")))
-cat(sprintf("  Final tank inventory: %s tanks\n",
-            format(nrow(tank_inventory), big.mark = ",")))
-
-# 5.5 Create closed-tanks dataset (Models 3, 4)
-cat("\n--- Creating closed-tanks dataset ---\n")
-
-closed_tanks <- tank_inventory[event_closure == 1]
-closed_tanks[, closure_year := as.integer(format(tank_closed_date, "%Y"))]
-
-closed_tanks[, `:=`(
-  age_at_closure = as.numeric(difftime(
-    tank_closed_date, tank_installed_date, units = "days")) / 365.25,
-  post      = as.integer(closure_year >= TREATMENT_YEAR),
-  texas_post = as.integer(texas == 1 & closure_year >= TREATMENT_YEAR),
-  county_fips_fac = as.factor(county_fips)
-)]
-
-cat(sprintf("  Closed tanks (post-1999 events): %s\n",
-            format(nrow(closed_tanks), big.mark = ",")))
-cat(sprintf("  Closure years: %d to %d\n",
-            min(closed_tanks$closure_year), max(closed_tanks$closure_year)))
-
-# 5.6 1999 snapshot of tanks (for descriptive tables)
-tanks_1999 <- tank_inventory[!is.na(age_at_treatment) & age_at_treatment >= 0]
-tanks_1999[, risk_score := (single_walled == 1) +
-              (age_at_treatment > 20) +
-              (old_vintage == 1)]
-
-
-#==============================================================================
-# SECTION 6: DIAGNOSTICS — PRE-1999 EXIT BALANCE TEST
-#==============================================================================
-
-cat("\n========================================\n")
-cat("SECTION 6: DIAGNOSTICS\n")
-cat("========================================\n\n")
-
-cat("--- Pre-1999 Exit Balance Test (Memo Section 1.1) ---\n")
-cat("Purpose: Test whether TX and control facilities had differential\n")
-cat("         exit rates before 1999 (survivorship bias check).\n\n")
-
-# Use the full pre-1999 window: is the facility's last year before 1999?
-facility_exit <- annual_data[, .(
-  last_year  = max(panel_year),
-  first_year = min(panel_year),
-  texas      = first(texas_treated),
-  state      = first(state)
-), by = panel_id]
-
-facility_exit[, exited_pre_1999 := as.integer(last_year < TREATMENT_YEAR)]
-
-# Summary by group
-exit_summary <- facility_exit[, .(
-  N         = .N,
-  N_exited  = sum(exited_pre_1999),
-  Pct_exit  = round(100 * mean(exited_pre_1999), 2)
-), by = .(Group = fifelse(texas == 1, "Texas", "Control"))]
-
-cat("Pre-1999 exit rates:\n")
-print(exit_summary)
-cat("\n")
-
-# Regression test (note: only 2 clusters — inference severely limited)
-pre_exit_reg <- feols(
-  exited_pre_1999 ~ texas,
-  data = facility_exit,
-  cluster = ~state
-)
-cat("Regression: Pr(Exit before 1999) ~ Texas\n")
-cat("(Only 2 clusters — inference is indicative only)\n\n")
-print(summary(pre_exit_reg))
-
-# Interpretation
-tx_coef <- coef(pre_exit_reg)["texas"]
-tx_pval <- summary(pre_exit_reg)$coeftable["texas", "Pr(>|t|)"]
-
-cat("\n--- Interpretation ---\n")
-if (abs(tx_coef) < 0.01) {
-  cat("✓ No meaningful difference in pre-1999 exit rates (|β| < 1 pp)\n")
-} else if (!is.na(tx_pval) && tx_pval < 0.10) {
-  direction <- ifelse(tx_coef > 0, "HIGHER", "LOWER")
-  cat(sprintf("⚠  Texas had %s pre-1999 exit rate (β = %.4f, p = %.3f)\n",
-              direction, tx_coef, tx_pval))
-  cat("   Consider Definition B (1990-1999 window) as robustness check.\n")
-} else {
-  cat(sprintf("   No significant difference (p = %.3f); β = %.4f\n",
-              tx_pval, tx_coef))
-}
-
-fwrite(exit_summary,
-       file.path(OUTPUT_TABLES, "Diagnostic_Pre1999_Exit_Balance.csv"))
-cat("\n✓ Saved: Diagnostic_Pre1999_Exit_Balance.csv\n")
-
-
-#==============================================================================
-# SECTION 7: DESCRIPTIVE TABLES (TABLES 1-3)
-#==============================================================================
-
-cat("\n========================================\n")
-cat("SECTION 7: DESCRIPTIVE TABLES\n")
-cat("========================================\n\n")
-
-#--- Table 1: Sample Composition ---
-cat("--- Table 1: Sample Composition ---\n")
-
-# Panel A: Facilities
-table1_fac <- annual_data[panel_year == TREATMENT_YEAR, .(
-  N_facilities  = .N,
-  Med_tanks     = round(median(active_tanks_dec, na.rm = TRUE), 1),
-  Mean_tanks    = round(mean(active_tanks_dec,   na.rm = TRUE), 2),
-  Total_tanks   = sum(active_tanks_dec,          na.rm = TRUE),
-  Pct_SingleTank = round(100 * mean(active_tanks_dec == 1, na.rm = TRUE), 1)
-), by = .(Group = fifelse(texas_treated == 1, "Texas", "Control"))]
-
-totals_fac <- annual_data[panel_year == TREATMENT_YEAR, .(
-  Group = "Total",
-  N_facilities  = .N,
-  Med_tanks     = round(median(active_tanks_dec, na.rm = TRUE), 1),
-  Mean_tanks    = round(mean(active_tanks_dec,   na.rm = TRUE), 2),
-  Total_tanks   = sum(active_tanks_dec,          na.rm = TRUE),
-  Pct_SingleTank = round(100 * mean(active_tanks_dec == 1, na.rm = TRUE), 1)
-)]
-
-table1 <- rbind(table1_fac, totals_fac)
-cat("Table 1A — Facility Summary (at 1999):\n")
-print(table1)
-
-fwrite(table1, file.path(OUTPUT_TABLES, "Table_1_Sample_Composition.csv"))
-cat("✓ Saved: Table_1_Sample_Composition.csv\n")
-
-#--- Table 2: Baseline Characteristics (Tank-Level at 1999) ---
-cat("\n--- Table 2: Baseline Tank Characteristics ---\n")
-
-table2 <- tanks_1999[, .(
-  N_tanks          = .N,
-  Mean_age         = round(mean(age_at_treatment, na.rm = TRUE), 2),
-  Median_age       = round(median(age_at_treatment, na.rm = TRUE), 1),
-  Pct_SingleWalled = round(100 * mean(single_walled == 1, na.rm = TRUE), 1),
-  Pct_OldAtTx     = round(100 * mean(old_at_treatment == 1, na.rm = TRUE), 1),
-  Pct_Pre1980      = round(100 * mean(old_vintage == 1, na.rm = TRUE), 1),
-  Pct_1980_1988    = round(100 * mean(vintage == "1980-1988", na.rm = TRUE), 1),
-  Pct_1989_1998    = round(100 * mean(vintage == "1989-1998", na.rm = TRUE), 1),
-  Pct_Events       = round(100 * mean(event_closure == 1, na.rm = TRUE), 1)
-), by = .(Group = fifelse(texas == 1, "Texas", "Control"))]
-
-cat("Table 2 — Tank Baseline Characteristics (1999 snapshot):\n")
-print(table2)
-fwrite(table2, file.path(OUTPUT_TABLES, "Table_2_Baseline_Characteristics.csv"))
-cat("✓ Saved: Table_2_Baseline_Characteristics.csv\n")
-
-#--- Table 3: Risk Factor Distribution ---
-cat("\n--- Table 3: Risk Factor Distribution ---\n")
-
-tanks_1999[, risk_category := fcase(
-  risk_score == 0, "Low (0 factors)",
-  risk_score == 1, "Medium (1 factor)",
-  risk_score == 2, "High (2 factors)",
-  risk_score >= 3, "Very High (3 factors)",
-  default = NA_character_
-)]
-
-table3 <- tanks_1999[!is.na(risk_category), .(
-  N = .N
-), by = .(Group = fifelse(texas == 1, "Texas", "Control"), risk_category)]
-
-table3[, Pct := round(100 * N / sum(N), 1), by = Group]
-setorder(table3, Group, risk_category)
-
-cat("Table 3 — Risk Factor Distribution:\n")
-print(table3)
-fwrite(table3, file.path(OUTPUT_TABLES, "Table_3_Risk_Factor_Distribution.csv"))
-cat("✓ Saved: Table_3_Risk_Factor_Distribution.csv\n")
-
-
-#==============================================================================
-# SECTION 8: DESCRIPTIVE FIGURES (1-4 + PRE-TRENDS)
-#==============================================================================
-
-cat("\n========================================\n")
-cat("SECTION 8: DESCRIPTIVE FIGURES\n")
-cat("========================================\n\n")
-
-#--- Figure 1: Tank Age Distribution at 1999 ---
-cat("--- Figure 1: Age Distribution ---\n")
-
-p1 <- ggplot(tanks_1999[!is.na(age_at_treatment) & age_at_treatment >= 0],
-             aes(x = age_at_treatment, fill = factor(texas))) +
-  geom_histogram(position = "identity", alpha = 0.6, bins = 30,
-                 color = "white", linewidth = 0.2) +
-  scale_fill_manual(values = c("0" = "#0072B2", "1" = "#D55E00"),
-                    labels = c("Control", "Texas"), name = "") +
-  labs(
-    title    = "Figure 1: Tank Age Distribution as of January 1, 1999",
-    subtitle = "Incumbent sample — facilities active before 1999",
-    x = "Tank Age (years)", y = "Count"
-  ) +
-  theme_pub()
-
-ggsave(file.path(OUTPUT_FIGURES, "Figure_1_Age_Distribution_1999.png"),
-       p1, width = 10, height = 6, dpi = 300, bg = "white")
-cat("✓ Saved: Figure_1_Age_Distribution_1999.png\n")
-
-#--- Figure 2: Vintage Distribution ---
-cat("--- Figure 2: Vintage Distribution ---\n")
-
-vintage_dt <- tanks_1999[!is.na(vintage), .(N = .N),
-                          by = .(Group = fifelse(texas == 1, "Texas", "Control"),
-                                 vintage)]
-vintage_dt[, Pct := 100 * N / sum(N), by = Group]
-vintage_dt[, vintage := factor(vintage,
-                                levels = c("Pre-1980", "1980-1988", "1989-1998"))]
-
-p2 <- ggplot(vintage_dt, aes(x = vintage, y = Pct, fill = Group)) +
-  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
-  scale_fill_manual(values = c("Control" = "#0072B2", "Texas" = "#D55E00")) +
-  labs(
-    title    = "Figure 2: Vintage Cohort Distribution",
-    subtitle = "Share of tanks by installation era (1999 snapshot)",
-    x = "Installation Vintage", y = "% of Tanks", fill = ""
-  ) +
-  theme_pub()
-
-ggsave(file.path(OUTPUT_FIGURES, "Figure_2_Vintage_Distribution.png"),
-       p2, width = 10, height = 6, dpi = 300, bg = "white")
-cat("✓ Saved: Figure_2_Vintage_Distribution.png\n")
-
-#--- Figure 3: Single-Walled Prevalence by Vintage ---
-cat("--- Figure 3: Single-Walled by Vintage ---\n")
-
-wall_vintage <- tanks_1999[!is.na(vintage), .(
-  Pct_SW = 100 * mean(single_walled == 1, na.rm = TRUE),
-  N      = .N
-), by = .(Group = fifelse(texas == 1, "Texas", "Control"), vintage)]
-wall_vintage[, vintage := factor(vintage,
-                                  levels = c("Pre-1980", "1980-1988", "1989-1998"))]
-
-p3 <- ggplot(wall_vintage, aes(x = vintage, y = Pct_SW,
-                                color = Group, group = Group)) +
-  geom_line(linewidth = 1.2) +
-  geom_point(aes(size = N), alpha = 0.8) +
-  scale_color_manual(values = c("Control" = "#0072B2", "Texas" = "#D55E00")) +
-  scale_size_continuous(name = "Tank Count", range = c(3, 9)) +
-  labs(
-    title    = "Figure 3: Single-Walled Tank Prevalence by Vintage",
-    subtitle = "Risk factor distribution across installation cohorts",
-    x = "Installation Vintage", y = "% Single-Walled Tanks", color = ""
-  ) +
-  theme_pub()
-
-ggsave(file.path(OUTPUT_FIGURES, "Figure_3_Single_Walled_by_Vintage.png"),
-       p3, width = 10, height = 6, dpi = 300, bg = "white")
-cat("✓ Saved: Figure_3_Single_Walled_by_Vintage.png\n")
-
-#--- Figure 4: Pre-Period Trends (1990–1998) — Correct Figure 4 ---
-# Per Memo Section 7 / Section 1.3.2: 4-panel line plot showing parallel
-# trends between Texas and Control in the pre-period ONLY.
-# This is the key visual support for the parallel trends assumption.
-cat("--- Figure 4: Pre-Period Trends (1990-1998) ---\n")
-
-# AUDIT FIX 1 of 2 (Figure 4):
-# BUG: `leak_year` is a binary 0/1 flag (any leak this year?).
-# The memo (Section 7) specifies: sum(leak_incident) / .N * 1000,
-# which is total incident count, not facility-year prevalence.
-# In our panel, that corresponds to `n_leaks` (= sum of individual leak events).
-# Using `leak_year` understates the leak rate wherever facilities had multiple
-# incidents in a single year, and flattens the Y-axis of panel (b).
+# Cohort definitions (1988 federal mandate cutoff):
+#   Pooled: Full sample (no cohort restriction)
+#   A:      Post-1988 tanks/facilities only (NOT subject to 1998 mandate)
+#   B:      ≤1988 tanks/facilities only (SUBJECT to 1998 mandate)
+#   C:      Pooled with cohort_pre1988 × panel_year FE
+#   D:      Triple-difference: did_term + did_term × cohort_pre1988
 #
-# AUDIT FIX 2 of 2 (Figure 4):
-# BUG: `avg_tank_age_dec[closure_event == 1]` uses December snapshot of average
-# ACTIVE tank age in years when closures occurred — NOT the age of tanks that
-# were actually closed. These are different: the closed tanks (likely older)
-# have already left the stock, so avg_tank_age_dec is biased downward.
-# The memo specifies avg_closure_age, which does not exist as an annual panel
-# column (it's not emitted by 10_Build_Annual_Panel_Optimized.R).
-# FIX: compute from pre_period_closures captured in Section 5.4b above,
-# which has exact age_at_closure = (closure_date - install_date) per tank.
+# For tank-level models, cohort is direct (tank install date).
+# For facility-level models, cohort is defined by facility composition:
+#   A = all active tanks at 1999 installed after 12/22/1988
+#   B = all active tanks at 1999 installed on/before 12/22/1988
+#   C/D = full sample with cohort_pre1988 = majority of tanks are ≤1988
+#------------------------------------------------------------------------------
+run_cohort_did <- function(formula_pooled, data, cohort_var = "cohort_pre1988",
+                            treatment_var_name = "did_term",
+                            cluster_var = "state",
+                            fe_year_var = "panel_year",
+                            add_cohort_year_fe = TRUE,
+                            run_triple_diff = TRUE) {
 
-pre_trends <- annual_data[panel_year >= 1990 & panel_year <= 1998, .(
-  closure_rate = mean(closure_event, na.rm = TRUE),
-  leak_rate    = sum(n_leaks,        na.rm = TRUE) / .N * 1000,  # FIXED: n_leaks not leak_year
-  exit_rate    = mean(exit_flag,     na.rm = TRUE) * 100,
-  n            = .N
-), by = .(panel_year,
-          treatment_group = fifelse(texas_treated == 1, "Texas", "Control"))]
+  models  <- list()
+  headers <- list()
 
-# Compute mean_closure_age correctly from tank-level pre-period closures
-# (facility-year panel cannot supply this; avg_tank_age_dec is not age-at-closure)
-closure_age_pre <- pre_period_closures[, .(
-  mean_closure_age = mean(age_at_closure, na.rm = TRUE)
-), by = .(panel_year = closure_year,
-          treatment_group = fifelse(texas == 1, "Texas", "Control"))]
-
-pre_trends <- closure_age_pre[pre_trends, on = .(panel_year, treatment_group)]  # FIXED
-
-# Binomial SEs for closure rate and exit rate
-pre_trends[, `:=`(
-  se_closure = sqrt(closure_rate * (1 - closure_rate) / n),
-  se_exit    = sqrt((exit_rate / 100) * (1 - exit_rate / 100) / n)
-)]
-
-colors_fig4 <- c("Texas" = "#D55E00", "Control" = "#0072B2")
-
-p4a <- ggplot(pre_trends, aes(x = panel_year, y = closure_rate,
-                               color = treatment_group,
-                               fill  = treatment_group)) +
-  geom_ribbon(aes(ymin = closure_rate - 1.96 * se_closure,
-                  ymax = closure_rate + 1.96 * se_closure), alpha = 0.15,
-              color = NA) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
-  geom_vline(xintercept = 1998.5, linetype = "dashed", color = "gray40") +
-  scale_color_manual(values = colors_fig4) +
-  scale_fill_manual(values  = colors_fig4) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-  labs(title = "(a) Annual Closure Rate",
-       x = NULL, y = "% Facilities Closing a Tank",
-       color = NULL, fill = NULL) +
-  theme_pub() + theme(legend.position = "bottom")
-
-p4b <- ggplot(pre_trends, aes(x = panel_year, y = leak_rate,
-                               color = treatment_group)) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
-  geom_vline(xintercept = 1998.5, linetype = "dashed", color = "gray40") +
-  scale_color_manual(values = colors_fig4) +
-  labs(title = "(b) Annual Leak Rate (per 1,000 facility-years)",
-       x = NULL, y = "Leaks per 1,000",
-       color = NULL) +
-  theme_pub() + theme(legend.position = "none")
-
-p4c <- ggplot(pre_trends[!is.na(mean_closure_age)],
-              aes(x = panel_year, y = mean_closure_age,
-                  color = treatment_group)) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
-  geom_vline(xintercept = 1998.5, linetype = "dashed", color = "gray40") +
-  scale_color_manual(values = colors_fig4) +
-  labs(title = "(c) Mean Age at Closure (years)",
-       x = NULL, y = "Years",
-       color = NULL) +
-  theme_pub() + theme(legend.position = "none")
-
-p4d <- ggplot(pre_trends, aes(x = panel_year, y = exit_rate,
-                               color = treatment_group,
-                               fill  = treatment_group)) +
-  geom_ribbon(aes(ymin = (exit_rate / 100 - 1.96 * se_exit) * 100,
-                  ymax = (exit_rate / 100 + 1.96 * se_exit) * 100), alpha = 0.15,
-              color = NA) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
-  geom_vline(xintercept = 1998.5, linetype = "dashed", color = "gray40") +
-  scale_color_manual(values = colors_fig4) +
-  scale_fill_manual(values  = colors_fig4) +
-  labs(title = "(d) Full Exit Rate (% of facilities)",
-       x = "Year", y = "% Exiting",
-       color = NULL, fill = NULL) +
-  theme_pub() + theme(legend.position = "none")
-
-fig4_combined <- gridExtra::arrangeGrob(
-  p4a, p4b, p4c, p4d, ncol = 2,
-  top = grid::textGrob(
-    "Figure 4: Pre-Period Trends (1990-1998) — Texas vs. Control States",
-    gp = grid::gpar(fontsize = 13, fontface = "bold")
+  # --- POOLED ---
+  m_pooled <- tryCatch(
+    feols(formula_pooled, data = data, cluster = as.formula(paste0("~", cluster_var)), lean = FALSE),
+    error = function(e) { message("  Pooled failed: ", e$message); NULL }
   )
-)
+  models[["Pooled"]]  <- m_pooled
+  headers[["Pooled"]] <- "Pooled"
 
-ggsave(file.path(OUTPUT_FIGURES, "Figure_4_Pre_Period_Trends.png"),
-       fig4_combined, width = 14, height = 10, dpi = 300, bg = "white")
-cat("✓ Saved: Figure_4_Pre_Period_Trends.png\n")
+  # --- SPEC A: Post-1988 only ---
+  data_A <- data[get(cohort_var) == 0]
+  if (nrow(data_A) > 100) {
+    m_A <- tryCatch(
+      feols(formula_pooled, data = data_A, cluster = as.formula(paste0("~", cluster_var)), lean = FALSE),
+      error = function(e) { message("  Spec A failed: ", e$message); NULL }
+    )
+    models[["A"]]  <- m_A
+    headers[["A"]] <- "A: Post-1988"
+  } else {
+    message("  Spec A skipped: N = ", nrow(data_A))
+  }
 
-fwrite(pre_trends,
-       file.path(OUTPUT_TABLES, "Figure_4_Pre_Trends_Data.csv"))
-cat("✓ Saved: Figure_4_Pre_Trends_Data.csv\n")
+  # --- SPEC B: ≤1988 only ---
+  data_B <- data[get(cohort_var) == 1]
+  if (nrow(data_B) > 100) {
+    m_B <- tryCatch(
+      feols(formula_pooled, data = data_B, cluster = as.formula(paste0("~", cluster_var)), lean = FALSE),
+      error = function(e) { message("  Spec B failed: ", e$message); NULL }
+    )
+    models[["B"]]  <- m_B
+    headers[["B"]] <- "B: Pre-1988"
+  } else {
+    message("  Spec B skipped: N = ", nrow(data_B))
+  }
 
+  # --- SPEC C: Pooled + cohort × year FE ---
+  if (add_cohort_year_fe) {
+    # Append cohort_pre1988^panel_year to the existing FE specification
+    # Parse formula to inject additional FE term
+    fml_str <- deparse(formula_pooled, width.cutoff = 500)
+    # Inject cohort interaction FE: cohort_pre1988^panel_year
+    fml_C_str <- sub("\\|\\s*(.+)$",
+                      paste0("| \\1 + ", cohort_var, "^", fe_year_var),
+                      fml_str)
+    fml_C <- as.formula(fml_C_str)
 
-#==============================================================================
-# SECTION 9: FIGURE 5 — RISK FACTOR VALIDATION (FACILITY-LEVEL)
-#==============================================================================
-# Design decisions (confirmed with PI):
-#   Q1  — Facility-level regression (option c). LUST records are facility-level;
-#          we do NOT attribute leaks to individual tanks. Unit = facility-year.
-#          Covariates are facility-level aggregates of tank characteristics.
-#   Q2  — Incidence is the facility's first LUST report. event_first_leak (1 in
-#          first-leak year, 0 before) is already built in annual_data. Facility
-#          exits the risk set after that year.
-#   Q3  — Fold by FACILITY (option b). Each facility is either fully in train or
-#          fully in test. Prevents any temporal leakage of facility identity
-#          across folds. Stratified by state to preserve state representation.
-#   Q4  — State FE retained. Since we fold by facility (not state), every state
-#          in the test set also appears in training, so state FE coefficients
-#          are estimable. Predict on test using training-set FE values.
+    m_C <- tryCatch(
+      feols(fml_C, data = data, cluster = as.formula(paste0("~", cluster_var)), lean = FALSE),
+      error = function(e) { message("  Spec C failed: ", e$message); NULL }
+    )
+    models[["C"]]  <- m_C
+    headers[["C"]] <- "C: Pooled + Cohort×Year FE"
+  }
+
+  # --- SPEC D: Triple-difference ---
+  if (run_triple_diff) {
+    fml_str <- deparse(formula_pooled, width.cutoff = 500)
+    # Add cohort_pre1988 interactions to RHS
+    # Replace "did_term" with "did_term + did_term:cohort_pre1988 + cohort_pre1988:post"
+    fml_D_str <- sub(treatment_var_name,
+                      paste0(treatment_var_name, " + ", treatment_var_name, ":",
+                             cohort_var, " + post:", cohort_var),
+                      fml_str)
+    fml_D <- as.formula(fml_D_str)
+
+    m_D <- tryCatch(
+      feols(fml_D, data = data, cluster = as.formula(paste0("~", cluster_var)), lean = FALSE),
+      error = function(e) { message("  Spec D failed: ", e$message); NULL }
+    )
+    models[["D"]]  <- m_D
+    headers[["D"]] <- "D: Triple-Diff"
+  }
+
+  # Filter out NULLs
+  keep <- !sapply(models, is.null)
+  list(
+    models  = models[keep],
+    headers = headers[keep]
+  )
+}
+
+# SECTION 3: MODEL 1A — FACILITY-YEAR DiD + EVENT STUDY
 #==============================================================================
 
 cat("\n========================================\n")
-cat("SECTION 9: FIGURE 5 — RISK FACTOR VALIDATION\n")
-cat("========================================\n\n")
-
-cat("Design: Facility-year panel (1990-1998) | Outcome: first LUST report\n")
-cat("CV:     5-fold, folded by facility, stratified by state\n")
-cat("Specs:  (1) Year FE only | (2) Year + State FE [robustness]\n\n")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 17.1  BUILD FIGURE 5 PRE-PERIOD PANEL
-# ─────────────────────────────────────────────────────────────────────────────
-cat("--- 17.1: Building pre-period facility-year panel ---\n")
-
-# Start from the already-filtered annual_data (incumbent, clean missing-data sample)
-fig5_panel <- annual_data[panel_year >= 1990 & panel_year <= 1998]
-
-# --- Apply first-leak incidence censoring ---
-# Keep facility-years up to and including the year of first LUST report.
-# After that year, the facility has "become a leaker" and exits the risk set.
-# year_of_first_leak is NA for facilities that never leaked in the full panel.
-fig5_panel <- fig5_panel[
-  is.na(year_of_first_leak) | panel_year <= year_of_first_leak
-]
-cat(sprintf("  Facility-years after incidence censoring: %s\n",
-            format(nrow(fig5_panel), big.mark = ",")))
-cat(sprintf("  Unique facilities: %s\n",
-            format(uniqueN(fig5_panel$panel_id), big.mark = ",")))
-cat(sprintf("  Facilities with a first leak in 1990-1998: %s (%.1f%%)\n",
-            format(sum(!is.na(fig5_panel$year_of_first_leak) &
-                       fig5_panel$event_first_leak == 1, na.rm = TRUE),
-                   big.mark = ","),
-            100 * mean(!is.na(fig5_panel$year_of_first_leak) &
-                       fig5_panel$event_first_leak == 1, na.rm = TRUE)))
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 17.2  COMPUTE FACILITY-LEVEL COVARIATES
-# ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- 17.2: Computing facility-level risk covariates ---\n")
-
-# ── TIME-VARYING (from annual_data columns, computed per facility-year) ────────
-# pct_single_walled_fac:  share of active tanks that are single-walled this year
-#   single_tanks_dec / active_tanks_dec (December snapshot)
-# mean_tank_age:          avg_tank_age_dec (already in panel, December snapshot)
-# log_capacity_fac:       log(total_capacity_dec + 1) for facility-year
-# is_motor_fuel:          has_gasoline_year (any gasoline/diesel tank this year)
-
-fig5_panel[, `:=`(
-  pct_single_walled_fac = fifelse(
-    active_tanks_dec > 0,
-    single_tanks_dec / active_tanks_dec,
-    NA_real_
-  ),
-  mean_tank_age       = avg_tank_age_dec,
-  age_gt_20_fac       = as.integer(avg_tank_age_dec > 20),   # facility avg > 20
-  log_capacity_fac    = log(pmax(total_capacity_dec, 1)),
-  is_motor_fuel_fac   = as.integer(is_motor_fuel == 1)
-)]
-
-# ── TIME-INVARIANT (from tank_inventory — vintage requires install_date) ────────
-# pct_pre_1980_fac: share of facility's incumbent tanks with pre-1980 vintage.
-# Not in annual_data (install_year proxy is approximate). Compute from
-# tank_inventory where old_vintage is exact (install_date < 1980-01-01).
-
-fac_vintage <- tank_inventory[
-  panel_id %in% unique(fig5_panel$panel_id),
-  .(pct_pre_1980_fac = mean(old_vintage == 1, na.rm = TRUE)),
-  by = panel_id
-]
-cat(sprintf("  Vintage computed for %s facilities\n",
-            format(nrow(fac_vintage), big.mark = ",")))
-
-fig5_panel <- fac_vintage[fig5_panel, on = "panel_id"]
-
-# Check covariate completeness
-n_complete <- nrow(fig5_panel[
-  !is.na(event_first_leak) &
-  !is.na(pct_single_walled_fac) &
-  !is.na(mean_tank_age) &
-  !is.na(pct_pre_1980_fac) &
-  !is.na(log_capacity_fac)
-])
-cat(sprintf("  Complete cases (all covariates + outcome): %s / %s (%.1f%%)\n",
-            format(n_complete, big.mark = ","),
-            format(nrow(fig5_panel), big.mark = ","),
-            100 * n_complete / nrow(fig5_panel)))
-
-# Drop rows with any covariate or outcome NA (cannot feed glm)
-fig5_panel <- fig5_panel[
-  !is.na(event_first_leak) &
-  !is.na(pct_single_walled_fac) &
-  !is.na(mean_tank_age) &
-  !is.na(pct_pre_1980_fac) &
-  !is.na(log_capacity_fac)
-]
-cat(sprintf("  Panel after complete-case filter: %s rows | %s facilities\n",
-            format(nrow(fig5_panel), big.mark = ","),
-            format(uniqueN(fig5_panel$panel_id), big.mark = ",")))
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 17.3  COMPOSITE RISK SCORE & FIGURE 5A — RAW LEAK RATES BY CATEGORY
-# ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- 17.3: Figure 5A — Raw Leak Rates by Risk Category ---\n")
-
-# Risk score at facility-year level (sum of binary risk indicators).
-# Each dimension is binarised at its natural threshold:
-#   pct_single_walled_fac > 0.5  → majority single-walled
-#   age_gt_20_fac == 1            → facility avg age > 20
-#   pct_pre_1980_fac   > 0.5      → majority pre-1980 vintage
-fig5_panel[, `:=`(
-  risk_sw_fac  = as.integer(pct_single_walled_fac > 0.5),
-  risk_age_fac = age_gt_20_fac,
-  risk_vin_fac = as.integer(pct_pre_1980_fac > 0.5),
-  risk_score_fac = (as.integer(pct_single_walled_fac > 0.5) +
-                    age_gt_20_fac +
-                    as.integer(pct_pre_1980_fac > 0.5))
-)]
-
-fig5_panel[, risk_category_fac := fcase(
-  risk_score_fac == 0, "Low (0)",
-  risk_score_fac == 1, "Medium (1)",
-  risk_score_fac == 2, "High (2)",
-  risk_score_fac == 3, "Very High (3)",
-  default = NA_character_
-)]
-
-# Raw leak rates per 1,000 facility-years, by risk category and group
-fig5a_data <- fig5_panel[!is.na(risk_category_fac), .(
-  leak_rate_per1000 = sum(event_first_leak, na.rm = TRUE) / .N * 1000,
-  n_events          = sum(event_first_leak, na.rm = TRUE),
-  n_fac_years       = .N
-), by = .(
-  Group = fifelse(texas_treated == 1, "Texas", "Control"),
-  risk_category_fac
-)]
-
-# Binomial SE for error bars (Clopper-Pearson style approximation)
-fig5a_data[, se_rate := sqrt(
-  (leak_rate_per1000 / 1000) * (1 - leak_rate_per1000 / 1000) / n_fac_years
-) * 1000]
-
-cat("Figure 5A — Raw leak rates by risk category:\n")
-print(fig5a_data[order(Group, risk_category_fac)])
-
-# Lift ratio: high-risk / low-risk
-low_rate_ctrl <- fig5a_data[Group == "Control" & risk_category_fac == "Low (0)",
-                             leak_rate_per1000]
-hi_rate_ctrl  <- fig5a_data[Group == "Control" & risk_category_fac == "Very High (3)",
-                             leak_rate_per1000]
-if (length(low_rate_ctrl) > 0 && low_rate_ctrl > 0)
-  cat(sprintf("  Control — Very High / Low risk lift: %.1fx\n",
-              hi_rate_ctrl / low_rate_ctrl))
-
-cat_order <- c("Low (0)", "Medium (1)", "High (2)", "Very High (3)")
-fig5a_data[, risk_category_fac := factor(risk_category_fac, levels = cat_order)]
-
-fig5a <- ggplot(
-  fig5a_data[!is.na(risk_category_fac)],
-  aes(x = risk_category_fac, y = leak_rate_per1000, fill = Group)
-) +
-  geom_col(position = position_dodge(width = 0.75), width = 0.7) +
-  geom_errorbar(
-    aes(ymin = pmax(leak_rate_per1000 - 1.96 * se_rate, 0),
-        ymax = leak_rate_per1000 + 1.96 * se_rate),
-    position = position_dodge(width = 0.75), width = 0.25, linewidth = 0.6
-  ) +
-  scale_fill_manual(values = c("Control" = "#0072B2", "Texas" = "#D55E00")) +
-  labs(
-    title    = "Figure 5A: Pre-Period Leak Rates by Facility Risk Category (1990-1998)",
-    subtitle = paste0("Risk score = # of majority-threshold indicators met",
-                      " (single-walled, age > 20 yrs, pre-1980 vintage)\n",
-                      "Rates are first-LUST incidence only — facility exits risk set",
-                      " after first event. Error bars: 95% CI."),
-    x = "Facility Risk Category (# Risk Factors)",
-    y = "First-Leak Rate per 1,000 Facility-Years",
-    fill = ""
-  ) +
-  theme_pub()
-
-ggsave(file.path(OUTPUT_FIGURES, "Figure_5A_Raw_Leak_Rates_by_Risk.png"),
-       fig5a, width = 10, height = 6, dpi = 300, bg = "white")
-cat("✓ Saved: Figure_5A_Raw_Leak_Rates_by_Risk.png\n")
-
-fwrite(fig5a_data,
-       file.path(OUTPUT_TABLES, "Figure_5A_Raw_Rates_Data.csv"))
-cat("✓ Saved: Figure_5A_Raw_Rates_Data.csv\n")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 17.4  5-FOLD CV SETUP — FOLD BY FACILITY, STRATIFIED BY STATE
-# ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- 17.4: 5-Fold CV setup (by facility, stratified by state) ---\n")
-
-# Assign folds at the FACILITY level (one fold per panel_id, constant across years).
-# Stratified by state so each fold mirrors the state composition of the full sample.
-set.seed(20260202)
-fac_folds <- unique(fig5_panel[, .(panel_id, state)])
-fac_folds[, fold := sample(1:5, .N, replace = TRUE), by = state]
-
-# Verify no facility spans two folds (should always be true by construction)
-stopifnot(uniqueN(fac_folds$panel_id) == nrow(fac_folds))
-
-cat(sprintf("  Facilities assigned to folds: %s\n",
-            format(nrow(fac_folds), big.mark = ",")))
-print(fac_folds[, .N, by = fold])   # rough balance check
-
-# Merge fold assignments back into panel
-fig5_panel <- fac_folds[fig5_panel, on = .(panel_id, state)]
-
-# Logistic regression formula pieces
-# Primary spec: year FE only  (captures global time trends in leak rates)
-# Robustness:   year + state FE (absorbs state-level leak rate levels;
-#               valid here because we fold by facility, so state FE is
-#               always estimable from training data)
-FORM_NOFE    <- event_first_leak ~ pct_single_walled_fac + age_gt_20_fac +
-                  pct_pre_1980_fac + log_capacity_fac + is_motor_fuel_fac +
-                  factor(panel_year)
-FORM_STATEFE <- event_first_leak ~ pct_single_walled_fac + age_gt_20_fac +
-                  pct_pre_1980_fac + log_capacity_fac + is_motor_fuel_fac +
-                  factor(panel_year) + factor(state)
-
-# Initialise prediction columns
-fig5_panel[, `:=`(
-  pred_no_state_fe   = NA_real_,
-  pred_with_state_fe = NA_real_
-)]
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 17.5  K-FOLD CROSS-VALIDATION
-# ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- 17.5: Running 5-fold CV ---\n")
-
-for (k in 1:5) {
-
-  train <- fig5_panel[fold != k]
-  test  <- fig5_panel[fold == k]
-
-  cat(sprintf("  Fold %d | train: %s fac-years, %s facs | test: %s fac-years, %s facs\n",
-              k,
-              format(nrow(train),            big.mark = ","),
-              format(uniqueN(train$panel_id), big.mark = ","),
-              format(nrow(test),             big.mark = ","),
-              format(uniqueN(test$panel_id),  big.mark = ",")))
-
-  # ── Spec 1: Year FE only ──────────────────────────────────────────────────
-  m_nofe <- tryCatch(
-    glm(FORM_NOFE, data = train, family = binomial(link = "logit")),
-    error = function(e) {
-      message(sprintf("    [Fold %d, no-state-FE] glm failed: %s", k, e$message))
-      NULL
-    }
-  )
-  if (!is.null(m_nofe)) {
-    # predict() handles new year factor levels by setting them to NA; suppress warning
-    preds_nofe <- suppressWarnings(
-      predict(m_nofe, newdata = test, type = "response")
-    )
-    fig5_panel[fold == k, pred_no_state_fe := preds_nofe]
-  }
-
-  # ── Spec 2: Year + State FE ───────────────────────────────────────────────
-  # State FE is estimable because every state in test also appears in train
-  # (we folded by facility; a state is "held out" only if it has exactly 1
-  # facility, which we check and warn about below).
-  states_test_only <- setdiff(unique(test$state), unique(train$state))
-  if (length(states_test_only) > 0) {
-    cat(sprintf("    ⚠  Fold %d: states only in test (FE undefined): %s\n",
-                k, paste(states_test_only, collapse = ", ")))
-    cat("       State FE for these will fallback to NA — inspect calibration.\n")
-  }
-
-  m_statefe <- tryCatch(
-    glm(FORM_STATEFE, data = train, family = binomial(link = "logit")),
-    error = function(e) {
-      message(sprintf("    [Fold %d, state-FE] glm failed: %s", k, e$message))
-      NULL
-    }
-  )
-  if (!is.null(m_statefe)) {
-    preds_statefe <- suppressWarnings(
-      predict(m_statefe, newdata = test, type = "response")
-    )
-    fig5_panel[fold == k, pred_with_state_fe := preds_statefe]
-  }
-}
-
-cat("\n  ✓ CV complete. OOB prediction coverage:\n")
-cat(sprintf("    No-state-FE:   %s / %s rows have predictions (%.1f%%)\n",
-            sum(!is.na(fig5_panel$pred_no_state_fe)),
-            nrow(fig5_panel),
-            100 * mean(!is.na(fig5_panel$pred_no_state_fe))))
-cat(sprintf("    With-state-FE: %s / %s rows have predictions (%.1f%%)\n",
-            sum(!is.na(fig5_panel$pred_with_state_fe)),
-            nrow(fig5_panel),
-            100 * mean(!is.na(fig5_panel$pred_with_state_fe))))
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 17.6  CALIBRATION TABLE
-# ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- 17.6: Calibration table (OOB predictions by decile) ---\n")
-
-cv_complete <- fig5_panel[!is.na(pred_no_state_fe)]
-cv_complete[, decile := as.integer(cut(
-  pred_no_state_fe,
-  breaks = quantile(pred_no_state_fe, probs = seq(0, 1, 0.1), na.rm = TRUE),
-  labels = FALSE, include.lowest = TRUE
-))]
-
-calibration_table <- cv_complete[, .(
-  mean_predicted  = mean(pred_no_state_fe, na.rm = TRUE),
-  mean_actual     = mean(event_first_leak, na.rm = TRUE),
-  n_fac_years     = .N,
-  n_first_leaks   = sum(event_first_leak)
-), by = decile][order(decile)]
-
-# Lift: actual rate in each decile relative to bottom decile
-bottom_rate <- calibration_table[decile == 1, mean_actual]
-calibration_table[, lift := fifelse(
-  bottom_rate > 0, mean_actual / bottom_rate, NA_real_
-)]
-
-cat("Calibration Table (No-State-FE spec, primary):\n")
-print(calibration_table, digits = 4)
-
-top_rate <- calibration_table[decile == 10, mean_actual]
-if (!is.na(bottom_rate) && bottom_rate > 0)
-  cat(sprintf("\n  Top-decile / Bottom-decile lift: %.1fx\n", top_rate / bottom_rate))
-
-fwrite(calibration_table,
-       file.path(OUTPUT_TABLES, "Figure_5B_Calibration_Table.csv"))
-cat("✓ Saved: Figure_5B_Calibration_Table.csv\n")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 17.7  DISCRIMINATION: AUC-ROC
-# ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- 17.7: AUC-ROC ---\n")
-
-auc_nofe <- tryCatch({
-  roc_nofe  <- pROC::roc(cv_complete$event_first_leak,
-                         cv_complete$pred_no_state_fe,
-                         quiet = TRUE)
-  as.numeric(pROC::auc(roc_nofe))
-}, error = function(e) { NA_real_ })
-
-auc_statefe <- tryCatch({
-  cv_sfe    <- fig5_panel[!is.na(pred_with_state_fe)]
-  roc_sfe   <- pROC::roc(cv_sfe$event_first_leak,
-                         cv_sfe$pred_with_state_fe,
-                         quiet = TRUE)
-  as.numeric(pROC::auc(roc_sfe))
-}, error = function(e) { NA_real_ })
-
-cat(sprintf("  AUC-ROC  (Year FE only):       %.3f\n", auc_nofe))
-cat(sprintf("  AUC-ROC  (Year + State FE):    %.3f\n", auc_statefe))
-
-if (!is.na(auc_nofe)) {
-  if      (auc_nofe >= 0.8) cat("  → Good discrimination (AUC ≥ 0.80)\n")
-  else if (auc_nofe >= 0.7) cat("  → Acceptable discrimination (AUC 0.70-0.79)\n")
-  else                       cat("  → Weak discrimination (AUC < 0.70) — expected for rare events\n")
-  cat("  Note: Leaks are rare (low base rate); AUC alone understates lift.\n")
-  cat("  Inspect the top-decile lift ratio alongside AUC.\n")
-}
-
-auc_summary <- data.frame(
-  Spec    = c("Year FE only (primary)", "Year + State FE (robustness)"),
-  AUC_ROC = round(c(auc_nofe, auc_statefe), 4)
-)
-fwrite(as.data.table(auc_summary),
-       file.path(OUTPUT_TABLES, "Figure_5B_AUC_Summary.csv"))
-cat("✓ Saved: Figure_5B_AUC_Summary.csv\n")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 17.8  PARTIAL DEPENDENCE SUMMARIES
-# ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- 17.8: Partial dependence summaries ---\n")
-
-# By single-walled share (quartile bins)
-cv_complete[, sw_bin := cut(
-  pct_single_walled_fac,
-  breaks = c(0, 0.25, 0.5, 0.75, 1.00001),
-  labels = c("0-25%", "26-50%", "51-75%", "76-100%"),
-  include.lowest = TRUE
-)]
-
-pd_sw <- cv_complete[!is.na(sw_bin), .(
-  mean_predicted = mean(pred_no_state_fe, na.rm = TRUE),
-  mean_actual    = mean(event_first_leak, na.rm = TRUE),
-  n = .N
-), by = sw_bin][order(sw_bin)]
-
-# By mean tank age (bins matching memo example)
-cv_complete[, age_bin := cut(
-  mean_tank_age,
-  breaks = c(0, 10, 20, 30, Inf),
-  labels = c("0-10 yrs", "11-20 yrs", "21-30 yrs", "30+ yrs"),
-  include.lowest = TRUE
-)]
-
-pd_age <- cv_complete[!is.na(age_bin), .(
-  mean_predicted = mean(pred_no_state_fe, na.rm = TRUE),
-  mean_actual    = mean(event_first_leak, na.rm = TRUE),
-  n = .N
-), by = age_bin][order(age_bin)]
-
-# By pre-1980 vintage share (quartile bins)
-cv_complete[, vin_bin := cut(
-  pct_pre_1980_fac,
-  breaks = c(-0.001, 0, 0.25, 0.5, 1.00001),
-  labels = c("None", "1-25%", "26-50%", "51-100%"),
-  include.lowest = TRUE
-)]
-
-pd_vin <- cv_complete[!is.na(vin_bin), .(
-  mean_predicted = mean(pred_no_state_fe, na.rm = TRUE),
-  mean_actual    = mean(event_first_leak, na.rm = TRUE),
-  n = .N
-), by = vin_bin][order(vin_bin)]
-
-cat("Partial Dependence — % Single-Walled:\n"); print(pd_sw)
-cat("Partial Dependence — Mean Tank Age:\n");    print(pd_age)
-cat("Partial Dependence — % Pre-1980 Vintage:\n"); print(pd_vin)
-
-# Save combined PD table
-pd_all <- rbind(
-  pd_sw[ , .(Factor = "Share Single-Walled", Category = as.character(sw_bin),
-             Mean_Predicted = mean_predicted, Mean_Actual = mean_actual, N = n)],
-  pd_age[, .(Factor = "Mean Tank Age",       Category = as.character(age_bin),
-             Mean_Predicted = mean_predicted, Mean_Actual = mean_actual, N = n)],
-  pd_vin[, .(Factor = "Share Pre-1980",      Category = as.character(vin_bin),
-             Mean_Predicted = mean_predicted, Mean_Actual = mean_actual, N = n)]
-)
-fwrite(pd_all, file.path(OUTPUT_TABLES, "Figure_5B_Partial_Dependence.csv"))
-cat("✓ Saved: Figure_5B_Partial_Dependence.csv\n")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 17.9  FIGURE 5B — CALIBRATION PLOT + PARTIAL DEPENDENCE PANELS
-# ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- 17.9: Generating Figure 5B ---\n")
-
-# ── Panel 1: Calibration plot ─────────────────────────────────────────────────
-auc_label <- ifelse(!is.na(auc_nofe),
-                    sprintf("5-Fold CV, Year FE | AUC = %.3f", auc_nofe),
-                    "5-Fold CV, Year FE | AUC not computed")
-
-fig5b_cal <- ggplot(calibration_table,
-                    aes(x = mean_predicted, y = mean_actual)) +
-  geom_abline(intercept = 0, slope = 1,
-              linetype = "dashed", color = "gray50", linewidth = 0.7) +
-  geom_point(size = 3.5, color = "#D55E00") +
-  geom_text(aes(label = decile), vjust = -0.8, size = 3.2, color = "gray30") +
-  scale_x_continuous(labels = scales::percent_format(accuracy = 0.01)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.01)) +
-  labs(
-    title    = "Calibration: Predicted vs. Actual First-Leak Rates (OOB)",
-    subtitle = auc_label,
-    x = "Mean OOB Predicted Probability",
-    y = "Mean Actual First-Leak Rate",
-    caption  = "Numbers = decile. Dashed line = perfect calibration."
-  ) +
-  theme_pub()
-
-# ── Panel 2: Partial dependence — long format for faceted bar chart ────────────
-pd_long <- melt(
-  pd_all,
-  id.vars      = c("Factor", "Category"),
-  measure.vars = c("Mean_Predicted", "Mean_Actual"),
-  variable.name = "Type",
-  value.name    = "Rate"
-)
-pd_long[, Type := fifelse(Type == "Mean_Predicted",
-                          "Predicted (OOB)", "Actual")]
-
-# Enforce factor order within each facet
-pd_long[Factor == "Share Single-Walled",
-        Category := factor(Category,
-                           levels = c("0-25%", "26-50%", "51-75%", "76-100%"))]
-pd_long[Factor == "Mean Tank Age",
-        Category := factor(Category,
-                           levels = c("0-10 yrs", "11-20 yrs", "21-30 yrs", "30+ yrs"))]
-pd_long[Factor == "Share Pre-1980",
-        Category := factor(Category,
-                           levels = c("None", "1-25%", "26-50%", "51-100%"))]
-
-fig5b_pd <- ggplot(pd_long[!is.na(Category) & !is.na(Rate)],
-                   aes(x = Category, y = Rate, fill = Type)) +
-  geom_col(position = position_dodge(width = 0.75), width = 0.68) +
-  facet_wrap(~Factor, scales = "free_x", nrow = 1) +
-  scale_fill_manual(
-    values = c("Predicted (OOB)" = "#D55E00", "Actual" = "#0072B2")
-  ) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.01)) +
-  labs(
-    title    = "Partial Dependence: Predicted vs. Actual First-Leak Rates",
-    subtitle = "Facility-year averages within covariate bins | Pre-period 1990-1998",
-    x = NULL, y = "First-Leak Rate", fill = NULL,
-    caption  = "Predicted = OOB logistic predictions (Year FE spec, no state FE)."
-  ) +
-  theme_pub() +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 8))
-
-# ── Combine into Figure 5B composite ──────────────────────────────────────────
-fig5b_combined <- gridExtra::arrangeGrob(
-  fig5b_cal, fig5b_pd, nrow = 2,
-  heights = c(1, 0.85),
-  top = grid::textGrob(
-    "Figure 5B: Cross-Validated Risk Factor Validation (Facility Level)",
-    gp = grid::gpar(fontsize = 13, fontface = "bold")
-  )
-)
-
-ggsave(file.path(OUTPUT_FIGURES, "Figure_5B_CV_Risk_Validation.png"),
-       fig5b_combined, width = 14, height = 12, dpi = 300, bg = "white")
-cat("✓ Saved: Figure_5B_CV_Risk_Validation.png\n")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 17.10 FULL COEFFICIENT TABLE (in-sample, for interpretation)
-# ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- 17.10: Full-sample logit coefficients (in-sample, for reporting) ---\n")
-cat("NOTE: These are IN-SAMPLE — for table reporting only.\n")
-cat("      Use OOB predictions (above) for validation claims.\n\n")
-
-m_full_nofe <- tryCatch(
-  glm(FORM_NOFE, data = fig5_panel, family = binomial(link = "logit")),
-  error = function(e) {
-    message(sprintf("Full-sample logit (no state FE) failed: %s", e$message))
-    NULL
-  }
-)
-m_full_sfe <- tryCatch(
-  glm(FORM_STATEFE, data = fig5_panel, family = binomial(link = "logit")),
-  error = function(e) {
-    message(sprintf("Full-sample logit (state FE) failed: %s", e$message))
-    NULL
-  }
-)
-
-if (!is.null(m_full_nofe)) {
-  cat("Full-sample logit (Year FE only):\n")
-  coef_nofe <- as.data.table(broom::tidy(m_full_nofe, exponentiate = FALSE))
-  coef_nofe <- coef_nofe[!grepl("^factor\\(panel_year\\)", term)]  # suppress year FEs for display
-  print(coef_nofe[, .(term, estimate = round(estimate,4),
-                       std.error = round(std.error,4),
-                       p.value   = round(p.value, 4))],
-        row.names = FALSE)
-}
-if (!is.null(m_full_sfe)) {
-  cat("\nFull-sample logit (Year + State FE):\n")
-  coef_sfe <- as.data.table(broom::tidy(m_full_sfe, exponentiate = FALSE))
-  coef_sfe <- coef_sfe[!grepl("^factor\\(panel_year\\)|^factor\\(state\\)", term)]
-  print(coef_sfe[, .(term, estimate = round(estimate,4),
-                      std.error = round(std.error,4),
-                      p.value   = round(p.value, 4))],
-        row.names = FALSE)
-}
-
-# Save coefficient tables
-coef_out <- rbind(
-  if (!is.null(m_full_nofe)) {
-    dt <- as.data.table(broom::tidy(m_full_nofe))
-    dt[!grepl("^factor\\(panel_year\\)", term), .(Spec = "Year FE only", term,
-       estimate = round(estimate, 4), std.error = round(std.error, 4),
-       p.value  = round(p.value, 4))]
-  },
-  if (!is.null(m_full_sfe)) {
-    dt <- as.data.table(broom::tidy(m_full_sfe))
-    dt[!grepl("^factor\\(panel_year\\)|^factor\\(state\\)", term),
-       .(Spec = "Year + State FE", term,
-         estimate = round(estimate, 4), std.error = round(std.error, 4),
-         p.value  = round(p.value, 4))]
-  },
-  fill = TRUE
-)
-fwrite(coef_out,
-       file.path(OUTPUT_TABLES, "Figure_5_Full_Sample_Logit_Coefs.csv"))
-cat("✓ Saved: Figure_5_Full_Sample_Logit_Coefs.csv\n")
-
-# Save full CV panel (with OOB predictions) for any further analysis
-fwrite(fig5_panel[, .(
-  panel_id, state, panel_year, fold,
-  event_first_leak,
-  pct_single_walled_fac, mean_tank_age, age_gt_20_fac,
-  pct_pre_1980_fac, log_capacity_fac, is_motor_fuel_fac,
-  risk_score_fac, risk_category_fac,
-  pred_no_state_fe, pred_with_state_fe
-)], file.path(OUTPUT_TABLES, "Figure_5_CV_Panel_with_OOB_Preds.csv"))
-cat("✓ Saved: Figure_5_CV_Panel_with_OOB_Preds.csv\n")
-
-gc()
-
-
-#==============================================================================
-# SECTION 10: MODEL 1A — FACILITY-YEAR DiD + EVENT STUDY
-#==============================================================================
-
-cat("\n========================================\n")
-cat("SECTION 10: MODEL 1A — FACILITY DiD\n")
+cat("SECTION 3: MODEL 1A — FACILITY DiD\n")
 cat("========================================\n\n")
 
 cat("Specification: Closure_Event_it = αi + λt + β(TX_i × Post_t) + εit\n")
@@ -1684,7 +522,7 @@ cat("Outcome:  Any_Closure = 1 if facility closed ≥1 tank in year t\n")
 cat("FE:       Facility (αi) + Year (λt)\n")
 cat("Cluster:  State (19 clusters)\n\n")
 
-# Baseline
+# Baseline (POOLED)
 model_1a <- feols(
   closure_event ~ did_term | panel_id + panel_year,
   data    = annual_data,
@@ -1692,10 +530,10 @@ model_1a <- feols(
   lean    = FALSE
 )
 
-cat("--- Model 1A: Baseline ---\n")
+cat("--- Model 1A: Baseline (Pooled) ---\n")
 print(summary(model_1a))
 
-# With facility-size control (log tanks)
+# With facility-size control (log tanks) — POOLED
 model_1a_ctrl <- feols(
   closure_event ~ did_term + log(active_tanks_dec + 1) | panel_id + panel_year,
   data    = annual_data,
@@ -1703,20 +541,46 @@ model_1a_ctrl <- feols(
   lean    = FALSE
 )
 
-cat("\n--- Model 1A: With Controls ---\n")
+cat("\n--- Model 1A: With Controls (Pooled) ---\n")
 print(summary(model_1a_ctrl))
 
-# Interpretation
-beta_1a <- coef(model_1a)["did_term"]
-cat("\n--- Economic Interpretation ---\n")
-cat(sprintf("β = %.6f (%.4f pp)\n", beta_1a, beta_1a * 100))
-if (beta_1a > 0) {
-  cat("→ Texas facilities MORE likely to close a tank post-1999\n")
-  cat("→ Consistent with insurance reform accelerating tank retirement\n")
-} else {
-  cat("→ Texas facilities LESS likely to close a tank post-1999\n")
+# ─────────────────────────────────────────────────────────────────────────────
+# Model 1A COHORT SPLITS: Pooled | A | B | C | D
+# ─────────────────────────────────────────────────────────────────────────────
+cat("\n--- Model 1A: Cohort Splits (1988 Federal Mandate) ---\n")
+cat("Spec A: Post-1988 only (clean, no mandate confound)\n")
+cat("Spec B: Pre-1988 only (composite mandate + insurance effect)\n")
+cat("Spec C: Pooled + cohort×year FE\n")
+cat("Spec D: Triple-difference (tests cohort heterogeneity)\n\n")
+
+cohort_1a <- run_cohort_did(
+  formula_pooled = closure_event ~ did_term | panel_id + panel_year,
+  data           = annual_data,
+  cohort_var     = "cohort_pre1988",
+  treatment_var_name = "did_term"
+)
+
+# Print all cohort results
+for (nm in names(cohort_1a$models)) {
+  cat(sprintf("--- Model 1A [%s] ---\n", cohort_1a$headers[[nm]]))
+  print(summary(cohort_1a$models[[nm]]))
+  cat("\n")
 }
 
+# Save combined Pooled|A|B|C|D table
+save_standard_did_table(
+  models        = cohort_1a$models,
+  headers       = unlist(cohort_1a$headers),
+  base_name     = "Model_1A_Facility_Closure_Cohort_Splits",
+  title         = "Model 1A: Closure Probability — Cohort Splits (Pooled|A|B|C|D)",
+  treatment_var = "did_term",
+  cluster_var   = "state",
+  use_bootstrap = USE_BOOTSTRAP,
+  n_reps        = N_BOOTSTRAP,
+  digits        = 6
+)
+
+# Also save original 2-column baseline + controls table
 save_standard_did_table(
   models        = list(model_1a, model_1a_ctrl),
   headers       = c("Baseline", "With Controls"),
@@ -1792,11 +656,11 @@ fwrite(es_coefs_dt, file.path(OUTPUT_TABLES, "Model_1A_ES_Coefficients.csv"))
 
 
 #==============================================================================
-# SECTION 11: MODEL 1B — FACILITY-LEVEL COX SURVIVAL
+# SECTION 4: MODEL 1B — FACILITY-LEVEL COX SURVIVAL
 #==============================================================================
 
 cat("\n========================================\n")
-cat("SECTION 11: MODEL 1B — FACILITY SURVIVAL\n")
+cat("SECTION 4: MODEL 1B — FACILITY SURVIVAL\n")
 cat("========================================\n\n")
 
 cat("Specification: h_i(t) = h_0(t) × exp(β × TX_i)\n")
@@ -1884,11 +748,11 @@ save_cox_results(
 
 
 #==============================================================================
-# SECTION 12: MODEL 2 — TANK-LEVEL COX HTE (TWO SPECIFICATIONS)
+# SECTION 5: MODEL 2 — TANK-LEVEL COX HTE (TWO SPECIFICATIONS)
 #==============================================================================
 
 cat("\n========================================\n")
-cat("SECTION 12: MODEL 2 — TANK-LEVEL COX HTE\n")
+cat("SECTION 5: MODEL 2 — TANK-LEVEL COX HTE\n")
 cat("========================================\n\n")
 
 cat("Both specs share: Outcome = time from 1999 to tank closure\n\n")
@@ -2009,11 +873,11 @@ if ("texas:single_walled" %in% names(coef(model_2c_specB))) {
 
 
 #==============================================================================
-# SECTION 13: MODEL 3A — AGE AT CLOSURE (COUNTY FE) + EVENT STUDY
+# SECTION 6: MODEL 3A — AGE AT CLOSURE (COUNTY FE) + EVENT STUDY
 #==============================================================================
 
 cat("\n========================================\n")
-cat("SECTION 13: MODEL 3A — AGE AT CLOSURE\n")
+cat("SECTION 6: MODEL 3A — AGE AT CLOSURE\n")
 cat("========================================\n\n")
 
 cat("Specification: Age_j = μ_c + λ_t + β(TX_c × Post_t) + X_j'γ + ε_j\n")
@@ -2076,6 +940,37 @@ save_standard_did_table(
   n_reps        = N_BOOTSTRAP
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Model 3A COHORT SPLITS: Pooled | A | B | C | D
+# ─────────────────────────────────────────────────────────────────────────────
+cat("\n--- Model 3A: Cohort Splits (1988 Federal Mandate) ---\n")
+
+# For tank-level models, use tank's own cohort_pre1988
+cohort_3a <- run_cohort_did(
+  formula_pooled = age_at_closure ~ texas_post | county_fips_fac + closure_year,
+  data           = model_3a_data,
+  cohort_var     = "cohort_pre1988",
+  treatment_var_name = "texas_post",
+  fe_year_var    = "closure_year"
+)
+
+for (nm in names(cohort_3a$models)) {
+  cat(sprintf("--- Model 3A [%s] ---\n", cohort_3a$headers[[nm]]))
+  print(summary(cohort_3a$models[[nm]]))
+  cat("\n")
+}
+
+save_standard_did_table(
+  models        = cohort_3a$models,
+  headers       = unlist(cohort_3a$headers),
+  base_name     = "Model_3A_Age_at_Closure_Cohort_Splits",
+  title         = "Model 3A: Age at Closure — Cohort Splits (Pooled|A|B|C|D)",
+  treatment_var = "texas_post",
+  cluster_var   = "state",
+  use_bootstrap = USE_BOOTSTRAP,
+  n_reps        = N_BOOTSTRAP
+)
+
 #------------------------------------------------------------------------------
 # Model 3A-ES: Event Study for Age at Closure
 #------------------------------------------------------------------------------
@@ -2120,11 +1015,11 @@ fwrite(es_3a_dt, file.path(OUTPUT_TABLES, "Model_3A_ES_Coefficients.csv"))
 
 
 #==============================================================================
-# SECTION 14: MODEL 3B — AGE AT CLOSURE (FACILITY FE, SPANNING SAMPLE)
+# SECTION 7: MODEL 3B — AGE AT CLOSURE (FACILITY FE, SPANNING SAMPLE)
 #==============================================================================
 
 cat("\n========================================\n")
-cat("SECTION 14: MODEL 3B — WITHIN-FACILITY\n")
+cat("SECTION 7: MODEL 3B — WITHIN-FACILITY\n")
 cat("========================================\n\n")
 
 cat("Specification: Age_jt = αi + λt + β(Post_t) + εjt\n")
@@ -2181,12 +1076,23 @@ if (nrow(model_3b_data) == 0) {
   cat("      change in closure age post-1999 (both TX and Control).\n")
   cat("      In model_3b_did, texas_post isolates the TX-specific change.\n")
 
+  # FIX: Split save calls — model_3b uses "post", model_3b_did uses "texas_post"
   save_standard_did_table(
-    models        = list(model_3b, model_3b_did),
-    headers       = c("Post Only (Facility FE)", "TX×Post (DiD within Spanning)"),
-    base_name     = "Model_3B_Age_at_Closure_Facility_FE",
-    title         = "Model 3B: Age at Closure (Facility FE, Spanning Sample)",
+    models        = list(model_3b),
+    headers       = c("Post Only (Facility FE)"),
+    base_name     = "Model_3B_Age_at_Closure_Post_Only",
+    title         = "Model 3B: Age at Closure (Facility FE, Post Effect)",
     treatment_var = "post",
+    cluster_var   = "state",
+    use_bootstrap = USE_BOOTSTRAP,
+    n_reps        = N_BOOTSTRAP
+  )
+  save_standard_did_table(
+    models        = list(model_3b_did),
+    headers       = c("TX×Post (DiD within Spanning)"),
+    base_name     = "Model_3B_Age_at_Closure_TXxPost",
+    title         = "Model 3B: Age at Closure (Facility FE, TX×Post DiD)",
+    treatment_var = "texas_post",
     cluster_var   = "state",
     use_bootstrap = USE_BOOTSTRAP,
     n_reps        = N_BOOTSTRAP
@@ -2196,11 +1102,11 @@ if (nrow(model_3b_data) == 0) {
 
 
 #==============================================================================
-# SECTION 15: MODEL 4 — REVEALED LEAKS AT CLOSURE
+# SECTION 8: MODEL 4 — REVEALED LEAKS AT CLOSURE
 #==============================================================================
 
 cat("\n========================================\n")
-cat("SECTION 15: MODEL 4 — REVEALED LEAKS\n")
+cat("SECTION 8: MODEL 4 — REVEALED LEAKS\n")
 cat("========================================\n\n")
 
 cat("Research question: When tanks close, does the closure reveal contamination?\n")
@@ -2329,13 +1235,42 @@ if (beta_4 > 0) {
   cat("→ Inconsistent with risk-based selection hypothesis\n")
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Model 4 COHORT SPLITS: Pooled | A | B | C | D (Primary window only)
+# ─────────────────────────────────────────────────────────────────────────────
+cat("\n--- Model 4: Cohort Splits (Primary 0-60d window) ---\n")
+
+cohort_4 <- run_cohort_did(
+  formula_pooled = revealed_primary ~ did_term | county_fips_fac + panel_year,
+  data           = model_4_data,
+  cohort_var     = "cohort_pre1988",
+  treatment_var_name = "did_term"
+)
+
+for (nm in names(cohort_4$models)) {
+  cat(sprintf("--- Model 4 [%s] ---\n", cohort_4$headers[[nm]]))
+  print(summary(cohort_4$models[[nm]]))
+  cat("\n")
+}
+
+save_standard_did_table(
+  models        = cohort_4$models,
+  headers       = unlist(cohort_4$headers),
+  base_name     = "Model_4_Revealed_Leaks_Cohort_Splits",
+  title         = "Model 4: Revealed Leaks — Cohort Splits (Pooled|A|B|C|D)",
+  treatment_var = "did_term",
+  cluster_var   = "state",
+  use_bootstrap = USE_BOOTSTRAP,
+  n_reps        = N_BOOTSTRAP
+)
+
 
 #==============================================================================
-# SECTION 16: MODELS 5A/5B — OPERATIONAL LEAKS, COMPETING RISKS
+# SECTION 9: MODELS 5A/5B — OPERATIONAL LEAKS, COMPETING RISKS
 #==============================================================================
 
 cat("\n========================================\n")
-cat("SECTION 16: MODELS 5A/5B — COMPETING RISKS\n")
+cat("SECTION 9: MODELS 5A/5B — COMPETING RISKS\n")
 cat("========================================\n\n")
 
 cat("INCIDENCE (not recurrence): using event_first_leak + year_of_first_leak\n")
@@ -2489,24 +1424,25 @@ cat("→ Supports proactive exit interpretation over operational failure\n")
 
 
 #==============================================================================
-# SECTION 17: ROBUSTNESS — REGULATORY VINTAGE CONTROLS
+# SECTION 10: ROBUSTNESS — REGULATORY VINTAGE & PHASED MANDATE CONTROLS
 #==============================================================================
 
 cat("\n========================================\n")
-cat("SECTION 17: ROBUSTNESS CHECKS\n")
+cat("SECTION 10: ROBUSTNESS CHECKS\n")
 cat("========================================\n\n")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 17.1  Regulatory Vintage Controls (existing)
+# ─────────────────────────────────────────────────────────────────────────────
 cat("--- Robustness 1: Regulatory Vintage Controls (1998 Federal Mandate) ---\n")
 cat("The Dec 22, 1998 federal mandate required all tanks installed ≤ 1988\n")
 cat("to retrofit or close by the deadline. This confounds our 1999 TX reform.\n")
 cat("We add pre1998_install × post_1999 interaction to absorb mandate effects.\n\n")
 
-# Check reg_vintage column exists
 if ("reg_vintage" %in% names(annual_data)) {
   annual_data[, reg_vintage := factor(reg_vintage,
                                        levels = c("Post-Deadline", "Transition", "Pre-RCRA"))]
 
-  # Baseline Model 1A + reg vintage control
   model_rob_1a <- feols(
     closure_event ~ did_term + pre1998_install:post_1999 |
       panel_id + panel_year,
@@ -2516,7 +1452,6 @@ if ("reg_vintage" %in% names(annual_data)) {
   cat("Model 1A + pre1998 mandate interaction:\n")
   print(summary(model_rob_1a))
 
-  # Model 1A + full vintage FE interaction
   model_rob_1b <- feols(
     closure_event ~ did_term + reg_vintage:post_1999 |
       panel_id + panel_year,
@@ -2540,7 +1475,6 @@ if ("reg_vintage" %in% names(annual_data)) {
   )
   cat("✓ Saved: Robustness_Regulatory_Vintage_Controls.*\n")
 
-  # Interpretation note
   beta_base <- coef(model_1a)["did_term"]
   beta_rob  <- coef(model_rob_1a)["did_term"]
   cat(sprintf("\nBaseline β: %.6f | After mandate control β: %.6f\n",
@@ -2552,126 +1486,576 @@ if ("reg_vintage" %in% names(annual_data)) {
     cat("Estimate changes noticeably; mandate confound may matter.\n")
 
 } else {
-  cat("⚠  reg_vintage column not found in panel — skipping this robustness check.\n")
-  cat("   Ensure 10_Build_Annual_Panel_Optimized.R has been run.\n")
+  cat("⚠  reg_vintage column not found in panel — skipping.\n")
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 17.2  Texas Phased Mandate Exposure Control (NEW)
+# ─────────────────────────────────────────────────────────────────────────────
+cat("\n--- Robustness 2: Texas Phased Mandate Exposure ---\n")
+cat("Texas had phased compliance deadlines (1989-1993) for pre-1988 tanks,\n")
+cat("while control states all faced the federal 12/22/1998 deadline.\n")
+cat("This means TX pre-1988 tanks were 5-9 years PAST their mandate deadline\n")
+cat("at treatment, vs. control pre-1988 tanks that just hit theirs.\n")
+cat("mandate_exposure controls for this differential timing.\n\n")
+
+if ("mandate_exposure" %in% names(annual_data)) {
+  # Model 1A + continuous mandate exposure control
+  model_rob_2a <- feols(
+    closure_event ~ did_term + mandate_x_post |
+      panel_id + panel_year,
+    data    = annual_data,
+    cluster = ~state
+  )
+  cat("Model 1A + mandate_exposure × post:\n")
+  print(summary(model_rob_2a))
+
+  # Model 1A + mandate exposure + vintage controls (kitchen sink)
+  model_rob_2b <- feols(
+    closure_event ~ did_term + mandate_x_post + pre1998_install:post_1999 |
+      panel_id + panel_year,
+    data    = annual_data,
+    cluster = ~state
+  )
+  cat("\nModel 1A + mandate_exposure × post + pre1998 × post:\n")
+  print(summary(model_rob_2b))
+
+  save_standard_did_table(
+    models        = list(model_1a, model_rob_2a, model_rob_2b),
+    headers       = c("Baseline",
+                      "+ Phased Mandate Exposure",
+                      "+ Phased + Pre1998×Post"),
+    base_name     = "Robustness_Phased_Mandate_Controls",
+    title         = "Robustness: Texas Phased Mandate Exposure Controls",
+    treatment_var = "did_term",
+    cluster_var   = "state",
+    use_bootstrap = USE_BOOTSTRAP,
+    n_reps        = N_BOOTSTRAP
+  )
+  cat("✓ Saved: Robustness_Phased_Mandate_Controls.*\n")
+
+  beta_rob2 <- coef(model_rob_2a)["did_term"]
+  cat(sprintf("\nBaseline β: %.6f | After phased mandate β: %.6f\n",
+              beta_base, beta_rob2))
+  pct_change2 <- 100 * (beta_rob2 - beta_base) / abs(beta_base)
+  cat(sprintf("Change: %.1f%%\n", pct_change2))
+} else {
+  cat("⚠  mandate_exposure not found — skipping.\n")
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 17.3  Cohort Splits Summary Table (NEW)
+# ─────────────────────────────────────────────────────────────────────────────
+cat("\n--- Robustness 3: Cohort Split Summary ---\n")
+cat("Collecting Pooled|A|B|C|D estimates across all DiD models.\n\n")
+
+# Gather cohort split results for a summary comparison
+cohort_summary_list <- list()
+
+# Model 1A splits
+if (exists("cohort_1a") && !is.null(cohort_1a$models)) {
+  for (nm in names(cohort_1a$models)) {
+    m <- cohort_1a$models[[nm]]
+    if (!is.null(m) && "did_term" %in% names(coef(m))) {
+      ct <- summary(m)$coeftable
+      idx <- grep("did_term", rownames(ct))[1]
+      if (length(idx) > 0) {
+        cohort_summary_list[[paste0("1A_", nm)]] <- data.table(
+          Model = "1A: Closure Prob",
+          Spec  = cohort_1a$headers[[nm]],
+          Estimate = round(ct[idx, "Estimate"], 6),
+          Std_Error = round(ct[idx, "Std. Error"], 6),
+          p_value  = round(ct[idx, "Pr(>|t|)"], 4),
+          N_obs    = nobs(m)
+        )
+      }
+    }
+  }
+}
+
+# Model 3A splits
+if (exists("cohort_3a") && !is.null(cohort_3a$models)) {
+  for (nm in names(cohort_3a$models)) {
+    m <- cohort_3a$models[[nm]]
+    if (!is.null(m) && "texas_post" %in% names(coef(m))) {
+      ct <- summary(m)$coeftable
+      idx <- grep("texas_post", rownames(ct))[1]
+      if (length(idx) > 0) {
+        cohort_summary_list[[paste0("3A_", nm)]] <- data.table(
+          Model = "3A: Age at Closure",
+          Spec  = cohort_3a$headers[[nm]],
+          Estimate = round(ct[idx, "Estimate"], 4),
+          Std_Error = round(ct[idx, "Std. Error"], 4),
+          p_value  = round(ct[idx, "Pr(>|t|)"], 4),
+          N_obs    = nobs(m)
+        )
+      }
+    }
+  }
+}
+
+# Model 4 splits
+if (exists("cohort_4") && !is.null(cohort_4$models)) {
+  for (nm in names(cohort_4$models)) {
+    m <- cohort_4$models[[nm]]
+    if (!is.null(m) && "did_term" %in% names(coef(m))) {
+      ct <- summary(m)$coeftable
+      idx <- grep("did_term", rownames(ct))[1]
+      if (length(idx) > 0) {
+        cohort_summary_list[[paste0("4_", nm)]] <- data.table(
+          Model = "4: Revealed Leaks",
+          Spec  = cohort_4$headers[[nm]],
+          Estimate = round(ct[idx, "Estimate"], 6),
+          Std_Error = round(ct[idx, "Std. Error"], 6),
+          p_value  = round(ct[idx, "Pr(>|t|)"], 4),
+          N_obs    = nobs(m)
+        )
+      }
+    }
+  }
+}
+
+if (length(cohort_summary_list) > 0) {
+  cohort_summary <- rbindlist(cohort_summary_list)
+  cat("Cohort Split Summary:\n")
+  print(cohort_summary)
+  fwrite(cohort_summary,
+         file.path(OUTPUT_TABLES, "Robustness_Cohort_Split_Summary.csv"))
+  cat("✓ Saved: Robustness_Cohort_Split_Summary.csv\n")
+} else {
+  cat("  No cohort split results available.\n")
 }
 
 
 #==============================================================================
-# SECTION 18: SCRIPT SUMMARY
+
+
+#==============================================================================
+# SECTION 11: MODEL 1C — EXIT|CLOSURE AND REPLACE|CLOSURE DiD [NEW]
+#==============================================================================
+# Paper: tbl-reg_closure, columns (3)-(6)
+# Sample: Facility-years where n_closures > 0 (conditional on closure)
+# Outcomes:
+#   exit_flag          = 1 if facility exits permanently (all tanks closed)
+#   replace_indicator  = 1 if facility closed a tank but stayed (replacement)
+#
+# This decomposes the closure margin into:
+#   P(Closure) = P(Exit | Closure) × P(Closure) + P(Replace | Closure) × P(Closure)
+#==============================================================================
+
+cat("\n========================================\n")
+cat("SECTION 11: MODEL 1C — EXIT/REPLACE | CLOSURE\n")
+cat("========================================\n\n")
+
+cat("Specification: Outcome_it = αi + λt + β(TX × Post) + γ·AgeBins + εit\n")
+cat("Sample: Facility-years with at least one tank closure\n")
+cat("Outcomes: exit_flag (permanent exit), replace_indicator (tank swap)\n\n")
+
+# Subset to facility-years with closures
+closure_data <- annual_data[closure_event == 1]
+cat(sprintf("Facility-years with closures: %s\n",
+            format(nrow(closure_data), big.mark = ",")))
+
+# Create replace indicator: closure happened but facility didn't exit
+closure_data[, replace_indicator := as.integer(exit_flag == 0)]
+
+cat(sprintf("  Exit rate (conditional on closure): %.1f%%\n",
+            100 * mean(closure_data$exit_flag, na.rm = TRUE)))
+cat(sprintf("  Replace rate (conditional on closure): %.1f%%\n",
+            100 * mean(closure_data$replace_indicator, na.rm = TRUE)))
+
+# ── Exit | Closure ──
+model_1c_exit_base <- feols(
+  exit_flag ~ did_term | panel_id + panel_year,
+  data    = closure_data,
+  cluster = ~state,
+  lean    = FALSE
+)
+
+model_1c_exit_ctrl <- feols(
+  exit_flag ~ did_term + i(age_bins) | panel_id + panel_year,
+  data    = closure_data,
+  cluster = ~state,
+  lean    = FALSE
+)
+
+cat("\n--- Exit | Closure (Baseline) ---\n")
+print(summary(model_1c_exit_base))
+cat("\n--- Exit | Closure (With Age Controls) ---\n")
+print(summary(model_1c_exit_ctrl))
+
+save_standard_did_table(
+  models        = list(model_1c_exit_base, model_1c_exit_ctrl),
+  headers       = c("Exit: Baseline", "Exit: Age Controls"),
+  base_name     = "Model_1C_Exit_Given_Closure",
+  title         = "Model 1C: Pr(Exit | Closure)",
+  treatment_var = "did_term",
+  cluster_var   = "state",
+  use_bootstrap = USE_BOOTSTRAP,
+  n_reps        = N_BOOTSTRAP
+)
+
+# ── Replace | Closure ──
+model_1c_rep_base <- feols(
+  replace_indicator ~ did_term | panel_id + panel_year,
+  data    = closure_data,
+  cluster = ~state,
+  lean    = FALSE
+)
+
+model_1c_rep_ctrl <- feols(
+  replace_indicator ~ did_term + i(age_bins) | panel_id + panel_year,
+  data    = closure_data,
+  cluster = ~state,
+  lean    = FALSE
+)
+
+cat("\n--- Replace | Closure (Baseline) ---\n")
+print(summary(model_1c_rep_base))
+cat("\n--- Replace | Closure (With Age Controls) ---\n")
+print(summary(model_1c_rep_ctrl))
+
+save_standard_did_table(
+  models        = list(model_1c_rep_base, model_1c_rep_ctrl),
+  headers       = c("Replace: Baseline", "Replace: Age Controls"),
+  base_name     = "Model_1C_Replace_Given_Closure",
+  title         = "Model 1C: Pr(Replace | Closure)",
+  treatment_var = "did_term",
+  cluster_var   = "state",
+  use_bootstrap = USE_BOOTSTRAP,
+  n_reps        = N_BOOTSTRAP
+)
+
+
+
+
+#==============================================================================
+# SECTION 12: MODEL 6 — REPORTED LEAK DiD + EVENT STUDY [NEW]
+#==============================================================================
+# Paper: tbl-leak_results
+# Sample: Full facility-year panel (not conditional on closure)
+# Outcome: leak_year (= 1 if facility reported any leak in year t)
+#
+# This is the UNCONDITIONAL leak probability — distinct from:
+#   Model 4 (revealed leaks conditional on closure)
+#   Model 5A/5B (competing risks: first leak vs first closure)
+#==============================================================================
+
+cat("\n========================================\n")
+cat("SECTION 12: MODEL 6 — REPORTED LEAK DiD\n")
+cat("========================================\n\n")
+
+cat("Specification: Leak_it = αi + λt + β(TX × Post) + γ·AgeBins + εit\n")
+cat("Outcome: leak_year = 1 if any leak reported at facility i in year t\n\n")
+
+cat(sprintf("Baseline leak rate (pre-1999): %.3f%%\n",
+            100 * mean(annual_data[panel_year < TREATMENT_YEAR]$leak_year, na.rm = TRUE)))
+
+# ── DiD Estimation ──
+model_6_base <- feols(
+  leak_year ~ did_term | panel_id + panel_year,
+  data    = annual_data,
+  cluster = ~state,
+  lean    = FALSE
+)
+
+model_6_ctrl <- feols(
+  leak_year ~ did_term + i(age_bins) | panel_id + panel_year,
+  data    = annual_data,
+  cluster = ~state,
+  lean    = FALSE
+)
+
+cat("--- Model 6: Reported Leak (Baseline) ---\n")
+print(summary(model_6_base))
+cat("\n--- Model 6: Reported Leak (With Age Controls) ---\n")
+print(summary(model_6_ctrl))
+
+save_standard_did_table(
+  models        = list(model_6_base, model_6_ctrl),
+  headers       = c("Baseline", "Age Controls"),
+  base_name     = "Model_6_Reported_Leak",
+  title         = "Model 6: Reported Leak Probability (Unconditional)",
+  treatment_var = "did_term",
+  cluster_var   = "state",
+  use_bootstrap = USE_BOOTSTRAP,
+  n_reps        = N_BOOTSTRAP
+)
+
+# ── Cohort Splits ──
+cat("\n--- Model 6: Cohort Splits ---\n")
+cohort_6 <- run_cohort_did(
+  formula_pooled = leak_year ~ did_term | panel_id + panel_year,
+  data           = annual_data,
+  cohort_var     = "cohort_pre1988",
+  treatment_var_name = "did_term"
+)
+
+for (nm in names(cohort_6$models)) {
+  cat(sprintf("--- Model 6 [%s] ---\n", cohort_6$headers[[nm]]))
+  print(summary(cohort_6$models[[nm]]))
+  cat("\n")
+}
+
+save_standard_did_table(
+  models        = cohort_6$models,
+  headers       = unlist(cohort_6$headers),
+  base_name     = "Model_6_Reported_Leak_Cohort_Splits",
+  title         = "Model 6: Reported Leak — Cohort Splits (Pooled|A|B|C|D)",
+  treatment_var = "did_term",
+  cluster_var   = "state",
+  use_bootstrap = USE_BOOTSTRAP,
+  n_reps        = N_BOOTSTRAP
+)
+
+# ── Event Study ──
+cat("\n--- Model 6-ES: Leak Event Study ---\n")
+
+es_data_6 <- annual_data[panel_year >= ES_START & panel_year <= ES_END]
+rel_min <- ES_START - TREATMENT_YEAR
+rel_max <- ES_END   - TREATMENT_YEAR
+es_data_6[, rel_year_bin := pmax(pmin(rel_year_1999, rel_max), rel_min)]
+
+model_6_es <- feols(
+  leak_year ~ i(rel_year_bin, texas_treated, ref = -1) |
+    panel_id + panel_year,
+  data    = es_data_6,
+  cluster = ~state
+)
+
+cat("Model 6-ES summary:\n")
+print(summary(model_6_es))
+
+# Pre-trend F-test
+pre_coefs_6 <- names(coef(model_6_es))
+pre_coefs_6 <- pre_coefs_6[grepl("::-[2-9]|::-1[0-9]", pre_coefs_6)]
+pre_pval_6  <- tryCatch(wald(model_6_es, keep = pre_coefs_6)$p,
+                          error = function(e) NA_real_)
+cat(sprintf("Pre-trends F-test: p = %s\n",
+            ifelse(is.na(pre_pval_6), "N/A", round(pre_pval_6, 4))))
+
+# Publication-quality event study plot
+png(file.path(OUTPUT_FIGURES, "JMP_Figure_7_Leak_Event_Study.png"),
+    width = 2400, height = 1440, res = 200)
+iplot(model_6_es,
+      main  = "",
+      xlab  = "Years Relative to Treatment (1999)",
+      ylab  = "Effect on Pr(Reported Leak)",
+      col   = "#D55E00")
+abline(h = 0, lty = 2, col = "gray40")
+abline(v = -0.5, lty = 3, col = "red")
+dev.off()
+cat("Saved: JMP_Figure_7_Leak_Event_Study.png\n")
+
+es_coefs_6_dt <- as.data.table(broom::tidy(model_6_es, conf.int = TRUE))
+fwrite(es_coefs_6_dt, file.path(OUTPUT_TABLES, "Model_6_ES_Coefficients.csv"))
+
+
+#==============================================================================
+# SECTION 13: JMP PUBLICATION TABLES — UNIFIED MULTI-PANEL LaTeX
+#==============================================================================
+# These produce the exact tables for the paper, combining multiple models.
+#==============================================================================
+
+cat("\n========================================\n")
+cat("SECTION 13: JMP PAPER TABLES\n")
+cat("========================================\n\n")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JMP TABLE 3: Policy Effects on Facility Decisions (tbl-reg_closure)
+# 6 columns: Closure(1-2) | Exit|Closure(3-4) | Replace|Closure(5-6)
+# ─────────────────────────────────────────────────────────────────────────────
+cat("--- JMP Table 3: Unified Closure/Exit/Replace ---\n")
+
+# Collect coefficients
+extract_did <- function(m, tvar = "did_term") {
+  s  <- summary(m, cluster = ~state)
+  ct <- coeftable(s)
+  idx <- grep(tvar, rownames(ct), fixed = TRUE)[1]
+  if (is.na(idx)) return(list(beta = NA, se = NA, p = NA, n = m$nobs))
+  list(
+    beta = ct[idx, "Estimate"],
+    se   = ct[idx, "Std. Error"],
+    p    = ct[idx, "Pr(>|t|)"],
+    n    = m$nobs
+  )
+}
+
+stars_fn <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.01) return("$^{***}$")
+  if (p < 0.05) return("$^{**}$")
+  if (p < 0.10) return("$^{*}$")
+  return("")
+}
+
+# Extract from all 6 models
+cols <- list(
+  extract_did(model_1a),           # (1) Closure baseline
+  extract_did(model_1a_ctrl),      # (2) Closure + age
+  extract_did(model_1c_exit_base), # (3) Exit baseline
+  extract_did(model_1c_exit_ctrl), # (4) Exit + age
+  extract_did(model_1c_rep_base),  # (5) Replace baseline
+  extract_did(model_1c_rep_ctrl)   # (6) Replace + age
+)
+
+tex3 <- c(
+  "\\begin{table}[htbp]",
+  "\\centering",
+  "\\caption{Policy Effects on Single-Walled Facility Decisions}",
+  "\\label{tbl:reg-closure}",
+  "\\resizebox{\\textwidth}{!}{",
+  "\\begin{tabular}{lcccccc}",
+  "\\toprule",
+  "\\textbf{Dependent Variables:} & \\multicolumn{2}{c}{\\textbf{Tank Closure}} & \\multicolumn{2}{c}{\\textbf{Exit $|$ Closure}} & \\multicolumn{2}{c}{\\textbf{Replace $|$ Closure}} \\\\",
+  "\\cmidrule(lr){2-3} \\cmidrule(lr){4-5} \\cmidrule(lr){6-7}",
+  "\\textbf{Model:} & (1) & (2) & (3) & (4) & (5) & (6) \\\\",
+  "\\midrule",
+  sprintf("Texas $\\times$ Post-Policy & %s%s & %s%s & %s%s & %s%s & %s%s & %s%s \\\\",
+    sprintf("%.4f", cols[[1]]$beta), stars_fn(cols[[1]]$p),
+    sprintf("%.4f", cols[[2]]$beta), stars_fn(cols[[2]]$p),
+    sprintf("%.4f", cols[[3]]$beta), stars_fn(cols[[3]]$p),
+    sprintf("%.4f", cols[[4]]$beta), stars_fn(cols[[4]]$p),
+    sprintf("%.4f", cols[[5]]$beta), stars_fn(cols[[5]]$p),
+    sprintf("%.4f", cols[[6]]$beta), stars_fn(cols[[6]]$p)),
+  sprintf("& (%s) & (%s) & (%s) & (%s) & (%s) & (%s) \\\\",
+    sprintf("%.4f", cols[[1]]$se),
+    sprintf("%.4f", cols[[2]]$se),
+    sprintf("%.4f", cols[[3]]$se),
+    sprintf("%.4f", cols[[4]]$se),
+    sprintf("%.4f", cols[[5]]$se),
+    sprintf("%.4f", cols[[6]]$se)),
+  "\\midrule",
+  sprintf("Age Bin Controls & No & Yes & No & Yes & No & Yes \\\\"),
+  "\\midrule",
+  "\\textbf{Fixed-effects} & & & & & & \\\\",
+  "Year FE & Yes & Yes & Yes & Yes & Yes & Yes \\\\",
+  "Facility FE & Yes & Yes & Yes & Yes & Yes & Yes \\\\",
+  "\\midrule",
+  sprintf("Observations & %s & %s & %s & %s & %s & %s \\\\",
+    format(cols[[1]]$n, big.mark = ","),
+    format(cols[[2]]$n, big.mark = ","),
+    format(cols[[3]]$n, big.mark = ","),
+    format(cols[[4]]$n, big.mark = ","),
+    format(cols[[5]]$n, big.mark = ","),
+    format(cols[[6]]$n, big.mark = ",")),
+  "\\bottomrule",
+  "\\multicolumn{7}{p{0.95\\textwidth}}{\\footnotesize \\textit{Notes:}",
+  "Difference-in-differences estimates of Texas's 1999 transition from public to",
+  "private UST insurance on single-walled tank facilities operating before 1999.",
+  "Columns (1)--(2): annual probability of closing any tank. Columns (3)--(4):",
+  "probability of permanent facility exit, conditional on closure. Columns (5)--(6):",
+  "probability of tank replacement (closure without exit), conditional on closure.",
+  "All models include facility and year fixed effects.",
+  "Standard errors clustered at the state level in parentheses.",
+  "$^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
+  "\\end{tabular}}",
+  "\\end{table}"
+)
+
+writeLines(tex3, file.path(OUTPUT_TABLES, "JMP_Table_3_Closure_Exit_Replace.tex"))
+cat("Saved: JMP_Table_3_Closure_Exit_Replace.tex\n")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JMP TABLE 4: Reported Leak Results (tbl-leak_results)
+# ─────────────────────────────────────────────────────────────────────────────
+cat("\n--- JMP Table 4: Reported Leak ---\n")
+
+leak_cols <- list(
+  extract_did(model_6_base),
+  extract_did(model_6_ctrl)
+)
+
+tex4 <- c(
+  "\\begin{table}[htbp]",
+  "\\centering",
+  "\\caption{Policy Effects on Reported Leak Rates}",
+  "\\label{tbl:leak-results}",
+  "\\begin{tabular}{lcc}",
+  "\\toprule",
+  "\\textbf{Dependent Variable:} & \\multicolumn{2}{c}{\\textbf{Reported Leak (0/1)}} \\\\",
+  "\\cmidrule(lr){2-3}",
+  "\\textbf{Model:} & (1) & (2) \\\\",
+  "\\midrule",
+  sprintf("Texas $\\times$ Post-1999 & %s%s & %s%s \\\\",
+    sprintf("%.4f", leak_cols[[1]]$beta), stars_fn(leak_cols[[1]]$p),
+    sprintf("%.4f", leak_cols[[2]]$beta), stars_fn(leak_cols[[2]]$p)),
+  sprintf("& (%s) & (%s) \\\\",
+    sprintf("%.4f", leak_cols[[1]]$se),
+    sprintf("%.4f", leak_cols[[2]]$se)),
+  "\\midrule",
+  "Age Bin Controls & No & Yes \\\\",
+  "\\midrule",
+  "\\textbf{Fixed-effects} & & \\\\",
+  "Year FE & Yes & Yes \\\\",
+  "Facility FE & Yes & Yes \\\\",
+  "\\midrule",
+  sprintf("Observations & %s & %s \\\\",
+    format(leak_cols[[1]]$n, big.mark = ","),
+    format(leak_cols[[2]]$n, big.mark = ",")),
+  "\\bottomrule",
+  "\\multicolumn{3}{p{0.85\\textwidth}}{\\footnotesize \\textit{Notes:}",
+  "Difference-in-differences estimates of the effect of Texas's 1999 transition",
+  "from public to private UST insurance on reported leak rates for single-walled",
+  "tank facilities operating before 1999. The dependent variable equals one if",
+  "facility $i$ reported any leak in year $t$. All models include facility and year",
+  "fixed effects. Model (2) adds flexible age-bin controls.",
+  "Standard errors clustered at the state level in parentheses.",
+  "$^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
+  "\\end{tabular}",
+  "\\end{table}"
+)
+
+writeLines(tex4, file.path(OUTPUT_TABLES, "JMP_Table_4_Reported_Leak.tex"))
+cat("Saved: JMP_Table_4_Reported_Leak.tex\n")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JMP FIGURE 6: Closure Event Study (publication quality)
+# ─────────────────────────────────────────────────────────────────────────────
+cat("\n--- JMP Figure 6: Closure Event Study ---\n")
+
+png(file.path(OUTPUT_FIGURES, "JMP_Figure_6_Closure_Event_Study.png"),
+    width = 2400, height = 1440, res = 200)
+iplot(model_1a_es,
+      main  = "",
+      xlab  = "Years Relative to Treatment (1999)",
+      ylab  = "Effect on Pr(Tank Closure)",
+      col   = "#0072B2")
+abline(h = 0, lty = 2, col = "gray40")
+abline(v = -0.5, lty = 3, col = "red")
+dev.off()
+cat("Saved: JMP_Figure_6_Closure_Event_Study.png\n")
+
+
+
+
+#==============================================================================
+# SECTION 14: SCRIPT SUMMARY
 #==============================================================================
 
 cat("\n====================================================================\n")
-cat("FINAL DiD ANALYSIS COMPLETE\n")
+cat("02_DiD_Causal_Estimates.R COMPLETE\n")
 cat("====================================================================\n\n")
 
 cat("MODELS ESTIMATED:\n")
-cat("  ✓ Model 1A:    Facility-Year DiD (Baseline + Controls)\n")
-cat("  ✓ Model 1A-ES: Event Study (", ES_START, "–", ES_END, ")\n", sep="")
-cat("  ✓ Model 1B:    Facility-Level Cox Survival\n")
-cat("  ✓ Model 2A-C:  Tank-Level Cox HTE — Spec A (simple interactions)\n")
-cat("  ✓ Model 2A-D:  Tank-Level Cox HTE — Spec B (county strata, preferred)\n")
-cat("  ✓ Model 3A:    Age at Closure (County FE + controls)\n")
-cat("  ✓ Model 3A-ES: Age at Closure Event Study\n")
-cat("  ✓ Model 3B:    Age at Closure (Facility FE, spanning facilities)\n")
-cat("  ✓ Model 4:     Revealed Leaks — LPM (4 windows) + Logit (robustness)\n")
-cat("  ✓ Model 5A:    Cause-Specific Cox (leak vs closure competing risks)\n")
-cat("  ✓ Model 5B:    Fine-Gray Subdistribution Hazard\n")
-cat("  ✓ Robustness:  Regulatory Vintage / 1998 Mandate Controls\n")
-cat("  ✓ Figure 5A:   Raw First-Leak Rates by Facility Risk Category\n")
-cat("  ✓ Figure 5B:   5-Fold CV Risk Validation (Facility-Level Logit)\n\n")
+cat("  1A: Closure DiD + Event Study\n")
+cat("  1C: Exit|Closure + Replace|Closure DiD [NEW]\n")
+cat("  1B: Facility Cox Survival\n")
+cat("   2: Tank-Level Cox HTE\n")
+cat("  3A: Age at Closure (County FE) + Event Study\n")
+cat("  3B: Age at Closure (Facility FE)\n")
+cat("   4: Revealed Leaks at Closure (LPM + Logit)\n")
+cat("   6: Reported Leak DiD + Event Study [NEW]\n")
+cat(" 5AB: Competing Risks (Cause-Specific Cox, Fine-Gray)\n\n")
 
-cat("TABLES SAVED:\n")
-cat("  ✓ Diagnostic_Pre1999_Exit_Balance.csv\n")
-cat("  ✓ Table_1_Sample_Composition.csv\n")
-cat("  ✓ Table_2_Baseline_Characteristics.csv\n")
-cat("  ✓ Table_3_Risk_Factor_Distribution.csv\n")
-cat("  ✓ Model_1A_Facility_Closure_Probability (.csv / .txt / .tex)\n")
-cat("  ✓ Model_1A_ES_Coefficients.csv\n")
-cat("  ✓ Model_1B_Facility_Survival_First_Closure (.csv / .txt)\n")
-cat("  ✓ Model_2_SpecA_Tank_HTE_Simple (.csv / .txt)\n")
-cat("  ✓ Model_2_SpecB_Tank_HTE_County_Strata (.csv / .txt)\n")
-cat("  ✓ Model_3A_Age_at_Closure_County_FE (.csv / .txt / .tex)\n")
-cat("  ✓ Model_3A_ES_Coefficients.csv\n")
-cat("  ✓ Model_3B_Age_at_Closure_Facility_FE (.csv / .txt / .tex)\n")
-cat("  ✓ Model_4_Revealed_Leaks_LPM (.csv / .txt / .tex)\n")
-cat("  ✓ Model_4_Revealed_Leaks_Logit_Robustness (.csv / .txt / .tex)\n")
-cat("  ✓ Model_5A_Cause_Specific_Cox (.csv / .txt)\n")
-cat("  ✓ Model_5B_Fine_Gray_Subdistribution (.csv / .txt)\n")
-cat("  ✓ Robustness_Regulatory_Vintage_Controls (.csv / .txt / .tex)\n\n")
+cat("JMP PAPER TABLES:\n")
+cat("  Table 3: JMP_Table_3_Closure_Exit_Replace.tex\n")
+cat("  Table 4: JMP_Table_4_Reported_Leak.tex\n")
+cat("  Figure 6: JMP_Figure_6_Closure_Event_Study.png\n")
+cat("  Figure 7: JMP_Figure_7_Leak_Event_Study.png\n\n")
 
-cat("FIGURES SAVED:\n")
-cat("  ✓ Figure_1_Age_Distribution_1999.png\n")
-cat("  ✓ Figure_2_Vintage_Distribution.png\n")
-cat("  ✓ Figure_3_Single_Walled_by_Vintage.png\n")
-cat("  ✓ Figure_4_Pre_Period_Trends.png (4-panel: closure, leak, age, exit)\n")
-cat("  ✓ Model_1A_Event_Study_iplot.png (iplot — separate from Figure 4)\n")
-cat("  ✓ Model_3A_ES_Age_at_Closure.png\n\n")
-cat("  ✓ Figure_5A_Raw_Leak_Rates_by_Risk.png\n")
-cat("  ✓ Figure_5B_CV_Risk_Validation.png (2-panel: calibration + PD)\n\n")
-
-cat("TABLES SAVED:\n")
-cat("  ✓ Appendix_A1_Missing_Data_Scale.csv\n")
-cat("  ✓ Appendix_A1_Missing_Data_Balance.csv\n")
-cat("  ✓ Diagnostic_Pre1999_Exit_Balance.csv\n")
-cat("  ✓ Table_1_Sample_Composition.csv\n")
-cat("  ✓ Table_2_Baseline_Characteristics.csv\n")
-cat("  ✓ Table_3_Risk_Factor_Distribution.csv\n")
-cat("  ✓ Model_1A_Facility_Closure_Probability (.csv / .txt / .tex)\n")
-cat("  ✓ Model_1A_ES_Coefficients.csv\n")
-cat("  ✓ Model_1B_Facility_Survival_First_Closure (.csv / .txt)\n")
-cat("  ✓ Model_2_SpecA_Tank_HTE_Simple (.csv / .txt)\n")
-cat("  ✓ Model_2_SpecB_Tank_HTE_County_Strata (.csv / .txt)\n")
-cat("  ✓ Model_3A_Age_at_Closure_County_FE (.csv / .txt / .tex)\n")
-cat("  ✓ Model_3A_ES_Coefficients.csv\n")
-cat("  ✓ Model_3B_Age_at_Closure_Facility_FE (.csv / .txt / .tex)\n")
-cat("  ✓ Model_4_Revealed_Leaks_LPM (.csv / .txt / .tex)\n")
-cat("  ✓ Model_4_Revealed_Leaks_Logit_Robustness (.csv / .txt / .tex)\n")
-cat("  ✓ Model_5A_Cause_Specific_Cox (.csv / .txt)\n")
-cat("  ✓ Model_5B_Fine_Gray_Subdistribution (.csv / .txt)\n")
-cat("  ✓ Robustness_Regulatory_Vintage_Controls (.csv / .txt / .tex)\n")
-cat("  ✓ Figure_5A_Raw_Rates_Data.csv\n")
-cat("  ✓ Figure_5B_Calibration_Table.csv\n")
-cat("  ✓ Figure_5B_AUC_Summary.csv\n")
-cat("  ✓ Figure_5B_Partial_Dependence.csv\n")
-cat("  ✓ Figure_5_Full_Sample_Logit_Coefs.csv\n")
-cat("  ✓ Figure_5_CV_Panel_with_OOB_Preds.csv\n")
-cat("  ✓ Figure_4_Pre_Trends_Data.csv\n\n")
-
-cat("FIGURES SAVED:\n")
-cat("  ✓ Figure_1_Age_Distribution_1999.png\n")
-cat("  ✓ Figure_2_Vintage_Distribution.png\n")
-cat("  ✓ Figure_3_Single_Walled_by_Vintage.png\n")
-cat("  ✓ Figure_4_Pre_Period_Trends.png [AUDITED: n_leaks + tank-level closure age]\n")
-cat("  ✓ Figure_5A_Raw_Leak_Rates_by_Risk.png\n")
-cat("  ✓ Figure_5B_CV_Risk_Validation.png\n")
-cat("  ✓ Model_1A_Event_Study_iplot.png\n")
-cat("  ✓ Model_3A_ES_Age_at_Closure.png\n\n")
-
-cat("KEY SPECIFICATIONS:\n")
-cat(sprintf("  Sample:           Incumbent facilities (is_incumbent == 1)\n"))
-cat(sprintf("  Main window:      %d–%d\n", PANEL_START, PANEL_END))
-cat(sprintf("  Event study:      %d–%d\n", ES_START, ES_END))
-cat(sprintf("  Fig 5 window:     1990–1998 (pre-period only)\n"))
-cat(sprintf("  Treatment:        TX vs {%s}\n",
-            paste(CONTROL_STATES, collapse = ", ")))
-cat(sprintf("  Clustering:       State (%d clusters)\n",
-            length(unique(annual_data$state))))
-cat(sprintf("  Bootstrap:        %s (B = %d)\n",
-            ifelse(USE_BOOTSTRAP, "ENABLED", "DISABLED"), N_BOOTSTRAP))
-cat(sprintf("  Fig 5 unit:       Facility-year (LUST are facility-level)\n"))
-cat(sprintf("  Fig 5 incidence:  Facility's first-ever LUST report\n"))
-cat(sprintf("  Fig 5 CV folds:   5, folded by facility, stratified by state\n"))
-cat(sprintf("  Fig 5 FE specs:   Year FE (primary) + Year+State FE (robustness)\n"))
-
-cat("\n====================================================================\n")
-cat("NEXT STEPS:\n")
-cat("  1. Set USE_BOOTSTRAP = TRUE and N_BOOTSTRAP = 9999 for final run\n")
-cat("  2. Review Figure 4 panel (b): confirm n_leaks > leak_year in practice\n")
-cat("  3. Review Figure 4 panel (c): confirm pre_period_closures non-empty\n")
-cat("  4. Inspect Figure 5B calibration: top-decile lift and AUC\n")
-cat("  5. Compare Figure 5B Year-FE vs Year+State-FE AUC for attenuation\n")
-cat("  6. Compare Model 2 Spec A vs Spec B — prefer Spec B (county strata)\n")
-cat("  7. Inspect Model 4 sensitivity across windows for robustness\n")
-cat("  8. Consider Definition B robustness if pre-1999 exit test fails\n")
+cat(sprintf("Output directory: %s\n", OUTPUT_TABLES))
+cat(sprintf("Figures directory: %s\n", OUTPUT_FIGURES))
+cat(sprintf("Bootstrap: %s\n",
+            ifelse(USE_BOOTSTRAP, "ENABLED (production)", "DISABLED (fast testing)")))
 cat("====================================================================\n")
