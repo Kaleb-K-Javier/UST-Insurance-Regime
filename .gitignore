@@ -3,6 +3,7 @@
 .Rhistory
 .RData
 .Ruserdata
+
 # Data Files (Strictly Local)
 *.csv
 *.rds
@@ -13,9 +14,16 @@
 *.dat
 *.dta
 *.sas7bdat
+
 # System Files
 .DS_Store
 Thumbs.db
 *.mdb
+
 # Ignore the entire Data directory and all contents
 Data/
+
+# Output Directory Configuration
+Output/*
+!Output/*/
+!Output/**/*.csv
