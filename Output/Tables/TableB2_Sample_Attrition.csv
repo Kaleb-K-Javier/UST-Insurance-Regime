@@ -1,0 +1,7 @@
+stage,filter,facilities,fac_years
+Raw harmonized panel,"All states, all years",478503,12702871
+Study window,"panel_year in [1985, 2020]",469681,7985050
+Analysis states,TX + 19 control states (NJ excluded),306731,4978288
+Incumbent sample,first_observed < 1998,286882,4705725
+Complete tank records,Facility-level missing-date exclusion (§4.3),233234,3967583
+Final analysis sample,"",233234,3967583

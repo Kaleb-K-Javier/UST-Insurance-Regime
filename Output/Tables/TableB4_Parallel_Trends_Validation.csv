@@ -1,0 +1,5 @@
+specification,f_stat,p_value,df1,conclusion
+"1. Pooled (all facilities), no mandate control",17.144,0.0000000000000000000000764865868018846,7,REJECTED — pre-trend divergence present
+2. Spec A (post-1988 only) — PRIMARY IDENTIFICATION,16.985,0.000000000000000000000132261747440493,7,REJECTED — pre-trend divergence present
+"3. Spec B (pre-1988 only), no mandate control",10.361,0.000000000000456300498672669,7,REJECTED — pre-trend divergence present
+4. Spec B (pre-1988 only) + mandate_active control,10.361,0.000000000000456300498672669,7,REJECTED — pre-trend divergence present

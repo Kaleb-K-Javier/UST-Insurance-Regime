@@ -997,6 +997,71 @@ if (nrow(specB_gap) == 2) {
 }
 
 
+# ── Table 1: Combined long-format panel for kbl() rendering ──────────────────
+# Reshapes Table1A (stock, wide) and Table1B (flow, stratified, wide) into a
+# single long data frame with columns: panel | cohort | variable | Texas | Control
+# The Quarto chunk becomes a one-liner: read CSV → kbl().
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Panel A: pivot stock_stats wide → long, then back to TX vs Control columns
+panelA_long <- melt(
+  stock_stats,
+  id.vars       = "Group",
+  measure.vars  = c("N_facilities", "N_tanks", "Mean_age_1998", "SD_age_1998",
+                    "Pct_pre_1988", "Pct_single_wall", "Tanks_per_fac"),
+  variable.name = "variable",
+  value.name    = "value"
+)
+panelA_wide <- dcast(panelA_long, variable ~ Group, value.var = "value")
+panelA_wide[, `:=`(panel = "A: Stock Variables (Dec 22, 1998)",
+                    cohort = "All Facilities")]
+
+# Panel B: pivot flow_stats_stratified wide → long → TX vs Control columns
+panelB_long <- melt(
+  flow_stats_stratified,
+  id.vars       = c("Group", "Cohort"),
+  measure.vars  = c("Avg_closure_rate", "Avg_exit_rate",
+                    "Avg_leak_incidence", "Leaks_per_1000", "N_fac_years"),
+  variable.name = "variable",
+  value.name    = "value"
+)
+panelB_wide <- dcast(panelB_long, Cohort + variable ~ Group, value.var = "value")
+setnames(panelB_wide, "Cohort", "cohort")
+panelB_wide[, panel := "B: Flow Variables (1989\u20131997 avg.)"]
+
+# Stack and enforce column order
+tbl1_combined <- rbindlist(
+  list(panelA_wide, panelB_wide),
+  use.names = TRUE, fill = TRUE
+)
+setcolorder(tbl1_combined, c("panel", "cohort", "variable", "Texas", "Control"))
+setorder(tbl1_combined, panel, cohort, variable)
+
+# Human-readable variable labels
+var_labels <- c(
+  N_facilities      = "N facilities",
+  N_tanks           = "N tanks",
+  Mean_age_1998     = "Mean tank age (years)",
+  SD_age_1998       = "SD tank age",
+  Pct_pre_1988      = "Pre-1988 tanks (%)",
+  Pct_single_wall   = "Single-walled tanks (%)",
+  Tanks_per_fac     = "Tanks per facility",
+  Avg_closure_rate  = "Annual closure rate",
+  Avg_exit_rate     = "Annual exit rate",
+  Avg_leak_incidence= "Annual leak incidence rate",
+  Leaks_per_1000    = "Leak incidents per 1,000 fac-years",
+  N_fac_years       = "N facility-years"
+)
+tbl1_combined[, variable := fifelse(
+  variable %in% names(var_labels),
+  var_labels[variable],
+  as.character(variable)
+)]
+
+save_table(tbl1_combined, "Table1_Combined_Long")
+cat("  ✓ Table1_Combined_Long.csv saved — ready for kbl() one-liner\n")
+
+
 # 7.3 Table 1B: Leak rate cohort decomposition
 cat("\n--- 7.3: Table 1B — Leak Rate Cohort Decomposition ---\n")
 

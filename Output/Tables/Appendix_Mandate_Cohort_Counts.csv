@@ -1,0 +1,13 @@
+mandate_cohort,texas_treated,spec_A_eligible,spec_B_eligible,N
+1965-1974 (Deadline 1990),1,0,1,64012
+1975-1979 (Deadline 1991),1,0,1,87208
+1980-1984 (Deadline 1992),1,0,1,144990
+1985-1988 (Deadline 1993),1,0,1,148743
+Post-1988 / Control,0,,,868611
+Post-1988 / Control,0,1,0,823532
+Post-1988 / Control,0,0,1,1254981
+Post-1988 / Control,0,0,0,124179
+Post-1988 / Control,1,,,250607
+Post-1988 / Control,1,1,0,168308
+Post-1988 / Control,1,0,0,21100
+Pre-1965 (Deadline 1989),1,0,1,11312
