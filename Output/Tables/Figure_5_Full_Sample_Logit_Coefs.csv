@@ -1,0 +1,13 @@
+Spec,term,estimate,std.error,p.value
+Year FE only,(Intercept),-7.277,0.1052,0
+Year FE only,pct_single_walled_fac,0.3164,0.0248,0
+Year FE only,age_gt_20_fac,0.1257,0.0345,0.0003
+Year FE only,pct_pre_1980_fac,-0.2239,0.031,0
+Year FE only,log_capacity_fac,0.2633,0.0099,0
+Year FE only,is_motor_fuel_fac,0.4383,0.038,0
+Year + State FE,(Intercept),-7.1516,0.1155,0
+Year + State FE,pct_single_walled_fac,-0.093,0.0313,0.003
+Year + State FE,age_gt_20_fac,0.1352,0.0352,0.0001
+Year + State FE,pct_pre_1980_fac,-0.2733,0.0315,0
+Year + State FE,log_capacity_fac,0.3016,0.0104,0
+Year + State FE,is_motor_fuel_fac,0.1281,0.0408,0.0017

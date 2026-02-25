@@ -1,0 +1,3 @@
+Spec,AUC_ROC
+Year FE only (primary),0.621
+Year + State FE (robustness),0.8033

@@ -1,0 +1,9 @@
+Group,risk_category,N,Pct
+Control,High (2 factors),16308,7.5
+Control,Low (0 factors),53730,24.7
+Control,Medium (1 factor),111162,51.1
+Control,Very High (3 factors),36540,16.8
+Texas,High (2 factors),2357,3.8
+Texas,Low (0 factors),7658,12.3
+Texas,Medium (1 factor),38073,61.2
+Texas,Very High (3 factors),14138,22.7

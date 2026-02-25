@@ -1,0 +1,7 @@
+Metric,N
+Incumbent facilities (initial),288881
+Facilities: missing install_date on any tank,53648
+Facilities: missing closure_date on any closed tank,0
+Facilities: missing both types,0
+Total facilities to exclude,53648
+Exclusion rate (%),18.57
