@@ -40,7 +40,7 @@
 #
 # INTERMEDIATE DATA (Data/Analysis/*.rds):
 #   analysis_annual_data.rds, analysis_tank_inventory.rds,
-#   analysis_closed_tanks.rds, analysis_tanks_1998.rds,
+#   analysis_closed_tanks.rds, analysis_tanks_1999.rds,
 #   analysis_pre_period_closures.rds, analysis_metadata.rds
 #
 # STRUCTURE:
@@ -412,7 +412,7 @@ tank_fac_flag[, has_any_missing := (has_miss_install | has_miss_closure)]
 
 # Balance test
 balance_glm <- tryCatch(
-  glm(has_miss_install ~ texas, data = tank_fac_flag, family = binomial),
+  glm(has_any_missing ~ texas, data = tank_fac_flag, family = binomial),
   error = function(e) NULL
 )
 
@@ -525,8 +525,8 @@ annual_data[, `:=`(
   # Primary outcome
   closure_event = as.integer(n_closures > 0),
 
-  # Relative year — indexed to 1998 (statutory treatment year)
-  rel_year_1998 = panel_year - TREATMENT_YEAR,
+# Relative year — indexed to 1999 (first full post-treatment year), only 9 days off from 1998 treatment date. Used for event study and pre-trend analyses.
+  rel_year_1999 = panel_year - POST_YEAR,
 
   # Convenience
   county_fips_fac = as.factor(county_fips)
@@ -1131,9 +1131,9 @@ closure_rate_pooled <- closure_rate_ci(annual_data)
 
 # Helper: run one pre-trend Wald test, return tidy row
 run_pt_test <- function(dt, label, extra_rhs = "") {
-  formula_str <- paste0(
-    "closure_event ~ i(rel_year_1998, texas_treated, ref = -1)",
-    if (nchar(extra_rhs) > 0) paste0(" + ", extra_rhs) else "",
+formula_str <- paste0(
+    "closure_event ~ i(rel_year_1999, texas_treated, ref = -1)",
+     if (nchar(extra_rhs) > 0) paste0(" + ", extra_rhs) else "",
     " | panel_id + panel_year"
   )
   m <- tryCatch(
@@ -1145,7 +1145,7 @@ run_pt_test <- function(dt, label, extra_rhs = "") {
   if (is.null(m)) return(data.table(specification = label, f_stat = NA_real_,
                                      p_value = NA_real_, df1 = NA_integer_,
                                      conclusion = "FAILED"))
-  w <- tryCatch(fixest::wald(m, "rel_year_1998"), error = function(e) NULL)
+  w <- tryCatch(fixest::wald(m, "rel_year_1999"), error = function(e) NULL)
   if (is.null(w)) return(data.table(specification = label, f_stat = NA_real_,
                                      p_value = NA_real_, df1 = NA_integer_,
                                      conclusion = "FAILED"))
@@ -1393,22 +1393,6 @@ cat("  ✓ Table A2 saved\n")
 print(cohort_comp)
 
 
-#==============================================================================
-# SECTION 11: INSTITUTIONAL CONTEXT FIGURES
-#==============================================================================
-
-cat("\n========================================\n")
-cat("SECTION 11: INSTITUTIONAL CONTEXT FIGURES\n")
-cat("========================================\n\n")
-
-
-#==============================================================================
-# SECTION 11: INSTITUTIONAL CONTEXT FIGURES (GRANULAR CONTRACT PANEL)
-#==============================================================================
-
-cat("\n========================================\n")
-cat("SECTION 11: INSTITUTIONAL CONTEXT FIGURES\n")
-cat("========================================\n\n")
 #==============================================================================
 # SECTION 11: INSTITUTIONAL CONTEXT FIGURES (GRANULAR CONTRACT PANEL)
 #==============================================================================
@@ -1785,8 +1769,8 @@ cat(sprintf("  ✓ analysis_tank_inventory.rds: %s tanks\n",
             format(nrow(tanks), big.mark = ",")))
 
 # 1998 cross-section
-saveRDS(tanks_1998, file.path(ANALYSIS_DIR, "analysis_tanks_1998.rds"))
-cat(sprintf("  ✓ analysis_tanks_1998.rds: %s tanks\n",
+saveRDS(tanks_1998, file.path(ANALYSIS_DIR, "analysis_tanks_1999.rds"))
+cat(sprintf("  ✓ analysis_tanks_1999.rds: %s tanks\n",
             format(nrow(tanks_1998), big.mark = ",")))
 
 # Closed tanks
@@ -1827,7 +1811,14 @@ metadata <- list(
   pooled_pretrend_p      = pooled_p,       # Pooled p-value (will be < 0.001)
   specA_n_facilities     = uniqueN(annual_data[spec_A_eligible == 1, panel_id]),
   specB_n_facilities     = uniqueN(annual_data[spec_B_eligible == 1, panel_id]),
-
+  es_start = ES_START,
+  es_end = ES_END,
+  study_end_date = STUDY_END_DATE,
+  output_tables = OUTPUT_TABLES,
+  output_figures = OUTPUT_FIGURES,
+  federal_mandate_date = FEDERAL_MANDATE_DATE,
+  mandate_cutoff_date = MANDATE_CUTOFF_DATE,
+  incumbent_ids = incumbent_ids,
   # Attrition
   attrition_log          = attrition_log,
   run_date               = Sys.time()

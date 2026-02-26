@@ -24,6 +24,8 @@
 #   Table 5:   Robustness — Pooled with Mandate Controls
 #   Table 6:   Reported Leak DiD (Spec A headline)
 #   Table B.4: Parallel Trends Validation (4-test battery)
+#   Table B.4b: Pre-Test Power Analysis (Roth 2022)
+#   Table B.4c: HonestDiD Sensitivity Analysis (Rambachan & Roth 2023)
 #   Table B.5: MD-Excluded Robustness
 #   Table B.6: mandate_window_3yr Sensitivity (Spec B)
 #   Table F.1: Cloglog / Frailty Robustness
@@ -42,7 +44,11 @@
 # STRUCTURE:
 #   §1   Setup & Data Loading + Mandate Variable Verification
 #   §2   Helper Functions
-#   §3   Parallel Trends Validation (4-Test Battery, Table B.4)
+#   §3   Parallel Trends Validation (Extended Modern Framework)
+#        3.1  4-Test Battery (Table B.4)
+#        3.2  Roth (2022) Pre-Test Power Analysis (Table B.4b)
+#        3.3  Rambachan & Roth (2023) HonestDiD Sensitivity (Table B.4c)
+#        3.4  Bacon Decomposition Diagnostic (Pooled spec)
 #   §4   Table 3 — Primary DiD: Spec A (Closure/Exit/Replace) + Event Study
 #   §5   Table 4 — Spec B Robustness (Mandate Controls Escalation)
 #   §6   Table 5 — Pooled Robustness (Mandate Controls)
@@ -54,7 +60,7 @@
 #   §12  Model 3B — Age at Closure (Facility FE)
 #   §13  Model 4  — Revealed Leaks at Closure
 #   §14  Models 5A/5B — Competing Risks
-#   §15  Appendix Robustness (MD, TN, mandate_window_3yr, CS stub)
+#   §15  Appendix Robustness (MD, mandate_window_3yr, CS stub)
 #   §16  JMP Publication Tables (unified LaTeX)
 #   §17  Script Summary
 #
@@ -92,6 +98,31 @@ if (requireNamespace("fwildclusterboot", quietly = TRUE)) {
   cat("fwildclusterboot loaded for wild cluster bootstrap.\n")
 }
 
+# ── Modern Parallel Trends Packages ──
+HAS_HONESTDID <- requireNamespace("HonestDiD", quietly = TRUE)
+if (HAS_HONESTDID) {
+  library(HonestDiD)
+  cat("HonestDiD loaded for Rambachan & Roth (2023) sensitivity analysis.\n")
+} else {
+  cat("⚠ HonestDiD not installed — install with: remotes::install_github('asheshrambachan/HonestDiD')\n")
+}
+
+HAS_PRETRENDS <- requireNamespace("pretrends", quietly = TRUE)
+if (HAS_PRETRENDS) {
+  library(pretrends)
+  cat("pretrends loaded for Roth (2022) pre-test power analysis.\n")
+} else {
+  cat("⚠ pretrends not installed — install with: remotes::install_github('jonathandroth/pretrends')\n")
+}
+
+HAS_BACONDECOMP <- requireNamespace("bacondecomp", quietly = TRUE)
+if (HAS_BACONDECOMP) {
+  library(bacondecomp)
+  cat("bacondecomp loaded for Goodman-Bacon (2021) diagnostic.\n")
+} else {
+  cat("⚠ bacondecomp not installed — install with: install.packages('bacondecomp')\n")
+}
+
 # ── Load metadata (constants from Script 01) ──
 ANALYSIS_DIR <- here("Data", "Analysis")
 
@@ -99,26 +130,25 @@ if (!file.exists(file.path(ANALYSIS_DIR, "analysis_metadata.rds")))
   stop("Run 01_Descriptive_Analysis.R first.\n  Missing: ", ANALYSIS_DIR)
 
 meta <- readRDS(file.path(ANALYSIS_DIR, "analysis_metadata.rds"))
-TREATMENT_YEAR  <- meta$TREATMENT_YEAR
-TREATMENT_DATE  <- meta$TREATMENT_DATE
-PANEL_START     <- meta$PANEL_START
-PANEL_END       <- meta$PANEL_END
-ES_START        <- meta$ES_START
-ES_END          <- meta$ES_END
-STUDY_END_DATE  <- meta$STUDY_END_DATE
-CONTROL_STATES  <- meta$CONTROL_STATES
-OUTPUT_TABLES   <- meta$OUTPUT_TABLES
-OUTPUT_FIGURES  <- meta$OUTPUT_FIGURES
-FEDERAL_MANDATE_DATE <- meta$FEDERAL_MANDATE_DATE
-MANDATE_CUTOFF_DATE  <- meta$MANDATE_CUTOFF_DATE
+TREATMENT_YEAR  <- meta$treatment_year
+TREATMENT_DATE  <- meta$treatment_date
+PANEL_START     <- meta$panel_start
+PANEL_END       <- meta$panel_end
+CONTROL_STATES  <- meta$control_states
+ES_START        <- meta$es_start
+ES_END          <- meta$es_end
+STUDY_END_DATE  <- meta$study_end_date
+OUTPUT_TABLES   <- meta$output_tables
+OUTPUT_FIGURES  <- meta$output_figures
+FEDERAL_MANDATE_DATE <- meta$federal_mandate_date
+MANDATE_CUTOFF_DATE  <- meta$mandate_cutoff_date
 incumbent_ids        <- meta$incumbent_ids
+POST_YEAR <- meta$post_year
 
 # Bootstrap toggle
 USE_BOOTSTRAP <- FALSE   # <-- CHANGE TO TRUE FOR FINAL RUN
 N_BOOTSTRAP   <- 9999
 
-# POST_YEAR: first full year under private insurance regime
-POST_YEAR <- TREATMENT_YEAR  # 1999
 
 dir.create(OUTPUT_TABLES,  recursive = TRUE, showWarnings = FALSE)
 dir.create(OUTPUT_FIGURES, recursive = TRUE, showWarnings = FALSE)
@@ -424,6 +454,127 @@ stars_fn <- function(p) {
 }
 
 #------------------------------------------------------------------------------
+# 2.4b plot_event_study_pub() — Publication-quality event study figure
+#      JMP-ready: ggplot2, coefficient + CI, treatment line, pre-trend shading
+#------------------------------------------------------------------------------
+plot_event_study_pub <- function(model,
+                                 title       = "",
+                                 subtitle    = NULL,
+                                 ylab        = "Treatment Effect",
+                                 xlab        = "Years Relative to Treatment (1999)",
+                                 ref_period  = -1,
+                                 treatment_line = -0.5,
+                                 color_pre   = "#4575B4",
+                                 color_post  = "#D73027",
+                                 ci_alpha    = 0.15,
+                                 pre_trend_p = NULL,
+                                 base_size   = 13,
+                                 filename    = NULL,
+                                 width_px    = 2800,
+                                 height_px   = 1600) {
+
+  # Extract coefficients from fixest model
+  ct <- as.data.table(broom::tidy(model, conf.int = TRUE))
+  ct <- ct[grepl("rel_year|event_time", term)]
+
+  # Parse relative year from fixest i() naming convention
+  ct[, rel_year := as.numeric(gsub(".*::(-?[0-9]+).*", "\\1", term))]
+  ct <- ct[!is.na(rel_year)]
+
+  # Add reference period row (zero effect by construction)
+  ref_row <- data.table(
+    term = "reference", estimate = 0, std.error = 0,
+    statistic = NA, p.value = NA, conf.low = 0, conf.high = 0,
+    rel_year = ref_period
+  )
+  ct <- rbind(ct, ref_row, fill = TRUE)
+  setorder(ct, rel_year)
+
+  # Period classification
+  ct[, period := fifelse(rel_year < 0, "Pre-treatment", "Post-treatment")]
+  ct[rel_year == ref_period, period := "Reference"]
+
+  # Build subtitle with F-test if provided
+  if (!is.null(pre_trend_p)) {
+    auto_sub <- sprintf("Pre-trend F-test: p = %.3f | Reference: t = %d",
+                         pre_trend_p, ref_period)
+    if (is.null(subtitle)) subtitle <- auto_sub
+  }
+
+  # Core plot
+  p <- ggplot(ct, aes(x = rel_year, y = estimate)) +
+
+    # Pre-treatment shading
+    annotate("rect",
+             xmin = min(ct$rel_year) - 0.5, xmax = treatment_line,
+             ymin = -Inf, ymax = Inf,
+             fill = "grey90", alpha = 0.5) +
+
+    # Zero reference line
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50",
+               linewidth = 0.5) +
+
+    # Treatment timing line
+    geom_vline(xintercept = treatment_line, linetype = "solid",
+               color = "grey30", linewidth = 0.6) +
+
+    # Confidence intervals
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
+                fill = ifelse(ct$rel_year < 0, color_pre, color_post),
+                alpha = ci_alpha) +
+
+    # Point estimates with color coding
+    geom_point(aes(color = period), size = 2.5, shape = 19) +
+    geom_line(color = "grey40", linewidth = 0.4, alpha = 0.6) +
+
+    # Error bars (thinner, complement ribbon)
+    geom_errorbar(aes(ymin = conf.low, ymax = conf.high, color = period),
+                  width = 0.25, linewidth = 0.5) +
+
+    # Color scale
+    scale_color_manual(
+      values = c("Pre-treatment" = color_pre,
+                 "Post-treatment" = color_post,
+                 "Reference" = "black"),
+      guide = "none"
+    ) +
+
+    # Labels
+    labs(title    = title,
+         subtitle = subtitle,
+         x = xlab, y = ylab) +
+
+    # Treatment annotation
+    annotate("text", x = treatment_line + 0.3,
+             y = max(ct$conf.high, na.rm = TRUE) * 0.92,
+             label = "Reform →", fontface = "italic",
+             size = 3.5, hjust = 0, color = "grey30") +
+
+    # Theme
+    theme_minimal(base_size = base_size) +
+    theme(
+      plot.title       = element_text(face = "bold", size = base_size + 3,
+                                       margin = margin(b = 4)),
+      plot.subtitle    = element_text(color = "grey40", size = base_size - 1,
+                                       margin = margin(b = 10)),
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank(),
+      axis.title       = element_text(size = base_size),
+      axis.text        = element_text(size = base_size - 1),
+      plot.margin      = margin(15, 15, 10, 10)
+    )
+
+  # Save if filename provided
+  if (!is.null(filename)) {
+    ggsave(filename, plot = p, width = width_px / 200, height = height_px / 200,
+           dpi = 200, bg = "white")
+    cat(sprintf("✓ Saved: %s\n", basename(filename)))
+  }
+
+  invisible(list(plot = p, data = ct))
+}
+
+#------------------------------------------------------------------------------
 # 2.5 run_cohort_did() — Pooled|A|B|C|D cohort splits (utility)
 # Retained for Model 3A, Model 4 which use cohort_pre1988 splits.
 # Primary DiD models (§4–§7) use the Spec A/B/Pooled architecture instead.
@@ -635,6 +786,472 @@ if (!is.na(specA_pretrend_p) && specA_pretrend_p > 0.10) {
 }
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# 3.2  ROTH (2022) PRE-TEST POWER ANALYSIS (Table B.4b)
+# ──────────────────────────────────────────────────────────────────────────────
+# Evaluates the ex-ante statistical power of the pre-test to detect a linear
+# violation of parallel trends large enough to explain away the headline
+# DiD estimate. Per Roth (2022, AER:I), failure to reject pre-trends is
+# only informative if the test has sufficient power against relevant alternatives.
+# Reference: Roth, J. (2022) "Pretest with Caution" DOI: 10.1257/aeri.20210236
+# ──────────────────────────────────────────────────────────────────────────────
+
+cat("\n--- 3.2 Roth (2022) Pre-Test Power Diagnostic ---\n")
+
+if (HAS_PRETRENDS) {
+
+  # Extract Spec A event study for power analysis
+  # Estimate full pre+post event study on Spec A to get variance-covariance
+  es_full_power <- specA_data[panel_year >= 1990 & panel_year <= ES_END]
+  es_full_power[, rel_year_bin := pmax(pmin(rel_year_1999,
+                                             ES_END - POST_YEAR),
+                                        1990L - POST_YEAR)]
+
+  m_power <- tryCatch(
+    feols(closure_event ~ i(rel_year_bin, texas_treated, ref = -1) |
+            panel_id + panel_year,
+          data = es_full_power, cluster = ~state),
+    error = function(e) { message("  Power model failed: ", e$message); NULL }
+  )
+
+  if (!is.null(m_power)) {
+    # Extract pre-period coefficients and their variance-covariance matrix
+    ct_power <- coeftable(summary(m_power, cluster = ~state))
+    all_coef_names <- rownames(ct_power)
+
+    # Pre-period coefficient names (negative relative years, excluding ref = -1)
+    pre_names <- all_coef_names[grepl("::-[2-9]$|::-1[0-9]$", all_coef_names)]
+    n_pre <- length(pre_names)
+
+    if (n_pre >= 2) {
+      # Get the headline DiD estimate to calibrate the relevant alternative
+      beta_headline <- abs(coef(m_closure_A_base)["did_term"])
+
+      # Construct the slope vector for a linear trend violation
+      # Under H1: δ_k = slope × k for k in pre-periods
+      pre_periods <- sort(as.numeric(gsub(".*::(-?[0-9]+).*", "\\1", pre_names)))
+
+      # Extract the pre-period variance-covariance matrix
+      vcov_full <- vcov(m_power, cluster = ~state)
+      pre_idx <- which(all_coef_names %in% pre_names)
+      sigma_pre <- vcov_full[pre_idx, pre_idx]
+
+      tryCatch({
+        # The slope that would generate bias = headline estimate at t=1
+        # Under linear violation: bias at t=1 ≈ slope
+        # Power of pre-test against this slope:
+        power_obj <- pretrends(
+          betahat = coef(m_power)[pre_names],
+          sigma   = sigma_pre,
+          numPrePeriods = n_pre,
+          numPostPeriods = 0,
+          deltatrue = beta_headline * (pre_periods / max(abs(pre_periods)))
+        )
+
+        power_val <- power_obj$Power
+        cat(sprintf("  Pre-periods used: %d (%s)\n", n_pre,
+                    paste(pre_periods, collapse = ", ")))
+        cat(sprintf("  Headline |β|:    %.6f\n", beta_headline))
+        cat(sprintf("  Power against linear violation sufficient to\n"))
+        cat(sprintf("    explain headline effect: %.1f%%\n", 100 * power_val))
+
+        if (power_val > 0.80) {
+          cat("  ✓ Adequate power (> 80%) — pre-test informative.\n")
+        } else if (power_val > 0.50) {
+          cat("  ◐ Moderate power (50-80%) — pre-test partially informative.\n")
+        } else {
+          cat("  ⚠ Low power (< 50%) — pre-test has limited ability to detect\n")
+          cat("    relevant violations. Interpret non-rejection cautiously.\n")
+        }
+
+        # Save results
+        power_results <- data.table(
+          metric = c("n_pre_periods", "headline_abs_beta", "power_linear_violation",
+                     "interpretation"),
+          value  = c(as.character(n_pre), sprintf("%.6f", beta_headline),
+                     sprintf("%.4f", power_val),
+                     fifelse(power_val > 0.80, "Adequate",
+                             fifelse(power_val > 0.50, "Moderate", "Low")))
+        )
+        fwrite(power_results,
+               file.path(OUTPUT_TABLES, "TableB4b_PreTest_Power_Roth2022.csv"))
+        cat("✓ Saved: TableB4b_PreTest_Power_Roth2022.csv\n")
+
+        # LaTeX table
+        tex_power <- c(
+          "\\begin{table}[htbp]",
+          "\\centering",
+          "\\caption{Pre-Test Power Analysis (Roth, 2022)}",
+          "\\label{tbl:pretest-power}",
+          "\\begin{tabular}{lc}",
+          "\\toprule",
+          "\\textbf{Diagnostic} & \\textbf{Value} \\\\",
+          "\\midrule",
+          sprintf("Pre-periods & %d \\\\", n_pre),
+          sprintf("Headline $|\\hat{\\beta}|$ & %.6f \\\\", beta_headline),
+          sprintf("Power vs.\\ linear violation & %.1f\\%% \\\\",
+                  100 * power_val),
+          sprintf("Assessment & %s \\\\",
+                  fifelse(power_val > 0.80, "Adequate ($>$80\\%)",
+                          fifelse(power_val > 0.50, "Moderate (50--80\\%)",
+                                  "Low ($<$50\\%)"))),
+          "\\bottomrule",
+          "\\multicolumn{2}{p{0.85\\textwidth}}{\\footnotesize \\textit{Notes:}",
+          "Power of the joint F-test of pre-treatment coefficients against a linear",
+          "violation of parallel trends calibrated to produce post-treatment bias",
+          "equal to the headline Spec A treatment effect estimate.",
+          "Following Roth (2022, \\textit{AER: Insights}).}",
+          "\\end{tabular}",
+          "\\end{table}"
+        )
+        writeLines(tex_power,
+                   file.path(OUTPUT_TABLES, "TableB4b_PreTest_Power_Roth2022.tex"))
+        cat("✓ Saved: TableB4b_PreTest_Power_Roth2022.tex\n")
+
+      }, error = function(e) {
+        cat(sprintf("  ⚠ pretrends::pretrends() failed: %s\n", e$message))
+      })
+    } else {
+      cat("  ⚠ Insufficient pre-periods for power analysis.\n")
+    }
+  }
+} else {
+  cat("  [Skipped — HAS_PRETRENDS = FALSE]\n")
+}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 3.3  RAMBACHAN & ROTH (2023) HonestDiD SENSITIVITY (Table B.4c)
+# ──────────────────────────────────────────────────────────────────────────────
+# Replaces binary PT testing with partial identification under bounded
+# violations of parallel trends. Reports breakdown values (M̄*) for
+# relative magnitude restrictions: "how large must the maximum post-treatment
+# violation be, relative to the maximum pre-treatment violation, to overturn
+# statistical significance?"
+# Reference: Rambachan & Roth (2023, ReStud) DOI: 10.1093/restud/rdad018
+# ──────────────────────────────────────────────────────────────────────────────
+
+cat("\n--- 3.3 Rambachan & Roth (2023) HonestDiD Sensitivity ---\n")
+
+if (HAS_HONESTDID) {
+
+  # Run full Spec A event study (pre + post periods)
+  es_honest <- specA_data[panel_year >= 1990 & panel_year <= ES_END]
+  es_honest[, rel_year_bin := pmax(pmin(rel_year_1999,
+                                         ES_END - POST_YEAR),
+                                    1990L - POST_YEAR)]
+
+  m_honest <- tryCatch(
+    feols(closure_event ~ i(rel_year_bin, texas_treated, ref = -1) |
+            panel_id + panel_year,
+          data = es_honest, cluster = ~state),
+    error = function(e) { message("  HonestDiD model failed: ", e$message); NULL }
+  )
+
+  if (!is.null(m_honest)) {
+    ct_h  <- coeftable(summary(m_honest, cluster = ~state))
+    coef_names_h <- rownames(ct_h)
+
+    # Separate pre and post coefficient names
+    pre_h  <- coef_names_h[grepl("::-[2-9]$|::-1[0-9]$", coef_names_h)]
+    post_h <- coef_names_h[grepl("::0$|::[1-9]$|::[1-9][0-9]$", coef_names_h)]
+
+    n_pre_h  <- length(pre_h)
+    n_post_h <- length(post_h)
+
+    if (n_pre_h >= 2 && n_post_h >= 1) {
+      beta_h <- coef(m_honest)
+      sigma_h <- vcov(m_honest, cluster = ~state)
+
+      # Indices for pre and post periods (in coefficient order)
+      pre_idx_h  <- which(coef_names_h %in% pre_h)
+      post_idx_h <- which(coef_names_h %in% post_h)
+
+      # Sort by relative year
+      pre_years_h  <- as.numeric(gsub(".*::(-?[0-9]+).*", "\\1", pre_h))
+      post_years_h <- as.numeric(gsub(".*::(-?[0-9]+).*", "\\1", post_h))
+
+      pre_order  <- order(pre_years_h)
+      post_order <- order(post_years_h)
+
+      pre_idx_sorted  <- pre_idx_h[pre_order]
+      post_idx_sorted <- post_idx_h[post_order]
+
+      tryCatch({
+        # ── Relative Magnitude Sensitivity (ΔRM) ──
+        # Tests: |post-treatment PT violation| ≤ M̄ × max|pre-treatment violation|
+        honest_rm <- HonestDiD::createSensitivityResults_relativeMagnitudes(
+          betahat        = beta_h[c(pre_idx_sorted, post_idx_sorted)],
+          sigma          = sigma_h[c(pre_idx_sorted, post_idx_sorted),
+                                    c(pre_idx_sorted, post_idx_sorted)],
+          numPrePeriods  = n_pre_h,
+          numPostPeriods = n_post_h,
+          Mbarvec        = seq(0, 2, by = 0.25),
+          l_vec          = basisVector(1, n_post_h)  # first post-period
+        )
+
+        # Find breakdown value M̄*
+        # M̄* = largest M̄ where the robust CI still excludes zero
+        honest_rm_dt <- as.data.table(honest_rm)
+        setnames(honest_rm_dt, c("Mbar", "lb", "ub", "method"))
+
+        # For FLCI method
+        flci_rows <- honest_rm_dt[method == "FLCI"]
+        if (nrow(flci_rows) > 0) {
+          # Breakdown: largest M̄ where sign of lb and ub are same (CI excludes 0)
+          flci_rows[, excludes_zero := (lb > 0 | ub < 0)]
+          breakdown_Mbar <- max(c(0, flci_rows[excludes_zero == TRUE, Mbar]),
+                                 na.rm = TRUE)
+        } else {
+          # Fallback to C-LF method
+          clf_rows <- honest_rm_dt[method != "FLCI"]
+          if (nrow(clf_rows) > 0) {
+            clf_rows[, excludes_zero := (lb > 0 | ub < 0)]
+            breakdown_Mbar <- max(c(0, clf_rows[excludes_zero == TRUE, Mbar]),
+                                   na.rm = TRUE)
+          } else {
+            breakdown_Mbar <- NA_real_
+          }
+        }
+
+        cat(sprintf("  Relative Magnitude breakdown M̄* = %.2f\n", breakdown_Mbar))
+        if (!is.na(breakdown_Mbar) && breakdown_Mbar >= 1.0) {
+          cat("  ✓ Robust: post-treatment violation would need to exceed\n")
+          cat("    pre-treatment violation to overturn significance.\n")
+        } else if (!is.na(breakdown_Mbar) && breakdown_Mbar > 0) {
+          cat(sprintf("  ◐ Moderate: significant up to M̄ = %.2f × max pre-violation.\n",
+                      breakdown_Mbar))
+        } else {
+          cat("  ⚠ Fragile: result not robust to even small PT violations.\n")
+        }
+
+        # ── Smoothness (ΔSD) Sensitivity ──
+        tryCatch({
+          honest_sd <- HonestDiD::createSensitivityResults(
+            betahat        = beta_h[c(pre_idx_sorted, post_idx_sorted)],
+            sigma          = sigma_h[c(pre_idx_sorted, post_idx_sorted),
+                                      c(pre_idx_sorted, post_idx_sorted)],
+            numPrePeriods  = n_pre_h,
+            numPostPeriods = n_post_h,
+            Mvec           = seq(0, 0.01, by = 0.001),
+            l_vec          = basisVector(1, n_post_h)
+          )
+
+          honest_sd_dt <- as.data.table(honest_sd)
+          setnames(honest_sd_dt, c("M", "lb", "ub", "method"))
+
+          sd_flci <- honest_sd_dt[method == "FLCI"]
+          if (nrow(sd_flci) > 0) {
+            sd_flci[, excludes_zero := (lb > 0 | ub < 0)]
+            breakdown_M_sd <- max(c(0, sd_flci[excludes_zero == TRUE, M]),
+                                   na.rm = TRUE)
+          } else {
+            breakdown_M_sd <- NA_real_
+          }
+
+          cat(sprintf("  Smoothness breakdown M* = %.4f\n", breakdown_M_sd))
+        }, error = function(e) {
+          cat(sprintf("  ⚠ Smoothness analysis failed: %s\n", e$message))
+          breakdown_M_sd <- NA_real_
+        })
+
+        # ── Save results ──
+        honest_results <- data.table(
+          restriction = c("Relative Magnitude (M̄)", "Smoothness (ΔSD)"),
+          breakdown_value = c(
+            sprintf("%.2f", breakdown_Mbar),
+            tryCatch(sprintf("%.4f", breakdown_M_sd), error = function(e) "N/A")
+          ),
+          interpretation = c(
+            fifelse(!is.na(breakdown_Mbar) & breakdown_Mbar >= 1.0,
+                    "Robust (M̄* ≥ 1)", "Moderate/Fragile"),
+            tryCatch(
+              fifelse(!is.na(breakdown_M_sd) & breakdown_M_sd > 0.005,
+                      "Robust", "Moderate/Fragile"),
+              error = function(e) "N/A"
+            )
+          )
+        )
+        fwrite(honest_results,
+               file.path(OUTPUT_TABLES, "TableB4c_HonestDiD_Sensitivity.csv"))
+        cat("✓ Saved: TableB4c_HonestDiD_Sensitivity.csv\n")
+
+        # ── Sensitivity Plot (Figure B-3) ──
+        tryCatch({
+          png(file.path(OUTPUT_FIGURES,
+                        "JMP_Figure_B3_HonestDiD_Sensitivity.png"),
+              width = 2800, height = 1600, res = 200)
+
+          plot_df <- honest_rm_dt[method == "FLCI"]
+          if (nrow(plot_df) == 0) plot_df <- honest_rm_dt[!duplicated(Mbar)]
+
+          p_honest <- ggplot(plot_df, aes(x = Mbar)) +
+            geom_ribbon(aes(ymin = lb, ymax = ub),
+                        fill = "#4575B4", alpha = 0.2) +
+            geom_line(aes(y = lb), color = "#4575B4", linewidth = 0.8) +
+            geom_line(aes(y = ub), color = "#4575B4", linewidth = 0.8) +
+            geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+            {if (!is.na(breakdown_Mbar) && breakdown_Mbar > 0)
+              geom_vline(xintercept = breakdown_Mbar, linetype = "dotted",
+                         color = "#D73027", linewidth = 0.7)} +
+            {if (!is.na(breakdown_Mbar) && breakdown_Mbar > 0)
+              annotate("text", x = breakdown_Mbar + 0.05,
+                       y = max(plot_df$ub, na.rm = TRUE) * 0.85,
+                       label = sprintf("M̄* = %.2f", breakdown_Mbar),
+                       color = "#D73027", size = 4, hjust = 0)} +
+            labs(
+              title    = "Sensitivity to Violations of Parallel Trends",
+              subtitle = "Rambachan & Roth (2023): Relative Magnitude Restrictions",
+              x = expression(bar(M) ~ "(Max post-violation / Max pre-violation)"),
+              y = "Robust Confidence Set for First Post-Period Effect"
+            ) +
+            theme_minimal(base_size = 13) +
+            theme(
+              plot.title    = element_text(face = "bold", size = 16),
+              plot.subtitle = element_text(color = "grey40", size = 12),
+              panel.grid.minor = element_blank()
+            )
+          print(p_honest)
+          dev.off()
+          cat("✓ Saved: JMP_Figure_B3_HonestDiD_Sensitivity.png\n")
+        }, error = function(e) {
+          cat(sprintf("  ⚠ HonestDiD plot failed: %s\n", e$message))
+        })
+
+        # LaTeX table
+        tex_honest <- c(
+          "\\begin{table}[htbp]",
+          "\\centering",
+          "\\caption{Sensitivity to Parallel Trends Violations (Rambachan \\& Roth, 2023)}",
+          "\\label{tbl:honest-did}",
+          "\\begin{tabular}{lcc}",
+          "\\toprule",
+          "\\textbf{Restriction} & \\textbf{Breakdown Value} & \\textbf{Interpretation} \\\\",
+          "\\midrule",
+          sprintf("Relative Magnitude ($\\bar{M}$) & %.2f & %s \\\\",
+                  breakdown_Mbar,
+                  fifelse(!is.na(breakdown_Mbar) & breakdown_Mbar >= 1.0,
+                          "Robust ($\\bar{M}^* \\geq 1$)",
+                          "Moderate")),
+          sprintf("Smoothness ($\\Delta$SD) & %s & %s \\\\",
+                  tryCatch(sprintf("%.4f", breakdown_M_sd),
+                           error = function(e) "N/A"),
+                  tryCatch(
+                    fifelse(!is.na(breakdown_M_sd) & breakdown_M_sd > 0.005,
+                            "Robust", "Moderate"),
+                    error = function(e) "N/A")),
+          "\\bottomrule",
+          "\\multicolumn{3}{p{0.9\\textwidth}}{\\footnotesize \\textit{Notes:}",
+          "Breakdown value reports the largest restriction parameter at which the",
+          "robust confidence set for the first post-treatment period effect excludes",
+          "zero. Relative Magnitude: $|\\delta^{post}_{t}| \\leq \\bar{M} \\times",
+          "\\max_{s<0} |\\delta^{pre}_{s}|$. Smoothness: $|\\Delta^2 \\delta_t|",
+          "\\leq M$. Spec A (post-1988, mandate-free sample). Following Rambachan",
+          "\\& Roth (2023, \\textit{ReStud}).}",
+          "\\end{tabular}",
+          "\\end{table}"
+        )
+        writeLines(tex_honest,
+                   file.path(OUTPUT_TABLES, "TableB4c_HonestDiD_Sensitivity.tex"))
+        cat("✓ Saved: TableB4c_HonestDiD_Sensitivity.tex\n")
+
+      }, error = function(e) {
+        cat(sprintf("  ⚠ HonestDiD analysis failed: %s\n", e$message))
+      })
+
+    } else {
+      cat(sprintf("  ⚠ Insufficient coefficients (pre=%d, post=%d) for HonestDiD.\n",
+                  n_pre_h, n_post_h))
+    }
+  }
+} else {
+  cat("  [Skipped — HAS_HONESTDID = FALSE]\n")
+}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 3.4  BACON DECOMPOSITION DIAGNOSTIC (Pooled Spec)
+# ──────────────────────────────────────────────────────────────────────────────
+# Decomposes the pooled TWFE estimate into component 2×2 DD comparisons
+# to visualize weight heterogeneity. Only diagnostic for pooled spec —
+# Spec A is a clean 2-group/1-date design where Bacon decomposition is
+# trivial (all weight on the single TX-vs-control comparison).
+# Reference: Goodman-Bacon (2021, JoE) DOI: 10.1016/j.jeconom.2021.03.014
+# ──────────────────────────────────────────────────────────────────────────────
+
+cat("\n--- 3.4 Bacon Decomposition Diagnostic (Pooled) ---\n")
+
+if (HAS_BACONDECOMP) {
+
+  # Bacon decomposition requires a balanced panel with binary treatment
+  # Use a collapsed facility-level dataset for the pooled spec
+  tryCatch({
+    # Prepare data for bacondecomp: needs id, time, treatment, outcome
+    bacon_data <- as.data.frame(pooled_data[, .(
+      panel_id, panel_year, did_term, closure_event
+    )])
+
+    bacon_out <- bacon(
+      closure_event ~ did_term,
+      data  = bacon_data,
+      id_var    = "panel_id",
+      time_var  = "panel_year"
+    )
+
+    cat("Bacon Decomposition Summary:\n")
+    if (is.data.frame(bacon_out)) {
+      bacon_dt <- as.data.table(bacon_out)
+      cat(sprintf("  Total 2×2 comparisons: %d\n", nrow(bacon_dt)))
+      cat(sprintf("  Weighted average DD:   %.6f\n",
+                  sum(bacon_dt$estimate * bacon_dt$weight)))
+      cat(sprintf("  Any negative weights:  %s\n",
+                  fifelse(any(bacon_dt$weight < 0), "YES ⚠", "No ✓")))
+
+      # Save
+      fwrite(bacon_dt, file.path(OUTPUT_TABLES, "Bacon_Decomposition_Pooled.csv"))
+
+      # Diagnostic plot
+      png(file.path(OUTPUT_FIGURES, "Diagnostic_Bacon_Decomposition.png"),
+          width = 2800, height = 1600, res = 200)
+      p_bacon <- ggplot(bacon_dt, aes(x = weight, y = estimate, color = type)) +
+        geom_point(size = 2.5, alpha = 0.7) +
+        geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+        labs(
+          title    = "Bacon Decomposition: Pooled TWFE Estimate",
+          subtitle = "Goodman-Bacon (2021): Component 2×2 DD Comparisons",
+          x = "Weight in TWFE Estimate", y = "Component DD Estimate",
+          color = "Comparison Type"
+        ) +
+        theme_minimal(base_size = 13) +
+        theme(
+          plot.title    = element_text(face = "bold", size = 16),
+          plot.subtitle = element_text(color = "grey40", size = 12),
+          legend.position = "bottom",
+          panel.grid.minor = element_blank()
+        )
+      print(p_bacon)
+      dev.off()
+      cat("✓ Saved: Diagnostic_Bacon_Decomposition.png\n")
+    } else {
+      cat("  bacon() returned non-tabular output — check package version.\n")
+    }
+  }, error = function(e) {
+    cat(sprintf("  ⚠ Bacon decomposition failed: %s\n", e$message))
+    cat("  (Common cause: unbalanced panel. bacondecomp requires balanced panels.)\n")
+    cat("  This is diagnostic only — Spec A identification does not rely on it.\n")
+  })
+} else {
+  cat("  [Skipped — HAS_BACONDECOMP = FALSE]\n")
+}
+
+cat("\n--- §3 Parallel Trends Validation Complete ---\n")
+cat("  Table B.4:  Traditional F-test battery (4 tests)\n")
+cat("  Table B.4b: Roth (2022) pre-test power analysis\n")
+cat("  Table B.4c: Rambachan & Roth (2023) HonestDiD sensitivity\n")
+cat("  Figure B-3: HonestDiD sensitivity plot\n")
+cat("  Bacon:      Pooled decomposition diagnostic\n\n")
+
+
 #==============================================================================
 # SECTION 4: TABLE 3 — PRIMARY DiD (SPEC A: POST-1988 COHORT) [HEADLINE]
 #==============================================================================
@@ -747,8 +1364,8 @@ save_standard_did_table(
 cat("\n--- 4.5 Event Study: Spec A (Figure 6A) ---\n")
 
 es_specA <- specA_data[panel_year >= ES_START & panel_year <= ES_END]
-rel_min <- ES_START - TREATMENT_YEAR
-rel_max <- ES_END   - TREATMENT_YEAR
+rel_min <- ES_START - POST_YEAR
+rel_max <- ES_END   - POST_YEAR
 es_specA[, rel_year_bin := pmax(pmin(rel_year_1999, rel_max), rel_min)]
 
 model_es_specA <- feols(
@@ -768,18 +1385,21 @@ pre_pval_A  <- tryCatch(wald(model_es_specA, keep = pre_coefs_A)$p,
 cat(sprintf("Spec A Event Study pre-trend F-test: p = %s\n",
             ifelse(is.na(pre_pval_A), "N/A", round(pre_pval_A, 4))))
 
-# Publication figure
-png(file.path(OUTPUT_FIGURES, "JMP_Figure_6A_Event_Study_SpecA.png"),
-    width = 2400, height = 1440, res = 200)
-iplot(model_es_specA,
-      main  = "",
-      xlab  = "Years Relative to Treatment (1999)",
-      ylab  = "Effect on Pr(Tank Closure)",
-      col   = "#0072B2")
-abline(h = 0, lty = 2, col = "gray40")
-abline(v = -0.5, lty = 3, col = "red")
-dev.off()
-cat("✓ Saved: JMP_Figure_6A_Event_Study_SpecA.png\n")
+# Publication figure (ggplot2 — JMP quality)
+es_specA_fig <- plot_event_study_pub(
+  model        = model_es_specA,
+  title        = "Effect of Insurance Privatization on Tank Closure Probability",
+  ylab         = "Effect on Pr(Tank Closure)",
+  ref_period   = -1,
+  pre_trend_p  = pre_pval_A,
+  color_pre    = "#4575B4",
+  color_post   = "#D73027",
+  filename     = file.path(OUTPUT_FIGURES, "JMP_Figure_6A_Event_Study_SpecA.png")
+)
+
+# Also save a PDF version for LaTeX inclusion
+ggsave(file.path(OUTPUT_FIGURES, "JMP_Figure_6A_Event_Study_SpecA.pdf"),
+       plot = es_specA_fig$plot, width = 14, height = 8, dpi = 300)
 
 es_coefs_A_dt <- as.data.table(broom::tidy(model_es_specA, conf.int = TRUE))
 fwrite(es_coefs_A_dt, file.path(OUTPUT_TABLES, "Figure6A_ES_Coefficients_SpecA.csv"))
@@ -884,17 +1504,18 @@ pre_pval_B  <- tryCatch(wald(model_es_specB, keep = pre_coefs_B)$p,
 cat(sprintf("Spec B Event Study pre-trend F-test: p = %s\n",
             ifelse(is.na(pre_pval_B), "N/A", round(pre_pval_B, 4))))
 
-png(file.path(OUTPUT_FIGURES, "JMP_Figure_B2_Event_Study_SpecB.png"),
-    width = 2400, height = 1440, res = 200)
-iplot(model_es_specB,
-      main  = "",
-      xlab  = "Years Relative to Treatment (1999)",
-      ylab  = "Effect on Pr(Tank Closure)",
-      col   = "#D55E00")
-abline(h = 0, lty = 2, col = "gray40")
-abline(v = -0.5, lty = 3, col = "red")
-dev.off()
-cat("✓ Saved: JMP_Figure_B2_Event_Study_SpecB.png\n")
+es_specB_fig <- plot_event_study_pub(
+  model        = model_es_specB,
+  title        = "Spec B: Pre-1988 Tanks with Mandate Control",
+  ylab         = "Effect on Pr(Tank Closure)",
+  ref_period   = -1,
+  pre_trend_p  = pre_pval_B,
+  color_pre    = "#4575B4",
+  color_post   = "#D55E00",
+  filename     = file.path(OUTPUT_FIGURES, "JMP_Figure_B2_Event_Study_SpecB.png")
+)
+ggsave(file.path(OUTPUT_FIGURES, "JMP_Figure_B2_Event_Study_SpecB.pdf"),
+       plot = es_specB_fig$plot, width = 14, height = 8, dpi = 300)
 
 es_coefs_B_dt <- as.data.table(broom::tidy(model_es_specB, conf.int = TRUE))
 fwrite(es_coefs_B_dt, file.path(OUTPUT_TABLES, "FigureB2_ES_Coefficients_SpecB.csv"))
@@ -982,17 +1603,15 @@ model_es_pooled <- feols(
   data = es_pooled, cluster = ~state
 )
 
-png(file.path(OUTPUT_FIGURES, "Diagnostic_Event_Study_Pooled.png"),
-    width = 2400, height = 1440, res = 200)
-iplot(model_es_pooled,
-      main = "DIAGNOSTIC: Pooled Event Study (Mandate-Contaminated)",
-      xlab = "Years Relative to Treatment (1999)",
-      ylab = "Effect on Pr(Tank Closure)",
-      col  = "gray50")
-abline(h = 0, lty = 2, col = "gray40")
-abline(v = -0.5, lty = 3, col = "red")
-dev.off()
-cat("✓ Saved: Diagnostic_Event_Study_Pooled.png\n")
+plot_event_study_pub(
+  model        = model_es_pooled,
+  title        = "DIAGNOSTIC: Pooled Event Study (Mandate-Contaminated)",
+  ylab         = "Effect on Pr(Tank Closure)",
+  ref_period   = -1,
+  color_pre    = "grey60",
+  color_post   = "grey40",
+  filename     = file.path(OUTPUT_FIGURES, "Diagnostic_Event_Study_Pooled.png")
+)
 
 
 #==============================================================================
@@ -1069,17 +1688,18 @@ pre_pval_leak  <- tryCatch(wald(model_es_leak_A, keep = pre_coefs_leak)$p,
 cat(sprintf("Leak ES pre-trend F-test (Spec A): p = %s\n",
             ifelse(is.na(pre_pval_leak), "N/A", round(pre_pval_leak, 4))))
 
-png(file.path(OUTPUT_FIGURES, "JMP_Figure_7_Leak_Event_Study.png"),
-    width = 2400, height = 1440, res = 200)
-iplot(model_es_leak_A,
-      main = "",
-      xlab = "Years Relative to Treatment (1999)",
-      ylab = "Effect on Pr(Reported Leak)",
-      col  = "#D55E00")
-abline(h = 0, lty = 2, col = "gray40")
-abline(v = -0.5, lty = 3, col = "red")
-dev.off()
-cat("✓ Saved: JMP_Figure_7_Leak_Event_Study.png\n")
+es_leak_fig <- plot_event_study_pub(
+  model        = model_es_leak_A,
+  title        = "Effect of Insurance Privatization on Reported Leak Probability",
+  ylab         = "Effect on Pr(Reported Leak)",
+  ref_period   = -1,
+  pre_trend_p  = pre_pval_leak,
+  color_pre    = "#4575B4",
+  color_post   = "#D55E00",
+  filename     = file.path(OUTPUT_FIGURES, "JMP_Figure_7_Leak_Event_Study.png")
+)
+ggsave(file.path(OUTPUT_FIGURES, "JMP_Figure_7_Leak_Event_Study.pdf"),
+       plot = es_leak_fig$plot, width = 14, height = 8, dpi = 300)
 
 es_leak_dt <- as.data.table(broom::tidy(model_es_leak_A, conf.int = TRUE))
 fwrite(es_leak_dt, file.path(OUTPUT_TABLES, "Figure7_Leak_ES_Coefficients.csv"))
@@ -1170,8 +1790,8 @@ facility_surv <- annual_data[, .(
 facility_surv[, `:=`(
   surv_time = fifelse(
     !is.na(first_closure_post),
-    first_closure_post - TREATMENT_YEAR,
-    pmin(last_obs, PANEL_END) - TREATMENT_YEAR
+    first_closure_post - POST_YEAR,
+    pmin(last_obs, PANEL_END) - POST_YEAR
   ),
   surv_event = as.integer(!is.na(first_closure_post))
 )]
@@ -1331,11 +1951,11 @@ save_standard_did_table(
 # Event study
 cat("\n--- Model 3A Event Study ---\n")
 model_3a_data[, `:=`(
-  event_time   = closure_year - TREATMENT_YEAR,
-  event_time_b = closure_year - TREATMENT_YEAR
+  event_time   = closure_year - POST_YEAR,
+  event_time_b = closure_year - POST_YEAR
 )]
-et_min_3a <- ES_START - TREATMENT_YEAR
-et_max_3a <- ES_END   - TREATMENT_YEAR
+et_min_3a <- ES_START - POST_YEAR
+et_max_3a <- ES_END   - POST_YEAR
 model_3a_data[event_time_b < et_min_3a, event_time_b := et_min_3a]
 model_3a_data[event_time_b > et_max_3a, event_time_b := et_max_3a]
 
@@ -1346,14 +1966,15 @@ model_3a_es <- feols(
   cluster = ~state
 )
 
-png(file.path(OUTPUT_FIGURES, "Model_3A_ES_Age_at_Closure.png"),
-    width = 2400, height = 1440, res = 200)
-iplot(model_3a_es, main = "Age at Closure Event Study",
-      xlab = "Years Relative to Treatment (1999)",
-      ylab = "Differential Age (years)", col = "#D55E00")
-abline(h = 0, lty = 2, col = "gray40")
-dev.off()
-cat("✓ Saved: Model_3A_ES_Age_at_Closure.png\n")
+plot_event_study_pub(
+  model        = model_3a_es,
+  title        = "Age at Closure Event Study",
+  ylab         = "Differential Age (years)",
+  ref_period   = -1,
+  color_pre    = "#4575B4",
+  color_post   = "#D55E00",
+  filename     = file.path(OUTPUT_FIGURES, "Model_3A_ES_Age_at_Closure.png")
+)
 
 fwrite(as.data.table(broom::tidy(model_3a_es, conf.int = TRUE)),
        file.path(OUTPUT_TABLES, "Model_3A_ES_Coefficients.csv"))
@@ -1530,9 +2151,9 @@ compete_data[, event_type := fcase(
 )]
 
 compete_data[, event_time := fcase(
-  event_type == 1L, pmax(yr_first_leak  - TREATMENT_YEAR, 0),
-  event_type == 2L, pmax(yr_first_close - TREATMENT_YEAR, 0),
-  default = pmin(last_obs, PANEL_END) - TREATMENT_YEAR
+  event_type == 1L, pmax(yr_first_leak  - POST_YEAR, 0),
+  event_type == 2L, pmax(yr_first_close - POST_YEAR, 0),
+  default = pmin(last_obs, PANEL_END) - POST_YEAR
 )]
 compete_data <- compete_data[!is.na(event_time) & event_time >= 0]
 
@@ -1614,34 +2235,9 @@ save_standard_did_table(
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 15.2  TN-Excluded from Leak Models (Table B.5b)
-# TN has zero LUST records pre-2008. Restrict TN to ≥2008 in leak models.
+# 15.2  [REMOVED] TN leak data issue resolved in 01_Descriptive_Analysis.R
+#       TN LUST records now correctly harmonized — no exclusion needed.
 # ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- 15.2 TN Leak Robustness ---\n")
-
-tn_exclude <- if (!is.null(meta$tn_exclude_leak_models)) meta$tn_exclude_leak_models else TRUE
-
-if (tn_exclude) {
-  cat("TN flagged: excluding from leak-outcome models.\n")
-  leak_noTN_data <- specA_data[state != "TN"]
-
-  m_leak_noTN <- feols(
-    leak_year ~ did_term | panel_id + panel_year,
-    data = leak_noTN_data, cluster = ~state, lean = FALSE
-  )
-  cat("Leak Spec A (TN excluded):\n"); print(summary(m_leak_noTN))
-
-  save_standard_did_table(
-    models  = list(m_leak_A_base, m_leak_noTN),
-    headers = c("Spec A (full)", "Spec A (no TN)"),
-    base_name = "TableB5b_TN_Leak_Robustness",
-    title = "Table B.5b: TN-Excluded Leak Robustness",
-    treatment_var = "did_term", cluster_var = "state",
-    use_bootstrap = USE_BOOTSTRAP, n_reps = N_BOOTSTRAP
-  )
-} else {
-  cat("TN not flagged for exclusion — skipping.\n")
-}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 15.3  mandate_window_3yr Sensitivity (Table B.6)
@@ -1954,11 +2550,13 @@ cat("  Figure 7:   Leak Event Study\n\n")
 cat("ROBUSTNESS (Spec B + Mandate Controls):\n")
 cat("  Table 4:    Spec B — mandate control escalation\n")
 cat("  Table 5:    Pooled — mandate control escalation\n")
-cat("  Table B.4:  Parallel trends 4-test battery\n")
+cat("  Table B.4:  Parallel trends F-test battery (4 tests)\n")
+cat("  Table B.4b: Pre-test power analysis (Roth, 2022)\n")
+cat("  Table B.4c: HonestDiD sensitivity (Rambachan & Roth, 2023)\n")
 cat("  Table B.5:  MD-excluded\n")
-cat("  Table B.5b: TN-excluded (leak models)\n")
 cat("  Table B.6:  mandate_window_3yr sensitivity\n")
-cat("  Figure B-2: Spec B event study\n\n")
+cat("  Figure B-2: Spec B event study\n")
+cat("  Figure B-3: HonestDiD sensitivity plot\n\n")
 
 cat("ADDITIONAL MODELS (existing architecture):\n")
 cat("  Model 1B:   Facility Cox Survival\n")
