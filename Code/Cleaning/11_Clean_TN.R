@@ -223,7 +223,8 @@ dt_lust_clean <- dt_lust_state[, .(
   lust_status = currentstatus
 )]
 dt_lust_clean <- dt_lust_clean[!is.na(facility_id) & facility_id != ""]
-
+# REQUIRED FIX: Append state key for master merge
+dt_lust_clean[, state := state_abbr]
 # 5. Merging -------------------------------------------------------------------
 message("Merging Datasets...")
 

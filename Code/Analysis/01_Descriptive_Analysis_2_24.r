@@ -1401,62 +1401,193 @@ cat("\n========================================\n")
 cat("SECTION 11: INSTITUTIONAL CONTEXT FIGURES\n")
 cat("========================================\n\n")
 
-# 11.1 Figure [A]: TX Private Insurance Market — Coverage & Concentration
-cat("--- 11.1: Figure [A] — TX FR Coverage & Concentration ---\n")
 
-if (!is.null(fr_year)) {
-  # Panel A: Coverage shares by year
-  regime_shares <- fr_year[YEAR >= 2007 & YEAR <= 2020, .N,
-                            by = .(YEAR, CATEGORY)]
+#==============================================================================
+# SECTION 11: INSTITUTIONAL CONTEXT FIGURES (GRANULAR CONTRACT PANEL)
+#==============================================================================
+
+cat("\n========================================\n")
+cat("SECTION 11: INSTITUTIONAL CONTEXT FIGURES\n")
+cat("========================================\n\n")
+#==============================================================================
+# SECTION 11: INSTITUTIONAL CONTEXT FIGURES (GRANULAR CONTRACT PANEL)
+#==============================================================================
+
+cat("\n========================================\n")
+cat("SECTION 11: INSTITUTIONAL CONTEXT FIGURES\n")
+cat("========================================\n\n")
+
+CONTRACT_PATH <- here("Data", "Processed", "texas_fr_contract_month_panel.csv")
+
+if (file.exists(CONTRACT_PATH)) {
+  contract_month <- fread(CONTRACT_PATH)
+  
+  # Base Filtering: Retain full temporal resolution (2007-2020)
+  panel_data <- contract_month[YEAR >= 2007 & YEAR <= 2020]
+  
+  # 11.1 Figure [A]: TX FR Coverage Composition (Facility-Month Integration)
+  cat("--- 11.1: TX FR Coverage Composition ---\n")
+  
+  panel_data[, plot_category := fcase(
+    CATEGORY == "Insurance", "Private Insurance",
+    CATEGORY == "State Fund", "State Fund",
+    CATEGORY == "Self-Insurance", "Self-Insurance",
+    CATEGORY == "NO COVERAGE", "No Coverage",
+    default = "Other"
+  )]
+
+  # Isolate unique facility-category-month pairings
+  fac_categories <- unique(panel_data[, .(FACILITY_ID, YEAR, MONTH, plot_category)])
+  # Fractional weight for facilities utilizing multiple mechanism types in the same month
+  fac_categories[, weight := 1.0 / .N, by = .(FACILITY_ID, YEAR, MONTH)]
+  
+  # Aggregate to annual level (average monthly exposure)
+  regime_shares <- fac_categories[, .(N = sum(weight) / 12), by = .(YEAR, plot_category)]
   regime_shares[, share := N / sum(N), by = YEAR]
 
-  # Panel B: Market structure (insurance category only)
-  market_struct <- fr_year[
-    YEAR >= 2007 & YEAR <= 2020 & CATEGORY == "Insurance",
-    .(n_insurers   = uniqueN(ISSUER_NAME),
-      n_facilities = uniqueN(FACILITY_ID)),
-    by = YEAR
-  ]
-  market_struct[, fac_per_insurer := round(n_facilities / n_insurers, 0)]
-
-  # Plot Panel A
-  fig_a_left <- ggplot(regime_shares,
-                        aes(x = YEAR, y = share, fill = CATEGORY)) +
+  fig_coverage <- ggplot(regime_shares, aes(x = YEAR, y = share, fill = plot_category)) +
     geom_col(position = "fill", width = 0.8) +
-    scale_y_continuous(labels = percent_format()) +
+    scale_y_continuous(labels = scales::percent_format()) +
     labs(x = "Year", y = "Share of Facilities",
-         title = "(a) Coverage Composition",
-         fill = "Category") +
-    theme(legend.position = "bottom",
-          legend.text = element_text(size = 8))
+         title = "Primary Financial Responsibility Mechanism (2007–2020)",
+         fill = "Mechanism") +
+    theme_pub() +
+    theme(legend.position = "bottom")
 
-  # Dynamic scale factor so fac_per_insurer line fits the insurer-count axis
-  scale_factor <- max(market_struct$n_insurers,    na.rm = TRUE) /
-                  max(market_struct$fac_per_insurer, na.rm = TRUE)
-
-  fig_a_right <- ggplot(market_struct, aes(x = YEAR)) +
-    geom_col(aes(y = n_insurers), fill = COL_TX, alpha = 0.7, width = 0.6) +
-    geom_line(aes(y = fac_per_insurer * scale_factor),
-              color = COL_CTRL, linewidth = 0.9) +
-    geom_point(aes(y = fac_per_insurer * scale_factor),
-               color = COL_CTRL, size = 2) +
-    scale_y_continuous(
-      name = "Distinct Insurers",
-      sec.axis = sec_axis(~ . / scale_factor, name = "Facilities per Insurer")
-    ) +
-    labs(x = "Year", title = "(b) Market Structure")
-
-  fig_a <- gridExtra::grid.arrange(
-    fig_a_left, fig_a_right, ncol = 2,
-    top = textGrob("Texas Private Insurance Market (2007–2020)",
-                   gp = gpar(fontsize = 14, fontface = "bold"))
-  )
-  save_fig(fig_a, "FigureA_TX_FR_Coverage_Concentration", width = 14, height = 6)
+  save_fig(fig_coverage, "FigureA_TX_FR_Coverage_Composition", width = 8, height = 6)
   save_table(regime_shares, "FigureA_data_regime_shares")
-  save_table(market_struct, "FigureA_data_market_structure")
+
+  # 11.2 Market Consolidation: Top 5 Insurers + HHI (Accurate Disaggregation)
+  cat("--- 11.2: TX Private Insurance Market — Top 5 & HHI Trend ---\n")
+  
+  # Isolate private insurance
+  ins_panel <- panel_data[plot_category == "Private Insurance" & !is.na(ISSUER_NAME) & ISSUER_NAME != "NO COVERAGE"]
+  
+  # Fractional Attribution by Month (Solves double-counting precisely)
+  ins_panel[, weight := 1.0 / .N, by = .(FACILITY_ID, YEAR, MONTH)]
+  
+  # Aggregate Facility-Months per Insurer
+  insurer_exposure <- ins_panel[, .(fac_months = sum(weight)), by = .(YEAR, ISSUER_NAME)]
+  insurer_exposure[, annual_total := sum(fac_months), by = YEAR]
+  insurer_exposure[, market_share := fac_months / annual_total]
+
+  # Calculate True HHI on fully disaggregated market shares
+  hhi_trend <- insurer_exposure[, .(HHI = sum((market_share * 100)^2)), by = YEAR]
+
+  # Isolate Top 5 for Visualization
+  setorder(insurer_exposure, YEAR, -fac_months)
+  insurer_exposure[, annual_rank := frank(-fac_months, ties.method = "first"), by = YEAR]
+  insurer_exposure[, Plot_Issuer := fifelse(annual_rank <= 5, ISSUER_NAME, "Other Private Insurers")]
+
+  plot_data <- insurer_exposure[, .(market_share = sum(market_share)), by = .(YEAR, Plot_Issuer)]
+
+  # Order factors: 'Other' at the bottom, largest remaining firms stacked above
+  overall_sizes <- plot_data[, .(total_share = sum(market_share)), by = Plot_Issuer]
+  setorder(overall_sizes, total_share)
+  factor_levels <- c("Other Private Insurers", setdiff(overall_sizes$Plot_Issuer, "Other Private Insurers"))
+  plot_data[, Plot_Issuer := factor(Plot_Issuer, levels = factor_levels)]
+
+  # Merge HHI for secondary axis plotting (scaled to fit 0-1 primary axis. Assumes HHI max ~5000)
+  HHI_SCALE_FACTOR <- 5000 
+  plot_data <- merge(plot_data, hhi_trend, by = "YEAR", all.x = TRUE)
+
+  fig_top5 <- ggplot(plot_data, aes(x = as.factor(YEAR))) +
+    geom_col(aes(y = market_share, fill = Plot_Issuer), width = 0.85, color = "white", linewidth = 0.1) +
+    geom_line(aes(y = HHI / HHI_SCALE_FACTOR, group = 1), color = "black", linewidth = 1.2, linetype = "dashed") +
+    geom_point(aes(y = HHI / HHI_SCALE_FACTOR, group = 1), color = "black", size = 2.5) +
+    scale_y_continuous(
+      labels = scales::percent_format(accuracy = 1), 
+      expand = c(0, 0),
+      sec.axis = sec_axis(~ . * HHI_SCALE_FACTOR, name = "Herfindahl-Hirschman Index (HHI)")
+    ) +
+    scale_fill_manual(values = setNames(c("gray70", scales::viridis_pal(option = "mako")(length(factor_levels)-1)), factor_levels)) +
+    labs(x = "Year", y = "Market Share (by Facility-Months)",
+         title = "Private Insurance Market Consolidation",
+         subtitle = "Top 5 Insurers (Bars) and Market Concentration HHI (Dashed Line)",
+         fill = "Insurer") +
+    theme_pub() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "right") +
+    guides(fill = guide_legend(ncol = 1, reverse = TRUE))
+
+  save_fig(fig_top5, "Figure_TX_FR_Top5_Dominance_HHI", width = 12, height = 6)
+  save_table(plot_data, "Figure_data_Top5_HHI")
+
+  # 11.3 Insurer Abandonment Rate (Corrected Churn Logic with Event Tags)
+  cat("--- 11.3: Insurer Switching Behavior (Churn) with Event Tags ---\n")
+  
+  # Identify all unique insurers a facility used in Year T
+  fac_yr_issuers <- unique(ins_panel[, .(FACILITY_ID, YEAR, ISSUER_NAME)])
+  
+  # Self-join to evaluate if the T-1 insurer was completely abandoned in T
+  t_minus_1 <- fac_yr_issuers[, .(FACILITY_ID, YEAR_T1 = YEAR, ISSUER_T1 = ISSUER_NAME)]
+  t_current <- fac_yr_issuers[, .(FACILITY_ID, YEAR_T0 = YEAR, ISSUER_T0 = ISSUER_NAME)]
+  
+  churn_merge <- merge(t_minus_1, t_current, 
+                       by.x = c("FACILITY_ID", "YEAR_T1", "ISSUER_T1"), 
+                       by.y = c("FACILITY_ID", "YEAR_T0", "ISSUER_T0"), 
+                       all.x = TRUE)
+  
+  # An insurer is "abandoned" if they existed in T-1 but fail to map to T
+  churn_merge[, is_dropped := is.na(YEAR_T0)]
+  
+  # Aggregate at facility level: did the facility drop ANY insurer from last year?
+  fac_churn <- churn_merge[, .(abandoned_insurer = any(is_dropped)), by = .(FACILITY_ID, YEAR = YEAR_T1 + 1)]
+  
+  churn_summary <- fac_churn[YEAR <= 2020 & YEAR >= 2008, .(total_churn = mean(abandoned_insurer)), by = YEAR]
+
+  fig_churn <- ggplot(churn_summary, aes(x = YEAR, y = total_churn)) +
+    geom_line(color = "gray80", linewidth = 1, linetype = "dashed") +
+    geom_point(aes(size = total_churn), color = "gray40", alpha = 0.5) +
+    # Institutional Event Overlays
+    geom_point(data = churn_summary[YEAR == 2012], aes(y = total_churn), color = "#D55E00", size = 5) +
+    geom_point(data = churn_summary[YEAR == 2018], aes(y = total_churn), color = "#0072B2", size = 5) +
+    annotate("text", x = 2012, y = churn_summary[YEAR==2012, total_churn] + 0.02, 
+             label = "Zurich Exit\n(2012)", color = "#D55E00", fontface = "bold", size = 3.5) +
+    annotate("text", x = 2018, y = churn_summary[YEAR==2018, total_churn] + 0.02, 
+             label = "TOMIC Acquisition\n(2018)", color = "#0072B2", fontface = "bold", size = 3.5) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    labs(x = "Year", y = "Facility Abandonment Rate",
+         title = "Institutional Drivers of Market Churn",
+         subtitle = "Percentage of facilities dropping an incumbent provider. Spikes correspond to known exits/M&A.") +
+    theme_pub() + theme(legend.position = "none")
+
+  save_fig(fig_churn, "Figure_TX_FR_Market_Churn_Annotated", width = 8, height = 5)
+  save_table(churn_summary, "Figure_data_Market_Churn")
+
+  # 11.4 Capital Exposure: Statutory Minimum Adherence vs. Excess Coverage
+  cat("--- 11.4: Statutory Coverage Limits ---\n")
+  
+  # Texas statutory minimum occurrence limit for petroleum USTs is generally $1,000,000
+  # Utilize unique contracts observed in the panel year
+  limits_data <- unique(ins_panel[!is.na(COVER_OCC) & COVER_OCC >= 10000, .(FIN_ASSUR_ID, YEAR, COVER_OCC)])
+  limits_data[, coverage_tier := fcase(
+    COVER_OCC == 1000000, "$1M (Statutory)",
+    COVER_OCC < 1000000, "Sub-$1M",
+    COVER_OCC > 1000000, "Excess (>$1M)"
+  )]
+  
+  tier_shares <- limits_data[, .N, by = .(YEAR, coverage_tier)]
+  tier_shares[, share := N / sum(N), by = YEAR]
+  tier_shares[, coverage_tier := factor(coverage_tier, levels = c("Sub-$1M", "$1M (Statutory)", "Excess (>$1M)"))]
+
+  fig_limits <- ggplot(tier_shares, aes(x = YEAR, y = share, fill = coverage_tier)) +
+    geom_col(position = "stack", width = 0.7) +
+    scale_y_continuous(labels = scales::percent_format()) +
+    scale_fill_manual(values = c("Sub-$1M" = "firebrick", "$1M (Statutory)" = "gray60", "Excess (>$1M)" = COL_CTRL)) +
+    labs(x = "Year", y = "Share of Contracts",
+         title = "Per-Occurrence Coverage Limits",
+         subtitle = "Adherence to the standard $1M statutory minimum vs. excess coverage acquisition",
+         fill = "Occurrence Limit") +
+    theme_pub() +
+    theme(legend.position = "bottom")
+
+  save_fig(fig_limits, "Figure_TX_FR_Coverage_Limits", width = 8, height = 5)
+  save_table(tier_shares, "Figure_data_Coverage_Limits")
+
 } else {
-  cat("  ⚠ Skipped — FR panel not available\n")
+  cat("  ⚠ Skipped Section 11 — texas_fr_contract_month_panel.csv not available\n")
 }
+
 
 # 11.2 Figure [B]: Risk-Differentiated Pricing (Mid-Continent Rate Filings)
 cat("\n--- 11.2: Figure [B] — Mid-Continent Pricing ---\n")

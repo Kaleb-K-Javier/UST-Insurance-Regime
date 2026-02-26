@@ -266,7 +266,9 @@ if (length(missing_spatial) > 0 && has_sf) {
   message("Spatial fill complete.")
 }
 
-master_tanks[, c("temp_clean_name", "zip5") := NULL]
+# REPLACE WITH:
+cols_to_drop <- intersect(c("temp_clean_name", "zip5"), names(master_tanks))
+master_tanks[, (cols_to_drop) := NULL]
 
 pct_fips <- round(sum(!is.na(master_tanks$county_fips)) / nrow(master_tanks) * 100, 1)
 message(paste0("Final FIPS Coverage: ", pct_fips, "%"))
