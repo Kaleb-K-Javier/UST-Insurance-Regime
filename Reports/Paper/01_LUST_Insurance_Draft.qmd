@@ -40,6 +40,27 @@ load packages
 -->
 
 
+```{r}
+#| label: setup
+#| include: false
+#| message: false
+#| warning: false
+
+# 2. FORCE the root identification 
+# This looks for the directory containing the 'Reports' folder
+here::i_am("Reports/Paper/01_LUST_Insurance_Draft.qmd")
+
+# 3. DEBUG: Print the detected root to your render console
+# If this doesn't say ".../ust_ins_move_to_github", here is the problem.
+message("CHECKPOINT: Project root is: ", here::here())
+
+# 2. Load all required packages 
+library(here)
+library(tidyverse)
+library(kableExtra)
+# Add any other packages your script requires below
+```
+
 
 \clearpage
 
@@ -268,7 +289,7 @@ Texas's behavioral response is identified.
 
 ---
 
-#  Data
+# Data
 
 ##  Panel Architecture and Source Layers
 
@@ -329,10 +350,9 @@ Appendix B.4].
 #| tbl-cap: "Sample attrition across four sequential construction filters. Each row reports the facility count and facility-year count remaining after applying cumulative filters, separately for Texas and the control group."
 #| echo: false
 #| warning: false
-# Reads the CSV saved by save_table() in 01_Descriptive_Analysis.R.
-# To use RDS instead, add saveRDS(attrition_log_df, here::here("Output","tbl_attrition.rds"))
-# to the R script, then replace read.csv() with readRDS() here.
-read.csv("../../Output/TableB2_Sample_Attrition.csv") |>
+
+# FIX 1: broken pipe restored; path updated to Tables subdirectory.
+read.csv(here::here("Output", "Tables", "TableB2_Sample_Attrition.csv")) |>
   kableExtra::kbl(
     booktabs  = TRUE,
     linesep   = "",
@@ -355,8 +375,10 @@ read.csv("../../Output/TableB2_Sample_Attrition.csv") |>
 #| tbl-cap: "Balance test for the missing-data exclusion. The dependent variable equals one if the facility was dropped from the estimation sample due to missing tank-level date records. The coefficient on the Texas indicator tests whether exclusion probability is differentially correlated with treatment status."
 #| echo: false
 #| warning: false
-# Reads the CSV saved by save_table() in 01_Descriptive_Analysis.R.
-read.csv("../../Output/TableB3_Missing_Data_Balance.csv") |>
+
+# FIX 2: path updated to Tables subdirectory; filename is TableB3_Missing_Data_Balance_Test.csv
+# (note the _Test suffix — confirmed from directory listing).
+read.csv(here::here("Output", "Tables", "TableB3_Missing_Data_Balance_Test.csv")) |>
   kableExtra::kbl(
     booktabs = TRUE,
     linesep  = "",
@@ -423,7 +445,8 @@ reported in @tbl-mandate-exposure.
 #| tbl-cap: "Texas phased UST upgrade mandate schedule under 30 TAC Chapter 334. Each row corresponds to an installation vintage cohort. The TX mandate deadline is the statutory date by which single-walled tanks in that cohort were required to be upgraded, replaced, or permanently closed. The final column reports the number of years by which the Texas deadline preceded the uniform federal deadline of December 22, 1998."
 #| echo: false
 #| warning: false
-# This table is constructed directly from the statute — no external file needed.
+
+# Constructed directly from the statute — no external file needed.
 # Values confirmed from 01_Descriptive_Analysis.R §5.7a console output.
 tibble::tribble(
   ~Vintage,                    ~Cohort,      ~`TX Deadline`,  ~`Yrs Before Federal`,
@@ -455,8 +478,9 @@ tibble::tribble(
 #| tbl-cap: "Mandate exposure among pre-1988 single-walled tanks active as of December 22, 1998, by group. Years past deadline is the elapsed time between each tank's cohort-specific Texas compliance deadline and the PSTRF cutoff date of December 22, 1998. Control state tanks faced the federal deadline of December 22, 1998 and therefore had zero years past deadline at the treatment date."
 #| echo: false
 #| warning: false
-# Reads the CSV saved by save_table(mandate_desc_comp, "Table2_Mandate_Exposure_Comparison")
-read.csv("../../Output/Table2_Mandate_Exposure_Comparison.csv") |>
+
+# FIX 3: path updated to Tables subdirectory.
+read.csv(here::here("Output", "Tables", "Table2_Mandate_Exposure_Comparison.csv")) |>
   kableExtra::kbl(
     booktabs  = TRUE,
     linesep   = "",
@@ -529,38 +553,62 @@ imputation is evaluated in Appendix [INSERT].
 
 The control group operates under a uniform-premium public fund regime in which
 remediation costs are realized ex-post rather than priced ex-ante. To
-parameterize the severity of environmental failure, the term $L(x_t)$ in the
-structural model of Section [INSERT], I link the administrative facility
+parameterize the severity of environmental failure --- the term $L(x_t)$ in the
+structural model of Section [INSERT] --- I link the administrative facility
 identifiers to the payment ledgers of state trust funds in Colorado, Louisiana,
 New Mexico, Tennessee, and Utah [@noauthor_petroleum_nodate;
 @noauthor_underground_nodate]. This five-state subset provides the empirical
-distribution of realized cleanup costs conditional on a confirmed release. All
-cost figures are deflated to 2023 dollars using the Bureau of Labor Statistics
-CPI for urban consumers. The realized cost distribution is characterized by
-extreme positive skewness and rejects normality in favor of a heavy-tailed
-log-normal structure. The median cleanup cost represents the typical remediation
-event, while the mean is elevated by a small number of catastrophic outcomes in
-which contamination plumes migrate off-site and trigger third-party liability.
-This heavy tail is a structural feature of UST liability rather than an artifact
-of specific state administrative procedures: the upper tail of the cost
-distribution is consistent across all five sampled fund states, as documented
-in @fig-cost-distribution. For control states without verifiable claims data, I
-extrapolate the conditional cost function from the five-state sample using
-observable facility characteristics as predictors and assume stationarity of the
-cost distribution over time within each state, adjusting for aggregate inflation.
+distribution of realized cleanup costs conditional on a confirmed release.
+Pennsylvania, the treatment state, operates under a pay-for-performance auction
+regime and is excluded from this cost parameterization; its realized costs are
+instead the primary outcome variable of the causal analysis in Section [INSERT].
+All cost figures are deflated to 2023 dollars using the Bureau of Labor
+Statistics CPI for urban consumers (CPIAUCSL series, Federal Reserve Bank of
+St. Louis FRED).
+
+The realized cost distribution is characterized by extreme positive skewness and
+rejects normality in favor of a heavy-tailed log-normal structure. The median
+cleanup cost represents the typical remediation event, while the mean is
+elevated by a small number of catastrophic outcomes in which contamination
+plumes migrate off-site and trigger third-party liability. This heavy tail is a
+structural feature of UST liability rather than an artifact of specific state
+administrative procedures: the upper tail of the cost distribution is consistent
+across all five sampled fund states, as documented in @fig-cost-distribution.
+For control states without verifiable claims data, I extrapolate the conditional
+cost function from the five-state sample using observable facility
+characteristics as predictors and assume stationarity of the cost distribution
+over time within each state, adjusting for aggregate inflation.
 
 ```{r}
 #| label: fig-cost-distribution
-#| fig-cap: "Empirical distribution of realized cleanup costs per confirmed release across five control-state trust funds (Colorado, Louisiana, New Mexico, Tennessee, Utah), deflated to 2023 dollars. Each panel plots the log-scale density for one state. Vertical dashed lines mark the median and mean. The consistency of the heavy upper tail across all five states supports treating the skewed cost distribution as a structural feature of UST liability."
+#| fig-cap: >
+#|   Empirical distribution of realized cleanup costs per confirmed release
+#|   across five control-state trust funds (Colorado, Louisiana, New Mexico,
+#|   Tennessee, Utah), deflated to 2023 dollars. Each panel plots the log-scale
+#|   kernel density for one state. Vertical dashed lines mark the state-specific
+#|   median (red) and mean (orange). The consistency of the heavy upper tail
+#|   across all five states supports treating the skewed cost distribution as a
+#|   structural feature of UST liability rather than a state-specific artifact.
+#|   Pennsylvania (the treatment state) is excluded; its costs reflect the
+#|   pay-for-performance auction regime and are analyzed separately.
 #| fig-width: 7
 #| fig-height: 5
 #| echo: false
 #| warning: false
-# Uses the PNG saved by save_fig() in the R script.
-# To use an RDS ggplot object instead, add:
-#   saveRDS(fig_cost_dist, here::here("Output", "fig_cost_distribution.rds"))
-# in the R script, then replace include_graphics() with readRDS().
-knitr::include_graphics("../../Output/FigureCostDistribution.png")
+#| message: false
+
+# Build the figure on-the-fly from the harmonized claims data.
+# Source the dedicated figure script so this chunk stays readable.
+# The script reads Outputs/all_cleaned_claims.csv (produced by
+# 05_Claims_Analysis.r with RUN_LOCAL = TRUE) and saves the PNG to
+# Output/Figures/Figure_cost_distribution.png before returning it here.
+
+source(here::here("R", "build_cost_distribution_figure.R"),
+       local = knitr::knit_global())
+
+knitr::include_graphics(
+  here::here("Output", "Figures", "Figure_cost_distribution.png")
+)
 ```
 
 ## Descriptive Statistics
@@ -614,28 +662,41 @@ control group, with the direction of the gap [INSERT: describe].
 #| echo: false
 #| warning: false
 
-#| label: tbl-descriptive
-read_csv(here("Output", "Tables", "Table1_Combined_Long.csv")) |>
-  kbl(booktabs = TRUE, linesep = "",
-      col.names = c("Panel", "Cohort", "Variable", "Texas", "Control")) |>
-  kable_styling(latex_options = c("hold_position", "scale_down")) |>
-  pack_rows(index = table(tbl1_combined$panel)) |>
-  footnote(general = "Panel A stock variables measured Dec 22, 1998.
-                       Panel B flow variables are 1989–1997 facility-year averages.
-                       Spec A = post-1988 tanks only (mandate-free).
-                       Spec B = pre-1988 tanks only (mandate-exposed, 1989–1993).")
-
+# Table1_Combined_Long.csv confirmed in Output/Tables from directory listing.
+read.csv(here::here("Output", "Tables", "Table1_Combined_Long.csv")) |>
+  kableExtra::kbl(
+    booktabs  = TRUE,
+    linesep   = "",
+    col.names = c("Panel", "Cohort", "Variable", "Texas", "Control")
+  ) |>
+  kableExtra::kable_styling(latex_options = c("hold_position", "scale_down")) |>
+  kableExtra::pack_rows("Panel A: 1998 Cross-Section (Stock as of December 22, 1998)", 1, 7) |>
+  kableExtra::pack_rows("Panel B: Pre-Period Flow Averages, 1989--1997", 8, 23) |>
+  kableExtra::pack_rows("All Facilities",                              8,  11, indent = TRUE) |>
+  kableExtra::pack_rows("Post-1988 Only (Spec A — Mandate-Free)",     12, 15, indent = TRUE) |>
+  kableExtra::pack_rows("Pre-1988 Only (Spec B — Mandate-Exposed)",   16, 19, indent = TRUE) |>
+  kableExtra::pack_rows("Mixed Cohort",                               20, 23, indent = TRUE) |>
+  kableExtra::add_footnote(
+    "Standard deviations in parentheses. Panel A: active facilities and
+     tanks on December 22, 1998; tank age in years. Panel B: annual averages
+     over 1989--1997 (1998 excluded). Spec A facilities hold exclusively
+     post-1988 tanks and were never subject to Texas phased upgrade mandates
+     (30 TAC Chapter 334, 1989--1993). Spec B facilities hold exclusively
+     pre-1988 tanks and faced cohort-specific Texas mandate deadlines
+     5--9 years before the December 22, 1998 PSTRF cutoff. Leak incidence
+     expressed per 1,000 facility-years.",
+    notation = "none"
+  )
 ```
-
-
 
 ```{r}
 #| label: tbl-pt-validation
 #| tbl-cap: "Parallel trends validation: Wald F-tests by sample and specification, 1990--1997 pre-reform window. Each test estimates a TWFE regression of the annual closure indicator on interactions of relative-year dummies with the Texas indicator, with facility and year fixed effects, standard errors clustered at the state level. The null hypothesis is joint nullity of all pre-period interaction coefficients."
 #| echo: false
 #| warning: false
-# Reads the CSV saved by save_table(pt_all, "TableB4_Parallel_Trends_Validation")
-read.csv("../../Output/TableB4_Parallel_Trends_Validation.csv") |>
+
+# FIX 4: path updated to Tables subdirectory.
+read.csv(here::here("Output", "Tables", "TableB4_Parallel_Trends_Validation.csv")) |>
   kableExtra::kbl(
     booktabs  = TRUE,
     linesep   = "",
@@ -683,10 +744,10 @@ between Texas and control closure rates.
 #| fig-height: 4
 #| echo: false
 #| warning: false
-# Uses the PNG saved by save_fig(fig4, "Figure4_PrePeriod_SpecA_MainText")
-# To use RDS instead, add saveRDS(fig4, here::here("Output","fig4_specA.rds"))
-# in the R script, then replace with: readRDS("../../Output/fig4_specA.rds")
-knitr::include_graphics("../../Output/Figure4_PrePeriod_SpecA_MainText.png")
+
+# FIX 5: added "Figures" subdirectory to path.
+# File confirmed in directory: Output\Figures\Figure4_PrePeriod_SpecA_MainText.png
+knitr::include_graphics(here::here("Output", "Figures", "Figure4_PrePeriod_SpecA_MainText.png"))
 ```
 
 ```{r}
@@ -696,8 +757,10 @@ knitr::include_graphics("../../Output/Figure4_PrePeriod_SpecA_MainText.png")
 #| fig-height: 4
 #| echo: false
 #| warning: false
-# Uses the PNG saved by save_fig(fig4_pooled, "Figure4B_PrePeriod_Pooled_Appendix")
-knitr::include_graphics("../../Output/Figure4B_PrePeriod_Pooled_Appendix.png")
+
+# FIX 6: added "Figures" subdirectory to path.
+# File confirmed in directory: Output\Figures\Figure4B_PrePeriod_Pooled_Appendix.png
+knitr::include_graphics(here::here("Output", "Figures", "Figure4B_PrePeriod_Pooled_Appendix.png"))
 ```
 
 
