@@ -27,3 +27,11 @@ Data/
 Output/*
 !Output/*/
 !Output/**/*.csv
+
+# R project-specific library (do not commit packages)
+renv_library/
+
+# R session files
+.Rhistory
+.RData
+.Rproj.user
