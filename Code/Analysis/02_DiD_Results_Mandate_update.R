@@ -123,6 +123,7 @@ if (HAS_BACONDECOMP) {
   cat("⚠ bacondecomp not installed — install with: install.packages('bacondecomp')\n")
 }
 
+
 # ── Load metadata (constants from Script 01) ──
 ANALYSIS_DIR <- here("Data", "Analysis")
 
@@ -213,7 +214,7 @@ stopifnot("spec_A_eligible"  %in% names(annual_data))
 stopifnot("spec_B_eligible"  %in% names(annual_data))
 
 cat(sprintf("mandate_active facility-years: %s (%.1f%% of TX pre-1988)\n",
-            format(sum(annual_data$mandate_active), big.mark = ","),
+            format(sum(annual_data$mandate_active, na.rm = TRUE), big.mark = ","),
             100 * mean(annual_data$mandate_active[annual_data$texas_treated == 1 &
                                                    annual_data$spec_B_eligible == 1],
                        na.rm = TRUE)))
@@ -226,11 +227,12 @@ if (!"mandate_window_3yr" %in% names(annual_data)) {
       panel_year >= 1988L & panel_year <= 1994L
   )]
   cat(sprintf("  mandate_window_3yr facility-years: %s\n",
-              format(sum(annual_data$mandate_window_3yr), big.mark = ",")))
+              format(sum(annual_data$mandate_window_3yr, na.rm = TRUE), big.mark = ",")))
 } else {
   cat(sprintf("  mandate_window_3yr facility-years: %s\n",
-              format(sum(annual_data$mandate_window_3yr), big.mark = ",")))
+              format(sum(annual_data$mandate_window_3yr, na.rm = TRUE), big.mark = ",")))
 }
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 1.3  CONSTRUCT SPEC A / SPEC B / POOLED SUBSETS
@@ -687,7 +689,7 @@ pt_tests <- list()
 pt_tests[["pooled_no_ctrl"]] <- tryCatch(
   feols(closure_event ~ i(rel_year_1999, texas_treated, ref = -1) |
           panel_id + panel_year,
-        data = annual_data[panel_year >= 1990 & panel_year <= 1997],
+        data = annual_data[panel_year >= 1990 & panel_year <= 1998],
         cluster = ~state),
   error = function(e) { message("  PT test 1 failed: ", e$message); NULL }
 )
@@ -696,7 +698,7 @@ pt_tests[["pooled_no_ctrl"]] <- tryCatch(
 pt_tests[["specA_clean"]] <- tryCatch(
   feols(closure_event ~ i(rel_year_1999, texas_treated, ref = -1) |
           panel_id + panel_year,
-        data = specA_data[panel_year >= 1990 & panel_year <= 1997],
+        data = specA_data[panel_year >= 1990 & panel_year <= 1998],
         cluster = ~state),
   error = function(e) { message("  PT test 2 failed: ", e$message); NULL }
 )
@@ -705,7 +707,7 @@ pt_tests[["specA_clean"]] <- tryCatch(
 pt_tests[["specB_no_ctrl"]] <- tryCatch(
   feols(closure_event ~ i(rel_year_1999, texas_treated, ref = -1) |
           panel_id + panel_year,
-        data = specB_data[panel_year >= 1990 & panel_year <= 1997],
+        data = specB_data[panel_year >= 1990 & panel_year <= 1998],
         cluster = ~state),
   error = function(e) { message("  PT test 3 failed: ", e$message); NULL }
 )
@@ -714,7 +716,7 @@ pt_tests[["specB_no_ctrl"]] <- tryCatch(
 pt_tests[["specB_mandate"]] <- tryCatch(
   feols(closure_event ~ i(rel_year_1999, texas_treated, ref = -1) +
           mandate_active | panel_id + panel_year,
-        data = specB_data[panel_year >= 1990 & panel_year <= 1997],
+        data = specB_data[panel_year >= 1990 & panel_year <= 1998],
         cluster = ~state),
   error = function(e) { message("  PT test 4 failed: ", e$message); NULL }
 )
@@ -742,47 +744,51 @@ pt_results <- rbindlist(lapply(names(pt_tests), function(nm) {
 cat("\n=== PARALLEL TRENDS VALIDATION TABLE (Table B.4) ===\n")
 print(pt_results)
 
-# Save
-fwrite(pt_results, file.path(OUTPUT_TABLES, "TableB4_Parallel_Trends_Validation.csv"))
+# Guard logic against null table parameters
+if (nrow(pt_results) > 0 && !all(is.na(pt_results$f_stat))) {
+  fwrite(pt_results, file.path(OUTPUT_TABLES, "TableB4_Parallel_Trends_Validation.csv"))
 
-# LaTeX version
-tex_pt <- c(
-  "\\begin{table}[htbp]",
-  "\\centering",
-  "\\caption{Parallel Trends Validation: Pre-Period F-Tests}",
-  "\\label{tbl:parallel-trends}",
-  "\\begin{tabular}{llccl}",
-  "\\toprule",
-  "Test & Sample & F-statistic & p-value & Result \\\\",
-  "\\midrule"
-)
-for (i in seq_len(nrow(pt_results))) {
-  r <- pt_results[i]
-  tex_pt <- c(tex_pt, sprintf("%d & %s & %.3f & %.4f & %s \\\\",
-                               i, r$spec, r$f_stat, r$p_value, r$interpretation))
-}
-tex_pt <- c(tex_pt,
-  "\\bottomrule",
-  "\\multicolumn{5}{p{0.9\\textwidth}}{\\footnotesize \\textit{Notes:}",
-  "Joint F-test of pre-treatment event-study coefficients (1990--1997),",
-  "reference year = 1998. Spec A restricts to facilities with 100\\% post-1988",
-  "tanks (exempt from Texas 30 TAC Ch. 334 phased mandate). Spec B restricts",
-  "to 100\\% pre-1988 tanks. Test 4 adds \\texttt{mandate\\_active} to absorb",
-  "mandate-induced closure spikes.}",
-  "\\end{tabular}",
-  "\\end{table}"
-)
-writeLines(tex_pt, file.path(OUTPUT_TABLES, "TableB4_Parallel_Trends_Validation.tex"))
-cat("✓ Saved: TableB4_Parallel_Trends_Validation (.csv / .tex)\n\n")
+  # LaTeX version
+  tex_pt <- c(
+    "\\begin{table}[htbp]",
+    "\\centering",
+    "\\caption{Parallel Trends Validation: Pre-Period F-Tests}",
+    "\\label{tbl:parallel-trends}",
+    "\\begin{tabular}{llccl}",
+    "\\toprule",
+    "Test & Sample & F-statistic & p-value & Result \\\\",
+    "\\midrule"
+  )
+  for (i in seq_len(nrow(pt_results))) {
+    r <- pt_results[i]
+    tex_pt <- c(tex_pt, sprintf("%d & %s & %.3f & %.4f & %s \\\\",
+                                 i, r$spec, r$f_stat, r$p_value, r$interpretation))
+  }
+  tex_pt <- c(tex_pt,
+    "\\bottomrule",
+    "\\multicolumn{5}{p{0.9\\textwidth}}{\\footnotesize \\textit{Notes:}",
+    "Joint F-test of pre-treatment event-study coefficients (1990--1997),",
+    "reference year = 1998. Spec A restricts to facilities with 100\\% post-1988",
+    "tanks (exempt from Texas 30 TAC Ch. 334 phased mandate). Spec B restricts",
+    "to 100\\% pre-1988 tanks. Test 4 adds \\texttt{mandate\\_active} to absorb",
+    "mandate-induced closure spikes.}",
+    "\\end{tabular}",
+    "\\end{table}"
+  )
+  writeLines(tex_pt, file.path(OUTPUT_TABLES, "TableB4_Parallel_Trends_Validation.tex"))
+  cat("✓ Saved: TableB4_Parallel_Trends_Validation (.csv / .tex)\n\n")
 
-# Store key p-values for downstream use
-specA_pretrend_p  <- pt_results[spec == "specA_clean",    p_value]
-pooled_pretrend_p <- pt_results[spec == "pooled_no_ctrl", p_value]
+  # Store key p-values for downstream use
+  specA_pretrend_p  <- pt_results[spec == "specA_clean",    p_value]
+  pooled_pretrend_p <- pt_results[spec == "pooled_no_ctrl", p_value]
 
-if (!is.na(specA_pretrend_p) && specA_pretrend_p > 0.10) {
-  cat("✓ Spec A passes pre-trend validation (p > 0.10) — primary identification confirmed.\n")
-} else if (!is.na(specA_pretrend_p)) {
-  cat("⚠ Spec A pre-trend p < 0.10 — investigate potential contamination.\n")
+  if (length(specA_pretrend_p) > 0 && !is.na(specA_pretrend_p) && specA_pretrend_p > 0.10) {
+    cat("✓ Spec A passes pre-trend validation (p > 0.10) — primary identification confirmed.\n")
+  } else if (length(specA_pretrend_p) > 0 && !is.na(specA_pretrend_p)) {
+    cat("⚠ Spec A pre-trend p < 0.10 — investigate potential contamination.\n")
+  }
+} else {
+  cat("⚠ No valid models for Parallel Trends. Skipping table generation.\n")
 }
 
 

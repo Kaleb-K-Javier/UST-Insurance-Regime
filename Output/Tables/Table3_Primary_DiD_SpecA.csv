@@ -1,0 +1,7 @@
+Model,Estimate,Std_Error,t_stat,p_value_conv,p_value_webb,p_value_rad,CI_low_webb,CI_high_webb,N_obs
+Closure,-0.002507,0.005236,-0.479,0.6375,,,,,991840
+Closure + Age,-0.002507,0.005236,-0.479,0.6375,,,,,991840
+Exit|Cls,-0.004102,0.019337,-0.212,0.8343,,,,,31952
+Exit|Cls + Age,-0.004102,0.019337,-0.212,0.8343,,,,,31952
+Replace|Cls,0.004102,0.019337,0.212,0.8343,,,,,31952
+Replace|Cls + Age,0.004102,0.019337,0.212,0.8343,,,,,31952

@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\centering
+\caption{Parallel Trends Validation: Pre-Period F-Tests}
+\label{tbl:parallel-trends}
+\begin{tabular}{llccl}
+\toprule
+Test & Sample & F-statistic & p-value & Result \\
+\midrule
+1 & pooled_no_ctrl & 16.744 & 0.0000 & REJECTED \\
+2 & specA_clean & 15.797 & 0.0000 & REJECTED \\
+3 & specB_no_ctrl & 11.154 & 0.0000 & REJECTED \\
+4 & specB_mandate & 12.746 & 0.0000 & REJECTED \\
+\bottomrule
+\multicolumn{5}{p{0.9\textwidth}}{\footnotesize \textit{Notes:}
+Joint F-test of pre-treatment event-study coefficients (1990--1997),
+reference year = 1998. Spec A restricts to facilities with 100\% post-1988
+tanks (exempt from Texas 30 TAC Ch. 334 phased mandate). Spec B restricts
+to 100\% pre-1988 tanks. Test 4 adds \texttt{mandate\_active} to absorb
+mandate-induced closure spikes.}
+\end{tabular}
+\end{table}
