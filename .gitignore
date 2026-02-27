@@ -39,3 +39,5 @@ renv_library/
 staging_library/
 
 staging_library/
+
+renv/library/
