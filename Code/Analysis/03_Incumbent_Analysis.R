@@ -2485,7 +2485,7 @@ age_effects_simple <- rbind(
 )
 
 # Order age groups correctly
-age_bin_levels <- c("0-5", paste0(seq(5, 30, by 5), "-", seq(10, 35, by 5)), "35+")
+age_bin_levels <- c("0-5", paste0(seq(5, 30, by= 5), "-", seq(10, 35, by= 5)), "35+")
 age_effects_simple$age_group <- factor(age_effects_simple$age_group, levels = age_bin_levels)
 
 # Create a more readable plot for age heterogeneity
