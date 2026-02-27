@@ -1,7 +1,7 @@
 Group,Cohort,leak_rate_per1000,leak_incidence,n_fac_years
-Control,Mixed,24.94,0.0245,34965
+Control,Mixed,27.23,0.0268,34965
 Texas,Mixed,15.02,0.0142,5859
-Control,Post-1988 Only,22.01,0.0214,208593
+Control,Post-1988 Only,24.19,0.0236,208593
 Texas,Post-1988 Only,11.98,0.0119,40052
-Control,Pre-1988 Only,11.49,0.0113,406503
+Control,Pre-1988 Only,13.06,0.0128,406503
 Texas,Pre-1988 Only,11.75,0.0117,142173

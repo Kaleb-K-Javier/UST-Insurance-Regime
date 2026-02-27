@@ -1138,7 +1138,7 @@ formula_str <- paste0(
   )
   m <- tryCatch(
     feols(as.formula(formula_str),
-          data    = dt[panel_year >= 1990 & panel_year <= 1997],
+          data   = dt[panel_year >= 1990 & panel_year <= TREATMENT_YEAR],
           cluster = ~state),
     error = function(e) { cat("  ⚠ PT test failed for:", label, "\n"); NULL }
   )
@@ -1181,14 +1181,17 @@ save_table(pt_all, "TableB4_Parallel_Trends_Validation")
 # Extract key p-values for figure annotations
 specA_p   <- pt_all[grepl("Spec A", specification), p_value]
 pooled_p  <- pt_all[grepl("Pooled", specification), p_value]
-specA_label <- sprintf(
-  "Spec A pre-trend F-test: p = %.3f\n(%s)",
-  specA_p,
-  fifelse(specA_p > 0.10,
-          "Null of parallel pre-trends NOT rejected",
-          "Null of parallel pre-trends REJECTED")
-)
-
+specA_label <- if (is.na(specA_p)) {
+  "Spec A pre-trend F-test: estimation failed\n(check reference year)"
+} else {
+  sprintf(
+    "Spec A pre-trend F-test: p = %.3f\n(%s)",
+    specA_p,
+    fifelse(specA_p > 0.10,
+            "Null of parallel pre-trends NOT rejected",
+            "Null of parallel pre-trends REJECTED")
+  )
+}
 # ---- Figure 4 (MAIN TEXT): Spec A — mandate-free ----
 fig4 <- ggplot(closure_rate_specA,
                aes(x = panel_year, y = closure_rate, color = Group)) +
@@ -1496,47 +1499,53 @@ if (file.exists(CONTRACT_PATH)) {
   save_fig(fig_top5, "Figure_TX_FR_Top5_Dominance_HHI", width = 12, height = 6)
   save_table(plot_data, "Figure_data_Top5_HHI")
 
-  # 11.3 Insurer Abandonment Rate (Corrected Churn Logic with Event Tags)
-  cat("--- 11.3: Insurer Switching Behavior (Churn) with Event Tags ---\n")
-  
-  # Identify all unique insurers a facility used in Year T
-  fac_yr_issuers <- unique(ins_panel[, .(FACILITY_ID, YEAR, ISSUER_NAME)])
-  
-  # Self-join to evaluate if the T-1 insurer was completely abandoned in T
-  t_minus_1 <- fac_yr_issuers[, .(FACILITY_ID, YEAR_T1 = YEAR, ISSUER_T1 = ISSUER_NAME)]
-  t_current <- fac_yr_issuers[, .(FACILITY_ID, YEAR_T0 = YEAR, ISSUER_T0 = ISSUER_NAME)]
-  
-  churn_merge <- merge(t_minus_1, t_current, 
-                       by.x = c("FACILITY_ID", "YEAR_T1", "ISSUER_T1"), 
-                       by.y = c("FACILITY_ID", "YEAR_T0", "ISSUER_T0"), 
-                       all.x = TRUE)
-  
-  # An insurer is "abandoned" if they existed in T-1 but fail to map to T
-  churn_merge[, is_dropped := is.na(YEAR_T0)]
-  
-  # Aggregate at facility level: did the facility drop ANY insurer from last year?
-  fac_churn <- churn_merge[, .(abandoned_insurer = any(is_dropped)), by = .(FACILITY_ID, YEAR = YEAR_T1 + 1)]
-  
-  churn_summary <- fac_churn[YEAR <= 2020 & YEAR >= 2008, .(total_churn = mean(abandoned_insurer)), by = YEAR]
+# 11.3 Insurer Abandonment Rate (Corrected Churn Logic with Event Tags)
+cat("--- 11.3: Insurer Switching Behavior (Churn) with Event Tags ---\n")
 
-  fig_churn <- ggplot(churn_summary, aes(x = YEAR, y = total_churn)) +
-    geom_line(color = "gray80", linewidth = 1, linetype = "dashed") +
-    geom_point(aes(size = total_churn), color = "gray40", alpha = 0.5) +
-    # Institutional Event Overlays
-    geom_point(data = churn_summary[YEAR == 2012], aes(y = total_churn), color = "#D55E00", size = 5) +
-    geom_point(data = churn_summary[YEAR == 2018], aes(y = total_churn), color = "#0072B2", size = 5) +
-    annotate("text", x = 2012, y = churn_summary[YEAR==2012, total_churn] + 0.02, 
-             label = "Zurich Exit\n(2012)", color = "#D55E00", fontface = "bold", size = 3.5) +
-    annotate("text", x = 2018, y = churn_summary[YEAR==2018, total_churn] + 0.02, 
-             label = "TOMIC Acquisition\n(2018)", color = "#0072B2", fontface = "bold", size = 3.5) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-    labs(x = "Year", y = "Facility Abandonment Rate",
-         title = "Institutional Drivers of Market Churn",
-         subtitle = "Percentage of facilities dropping an incumbent provider. Spikes correspond to known exits/M&A.") +
-    theme_pub() + theme(legend.position = "none")
+# Identify all unique facility-year-insurer combinations
+fac_yr_issuers <- unique(ins_panel[, .(FACILITY_ID, YEAR, ISSUER_NAME)])
 
-  save_fig(fig_churn, "Figure_TX_FR_Market_Churn_Annotated", width = 8, height = 5)
-  save_table(churn_summary, "Figure_data_Market_Churn")
+# Build lookup set of all existing facility-year-insurer keys
+fac_yr_issuers[, lookup_key := paste(FACILITY_ID, YEAR, ISSUER_NAME, sep = "__")]
+existing_keys <- fac_yr_issuers$lookup_key
+
+# For each facility-insurer in year T, check if that insurer reappears in year T+1
+t_lagged <- copy(fac_yr_issuers)
+t_lagged[, next_key  := paste(FACILITY_ID, YEAR + 1L, ISSUER_NAME, sep = "__")]
+t_lagged[, is_dropped := !(next_key %in% existing_keys)]
+
+# Facility-level: did the facility drop ANY incumbent insurer going into year T+1?
+fac_churn <- t_lagged[, .(abandoned_insurer = any(is_dropped)),
+                       by = .(FACILITY_ID, YEAR = YEAR + 1L)]
+
+churn_summary <- fac_churn[YEAR >= 2008 & YEAR <= 2020,
+                            .(total_churn = mean(abandoned_insurer)),
+                            by = YEAR]
+setorder(churn_summary, YEAR)
+
+fig_churn <- ggplot(churn_summary, aes(x = YEAR, y = total_churn)) +
+  geom_line(color = "gray80", linewidth = 1, linetype = "dashed") +
+  geom_point(aes(size = total_churn), color = "gray40", alpha = 0.5) +
+  geom_point(data = churn_summary[YEAR == 2012], aes(y = total_churn),
+             color = "#D55E00", size = 5) +
+  geom_point(data = churn_summary[YEAR == 2018], aes(y = total_churn),
+             color = "#0072B2", size = 5) +
+  annotate("text", x = 2012, y = churn_summary[YEAR == 2012, total_churn] + 0.02,
+           label = "Zurich Exit\n(2012)", color = "#D55E00",
+           fontface = "bold", size = 3.5) +
+  annotate("text", x = 2018, y = churn_summary[YEAR == 2018, total_churn] + 0.02,
+           label = "TOMIC Acquisition\n(2018)", color = "#0072B2",
+           fontface = "bold", size = 3.5) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(x = "Year", y = "Facility Abandonment Rate",
+       title = "Institutional Drivers of Market Churn",
+       subtitle = "Percentage of facilities dropping an incumbent provider. Spikes correspond to known exits/M&A.") +
+  theme_pub() +
+  theme(legend.position = "none")
+
+save_fig(fig_churn, "Figure_TX_FR_Market_Churn_Annotated", width = 8, height = 5)
+save_table(churn_summary, "Figure_data_Market_Churn")
+
 
   # 11.4 Capital Exposure: Statutory Minimum Adherence vs. Excess Coverage
   cat("--- 11.4: Statutory Coverage Limits ---\n")

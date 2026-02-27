@@ -1,0 +1,76 @@
+
+\begingroup
+\centering
+\begin{tabular}{lccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{3}{c}{log(Cleanup Cost, 2023 USD)}\\
+                                           & State FE                & State+Year FE           & Interacted \\   
+   Model:                                  & (1)                     & (2)                     & (3)\\  
+   \midrule
+   \emph{Variables}\\
+   age\_bins5-10                           & -0.1928$^{***}$         & -0.0697$^{*}$           & -0.1190$^{*}$\\   
+                                           & (0.0267)                & (0.0301)                & (0.0532)\\   
+   age\_bins10-15                          & -0.4479$^{***}$         & -0.2699$^{***}$         & -0.3047$^{**}$\\   
+                                           & (0.1012)                & (0.0600)                & (0.1038)\\   
+   age\_bins15-20                          & -0.5003$^{***}$         & -0.2507$^{***}$         & -0.5118$^{***}$\\   
+                                           & (0.0588)                & (0.0563)                & (0.1163)\\   
+   age\_bins20-25                          & -0.5166$^{***}$         & -0.1291                 & -0.1467\\   
+                                           & (0.0378)                & (0.0768)                & (0.0735)\\   
+   age\_bins25-30                          & -0.6940$^{***}$         & -0.1454                 & -0.2572\\   
+                                           & (0.0496)                & (0.1174)                & (0.1542)\\   
+   age\_bins30-35                          & -0.8901$^{***}$         & 0.0479                  & 0.2061\\   
+                                           & (0.0751)                & (0.1395)                & (0.1966)\\   
+   age\_bins35+                            & -1.011$^{***}$          & 0.1575                  & -0.1214\\   
+                                           & (0.0994)                & (0.2857)                & (0.3767)\\   
+   Active Tanks                            & 0.1897$^{***}$          & 0.1425$^{***}$          & 0.1419$^{***}$\\   
+                                           & (0.0240)                & (0.0223)                & (0.0225)\\   
+   Total Capacity (gal)                    & $-2.81\times 10^{-6}$   & $6.56\times 10^{-7}$    & $7.76\times 10^{-7}$\\    
+                                           & ($2.85\times 10^{-6}$)  & ($2.42\times 10^{-6}$)  & ($2.46\times 10^{-6}$)\\    
+   Single-Walled                           & 0.0577                  & 0.0215                  & -0.0781\\   
+                                           & (0.0975)                & (0.0612)                & (0.1405)\\   
+   Double-Walled                           & -0.6235$^{**}$          & -0.1871                 & -0.2542$^{***}$\\   
+                                           & (0.1607)                & (0.0951)                & (0.0290)\\   
+   age\_bins5-10 $\times$ Single-Walled    &                         &                         & 0.1723\\   
+                                           &                         &                         & (0.1497)\\   
+   age\_bins10-15 $\times$ Single-Walled   &                         &                         & 0.0365\\   
+                                           &                         &                         & (0.1262)\\   
+   age\_bins15-20 $\times$ Single-Walled   &                         &                         & 0.3125\\   
+                                           &                         &                         & (0.1833)\\   
+   age\_bins20-25 $\times$ Single-Walled   &                         &                         & 0.0171\\   
+                                           &                         &                         & (0.1773)\\   
+   age\_bins25-30 $\times$ Single-Walled   &                         &                         & 0.1512\\   
+                                           &                         &                         & (0.1700)\\   
+   age\_bins30-35 $\times$ Single-Walled   &                         &                         & -0.1730\\   
+                                           &                         &                         & (0.1294)\\   
+   age\_bins35+ $\times$ Single-Walled     &                         &                         & 0.3804\\   
+                                           &                         &                         & (0.5254)\\   
+   age\_bins5-10 $\times$ Double-Walled    &                         &                         & -0.1918$^{*}$\\   
+                                           &                         &                         & (0.0825)\\   
+   age\_bins10-15 $\times$ Double-Walled   &                         &                         & 0.1007\\   
+                                           &                         &                         & (0.1356)\\   
+   age\_bins15-20 $\times$ Double-Walled   &                         &                         & 0.3475$^{**}$\\   
+                                           &                         &                         & (0.1081)\\   
+   age\_bins20-25 $\times$ Double-Walled   &                         &                         & 0.1576$^{**}$\\   
+                                           &                         &                         & (0.0595)\\   
+   age\_bins25-30 $\times$ Double-Walled   &                         &                         & 0.1051\\   
+                                           &                         &                         & (0.1293)\\   
+   age\_bins30-35 $\times$ Double-Walled   &                         &                         & 0.0674\\   
+                                           &                         &                         & (0.3895)\\   
+   age\_bins35+ $\times$ Double-Walled     &                         &                         & -0.4625\\   
+                                           &                         &                         & (0.3617)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   state                                   & Yes                     & Yes                     & Yes\\  
+   panel\_year                             &                         & Yes                     & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                            & 7,914                   & 7,914                   & 7,914\\  
+   R$^2$                                   & 0.09750                 & 0.15022                 & 0.15238\\  
+   Within R$^2$                            & 0.05392                 & 0.02493                 & 0.02741\\  
+   \midrule \midrule
+   \multicolumn{4}{l}{\emph{Clustered (state) standard-errors in parentheses}}\\
+   \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+

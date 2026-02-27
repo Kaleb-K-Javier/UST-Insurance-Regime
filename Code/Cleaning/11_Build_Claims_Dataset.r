@@ -49,26 +49,38 @@ norm_id <- function(x, prefix = NULL) {
   x
 }
 
-# Safely parse dates across multiple format strings
-safe_parse <- function(x) {
-  as.Date(lubridate::parse_date_time(
-    x,
-    orders = c("ymd", "mdy", "dmy", "Y-m-d", "m/d/Y"),
-    quiet  = TRUE
-  ))
+# Regex scrubber for currency/accounting strings
+clean_cost <- function(x) {
+  as.numeric(gsub("[^0-9.-]", "", as.character(x)))
 }
 
-# Finalise a state claims table:
-#   • facility_id = raw panel ID (NO state-abbreviation prefix)
-#   • state       = 2-letter abbreviation
-#   • All IDs coerced to character
+# Safely parse dates across multiple formats and Excel serials
+safe_parse <- function(x) {
+  if (inherits(x, c("Date", "POSIXt"))) return(as.Date(x))
+  suppressWarnings({
+    num_x <- as.numeric(as.character(x))
+    is_num <- !is.na(num_x)
+  })
+  out <- rep(as.Date(NA), length(x))
+  if (any(is_num)) out[is_num] <- janitor::excel_numeric_to_date(num_x[is_num])
+  if (any(!is_num)) {
+    parsed <- lubridate::parse_date_time(
+      x[!is_num],
+      orders = c("ymd", "mdy", "dmy", "Y-m-d", "m/d/Y", "mdY", "Ymd"),
+      quiet  = TRUE
+    )
+    out[!is_num] <- as.Date(parsed)
+  }
+  return(out)
+}
+
+# Finalise a state claims table
 finalize_claims <- function(dt, state_abbrev) {
   dt[, claim_start_year  := year(claims_start_date)]
   dt[, claim_end_year    := year(claims_end_date)]
   dt[, state             := state_abbrev]
   dt[, facility_id       := as.character(facility_id)]
   dt[, lust_id           := as.character(lust_id)]
-  # Build panel_id to match the panel's composite key convention
   dt[, panel_id          := paste(facility_id, state, sep = "_")]
   setcolorder(
     dt,
@@ -78,7 +90,6 @@ finalize_claims <- function(dt, state_abbrev) {
   )
   dt[]
 }
-
 
 ###############################################################################
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -112,11 +123,11 @@ cat(sprintf("   CPI 2023 average base: %.4f\n", cpi_2023_avg))
 cat("Processing Louisiana (LA)...\n")
 
 la_claims_path <- here('Data\\Raw\\state_databases\\Louisiana\\LA Claims.xlsx') 
-la_claims <- read_excel(la_claims_path, sheet = 1) |> data.table() |> clean_names()
+la_claims <- read_excel(la_claims_path, sheet = 1, col_types = "text") |> data.table() |> clean_names()
 
-la_claims[, claims_start_date := ymd(x1st_app_received_date)]
-la_claims[, claims_end_date   := ymd(last_app_processed_date)]
-la_claims[, total_cost        := as.numeric(total_requested_amt)]
+la_claims[, claims_start_date := safe_parse(x1st_app_received_date)]
+la_claims[, claims_end_date   := safe_parse(last_app_processed_date)]
+la_claims[, total_cost        := clean_cost(total_requested_amt)]
 # facility_id = raw numeric ai_num — matches panel's raw LA ID
 la_claims[, facility_id       := norm_id(ai_num, prefix = NULL)]
 la_claims[, lust_id           := as.character(ai_num)]
@@ -138,20 +149,20 @@ tn_fac_extra_path <- here("Data", "Raw", "state_databases", "Tennessee", "ust_al
 
 # Apply clean_names() homogenously to force snake_case and block case-sensitivity faults
 tn_lust   <- fread(tn_lust_path) |> clean_names()
-tn_claims <- read_excel(tn_claims_path) |> data.table() |> clean_names()
-tn_extra  <- read_excel(tn_fac_extra_path) |> data.table() |> clean_names()
+tn_claims <- read_excel(tn_claims_path, col_types = "text") |> data.table() |> clean_names()
+tn_extra  <- read_excel(tn_fac_extra_path, col_types = "text") |> data.table() |> clean_names()
 
 # Standardise LUST file — keep raw divisionsiteid for joining
 tn_lust[, divisionsiteid := trimws(as.character(sub("^TN", "", facility_id)))]
 tn_lust[, casenumber     := sub(".*-(\\d+)$", "\\1", lust_id)]
 tn_lust[, lust_facility_id := divisionsiteid]          # raw, no prefix
-tn_lust[, report_date    := ymd_hms(report_date)]
+tn_lust[, report_date    := safe_parse(report_date)]
 
 # Claims: keep raw divisionsiteid as facility_id (no "TN" prefix)
 tn_claims[, divisionsiteid := trimws(as.character(divisionsiteid))]
 tn_claims[, casenumber     := trimws(as.character(casenumber))]
 tn_claims[, facility_id    := divisionsiteid]           # raw — matches panel
-tn_claims[, total_cost     := as.numeric(paidrequested)]
+tn_claims[, total_cost   := clean_cost(paidrequested)]
 tn_claims <- tn_claims[status == "Closed"]
 # Redundant LUST_id generation omitted here to prevent merge namespace collisions
 
@@ -193,8 +204,8 @@ nm_claim_paths <- c(
   here("Data", "Raw", "state_databases", "New Mexico", "sl_nfa_amounts.xlsx")
 )
 
-nm_claims_rp <- read_excel(nm_claim_paths[1]) |> data.table() |> clean_names()
-nm_claims_sl <- read_excel(nm_claim_paths[2]) |> data.table() |> clean_names()
+nm_claims_rp <- read_excel(nm_claim_paths[1], col_types = "text") |> data.table() |> clean_names()
+nm_claims_sl <- read_excel(nm_claim_paths[2], col_types = "text") |> data.table() |> clean_names()
 nm_claims_rp <- nm_claims_rp[total_wp > 0]
 nm_claims    <- rbind(nm_claims_rp, nm_claims_sl, fill = TRUE)
 
@@ -205,9 +216,9 @@ setnames(nm_claims, fid_col, "facility_id")
 
 nm_claims[, lust_id           := norm_id(lust_id,     prefix = NULL)]
 nm_claims[, facility_id       := norm_id(facility_id, prefix = NULL)]
-nm_claims[, claims_start_date := as.Date(ymd_hms(release_date))]
-nm_claims[, claims_end_date   := as.Date(ymd_hms(nfa_date))]
-nm_claims[, total_cost        := as.numeric(total_wp)]
+nm_claims[, claims_start_date := safe_parse(release_date)]
+nm_claims[, claims_end_date   := safe_parse(nfa_date)]
+nm_claims[, total_cost        := clean_cost(total_wp)]
 
 nm_clean <- finalize_claims(
   nm_claims[, .(facility_id, lust_id, claims_start_date, claims_end_date, total_cost)],
@@ -218,25 +229,29 @@ nm_clean <- finalize_claims(
 ##############################################################################
 # SECTION D — Utah (UT)
 ##############################################################################
+##############################################################################
+# SECTION D — Utah (UT)
+##############################################################################
 cat("Processing Utah (UT)...\n")
 
 ut_leaks_path  <- here("Data", "Raw", "state_databases", "Utah", "utah_state_LUSTs.xls")
 ut_claims_path <- here("Data", "Raw", "state_databases", "Utah", "Utah PST Fund Cleanup Amounts.xlsx")
 
-ut_leaks  <- read_excel(ut_leaks_path)  |> data.table() |> clean_names()
-ut_claims <- read_excel(ut_claims_path) |> data.table() |> clean_names()
+ut_leaks  <- read_excel(ut_leaks_path, col_types = "text")  |> data.table() |> clean_names()
+ut_claims <- read_excel(ut_claims_path, col_types = "text") |> data.table() |> clean_names()
 
 setnames(ut_claims, "rel_id",          "leak_id")
 setnames(ut_claims, "pst_amount_paid", "total_cost")
 
-ut_leaks [, leak_id     := norm_id(leak_id,     prefix = NULL)]
-ut_leaks [, facility_id := norm_id(facility_id, prefix = NULL)]
-ut_claims[, leak_id     := norm_id(leak_id,     prefix = NULL)]
-ut_claims[, facility_id := norm_id(facility_id, prefix = NULL)]
-ut_claims[, total_cost  := as.numeric(total_cost)]
+# FIX IMPLEMENTED: Appending "UT" prefix to match Master Panel key structure 
+ut_leaks [, leak_id     := norm_id(leak_id,     prefix = "UT")]
+ut_leaks [, facility_id := norm_id(facility_id, prefix = "UT")]
+ut_claims[, leak_id     := norm_id(leak_id,     prefix = "UT")]
+ut_claims[, facility_id := norm_id(facility_id, prefix = "UT")]
+ut_claims[, total_cost       := clean_cost(total_cost)]
 
-ut_leaks[, claims_start_date := as.Date(ymd(notif_date))]
-ut_leaks[, claims_end_date   := as.Date(ymd(date_closed))]
+ut_leaks[, claims_start_date := safe_parse(notif_date)]
+ut_leaks[, claims_end_date   := safe_parse(date_closed)]
 
 ut_join <- merge(
   ut_leaks,
@@ -249,8 +264,6 @@ ut_clean <- finalize_claims(
               claims_start_date, claims_end_date, total_cost)],
   "UT"
 )
-
-
 ##############################################################################
 # SECTION E — Colorado (CO)
 ##############################################################################
@@ -260,7 +273,7 @@ co_releases_path <- here("Data", "Raw", "state_databases", "Colorado", "Petroleu
 co_claims_path   <- here("Data", "Raw", "state_databases", "Colorado", "CO Claims.xlsx")
 
 co_releases <- fread(co_releases_path) |> clean_names()
-co_claims   <- read_excel(co_claims_path) |> data.table() |> clean_names()
+co_claims   <- read_excel(co_claims_path, col_types = "text") |> data.table() |> clean_names()
 
 legacy_col <- grep("legacy.*event.*id",  names(co_releases), value = TRUE)[1]
 relno_col  <- grep("^release.*number$",  names(co_releases), value = TRUE)[1]
@@ -272,33 +285,31 @@ setnames(co_releases, fid_col,    "facility_id")
 co_releases[, lust_id        := norm_id(lust_id,        prefix = NULL)]
 co_releases[, facility_id    := norm_id(facility_id,    prefix = NULL)]
 co_releases[, release_number := toupper(trimws(as.character(release_number)))]
-co_releases[, release_date   := as.character(release_date)]
 
 setnames(co_claims, "total_amount_paid_for_reimbursement", "total_cost")
 co_claims[, facility_id    := norm_id(facility_id, prefix = NULL)]
 co_claims[, release_number := toupper(trimws(as.character(release_number)))]
-co_claims[, total_cost     := as.numeric(total_cost)]
-co_claims[, release_date   := as.character(release_date)]
-co_claims[, claims_end_date   := as.Date(mdy(nfa_letter_sent_date))]
-co_claims[, claims_start_date := as.Date(mdy(release_date))]
+co_claims[, total_cost        := clean_cost(total_cost)]
+co_claims[, claims_end_date   := safe_parse(nfa_letter_sent_date)]
+co_claims[, claims_start_date := safe_parse(release_date)]
 
 co_claims <- unique(
-  co_claims[, .(facility_id, release_number, release_date,
+  co_claims[, .(facility_id, release_number, 
                 claims_start_date, claims_end_date, total_cost)]
 )
 
+# FIX IMPLEMENTED: 2-key join (facility_id, release_number), dropping release_date
 co_join <- merge(
-  co_releases[, .(facility_id, release_number, release_date, lust_id)],
-  co_claims  [, .(facility_id, release_number, release_date,
+  co_releases[, .(facility_id, release_number, lust_id)],
+  co_claims  [, .(facility_id, release_number,
                   claims_start_date, claims_end_date, total_cost)],
-  by = c("facility_id", "release_number", "release_date")
+  by = c("facility_id", "release_number")
 )
 
 co_clean <- finalize_claims(
   co_join[, .(facility_id, lust_id, claims_start_date, claims_end_date, total_cost)],
   "CO"
 )
-
 
 ##############################################################################
 # SECTION F — Wisconsin (WI)  [PLACEHOLDER — crosswalk pending]
@@ -319,9 +330,11 @@ co_clean <- finalize_claims(
 # Join key: claims$department (permit_number "XX-XXXXX")
 #           -> facility_linkage_table$facility_id -> facility_id (PA DEP ID)
 ##############################################################################
+##############################################################################
+# SECTION PA — Pennsylvania (PA)
+##############################################################################
 cat("Processing Pennsylvania (PA)...\n")
 
-# Explicit absolute paths bypassing here() relative referencing
 pa_repo_base  <- "C:/Users/kalebkja/PA_UST_Auction_Analysis"
 pa_claims_csv <- file.path(pa_repo_base, "data", "processed", "claims_clean.csv")
 pa_linkage    <- file.path(pa_repo_base, "data", "external", "padep", "facility_linkage_table.csv")
@@ -335,23 +348,19 @@ pa_link_dt    <- fread(pa_linkage,    colClasses = "character") |> clean_names()
 cat(sprintf("   PA claims loaded: %d rows | columns: %s\n",
             nrow(pa_claims_raw), paste(names(pa_claims_raw), collapse = ", ")))
 
-# In the current PA linkage schema, 'facility_id' contains the PA DEP 
-# permit sequence (e.g., '02-12345') which maps directly to 'department' in the claims.
 if (!"facility_id" %in% names(pa_link_dt)) {
   stop(sprintf("Schema fault: 'facility_id' missing from PA linkage. Available columns: %s", 
                paste(names(pa_link_dt), collapse = ", ")))
 }
 
-# Normalise the linkage table side
+# FIX IMPLEMENTED: facility_id set to map directly to the panel's identical XX-XXXXX format
 pa_link_key <- pa_link_dt[!is.na(facility_id) & facility_id != "", .(
   permit_key  = toupper(trimws(facility_id)),
   facility_id = as.character(trimws(facility_id))
 )] |> unique()
 
-# Claims data 'department' operates as the permit number key
 pa_claims_raw[, dept_key := toupper(trimws(department))]
 
-# Resolve cost column
 cost_col <- intersect(
   c("total_paid", "total_cost", "amount_paid", "paid_amount"),
   names(pa_claims_raw)
@@ -361,7 +370,6 @@ cat(sprintf("   Using '%s' as cost column\n", cost_col))
 
 pa_claims_raw[, total_cost := as.numeric(get(cost_col))]
 
-# Resolve date and ID columns
 open_col  <- intersect(c("claim_date", "loss_reported_date", "open_date"), names(pa_claims_raw))[1]
 close_col <- intersect(c("closed_date", "claim_close_date", "close_date"), names(pa_claims_raw))[1]
 lust_col  <- intersect(c("claim_number", "lust_id", "incident_number"), names(pa_claims_raw))[1]
@@ -370,7 +378,6 @@ pa_claims_raw[, claims_start_date := safe_parse(get(open_col))]
 pa_claims_raw[, claims_end_date   := if (!is.na(close_col)) safe_parse(get(close_col)) else as.Date(NA)]
 pa_claims_raw[, lust_id           := as.character(get(lust_col))]
 
-# Inner join: claims -> linkage table -> facility_id
 pa_merged <- merge(
   pa_claims_raw[, .(dept_key, lust_id, claims_start_date, claims_end_date, total_cost)],
   pa_link_key,
@@ -390,8 +397,6 @@ pa_clean <- finalize_claims(
   "PA"
 )
 cat(sprintf("   PA clean rows: %d\n", nrow(pa_clean)))
-
-
 
 ##############################################################################
 # SECTION H — Bind all states
@@ -445,14 +450,29 @@ if (!file.exists(panel_path)) {
 
 annual_panel <- fread(panel_path)
 
-# 2. Aggregate Claims to Facility-Year
-# Uses the in-memory all_cleaned_claims data.table from Section H
-claims_agg <- all_cleaned_claims[!is.na(claim_start_year) & !is.na(total_cost_2023), .(
+# 2. Extract Facility Lifespans from Panel
+fac_lifespan <- annual_panel[, .(
+  min_year = min(panel_year, na.rm = TRUE),
+  max_year = max(panel_year, na.rm = TRUE)
+), by = panel_id]
+
+# 3. Filter claims to ONLY facilities that survived the structural panel filters
+valid_claims <- all_cleaned_claims[panel_id %in% fac_lifespan$panel_id]
+
+# 4. Temporal Snapping (Fixing Zombie Claims)
+valid_claims <- merge(valid_claims, fac_lifespan, by = "panel_id", all.x = TRUE)
+# Snap post-closure claims to the facility's final active year in the panel
+valid_claims[!is.na(max_year) & claim_start_year > max_year, claim_start_year := max_year]
+# Snap premature claims to the facility's first active year
+valid_claims[!is.na(min_year) & claim_start_year < min_year, claim_start_year := min_year]
+
+# 5. Aggregate Claims to Facility-Year
+claims_agg <- valid_claims[!is.na(claim_start_year) & !is.na(total_cost_2023), .(
   claims_total_2023 = sum(total_cost_2023, na.rm = TRUE),
   n_claims_in_year  = .N
 ), by = .(panel_id, panel_year = claim_start_year)]
 
-# 3. Left Join Claims to Annual Panel
+# 6. Left Join Claims to Annual Panel
 merged_panel <- merge(
   annual_panel, 
   claims_agg, 
@@ -460,11 +480,11 @@ merged_panel <- merge(
   all.x = TRUE
 )
 
-# 4. Handle NAs for zero-claim observations
+# 7. Handle NAs for zero-claim observations
 merged_panel[is.na(claims_total_2023), claims_total_2023 := 0]
 merged_panel[is.na(n_claims_in_year),  n_claims_in_year  := 0L]
 
-# 5. Output Merged Panel
+# 8. Output Merged Panel
 merged_output_path <- here("Data", "Processed", "claims_panel_annual_merged.csv")
 fwrite(merged_panel, merged_output_path)
 

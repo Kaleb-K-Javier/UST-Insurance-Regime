@@ -1,0 +1,14 @@
+Category,Level,N_Claims
+Age Bin,0-5,889
+Age Bin,5-10,769
+Age Bin,10-15,1323
+Age Bin,15-20,1539
+Age Bin,20-25,1513
+Age Bin,25-30,944
+Age Bin,30-35,517
+Age Bin,35+,420
+Age Bin,,579
+SW Share Tercile,0-33%,1115
+SW Share Tercile,34-66%,159
+SW Share Tercile,67-100%,5488
+SW Share Tercile,Unknown,1731

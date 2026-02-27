@@ -8,16 +8,16 @@ panel,cohort,variable,Texas,Control
 "A: Stock Variables (Dec 22, 1998)",All Facilities,Tanks per facility,2.8,2.8
 B: Flow Variables (1989–1997 avg.),Mixed Cohort,Annual closure rate,0.0751,0.057
 B: Flow Variables (1989–1997 avg.),Mixed Cohort,Annual exit rate,0,0
-B: Flow Variables (1989–1997 avg.),Mixed Cohort,Annual leak incidence rate,0.0142,0.0245
-B: Flow Variables (1989–1997 avg.),Mixed Cohort,"Leak incidents per 1,000 fac-years",15.02,24.94
+B: Flow Variables (1989–1997 avg.),Mixed Cohort,Annual leak incidence rate,0.0142,0.0268
+B: Flow Variables (1989–1997 avg.),Mixed Cohort,"Leak incidents per 1,000 fac-years",15.02,27.23
 B: Flow Variables (1989–1997 avg.),Mixed Cohort,N facility-years,5859,34965
 B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),Annual closure rate,0.0706,0.0691
 B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),Annual exit rate,0,0
-B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),Annual leak incidence rate,0.0119,0.0214
-B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),"Leak incidents per 1,000 fac-years",11.98,22.01
+B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),Annual leak incidence rate,0.0119,0.0236
+B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),"Leak incidents per 1,000 fac-years",11.98,24.19
 B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),N facility-years,40052,208593
 B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),Annual closure rate,0.0092,0.0114
 B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),Annual exit rate,0,0
-B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),Annual leak incidence rate,0.0117,0.0113
-B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),"Leak incidents per 1,000 fac-years",11.75,11.49
+B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),Annual leak incidence rate,0.0117,0.0128
+B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),"Leak incidents per 1,000 fac-years",11.75,13.06
 B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),N facility-years,142173,406503
