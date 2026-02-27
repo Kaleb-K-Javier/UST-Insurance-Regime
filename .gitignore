@@ -35,3 +35,7 @@ renv_library/
 .Rhistory
 .RData
 .Rproj.user
+
+staging_library/
+
+staging_library/
