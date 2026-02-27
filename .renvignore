@@ -1,0 +1,11 @@
+Archive/
+Data/
+Docs/
+Output/
+Reports/
+staging_library/
+file_path_mapping.json
+file_path_mapping_r_structure.R
+lat_long_analysis.md
+Short Thoughts.md
+Readme.md
