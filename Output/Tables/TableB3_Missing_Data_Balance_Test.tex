@@ -1,0 +1,19 @@
+\begin{table}[!h]
+\centering
+\caption{\label{tab:tab:missing-balance}Balance test for missing-data exclusion. Logistic regression of missing-record indicator on Texas treatment dummy. Coefficient insignificance confirms exclusion probability is orthogonal to treatment status.}
+\centering
+\fontsize{10}{12}\selectfont
+\begin{threeparttable}
+\begin{tabular}[t]{lllll}
+\toprule
+Term & Estimate & Std. Error & Statistic & p-value\\
+\midrule
+(Intercept) & -1.2061 & 0.0049 & -245.063 & 0.0000$^{***}$\\
+\textbf{texas} & \textbf{-17.3600} & \textbf{28.0601} & \textbf{-0.619} & \textbf{0.5361}\\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item Dependent variable equals one if the facility was excluded due to missing tank-level date records. Insignificant coefficient on Texas dummy confirms null of no differential attrition.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}

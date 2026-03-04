@@ -1,0 +1,29 @@
+\begin{table}[H]
+\centering
+\caption{\label{tab:tab:cv-partial-dependence-nosfe}Partial dependence of predicted first-leak probability on key risk factors. No State Fixed Effects Model.}
+\centering
+\fontsize{10}{12}\selectfont
+\begin{threeparttable}
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{3.5cm}>{\raggedright\arraybackslash}p{3.5cm}>{\raggedleft\arraybackslash}p{2cm}>{\raggedleft\arraybackslash}p{2cm}>{\raggedleft\arraybackslash}p{2cm}}
+\toprule
+\multicolumn{2}{c}{ } & \multicolumn{2}{c}{Leak Probability} & \multicolumn{1}{c}{ } \\
+\cmidrule(l{3pt}r{3pt}){3-4}
+Risk Factor & Level & Mean Predicted & Mean Actual & N Fac.-Years\\
+\midrule
+Wall Type & Single-Walled & 0.0209 & 0.0209 & 973672\\
+Wall Type & Double-Walled & 0.0127 & 0.0127 & 276819\\
+Pre-1980 Vintage & Pre-1980 = No & 0.0169 & 0.0169 & 727103\\
+Pre-1980 Vintage & Pre-1980 = Yes & 0.0221 & 0.0221 & 523388\\
+Tank Age (5-yr bins) & 0-4 & 0.0204 & 0.0204 & 184572\\
+Tank Age (5-yr bins) & 5-9 & 0.0140 & 0.0140 & 282758\\
+Tank Age (5-yr bins) & 10-14 & 0.0179 & 0.0179 & 291624\\
+Tank Age (5-yr bins) & 15-19 & 0.0216 & 0.0216 & 226290\\
+Tank Age (5-yr bins) & 20-24 & 0.0229 & 0.0229 & 211438\\
+Tank Age (5-yr bins) & 25-29 & 0.0216 & 0.0216 & 53809\\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item Out-of-bag predictions from 5-fold cross-validated logit. Sample restricted to 1990--1998 pre-period.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}

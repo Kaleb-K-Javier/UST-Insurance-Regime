@@ -2038,7 +2038,7 @@ write_tex(
 )
 cat("  OK: Table3_Risk_Validation.tex saved\n")
 
-rm(panA, panB, panC_display, combined_data, pre_cv)
+rm(panA, panB, panC_display, combined_data)
 
 #==============================================================================
 # SECTION 8: DESCRIPTIVE FIGURES
@@ -2106,6 +2106,9 @@ pt_all <- rbindlist(list(
               "mandate_active",
               mandate_control = "mandate_active")
 ))
+
+specA_p  <- pt_all[grepl("Spec A",  Specification), `p-value`]
+pooled_p <- pt_all[grepl("Pooled",  Specification), `p-value`]
 
 cat("\n  === TABLE B.4: PARALLEL TRENDS VALIDATION ===\n")
 print(pt_all[, .(Specification, `F-statistic`, `p-value`, Conclusion)])
@@ -2725,139 +2728,97 @@ if (RUN_FULL) {
     cat("  WARNING: Insufficient complete predictions for calibration table\n")
   }
 
+# -----------------------------------------------------------------------
+  # 9.6 & 9.7 Partial Dependence Summaries & Plots (Two Sets: No SFE / SFE)
+  # -----------------------------------------------------------------------
+  cat("\n--- 9.6 & 9.7: Partial Dependence Summaries & Plots ---\n")
 
-# 9.6 Partial Dependence Summaries
-  cat("\n--- 9.6: Partial Dependence Summaries ---\n")
-  cv_pd <- cv_data[!is.na(pred_no_sfe)]
+  # Define strict global factor levels so ggplot NEVER alphabetizes the X-axis
+  all_pd_levels <- c("Double-Walled", "Single-Walled", 
+                     "Pre-1980 = No", "Pre-1980 = Yes", 
+                     AGE_BIN_LABELS)
 
-  # Wall type
-  pd_wall <- cv_pd[, .(
-    mean_pred   = round(mean(pred_no_sfe,      na.rm = TRUE), 4),
-    mean_actual = round(mean(event_first_leak, na.rm = TRUE), 4),
-    n_fac_years = .N,
-    covariate   = "Wall Type"
-  ), by = .(level = fifelse(has_single_walled == 1, "Single-Walled", "Double-Walled"))]
+  generate_pd_set <- function(prediction_col, desc_label, file_suffix) {
+    cv_pd <- cv_data[!is.na(get(prediction_col))]
 
-  # Pre-1980 vintage
-  pd_vintage <- cv_pd[!is.na(rf_pre_1980), .(
-    mean_pred   = round(mean(pred_no_sfe,      na.rm = TRUE), 4),
-    mean_actual = round(mean(event_first_leak, na.rm = TRUE), 4),
-    n_fac_years = .N,
-    covariate   = "Pre-1980 Vintage"
-  ), by = .(level = fifelse(rf_pre_1980 == 1, "Pre-1980 = Yes", "Pre-1980 = No"))]
+    pd_wall <- cv_pd[, .(
+      mean_pred   = round(mean(get(prediction_col), na.rm = TRUE), 4),
+      mean_actual = round(mean(event_first_leak, na.rm = TRUE), 4),
+      n_fac_years = .N,
+      covariate   = "Wall Type"
+    ), by = .(level = fifelse(has_single_walled == 1, "Single-Walled", "Double-Walled"))]
 
-  # Age bin — all 8 canonical bins in AGE_BIN_LABELS order
-  pd_age <- cv_pd[, .(
-    mean_pred   = round(mean(pred_no_sfe,      na.rm = TRUE), 4),
-    mean_actual = round(mean(event_first_leak, na.rm = TRUE), 4),
-    n_fac_years = .N,
-    covariate   = "Tank Age (5-yr bins)"
-  ), by = .(level = as.character(age_bin))]
+    pd_vintage <- cv_pd[!is.na(rf_pre_1980), .(
+      mean_pred   = round(mean(get(prediction_col), na.rm = TRUE), 4),
+      mean_actual = round(mean(event_first_leak, na.rm = TRUE), 4),
+      n_fac_years = .N,
+      covariate   = "Pre-1980 Vintage"
+    ), by = .(level = fifelse(rf_pre_1980 == 1, "Pre-1980 = Yes", "Pre-1980 = No"))]
 
-  # Enforce canonical ordering
-  pd_age[, level := factor(level, levels = AGE_BIN_LABELS)]
-  setorder(pd_age, level)
-  pd_age[, level := as.character(level)]
+    pd_age <- cv_pd[, .(
+      mean_pred   = round(mean(get(prediction_col), na.rm = TRUE), 4),
+      mean_actual = round(mean(event_first_leak, na.rm = TRUE), 4),
+      n_fac_years = .N,
+      covariate   = "Tank Age (5-yr bins)"
+    ), by = .(level = as.character(age_bin))]
 
-  # Combine
-  pd_combined <- rbindlist(list(pd_wall, pd_vintage, pd_age), use.names = TRUE)
+    pd_combined <- rbindlist(list(pd_wall, pd_vintage, pd_age), use.names = TRUE)
 
-  cat("  Partial dependence:\n")
-  print(pd_combined)
-  save_table(pd_combined, "Table_CV_Partial_Dependence")
+    # Save Table
+    table_name <- paste0("Table_CV_Partial_Dependence_", file_suffix)
+    save_table(pd_combined, table_name)
 
-  write_tex(
-    kbl(pd_combined, format = "latex", booktabs = TRUE, linesep = "",
-        escape = FALSE,
-        caption = paste("Partial dependence of predicted first-leak probability on",
-          "key risk factors. Mean out-of-bag predicted probability and mean actual",
-          "first-leak rate by covariate level. Values confirm that the model's risk",
-          "ordering aligns with observed leak incidence."),
-        label = "tab:cv-partial-dependence",
-        col.names = c("Risk Factor", "Level", "Mean Predicted",
-                      "Mean Actual", "N Fac.-Years")) |>
-      kable_styling(latex_options = c("HOLD_position"), font_size = 10,
-                    full_width = FALSE) |>
-      add_header_above(c(" " = 2, "Leak Probability" = 2, " " = 1)) |>
-      column_spec(1, width = "3.5cm") |>
-      column_spec(2, width = "3.5cm") |>
-      column_spec(3:5, width = "2cm") |>
-      footnote(general = paste(
-        "Out-of-bag predictions from 5-fold cross-validated logit",
-        "(no state fixed effects). See Table~\\\\ref{tab:cv-calibration} for",
-        "full calibration. Sample restricted to 1990--1998 pre-period."),
-        general_title = "", threeparttable = TRUE),
-    "Table_CV_Partial_Dependence"
-  )
+    # Prepare plotting data with STRICT global factor ordering
+    pd_long <- melt(pd_combined,
+                    id.vars       = c("covariate", "level", "n_fac_years"),
+                    measure.vars  = c("mean_pred", "mean_actual"),
+                    variable.name = "type", value.name = "rate")
 
-  # 9.7 Figure 5A: Partial Dependence Plot (CV — requires RUN_FULL)
-  cat("\n--- 9.7: Figure 5A — Partial Dependence (predicted vs actual) ---\n")
+    pd_long[, type := factor(fcase(
+      type == "mean_pred",   "Predicted (OOB)",
+      type == "mean_actual", "Actual",
+      default = "Other"
+    ), levels = c("Predicted (OOB)", "Actual"))]
 
-  pd_long <- melt(pd_combined,
-                  id.vars       = c("covariate", "level", "n_fac_years"),
-                  measure.vars  = c("mean_pred", "mean_actual"),
-                  variable.name = "type", value.name = "rate")
+    # Apply the strict global order
+    pd_long[, level := factor(as.character(level), levels = all_pd_levels)]
 
-  pd_long[, type := factor(fcase(
-    type == "mean_pred",   "Predicted (OOB)",
-    type == "mean_actual", "Actual",
-    default = "Other"
-  ), levels = c("Predicted (OOB)", "Actual"))]
+    # Generate Figure
+    fig_pd <- ggplot(pd_long, aes(x = level, y = rate, fill = type)) +
+      geom_col(position = position_dodge(width = 0.7), width = 0.65) +
+      facet_wrap(~ covariate, scales = "free_x", nrow = 1) +
+      scale_fill_manual(values = c("Predicted (OOB)" = COL_TX,
+                                   "Actual"          = COL_CTRL)) +
+      scale_y_continuous(labels = scales::percent_format(accuracy = 0.01)) +
+      labs(x = NULL, y = "Leak Probability",
+           title = sprintf("Risk Factor Partial Dependence: %s", desc_label),
+           subtitle = "5-Fold CV OOB predictions vs Actual | Pre-period (1990-1998)",
+           fill = NULL) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1),
+            legend.position = "bottom")
 
-  # Enforce canonical ordering for age bin levels within the age group
-  pd_long[covariate == "Tank Age (5-yr bins)",
-          level := factor(level, levels = AGE_BIN_LABELS)]
-  pd_long[covariate != "Tank Age (5-yr bins)",
-          level := factor(level)]
+    fig_name <- paste0("Figure5A_CV_Partial_Dependence_", file_suffix)
+    save_fig(fig_pd, fig_name, width = 13, height = 5)
+  }
 
-  fig5a_cv <- ggplot(pd_long,
-                     aes(x = level, y = rate, fill = type)) +
-    geom_col(position = position_dodge(width = 0.7), width = 0.65) +
-    facet_wrap(~ covariate, scales = "free_x", nrow = 1) +
-    scale_fill_manual(values = c("Predicted (OOB)" = COL_TX,
-                                  "Actual"          = COL_CTRL)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 0.01)) +
-    labs(x = NULL, y = "Leak Probability",
-         title = "Risk Factor Partial Dependence: Predicted vs Actual Leak Rates",
-         subtitle = "5-Fold CV OOB predictions | Pre-period facility-years (1990-1998)",
-         fill = NULL) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-  save_fig(fig5a_cv, "Figure5A_CV_Partial_Dependence", width = 13, height = 5)
-  cat("  OK: Figure 5A (CV partial dependence) saved\n")
-
-} else {
-  cat("  WARNING: Section 9 CV validation skipped — set RUN_FULL = TRUE for final run\n")
-  cat("    Placeholder NA predictions written to cv_data for downstream saves.\n")
-
-  # Create empty CV placeholder tables so save_table() calls don't error
-  calibration_table    <- data.table(decile = integer(0), mean_predicted = numeric(0),
-                                      mean_actual = numeric(0), n_fac_years = integer(0),
-                                      lift = numeric(0))
-  pd_combined          <- data.table(covariate = character(0), level = character(0),
-                                      mean_pred = numeric(0), mean_actual = numeric(0),
-                                      n_fac_years = integer(0))
-
-  save_table(calibration_table, "Table_CV_Calibration")
-  save_table(pd_combined,       "Table_CV_Partial_Dependence")
-  cat("  OK: Empty placeholder CSVs written (RUN_FULL = FALSE)\n")
-}
+  # Execute for both models
+  generate_pd_set("pred_no_sfe", "No State Fixed Effects", "NoSFE")
+  generate_pd_set("pred_with_sfe", "With State Fixed Effects", "SFE")
 
 
-# 9.7 Figure 5B: Leak Risk by Wall Type x Age (always produced)
-# CRITICAL: This figure is referenced as @fig-leak-risk in QMD §2.1.
-# Must be saved as "Figure_leak_risk" to match knitr::include_graphics() path.
-cat("\n--- 9.7: Figure 5B — Leak Risk by Wall Type x Age (fig-leak-risk) ---\n")
+# 9.7 Figure 5B: Leak Risk by Wall Type x Age (POOLED)
+cat("\n--- 9.7: Figure 5B - Leak Risk by Wall Type x Age (fig-leak-risk) ---\n")
 
-# Build from tbl3_leak_rates (Panel C of Table 3, computed in §7.4)
-stopifnot("tbl3_leak_rates" %in% ls())
-stopifnot("age_bin" %in% names(tbl3_leak_rates))
+# Re-aggregate pre_cv to completely pool Texas and Control
+tbl3_leak_rates_pooled <- pre_cv[, .(
+  leak_rate_per_1000 = round(sum(event_first_leak, na.rm = TRUE) / .N * 1000, 2),
+  n_fac_years        = .N
+), by = .(age_bin, wall_label)]
 
-# Enforce canonical ordering for axis
-tbl3_leak_rates[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
+tbl3_leak_rates_pooled[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
 
 fig5b_risk <- ggplot(
-  tbl3_leak_rates[!is.na(leak_rate_per_1000)],
+  tbl3_leak_rates_pooled[!is.na(leak_rate_per_1000)],
   aes(x = age_bin, y = leak_rate_per_1000,
       color = wall_label, linetype = wall_label, group = wall_label)
 ) +
@@ -2865,26 +2826,23 @@ fig5b_risk <- ggplot(
   geom_point(size = 2.5) +
   geom_text(aes(label = sprintf("%.1f", leak_rate_per_1000)),
             vjust = -0.7, size = 2.5, show.legend = FALSE) +
-  facet_wrap(~ Group, nrow = 1) +
-  scale_x_discrete(limits = AGE_BIN_LABELS) +
+  # Use drop = FALSE to force empty 30-34 and 35+ age bins to render on the x-axis
+  scale_x_discrete(limits = AGE_BIN_LABELS, drop = FALSE) +
   scale_color_manual(values = c("Single-Walled" = COL_TX,
-                                 "Double-Walled" = COL_CTRL)) +
+                                "Double-Walled" = COL_CTRL)) +
   scale_linetype_manual(values = c("Single-Walled" = "solid",
-                                    "Double-Walled" = "dashed")) +
+                                   "Double-Walled" = "dashed")) +
   labs(x = "Tank Age Bin (5-year intervals)",
        y = "First-Leak Rate (per 1,000 Facility-Years)",
-       title = "Pre-Period Leak Incidence by Tank Age and Wall Type",
-       subtitle = paste("1990-1998, never-yet-leaked facility-years only.",
-                        "Both lines expected to rise with age; SW steeper."),
+       title = "Pre-Period Leak Incidence by Tank Age and Wall Type (Pooled)",
+       subtitle = "1990-1998. Both lines expected to rise with age; SW steeper.",
        color = "Wall Type", linetype = "Wall Type") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.position = "bottom")
 
-# Save as Figure_leak_risk to match QMD cross-reference @fig-leak-risk
-save_fig(fig5b_risk, "Figure_leak_risk", width = 11, height = 6)
-cat("  OK: Figure_leak_risk saved (matches QMD cross-reference @fig-leak-risk)\n")
-
-
+save_fig(fig5b_risk, "Figure_leak_risk", width = 8, height = 6)
+cat("  OK: Figure_leak_risk (Pooled) saved\n")
+}
 #==============================================================================
 # SECTION 10: JMP PUBLICATION TABLES
 #==============================================================================
@@ -3107,95 +3065,137 @@ if (file.exists(CONTRACT_PATH)) {
   save_fig(fig_coverage, "FigureA_TX_FR_Coverage_Composition", width = 8, height = 6)
   save_table(regime_shares, "FigureA_data_regime_shares")
 
-  # 11.2 Market Consolidation: Top 5 Insurers + HHI
-  cat("--- 11.2: TX Private Insurance Market — Top 5 & HHI Trend ---\n")
-  ins_panel <- panel_data_inst[plot_category == "Private Insurance" &
-                                 !is.na(ISSUER_NAME) & ISSUER_NAME != "NO COVERAGE"]
-  ins_panel[, weight := 1.0 / .N, by = .(FACILITY_ID, YEAR, MONTH)]
-  insurer_exposure <- ins_panel[, .(fac_months = sum(weight)), by = .(YEAR, ISSUER_NAME)]
-  insurer_exposure[, annual_total := sum(fac_months), by = YEAR]
-  insurer_exposure[, market_share := fac_months / annual_total]
-  hhi_trend <- insurer_exposure[, .(HHI = sum((market_share * 100)^2)), by = YEAR]
 
-  setorder(insurer_exposure, YEAR, -fac_months)
-  insurer_exposure[, annual_rank := frank(-fac_months, ties.method = "first"), by = YEAR]
-  insurer_exposure[, Plot_Issuer := fifelse(annual_rank <= 5, ISSUER_NAME,
-                                             "Other Private Insurers")]
-  plot_data_inst <- insurer_exposure[, .(market_share = sum(market_share)),
-                                      by = .(YEAR, Plot_Issuer)]
+# 11.2 Market Consolidation: Top 5 Insurers + HHI
+cat("--- 11.2: TX Private Insurance Market - Top 5 & HHI Trend ---\n")
+ins_panel <- panel_data_inst[plot_category == "Private Insurance" & 
+                             !is.na(ISSUER_NAME) & ISSUER_NAME != "NO COVERAGE"]
 
-  overall_sizes <- plot_data_inst[, .(total_share = sum(market_share)), by = Plot_Issuer]
-  setorder(overall_sizes, total_share)
-  factor_levels_inst <- c("Other Private Insurers",
-                           setdiff(overall_sizes$Plot_Issuer, "Other Private Insurers"))
-  plot_data_inst[, Plot_Issuer := factor(Plot_Issuer, levels = factor_levels_inst)]
+# Force the literal string "OTHER" into the aggregate bucket
+ins_panel[toupper(ISSUER_NAME) == "OTHER", ISSUER_NAME := "Other Private Insurers"]
 
-  HHI_SCALE_FACTOR <- 5000
-  plot_data_inst <- merge(plot_data_inst, hhi_trend, by = "YEAR", all.x = TRUE)
+ins_panel[, weight := 1.0 / .N, by = .(FACILITY_ID, YEAR, MONTH)]
+insurer_exposure <- ins_panel[, .(fac_months = sum(weight)), by = .(YEAR, ISSUER_NAME)]
+insurer_exposure[, annual_total := sum(fac_months), by = YEAR]
+insurer_exposure[, market_share := fac_months / annual_total]
+hhi_trend <- insurer_exposure[, .(HHI = sum((market_share * 100)^2)), by = YEAR]
 
-  fig_top5 <- ggplot(plot_data_inst, aes(x = as.factor(YEAR))) +
-    geom_col(aes(y = market_share, fill = Plot_Issuer),
-             width = 0.85, color = "white", linewidth = 0.1) +
-    geom_line(aes(y = HHI / HHI_SCALE_FACTOR, group = 1),
-              color = "black", linewidth = 1.2, linetype = "dashed") +
-    geom_point(aes(y = HHI / HHI_SCALE_FACTOR, group = 1),
-               color = "black", size = 2.5) +
-    scale_y_continuous(
-      labels   = scales::percent_format(accuracy = 1),
-      expand   = c(0, 0),
-      sec.axis = sec_axis(~ . * HHI_SCALE_FACTOR,
-                          name = "Herfindahl-Hirschman Index (HHI)")
-    ) +
-    scale_fill_manual(values = setNames(
-      c("gray70", scales::viridis_pal(option = "mako")(length(factor_levels_inst) - 1)),
-      factor_levels_inst
-    )) +
-    labs(x = "Year", y = "Market Share (by Facility-Months)",
-         title = "Private Insurance Market Consolidation",
-         subtitle = "Top 5 Insurers (Bars) and Market Concentration HHI (Dashed Line)",
-         fill = "Insurer") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          legend.position = "right") +
-    guides(fill = guide_legend(ncol = 1, reverse = TRUE))
+setorder(insurer_exposure, YEAR, -fac_months)
+insurer_exposure[, annual_rank := frank(-fac_months, ties.method = "first"), by = YEAR]
+insurer_exposure[, Plot_Issuer := fifelse(annual_rank <= 5, ISSUER_NAME, "Other Private Insurers")]
 
-  save_fig(fig_top5, "Figure_TX_FR_Top5_Dominance_HHI", width = 12, height = 6)
-  save_table(plot_data_inst, "Figure_data_Top5_HHI")
+plot_data_inst <- insurer_exposure[, .(market_share = sum(market_share)), 
+                                   by = .(YEAR, Plot_Issuer)]
 
-  # 11.3 Insurer Churn with Event Tags
-  cat("--- 11.3: Insurer Churn ---\n")
-  fac_yr_issuers <- unique(ins_panel[, .(FACILITY_ID, YEAR, ISSUER_NAME)])
-  fac_yr_issuers[, lookup_key := paste(FACILITY_ID, YEAR, ISSUER_NAME, sep = "__")]
-  existing_keys <- fac_yr_issuers$lookup_key
-  t_lagged <- copy(fac_yr_issuers)
-  t_lagged[, next_key  := paste(FACILITY_ID, YEAR + 1L, ISSUER_NAME, sep = "__")]
-  t_lagged[, is_dropped := !(next_key %in% existing_keys)]
-  fac_churn <- t_lagged[, .(abandoned_insurer = any(is_dropped)),
-                          by = .(FACILITY_ID, YEAR = YEAR + 1L)]
-  churn_summary <- fac_churn[YEAR >= 2008 & YEAR <= 2020,
-                               .(total_churn = mean(abandoned_insurer)), by = YEAR]
-  setorder(churn_summary, YEAR)
+overall_sizes <- plot_data_inst[, .(total_share = sum(market_share)), by = Plot_Issuer]
+setorder(overall_sizes, total_share)
+factor_levels_inst <- c("Other Private Insurers", 
+                        setdiff(overall_sizes$Plot_Issuer, "Other Private Insurers"))
+plot_data_inst[, Plot_Issuer := factor(Plot_Issuer, levels = factor_levels_inst)]
 
-  fig_churn <- ggplot(churn_summary, aes(x = YEAR, y = total_churn)) +
-    geom_line(color = "gray80", linewidth = 1, linetype = "dashed") +
-    geom_point(aes(size = total_churn), color = "gray40", alpha = 0.5) +
-    geom_point(data = churn_summary[YEAR == 2012], aes(y = total_churn),
-               color = COL_TX, size = 5) +
-    geom_point(data = churn_summary[YEAR == 2018], aes(y = total_churn),
-               color = COL_CTRL, size = 5) +
-    annotate("text", x = 2012, y = churn_summary[YEAR == 2012, total_churn] + 0.02,
-             label = "Zurich Exit\n(2012)", color = COL_TX,
-             fontface = "bold", size = 3.5) +
-    annotate("text", x = 2018, y = churn_summary[YEAR == 2018, total_churn] + 0.02,
-             label = "TOMIC Acquisition\n(2018)", color = COL_CTRL,
-             fontface = "bold", size = 3.5) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-    labs(x = "Year", y = "Facility Abandonment Rate",
-         title = "Institutional Drivers of Market Churn",
-         subtitle = "Percentage of facilities dropping an incumbent provider.") +
-    theme(legend.position = "none")
+HHI_SCALE_FACTOR <- 5000
+plot_data_inst <- merge(plot_data_inst, hhi_trend, by = "YEAR", all.x = TRUE)
 
-  save_fig(fig_churn, "Figure_TX_FR_Market_Churn_Annotated", width = 8, height = 5)
-  save_table(churn_summary, "Figure_data_Market_Churn")
+# Apply a distinct color palette instead of a monochromatic scale
+distinct_top5 <- c("#264653", "#2a9d8f", "#e9c46a", "#f4a261", "#e76f51")
+custom_colors <- setNames(
+  c("gray75", distinct_top5[1:(length(factor_levels_inst) - 1)]), 
+  factor_levels_inst
+)
+
+fig_top5 <- ggplot(plot_data_inst, aes(x = as.factor(YEAR))) +
+  geom_col(aes(y = market_share, fill = Plot_Issuer),
+           width = 0.85, color = "white", linewidth = 0.2) +
+  geom_line(aes(y = HHI / HHI_SCALE_FACTOR, group = 1),
+            color = "black", linewidth = 1.2, linetype = "dashed") +
+  geom_point(aes(y = HHI / HHI_SCALE_FACTOR, group = 1),
+             color = "black", size = 2.5) +
+  scale_y_continuous(
+    labels   = scales::percent_format(accuracy = 1),
+    expand   = c(0, 0),
+    sec.axis = sec_axis(~ . * HHI_SCALE_FACTOR,
+                        name = "Herfindahl-Hirschman Index (HHI)")
+  ) +
+  scale_fill_manual(values = custom_colors) +
+  labs(x = "Year", y = "Market Share (by Facility-Months)",
+       title = "Private Insurance Market Consolidation",
+       subtitle = "Top 5 Insurers (Bars) and Market Concentration HHI (Dashed Line)",
+       fill = "Insurer") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right") +
+  guides(fill = guide_legend(ncol = 1, reverse = TRUE))
+
+save_fig(fig_top5, "Figure_TX_FR_Top5_Dominance_HHI", width = 12, height = 6)
+save_table(plot_data_inst, "Figure_data_Top5_HHI")
+
+
+# 11.3 Insurer Churn with Event Tags & Event Study
+cat("--- 11.3: Insurer Churn & Event Study ---\n")
+fac_yr_issuers <- unique(ins_panel[, .(FACILITY_ID, YEAR, ISSUER_NAME)])
+fac_yr_issuers[, lookup_key := paste(FACILITY_ID, YEAR, ISSUER_NAME, sep = "__")]
+existing_keys <- fac_yr_issuers$lookup_key
+t_lagged <- copy(fac_yr_issuers)
+t_lagged[, next_key  := paste(FACILITY_ID, YEAR + 1L, ISSUER_NAME, sep = "__")]
+t_lagged[, is_dropped := !(next_key %in% existing_keys)]
+fac_churn <- t_lagged[, .(abandoned_insurer = any(is_dropped)),
+                         by = .(FACILITY_ID, YEAR = YEAR + 1L)]
+churn_summary <- fac_churn[YEAR >= 2008 & YEAR <= 2020,
+                             .(total_churn = mean(abandoned_insurer)), by = YEAR]
+setorder(churn_summary, YEAR)
+
+fig_churn <- ggplot(churn_summary, aes(x = YEAR, y = total_churn)) +
+  geom_line(color = "gray80", linewidth = 1, linetype = "dashed") +
+  geom_point(aes(size = total_churn), color = "gray40", alpha = 0.5) +
+  geom_point(data = churn_summary[YEAR == 2012], aes(y = total_churn),
+             color = COL_TX, size = 5) +
+  geom_point(data = churn_summary[YEAR == 2018], aes(y = total_churn),
+             color = COL_CTRL, size = 5) +
+  annotate("text", x = 2012, y = churn_summary[YEAR == 2012, total_churn] + 0.02,
+           label = "Zurich Exit\n(2012)", color = COL_TX,
+           fontface = "bold", size = 3.5) +
+  annotate("text", x = 2018, y = churn_summary[YEAR == 2018, total_churn] + 0.02,
+           label = "TOMIC Acquisition\n(2018)", color = COL_CTRL,
+           fontface = "bold", size = 3.5) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(x = "Year", y = "Facility Abandonment Rate",
+       title = "Institutional Drivers of Market Churn",
+       subtitle = "Percentage of facilities dropping an incumbent provider.") +
+  theme(legend.position = "none")
+
+save_fig(fig_churn, "Figure_TX_FR_Market_Churn_Annotated", width = 8, height = 5)
+save_table(churn_summary, "Figure_data_Market_Churn")
+
+# NEW: Relative Time Event Study Plot
+# Zurich relative time (-4 to +4)
+zurich_ev <- churn_summary[YEAR >= 2008 & YEAR <= 2016]
+zurich_ev[, rel_year := YEAR - 2012]
+zurich_ev[, Event := "Zurich Exit (2012)"]
+
+# TOMIC relative time (-4 to +2, since data ends in 2020)
+tomic_ev <- churn_summary[YEAR >= 2014 & YEAR <= 2020]
+tomic_ev[, rel_year := YEAR - 2018]
+tomic_ev[, Event := "TOMIC Acquisition (2018)"]
+
+ev_churn <- rbind(zurich_ev, tomic_ev)
+
+fig_churn_ev <- ggplot(ev_churn, aes(x = rel_year, y = total_churn, color = Event)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+  scale_color_manual(values = c("Zurich Exit (2012)" = COL_TX, 
+                                "TOMIC Acquisition (2018)" = COL_CTRL)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_x_continuous(breaks = -4:4) +
+  labs(x = "Years Relative to Event (t=0)", 
+       y = "Facility Abandonment Rate",
+       title = "Insurance Churn Event Study: Institutional Exits & Acquisitions",
+       subtitle = "Spikes in facility-level insurer abandonment mapped to relative event time.",
+       color = NULL) +
+  theme(legend.position = "bottom")
+
+save_fig(fig_churn_ev, "Figure_TX_FR_Market_Churn_EventStudy", width = 8, height = 5)
+
+
 
   # 11.4 Statutory Coverage Limits
   cat("--- 11.4: Statutory Coverage Limits ---\n")
@@ -3265,8 +3265,9 @@ if (!is.null(rate_data)) {
   cat("  WARNING: Skipped — rate filing data not available\n")
 }
 
+
 # 11.3b Figure [T]: Regulatory & Data Availability Timeline
-cat("\n--- 11.3b: Figure [T] — Regulatory Timeline ---\n")
+cat("\n--- 11.3b: Figure [T] - Regulatory Timeline ---\n")
 
 timeline_events <- data.table(
   date  = as.numeric(c(1988, 1989, 1993, 1995, 1998, 2005, 2007, 2020)),
@@ -3286,12 +3287,12 @@ timeline_events <- data.table(
 )
 
 data_bars <- data.table(
-  source = c("Tank Inventory & LUST", "Texas FR Panel", "Mid-Continent Rates"),
-  start  = c(1985, 2007, ifelse(!is.null(rate_data),
-                                 min(rate_data$YEAR, na.rm = TRUE), 2006)),
-  end    = c(2020, 2020, ifelse(!is.null(rate_data),
-                                 max(rate_data$YEAR, na.rm = TRUE), 2024)),
-  y_bar  = c(0.15, 0.10, 0.05)
+  source = c("Control States Panel", "Texas Tank & LUST Panel", "Texas FR Panel", "Mid-Continent Rates"),
+  start  = c(1985, 1985, 2007, ifelse(!is.null(rate_data),
+                                      min(rate_data$YEAR, na.rm = TRUE), 2006)),
+  end    = c(2020, 2020, 2020, ifelse(!is.null(rate_data),
+                                      max(rate_data$YEAR, na.rm = TRUE), 2024)),
+  y_bar  = c(0.20, 0.15, 0.10, 0.05)
 )
 
 fig_t <- ggplot() +
@@ -3302,13 +3303,13 @@ fig_t <- ggplot() +
             aes(x = (start + end) / 2, y = y_bar + 0.03, label = source),
             size = 2.8, fontface = "italic") +
   geom_segment(data = timeline_events,
-               aes(x = date, xend = date, y = 0.25, yend = y_pos - 0.03),
+               aes(x = date, xend = date, y = 0.28, yend = y_pos - 0.03),
                linetype = "dotted", color = "gray50") +
   geom_point(data = timeline_events, aes(x = date, y = y_pos),
              size = 3, shape = 18,
              color = fifelse(timeline_events$type == "texas", COL_TX,
-                      fifelse(timeline_events$type == "federal", COL_CTRL,
-                              "gray40"))) +
+                     fifelse(timeline_events$type == "federal", COL_CTRL,
+                             "gray40"))) +
   geom_text(data = timeline_events,
             aes(x = date, y = y_pos + 0.06, label = label),
             size = 2.5, lineheight = 0.85) +
@@ -3442,9 +3443,8 @@ write_tex(
 )
 cat("  OK: Table B.2 saved (CSV + .tex)\n")
 
-
 # 12.3 Table B.3: Missing Data Balance Test
-cat("\n--- 12.3: Table B.3 — Missing Data Balance Test ---\n")
+cat("\n--- 12.3: Table B.3 - Missing Data Balance Test ---\n")
 
 if (!is.null(balance_glm)) {
   balance_tidy    <- as.data.table(broom::tidy(balance_glm))
@@ -3464,8 +3464,8 @@ if (!is.null(balance_glm)) {
   )]
   b3_display[, stars := NULL]
 
-  write_tex(
-    kbl(b3_display[, .(term, estimate, std.error, statistic, p.value)],
+  # Build the base LaTeX table
+  b3_latex <- kbl(b3_display[, .(term, estimate, std.error, statistic, p.value)],
         format = "latex", booktabs = TRUE, linesep = "", escape = FALSE,
         caption = paste("Balance test for missing-data exclusion. Logistic",
           "regression of missing-record indicator on Texas treatment dummy.",
@@ -3474,21 +3474,26 @@ if (!is.null(balance_glm)) {
         label = "tab:missing-balance",
         col.names = c("Term", "Estimate", "Std. Error", "Statistic", "p-value")) |>
       kable_styling(latex_options = c("hold_position"), font_size = 10,
-                    full_width = FALSE) |>
-      {if (length(tx_row_b3) > 0)
-         row_spec(., tx_row_b3, bold = TRUE) else .}() |>
+                    full_width = FALSE)
+                    
+  # Apply conditional row specification outside the pipe
+  if (length(tx_row_b3) > 0) {
+      b3_latex <- row_spec(b3_latex, tx_row_b3, bold = TRUE)
+  }
+  
+  # Append footnote and save
+  b3_latex <- b3_latex |>
       footnote(general = paste(
         "Dependent variable equals one if the facility was excluded due to",
         "missing tank-level date records. Insignificant coefficient on Texas",
         "dummy confirms null of no differential attrition."),
-        general_title = "", threeparttable = TRUE),
-    "TableB3_Missing_Data_Balance_Test"
-  )
+        general_title = "", threeparttable = TRUE)
+        
+  write_tex(b3_latex, "TableB3_Missing_Data_Balance_Test")
   cat("  OK: Table B.3 saved (CSV + .tex)\n")
 } else {
-  cat("  WARNING: Balance GLM not available — Table B.3 skipped\n")
+  cat("  WARNING: Balance GLM not available - Table B.3 skipped\n")
 }
-
 
 #==============================================================================
 # SECTION 13: SAVE ANALYSIS-READY DATASETS (UPDATED)
@@ -3536,6 +3541,8 @@ if (RUN_FULL && exists("cv_data") && nrow(cv_data) > 0) {
 } else if (!RUN_FULL) {
   cat("  SKIPPED: analysis_cv_data.rds (RUN_FULL = FALSE)\n")
 }
+
+
 
 # Metadata (updated: run_full, cv_auc, age bin constants)
 metadata <- list(
@@ -3604,4 +3611,5 @@ cat(sprintf("  RUN_FULL = %s | CV AUC (no SFE): %s\n",
                    sprintf("%.3f", auc_no_sfe), "N/A")))
 cat(sprintf("  Tables saved to: %s\n", OUTPUT_TABLES))
 cat(sprintf("  Figures saved to: %s\n", OUTPUT_FIGURES))
+
 cat("====================================================================\n")
