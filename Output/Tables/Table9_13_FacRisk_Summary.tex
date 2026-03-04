@@ -1,0 +1,23 @@
+\begin{table}[H]
+\centering
+\caption{\label{tab:tab:fac-risk-summary}Facility-level empirical risk score at December 22, 1998. Risk score is the mean cross-validated predicted first-leak probability from the pre-period logistic regression (1990--1998 facility-years in the never-yet-leaked risk set). All-single-walled: every active tank is single-walled with no missing wall-type records. Q4 = top quartile of the pooled risk score distribution.}
+\centering
+\fontsize{10}{12}\selectfont
+\begin{threeparttable}
+\begin{tabular}[t]{llrrrrrrr}
+\toprule
+Group & Spec & N_fac & Mean_risk & SD_risk & Pct_Q4 & N_all_sw & Pct_all_sw & Pct_Q4_all_sw\\
+\midrule
+Control & Mixed & 14291 & 0.0191 & 0.0058 & 23.8 & 2300 & 61.7 & 5.1\\
+Texas & Mixed & 4146 & 0.0195 & 0.0065 & 30.0 & 478 & 74.7 & 2.9\\
+Control & Spec A & 26963 & 0.0193 & 0.0057 & 23.1 & 14468 & 53.7 & 18.8\\
+Texas & Spec A & 5605 & 0.0194 & 0.0062 & 27.7 & 3872 & 69.1 & 25.1\\
+Control & Spec B & 44364 & 0.0195 & 0.0059 & 24.9 & 31914 & 71.9 & 23.5\\
+Texas & Spec B & 15548 & 0.0182 & 0.0065 & 21.6 & 13863 & 89.2 & 21.0\\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item Never-leaked risk set excludes facilities with any LUST report before 1990 (pre\textbackslash{}\_panel\textbackslash{}\_leak) or any within-panel prior leak (has\textbackslash{}\_previous\textbackslash{}\_leak). Quartile cutoffs from the pooled TX + control distribution. OOB = out-of-bag 5-fold CV predictions (unbiased). Final-model fallback used where OOB predictions are unavailable.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}

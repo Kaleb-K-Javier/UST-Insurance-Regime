@@ -1,0 +1,5 @@
+group,period,n_closures,mean_age,median_age,pct_over_20
+Control,Pre-Reform (1990–1998),228072,19.05,17.87,40.5
+Texas,Pre-Reform (1990–1998),68351,16.88,15.71,33.9
+Control,Post-Reform (1999+),98297,24.15,23.29,63.9
+Texas,Post-Reform (1999+),28872,25.01,24.32,67.7

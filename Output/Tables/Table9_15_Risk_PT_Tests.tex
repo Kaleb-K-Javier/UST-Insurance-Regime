@@ -1,0 +1,22 @@
+\begin{table}[H]
+\centering
+\caption{\label{tab:tab:risk-pt-tests}Parallel trends Wald tests for risk-stratified subsamples. Each row estimates the TWFE event study on the pre-period (1990--1998) for the indicated Spec A subsample. $H_0$: joint nullity of all pre-period TX $\times$ year interactions. Standard errors clustered at the state level.}
+\centering
+\fontsize{10}{12}\selectfont
+\begin{threeparttable}
+\begin{tabular}[t]{lrrrrl}
+\toprule
+Subsample & N TX & N CTL & F-stat & p-value & Conclusion\\
+\midrule
+\em{Spec A — full (benchmark)} & \em{5744} & \em{28016} & \em{15.797} & \em{0} & \em{REJECTED}\\
+Spec A — all-SW only & 3872 & 14468 & 76.790 & 0 & REJECTED\\
+Spec A — top-quartile risk (Q4) & 1552 & 6224 & 6.809 & 0 & REJECTED\\
+Spec A — top-tertile risk (T3) & 2242 & 9617 & 11.543 & 0 & REJECTED\\
+\cellcolor{gray90}{Spec A — bottom-quartile risk (placebo)} & \cellcolor{gray90}{1407} & \cellcolor{gray90}{6332} & \cellcolor{gray90}{15.799} & \cellcolor{gray90}{0} & \cellcolor{gray90}{REJECTED}\\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item Top-quartile and top-tertile defined using pooled (TX + control) quantile cutoffs from the empirical risk score distribution. All-SW: every active tank is single-walled with no unknown-wall records. Placebo row (bottom quartile) expected to show small/null effect.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}

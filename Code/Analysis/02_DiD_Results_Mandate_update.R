@@ -502,12 +502,12 @@ cat("SECTION 3: PARALLEL TRENDS VALIDATION\n")
 cat("========================================\n\n")
 
 cat("Six-test battery:\n")
-cat("  1. Pooled, no controls         -> Expected: REJECT\n")
-cat("  2. Spec A, no controls         -> Expected: NOT reject\n")
-cat("  3. Spec B, no controls         -> Expected: REJECT\n")
-cat("  4. Spec B + mandate_active     -> Expected: Attenuated\n")
-cat("  5. Pooled + vintage FE + mand  -> Expected: NOT reject [KEY TEST]\n")
-cat("  6. Pooled + coarse vintage FE  -> Expected: NOT reject\n\n")
+cat("  1. Pooled, no controls\n")
+cat("  2. Spec A, no controls\n")
+cat("  3. Spec B, no controls\n")
+cat("  4. Spec B + mandate_active\n")
+cat("  5. Pooled + vintage FE + mandate_active [KEY]\n")
+cat("  6. Pooled + coarse vintage FE\n")
 
 pre_window <- annual_data[panel_year >= 1990 & panel_year <= 1998]
 
@@ -601,6 +601,13 @@ m_closure_H1 <- feols(
   closure_event ~ did_term + mandate_active |
     panel_id + vintage_cohort^panel_year,
   data = pooled_data, cluster = ~state, lean = FALSE)
+
+m_closure_H0 <- feols(
+  closure_event ~ did_term +) |
+    panel_id + panel_year,
+  data = pooled_data, cluster = ~state, lean = FALSE)
+
+
 
 m_closure_H2 <- feols(
   closure_event ~ did_term + mandate_window_3yr |
@@ -879,6 +886,16 @@ cat("\n========================================\n")
 cat("SECTION 8: HTE -- AGE BIN x TREATMENT\n")
 cat("========================================\n\n")
 
+
+# Pooled + vintage FE, contorl with age_bin
+m_age_control_pool <- feols(
+  closure_event ~ did_term +  age_bin + mandate_active |
+    panel_id + vintage_cohort^panel_year,
+  data = pooled_data, cluster = ~state, lean = FALSE)
+
+cat("HTE Age Bin (Pooled + VFE):\n"); print(summary(m_hte_age_pool))
+
+
 # Pooled + vintage FE, interacted with age_bin
 m_hte_age_pool <- feols(
   closure_event ~ did_term + did_term:age_bin + age_bin + mandate_active |
@@ -888,6 +905,12 @@ m_hte_age_pool <- feols(
 cat("HTE Age Bin (Pooled + VFE):\n"); print(summary(m_hte_age_pool))
 
 # Spec A
+
+m_age_A <- feols(
+  closure_event ~ did_term + age_bin | panel_id + panel_year,
+  data = specA_data, cluster = ~state, lean = FALSE)
+
+
 m_hte_age_A <- feols(
   closure_event ~ did_term + did_term:age_bin + age_bin | panel_id + panel_year,
   data = specA_data, cluster = ~state, lean = FALSE)

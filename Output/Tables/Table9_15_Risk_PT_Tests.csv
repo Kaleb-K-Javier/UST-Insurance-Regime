@@ -1,0 +1,6 @@
+Subsample,N_TX,N_CTL,F_stat,p_value,Conclusion
+Spec A — full (benchmark),5744,28016,15.797,0,REJECTED
+Spec A — all-SW only,3872,14468,76.79,0,REJECTED
+Spec A — top-quartile risk (Q4),1552,6224,6.809,0,REJECTED
+Spec A — top-tertile risk (T3),2242,9617,11.543,0,REJECTED
+Spec A — bottom-quartile risk (placebo),1407,6332,15.799,0,REJECTED

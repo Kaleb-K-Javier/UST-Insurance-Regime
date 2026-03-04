@@ -1,0 +1,4 @@
+Model,Estimate,Std_Error,t_stat,p_value_conv,p_value_webb,CI_low_webb,CI_high_webb,N_obs
+Pooled + VFE (headline),-0.0096,0.0026,-3.713,0.0015,,,,3862756
+Spec A,-0.0022,0.0031,-0.694,0.4961,,,,991840
+Spec B + Mandate,-0.014,0.0032,-4.439,0.0003,,,,1711246
