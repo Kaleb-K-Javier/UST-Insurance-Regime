@@ -1,0 +1,68 @@
+\begin{table}[!h]
+\centering
+\caption{\label{tab:tab:data-quality}State-level data quality metrics for the raw tank inventory. Criteria for inclusion in the analysis sample: installation date present $\geq75\%$; closure date present $\geq75\%$ (among closed tanks); wall type present $\geq50\%$.}
+\centering
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\fontsize{9}{11}\selectfont
+\begin{threeparttable}
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{2cm}>{\raggedright\arraybackslash}p{2cm}rrrrlll}
+\toprule
+State & Group & N Tanks & \% Miss. Install & \% Miss. Closure & \% Miss. Wall Type & Pass Install & Pass Closure & Pass Wall\\
+\midrule
+AL & Control Tier 1 & 48635 & 24.1 & 9.4 & 85.0 & \checkmark & \checkmark & \texttimes\\
+AR & Control Tier 1 & 34083 & 18.5 & 7.7 & 21.7 & \checkmark & \checkmark & \checkmark\\
+ID & Control Tier 1 & 14880 & 2.2 & 0.8 & 0.0 & \checkmark & \checkmark & \checkmark\\
+KS & Control Tier 1 & 27477 & 9.4 & 16.5 & 0.0 & \checkmark & \checkmark & \checkmark\\
+LA & Control Tier 1 & 46520 & 0.1 & 0.0 & 33.7 & \checkmark & \checkmark & \checkmark\\
+ME & Control Tier 1 & 16902 & 0.0 & 0.6 & 0.2 & \checkmark & \checkmark & \checkmark\\
+MN & Control Tier 1 & 45575 & 22.3 & 6.8 & 0.0 & \checkmark & \checkmark & \checkmark\\
+MT & Control Tier 1 & 16060 & 9.9 & 4.7 & 12.2 & \checkmark & \checkmark & \checkmark\\
+NC & Control Tier 1 & 91664 & 1.4 & 0.3 & 8.2 & \checkmark & \checkmark & \checkmark\\
+NM & Control Tier 1 & 16322 & 15.9 & 2.5 & 100.0 & \checkmark & \checkmark & \texttimes\\
+OK & Control Tier 1 & 40004 & 13.2 & 11.1 & 0.0 & \checkmark & \checkmark & \checkmark\\
+SD & Control Tier 1 & 10178 & 9.1 & 80.0 & 0.0 & \checkmark & \texttimes & \checkmark\\
+CO & Control Tier 2 & 32910 & 21.6 & 6.9 & 24.7 & \checkmark & \checkmark & \checkmark\\
+IL & Control Tier 2 & 84307 & 48.4 & 6.4 & 100.0 & \texttimes & \checkmark & \texttimes\\
+MA & Control Tier 2 & 36448 & 8.2 & 5.7 & 45.7 & \checkmark & \checkmark & \checkmark\\
+OH & Control Tier 2 & 73200 & 28.4 & 3.0 & 0.0 & \texttimes & \checkmark & \checkmark\\
+PA & Control Tier 2 & 100554 & 17.4 & 20.0 & 16.1 & \checkmark & \checkmark & \checkmark\\
+TN & Control Tier 2 & 60277 & 0.6 & 10.8 & 9.6 & \checkmark & \checkmark & \checkmark\\
+VA & Control Tier 2 & 78612 & 14.1 & 26.7 & 0.0 & \checkmark & \texttimes & \checkmark\\
+\cellcolor{gray90}{AK} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{6853} & \cellcolor{gray90}{15.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{AZ} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{28544} & \cellcolor{gray90}{15.4} & \cellcolor{gray90}{0.3} & \cellcolor{gray90}{37.9} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark}\\
+\cellcolor{gray90}{CA} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{37400} & \cellcolor{gray90}{2.6} & \cellcolor{gray90}{NA} & \cellcolor{gray90}{0.2} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark}\\
+\cellcolor{gray90}{DE} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{9388} & \cellcolor{gray90}{18.1} & \cellcolor{gray90}{8.6} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{GA} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{79273} & \cellcolor{gray90}{3.3} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{0.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\checkmark}\\
+\cellcolor{gray90}{HI} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{6763} & \cellcolor{gray90}{19.4} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{IN} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{57525} & \cellcolor{gray90}{53.3} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{KY} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{51771} & \cellcolor{gray90}{18.0} & \cellcolor{gray90}{5.2} & \cellcolor{gray90}{0.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark}\\
+\cellcolor{gray90}{MO} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{41774} & \cellcolor{gray90}{37.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{1.0} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\checkmark}\\
+\cellcolor{gray90}{MS} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{32132} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{ND} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{10372} & \cellcolor{gray90}{5.9} & \cellcolor{gray90}{8.4} & \cellcolor{gray90}{0.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark}\\
+\cellcolor{gray90}{NE} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{6188} & \cellcolor{gray90}{3.8} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{99.7} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{NH} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{15350} & \cellcolor{gray90}{1.7} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{NV} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{12023} & \cellcolor{gray90}{1.8} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{0.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\checkmark}\\
+\cellcolor{gray90}{NY} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{122648} & \cellcolor{gray90}{30.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{OR} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{30900} & \cellcolor{gray90}{18.6} & \cellcolor{gray90}{2.4} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{RI} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{10834} & \cellcolor{gray90}{1.4} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{78.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{SC} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{45996} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{UT} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{18100} & \cellcolor{gray90}{1.6} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{0.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\checkmark}\\
+\cellcolor{gray90}{VT} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{11001} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{0.5} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{WA} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{52245} & \cellcolor{gray90}{7.1} & \cellcolor{gray90}{93.7} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{WI} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{83600} & \cellcolor{gray90}{79.7} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{59.3} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{WV} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{25796} & \cellcolor{gray90}{16.4} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{0.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\checkmark}\\
+\cellcolor{gray90}{WY} & \cellcolor{gray90}{Excluded - Data/Institutional} & \cellcolor{gray90}{10172} & \cellcolor{gray90}{13.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{MD} & \cellcolor{gray90}{Excluded - No State Fund} & \cellcolor{gray90}{54296} & \cellcolor{gray90}{18.1} & \cellcolor{gray90}{15.5} & \cellcolor{gray90}{0.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark}\\
+\cellcolor{gray90}{CT} & \cellcolor{gray90}{Excluded - Treated} & \cellcolor{gray90}{36076} & \cellcolor{gray90}{4.7} & \cellcolor{gray90}{26.2} & \cellcolor{gray90}{81.1} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{FL} & \cellcolor{gray90}{Excluded - Treated} & \cellcolor{gray90}{127314} & \cellcolor{gray90}{28.8} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{IA} & \cellcolor{gray90}{Excluded - Treated} & \cellcolor{gray90}{37200} & \cellcolor{gray90}{10.8} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{100.0} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\texttimes} & \cellcolor{gray90}{\texttimes}\\
+\cellcolor{gray90}{MI} & \cellcolor{gray90}{Excluded - Treated (fund transition 1995)} & \cellcolor{gray90}{98847} & \cellcolor{gray90}{15.9} & \cellcolor{gray90}{0.2} & \cellcolor{gray90}{10.8} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark}\\
+\cellcolor{gray90}{NJ} & \cellcolor{gray90}{Excluded - Treated (private ins. May 2003)} & \cellcolor{gray90}{108992} & \cellcolor{gray90}{0.1} & \cellcolor{gray90}{4.3} & \cellcolor{gray90}{0.5} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark} & \cellcolor{gray90}{\checkmark}\\
+\textbf{TX} & \textbf{Target} & \textbf{178611} & \textbf{0.0} & \textbf{0.0} & \textbf{9.9} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark}\\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item Pass/fail criteria applied to raw source data before any sample filters. MI excluded as treated (fund transition 1995). NJ excluded as treated (private insurance mandate 2003). TN: state fund not established until July 2008 --- pre-2008 LUST counts are zero (institutional artifact).
+\end{tablenotes}
+\end{threeparttable}}
+\end{table}

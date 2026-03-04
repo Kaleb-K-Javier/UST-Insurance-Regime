@@ -1,0 +1,13 @@
+Panel,Category,Texas,Control,Total
+A: Facility Size Distribution,N Facilities,22192,77068,99260
+A: Facility Size Distribution,Single-tank (%),15.7,21.2,20
+A: Facility Size Distribution,2-3 tanks (%),60.9,52,54
+A: Facility Size Distribution,4-6 tanks (%),22.4,25.4,24.8
+A: Facility Size Distribution,7+ tanks (%),0.9,1.4,1.3
+B: Tank Characteristics,N Tanks,61782,214948,276730
+B: Tank Characteristics,Single-walled (%),86.7,69.3,73.2
+B: Tank Characteristics,Double-walled (%),10.1,10.8,10.6
+B: Tank Characteristics,Unknown wall type (%),3.2,20,16.2
+B: Tank Characteristics,Motor fuel facility (%),71.4,92,87.3
+B: Tank Characteristics,Has gasoline (%),65.9,81.8,78.2
+B: Tank Characteristics,Has diesel (%),34.3,43.3,41.2

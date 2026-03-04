@@ -1,23 +1,28 @@
-panel,cohort,variable,Texas,Control
-"A: Stock Variables (Dec 22, 1998)",All Facilities,N facilities,22192,77068
-"A: Stock Variables (Dec 22, 1998)",All Facilities,N tanks,61782,214948
-"A: Stock Variables (Dec 22, 1998)",All Facilities,Mean tank age (years),15.6,14.9
-"A: Stock Variables (Dec 22, 1998)",All Facilities,SD tank age,11.2,10.8
-"A: Stock Variables (Dec 22, 1998)",All Facilities,Pre-1988 tanks (%),76.3,64.5
-"A: Stock Variables (Dec 22, 1998)",All Facilities,Single-walled tanks (%),86.7,69.3
-"A: Stock Variables (Dec 22, 1998)",All Facilities,Tanks per facility,2.8,2.8
-B: Flow Variables (1989–1997 avg.),Mixed Cohort,Annual closure rate,0.0751,0.057
-B: Flow Variables (1989–1997 avg.),Mixed Cohort,Annual exit rate,0,0
-B: Flow Variables (1989–1997 avg.),Mixed Cohort,Annual leak incidence rate,0.0142,0.0268
-B: Flow Variables (1989–1997 avg.),Mixed Cohort,"Leak incidents per 1,000 fac-years",15.02,27.23
-B: Flow Variables (1989–1997 avg.),Mixed Cohort,N facility-years,5859,34965
-B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),Annual closure rate,0.0706,0.0691
-B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),Annual exit rate,0,0
-B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),Annual leak incidence rate,0.0119,0.0236
-B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),"Leak incidents per 1,000 fac-years",11.98,24.19
-B: Flow Variables (1989–1997 avg.),Post-1988 (Spec A — Mandate-Free),N facility-years,40052,208593
-B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),Annual closure rate,0.0092,0.0114
-B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),Annual exit rate,0,0
-B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),Annual leak incidence rate,0.0117,0.0128
-B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),"Leak incidents per 1,000 fac-years",11.75,13.06
-B: Flow Variables (1989–1997 avg.),Pre-1988 (Spec B — Mandate-Exposed),N facility-years,142173,406503
+panel,cohort,variable,Texas,Control,Difference
+"A: Stock Variables (Dec 22, 1998)",All Facilities,N facilities,22192,77068,-54876
+"A: Stock Variables (Dec 22, 1998)",All Facilities,N tanks,61782,214948,-153166
+"A: Stock Variables (Dec 22, 1998)",All Facilities,Mean tank age (years),15.6,14.9,0.699999999999999
+"A: Stock Variables (Dec 22, 1998)",All Facilities,SD tank age,11.2,10.8,0.399999999999999
+"A: Stock Variables (Dec 22, 1998)",All Facilities,Pre-1988 tanks (\%),76.3,64.5,11.8
+"A: Stock Variables (Dec 22, 1998)",All Facilities,Single-walled tanks (\%),86.7,69.3,17.4
+"A: Stock Variables (Dec 22, 1998)",All Facilities,Tanks per facility,2.8,2.8,0
+B: Flow Variables (1989–1997 avg.),All Facilities,Annual closure rate,0.0934,0.0957,-0.0023
+B: Flow Variables (1989–1997 avg.),All Facilities,Annual exit rate,0.0745,0.0704,0.00409999999999999
+B: Flow Variables (1989–1997 avg.),All Facilities,Annual leak incidence rate,0.0122,0.0204,-0.0082
+B: Flow Variables (1989–1997 avg.),All Facilities,"Leak incidents per 1,000 fac-years",12.34,20.76,-8.42
+B: Flow Variables (1989–1997 avg.),All Facilities,N facility-years,320779,1112436,-791657
+B: Flow Variables (1989–1997 avg.),Mixed,Annual closure rate,0.0751,0.057,0.0181
+B: Flow Variables (1989–1997 avg.),Mixed,Annual exit rate,0,0,0
+B: Flow Variables (1989–1997 avg.),Mixed,Annual leak incidence rate,0.0142,0.0268,-0.0126
+B: Flow Variables (1989–1997 avg.),Mixed,"Leak incidents per 1,000 fac-years",15.02,27.23,-12.21
+B: Flow Variables (1989–1997 avg.),Mixed,N facility-years,5859,34965,-29106
+B: Flow Variables (1989–1997 avg.),Post-1988 Only,Annual closure rate,0.0706,0.0691,0.0015
+B: Flow Variables (1989–1997 avg.),Post-1988 Only,Annual exit rate,0,0,0
+B: Flow Variables (1989–1997 avg.),Post-1988 Only,Annual leak incidence rate,0.0119,0.0236,-0.0117
+B: Flow Variables (1989–1997 avg.),Post-1988 Only,"Leak incidents per 1,000 fac-years",11.98,24.19,-12.21
+B: Flow Variables (1989–1997 avg.),Post-1988 Only,N facility-years,40052,208593,-168541
+B: Flow Variables (1989–1997 avg.),Pre-1988 Only,Annual closure rate,0.0092,0.0114,-0.0022
+B: Flow Variables (1989–1997 avg.),Pre-1988 Only,Annual exit rate,0,0,0
+B: Flow Variables (1989–1997 avg.),Pre-1988 Only,Annual leak incidence rate,0.0117,0.0128,-0.0011
+B: Flow Variables (1989–1997 avg.),Pre-1988 Only,"Leak incidents per 1,000 fac-years",11.75,13.06,-1.31
+B: Flow Variables (1989–1997 avg.),Pre-1988 Only,N facility-years,142173,406503,-264330

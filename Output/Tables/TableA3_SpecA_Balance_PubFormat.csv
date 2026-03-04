@@ -1,0 +1,5 @@
+Variable,Texas,Control,Difference,p-value
+N Facilities,"6,395","31,901","",""
+Mean Tank Age (years),5.7,5.8,+0.12,0.000$^{***}$
+Single-Walled (%),70.8,58.1,-0.127,0.000$^{***}$
+SD Tank Age,2.92,2.98,"",""

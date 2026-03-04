@@ -122,7 +122,7 @@ suppressPackageStartupMessages({
   library(fixest)
   library(survival)
   library(cmprsk)
-  library(fwildclusterboot)
+  #library(fwildclusterboot)
   library(ggplot2)
   library(gridExtra)
   library(grid)
@@ -143,6 +143,7 @@ OUTPUT_TABLES  <- here("Output", "Tables")
 OUTPUT_FIGURES <- here("Output", "Figures")
 dir.create(OUTPUT_TABLES,  recursive = TRUE, showWarnings = FALSE)
 dir.create(OUTPUT_FIGURES, recursive = TRUE, showWarnings = FALSE)
+
 
 # ---- Publication theme ----
 theme_pub <- function(base_size = 12) {
@@ -222,7 +223,7 @@ N_BOOTSTRAP   <- 9999    # Replications (999 for testing, 9999 for final)
 # ---- Full-run flag (set TRUE for final submission) ----
 # When FALSE: Section 9 CV validation (k-fold logit) is skipped;
 # placeholder NAs are written so downstream save_table() calls don't error.
-RUN_FULL <- FALSE   # <-- CHANGE TO TRUE FOR FINAL RUN
+RUN_FULL <- TRUE   # <-- CHANGE TO TRUE FOR FINAL RUN
 
 # ---- Canonical 5-year tank age bins ----
 # Used in: Table 1A (stock stats), Table 3 (risk validation), Figure 1 (age density),
@@ -368,10 +369,15 @@ RATE_DIR <- here("Data", "Rate FIllings", "Mid-Continent Casualty Company - 2341
 cat(sprintf("  Looking for rate files in:\n  %s\n", RATE_DIR))
 cat(sprintf("  Directory exists: %s\n", dir.exists(RATE_DIR)))
 
+# Correcting the hyphen/dash character discrepancy
+RATE_DIR <- here("Data", "Rate FIllings", "Mid-Continent Casualty Company ­– 23418")
+
+# Modifying the pattern to include both facility_year and tank_month files
 rate_files <- list.files(RATE_DIR,
                          pattern = "^texas_midcontinent_facility_year_premium_.*\\.csv$",
                          full.names = TRUE)
-cat(sprintf("  Files matched: %d\n", length(rate_files)))
+                         
+                        cat(sprintf("  Files matched: %d\n", length(rate_files)))
 
 rate_data <- if (length(rate_files) > 0) {
   dt <- rbindlist(lapply(rate_files, fread), fill = TRUE)
@@ -585,6 +591,7 @@ unified_table[, `:=`(
   Excluded_Pct     = sprintf("%.2f\\%%", Excluded_Pct * 100)
 )]
 
+
 latex_unified <- kbl(
   unified_table,
   format = "latex",
@@ -596,7 +603,7 @@ latex_unified <- kbl(
   label   = "tab:missing-unified"
 ) |>
   kable_styling(latex_options = c("HOLD_position"), font_size = 10,
-                full_width = FALSE, threeparttable = TRUE) |>
+                full_width = FALSE) |>
   add_header_above(c(" " = 2, "Missing Install Date" = 2,
                      "Missing Closure Date" = 2, "Overall Attrition" = 2)) |>
   row_spec(2, hline_after = TRUE) |>
@@ -609,6 +616,8 @@ latex_unified <- kbl(
 
 save_table(unified_csv_output, "Appendix_Missing_Data_Unified")
 write_tex(latex_unified, "TableB_Missing_Data_Unified")
+
+
 
 # Apply exclusion
 annual_data <- annual_data[!panel_id %in% facilities_to_exclude_miss]
@@ -1017,7 +1026,7 @@ write_tex(
       col.names = c("Group", "N Tanks", "Mean", "Median", "SD", "Min", "Max",
                     "\\% Past Deadline")) |>
     kable_styling(latex_options = c("HOLD_position"), font_size = 10,
-                  full_width = FALSE, threeparttable = TRUE) |>
+                  full_width = FALSE) |>
     add_header_above(c(" " = 2,
                        "Years Past Cohort Deadline as of Dec 22, 1998" = 5,
                        " " = 1)) |>
@@ -1076,6 +1085,7 @@ tn_exclude_leak_models <- (
 )
 cat(sprintf("  TN exclude from leak models flag: %s\n", tn_exclude_leak_models))
 
+
 # 6.3 Wall Type Missingness Diagnostic
 cat("\n--- 6.3: Wall Type Missingness by State ---\n")
 wall_miss <- tanks_1998[, .(
@@ -1132,12 +1142,11 @@ if (age_ttest$p.value < 0.05) {
   cat("  OK: Spec A age balanced — compositional concern addressed.\n")
 }
 
-
 #==============================================================================
-# SECTION 6.5: SAMPLE COMPOSITION (NEW — TableA0)
+# SECTION 6.5: SAMPLE COMPOSITION (NEW - TableA0)
 #==============================================================================
 
-cat("\n--- 6.5: Table A0 — Sample Composition (Facility Size + Fuel Type) ---\n")
+cat("\n--- 6.5: Table A0 - Sample Composition (Facility Size + Fuel Type) ---\n")
 
 # Panel A: Facility counts by tank-count bins
 # Aggregate to facility level first
@@ -1146,15 +1155,14 @@ fac_size <- tanks_1998[, .(n_tanks_fac = .N,
                         by = panel_id]
 
 fac_size[, size_bin := fcase(
-  n_tanks_fac == 1,                    "Single-tank facility",
+  n_tanks_fac == 1,                     "Single-tank facility",
   n_tanks_fac >= 2 & n_tanks_fac <= 3, "2-3 tanks",
   n_tanks_fac >= 4 & n_tanks_fac <= 6, "4-6 tanks",
-  n_tanks_fac >= 7,                    "7+ tanks",
+  n_tanks_fac >= 7,                     "7+ tanks",
   default = "Unknown"
 )]
 
 panelA_comp <- fac_size[, .(
-  Group         = fifelse(texas_treated == 1, "Texas", "Control"),
   N_Facilities  = .N,
   Pct_1_tank    = round(100 * mean(size_bin == "Single-tank facility"), 1),
   Pct_2_3_tank  = round(100 * mean(size_bin == "2-3 tanks"), 1),
@@ -1174,12 +1182,11 @@ panelA_total <- fac_size[, .(
 panelA_comp <- rbind(panelA_comp, panelA_total)
 panelA_comp[, Panel := "A: Facility Size Distribution"]
 
-cat("  Panel A — Facility Size Distribution:\n")
+cat("  Panel A - Facility Size Distribution:\n")
 print(panelA_comp)
 
 # Panel B: Tank counts by wall type
 panelB_wall <- tanks_1998[, .(
-  Group          = fifelse(texas_treated == 1, "Texas", "Control"),
   N_Tanks        = .N,
   Pct_SW         = round(100 * mean(single_walled == 1,   na.rm = TRUE), 1),
   Pct_DW         = round(100 * mean(double_walled == 1,   na.rm = TRUE), 1),
@@ -1214,7 +1221,7 @@ fuel_total <- annual_data[panel_year == TREATMENT_YEAR, .(
 )]
 fuel_snap <- rbind(fuel_snap, fuel_total)
 
-cat("  Panel B — Wall Type & Fuel Type:\n")
+cat("  Panel B - Wall Type & Fuel Type:\n")
 print(panelB_wall)
 print(fuel_snap)
 
@@ -1232,7 +1239,7 @@ panelA_long <- data.table(
                                  .(N_Facilities, Pct_1_tank, Pct_2_3_tank, Pct_4_6_tank, Pct_7plus)])
 )
 
-# Panel B rows — wall type
+# Panel B rows - wall type
 panelB_long_wall <- data.table(
   Panel    = "B: Tank Characteristics",
   Category = c("N Tanks", "Single-walled (%)", "Double-walled (%)",
@@ -1242,7 +1249,7 @@ panelB_long_wall <- data.table(
   Total    = unlist(panelB_wall[Group == "Total",   .(N_Tanks, Pct_SW, Pct_DW, Pct_Unknown)])
 )
 
-# Panel B rows — fuel type
+# Panel B rows - fuel type
 panelB_long_fuel <- data.table(
   Panel    = "B: Tank Characteristics",
   Category = c("Motor fuel facility (%)", "Has gasoline (%)", "Has diesel (%)"),
@@ -1258,15 +1265,15 @@ save_table(tableA0_combined, "TableA0_Sample_Composition")
 # LaTeX: build with pack_rows for Panel A / Panel B
 tableA0_display <- copy(tableA0_combined)
 tableA0_display[, `:=`(Panel = NULL)]
-tableA0_display[, Texas   := ifelse(Category == "N Facilities" | Category == "N Tanks",
-                                    format(Texas,   big.mark = ","),
-                                    sprintf("%.1f", Texas))]
+tableA0_display[, Texas    := ifelse(Category == "N Facilities" | Category == "N Tanks",
+                                     format(Texas,   big.mark = ","),
+                                     sprintf("%.1f", Texas))]
 tableA0_display[, Control := ifelse(Category == "N Facilities" | Category == "N Tanks",
-                                    format(as.numeric(Control), big.mark = ","),
-                                    sprintf("%.1f", as.numeric(Control)))]
-tableA0_display[, Total   := ifelse(Category == "N Facilities" | Category == "N Tanks",
-                                    format(as.numeric(Total), big.mark = ","),
-                                    sprintf("%.1f", as.numeric(Total)))]
+                                     format(as.numeric(Control), big.mark = ","),
+                                     sprintf("%.1f", as.numeric(Control)))]
+tableA0_display[, Total    := ifelse(Category == "N Facilities" | Category == "N Tanks",
+                                     format(as.numeric(Total), big.mark = ","),
+                                     sprintf("%.1f", as.numeric(Total)))]
 
 nA <- nrow(panelA_long)
 nB <- nrow(panelB_long_wall) + nrow(panelB_long_fuel)
@@ -1280,7 +1287,7 @@ write_tex(
       label = "tab:sample-composition",
       col.names = c("Category", "Texas", "Control", "Total")) |>
     kable_styling(latex_options = c("HOLD_position"), font_size = 10,
-                  full_width = FALSE, threeparttable = TRUE) |>
+                  full_width = FALSE) |>
     pack_rows("Panel A: Facility Size Distribution", 1, nA,
               bold = TRUE, italic = FALSE, latex_gap_space = "0.5em") |>
     pack_rows("Panel B: Tank Characteristics", nA + 1, nA + nB,
@@ -1300,7 +1307,6 @@ cat("  OK: TableA0_Sample_Composition saved (CSV + .tex)\n")
 
 rm(fac_size, panelA_long, panelB_long_wall, panelB_long_fuel, tableA0_display)
 gc()
-
 
 #==============================================================================
 # SECTION 7: DESCRIPTIVE TABLES
@@ -1536,7 +1542,7 @@ write_tex(
       label = "tab:stock-balance",
       col.names = c("Variable", "Texas", "Control", "Difference", "p-value")) |>
     kable_styling(latex_options = c("HOLD_position"), font_size = 10,
-                  full_width = FALSE, threeparttable = TRUE) |>
+                  full_width = FALSE) |>
     column_spec(1, width = "5cm") |>
     column_spec(2:5, width = "2cm") |>
     footnote(general = paste(
@@ -1733,7 +1739,7 @@ write_tex(
       label = "tab:descriptive",
       col.names = c("Variable", "Texas", "Control", "Difference")) |>
     kable_styling(latex_options = c("scale_down"), font_size = 9,
-                  full_width = FALSE, threeparttable = TRUE) |>
+                  full_width = FALSE) |>
     pack_rows("Panel A: 1998 Cross-Section (Stock as of December 22, 1998)",
               min(rows_panelA), max(rows_panelA),
               bold = TRUE, italic = FALSE, latex_gap_space = "0.5em") |>
@@ -2004,8 +2010,7 @@ write_tex(
       col.names = c("Variable / Age Bin", "Texas", "Control",
                     "TX N", "CTL N")) |>
     kable_styling(latex_options = c("scale_down", "hold_position"),
-                  font_size = 9, full_width = FALSE,
-                  threeparttable = TRUE) |>
+                  font_size = 9, full_width = FALSE) |>
     pack_rows("Panel A: High-Risk Indicator Prevalence (\\% of Tanks)",
               1, nA3,
               bold = TRUE, italic = FALSE, latex_gap_space = "0.5em") |>
@@ -2035,9 +2040,8 @@ cat("  OK: Table3_Risk_Validation.tex saved\n")
 
 rm(panA, panB, panC_display, combined_data, pre_cv)
 
-
 #==============================================================================
-# SECTION 8: DESCRIPTIVE FIGURES — PRE-PERIOD TRENDS
+# SECTION 8: DESCRIPTIVE FIGURES
 #==============================================================================
 
 cat("\n========================================\n")
@@ -2046,37 +2050,9 @@ cat("========================================\n\n")
 
 # 8.1 Figure 4 + Parallel Trends Validation
 # ---------------------------------------------------------------------------
-# TWO outputs:
-#   Figure 4 (main text): Spec A only — mandate-free, parallel trends hold
-#   Figure 4B (appendix): Pooled — annotated to show mandate contamination
-#
-# FOUR validation tests (Table B.4):
-#   1. Pooled, no control          -> Expected to REJECT (mandate contamination)
-#   2. Spec A, no control needed   -> Expected NOT to reject (clean sample)
-#   3. Spec B, no control          -> Expected to REJECT
-#   4. Spec B + mandate_active     -> Should improve toward non-rejection
-# ---------------------------------------------------------------------------
-cat("--- 8.1: Figure 4 + Parallel Trends Validation (four tests) ---\n")
+cat("--- 8.1: Figure 4 + Parallel Trends Validation ---\n")
 
-# Helper: Wilson 95% CI closure rates
-closure_rate_ci <- function(dt) {
-  dt[panel_year >= 1990 & panel_year <= TREATMENT_YEAR, {
-    n     <- .N
-    k     <- sum(closure_event, na.rm = TRUE)
-    rate  <- k / n
-    z     <- qnorm(0.975)
-    denom <- 1 + z^2 / n
-    ci_lo <- (rate + z^2/(2*n) - z*sqrt(rate*(1-rate)/n + z^2/(4*n^2))) / denom
-    ci_hi <- (rate + z^2/(2*n) + z*sqrt(rate*(1-rate)/n + z^2/(4*n^2))) / denom
-    .(closure_rate = rate, ci_lo = ci_lo, ci_hi = ci_hi,
-      n_fac = uniqueN(panel_id))
-  }, by = .(panel_year, Group = fifelse(texas_treated == 1, "Texas", "Control"))]
-}
-
-closure_rate_specA  <- closure_rate_ci(annual_data[spec_A_eligible == 1])
-closure_rate_pooled <- closure_rate_ci(annual_data)
-
-# Helper: run one pre-trend Wald test
+# Helper: run one pre-trend Wald test (Facility-level retained for Table B.4)
 run_pt_test <- function(dt, label, extra_rhs = "", mandate_control = "None") {
   formula_str <- paste0(
     "closure_event ~ i(rel_year_1999, texas_treated, ref = -1)",
@@ -2120,7 +2096,7 @@ pt_all <- rbindlist(list(
               "1. Pooled (all facilities), no mandate control", "",
               mandate_control = "None"),
   run_pt_test(annual_data[spec_A_eligible == 1],
-              "2. Spec A (post-1988 only) — PRIMARY IDENTIFICATION", "",
+              "2. Spec A (post-1988 only) - PRIMARY IDENTIFICATION", "",
               mandate_control = "None"),
   run_pt_test(annual_data[spec_B_eligible == 1],
               "3. Spec B (pre-1988 only), no mandate control", "",
@@ -2147,7 +2123,7 @@ write_tex(
         "level. H$_0$: joint nullity of all pre-period interaction coefficients."),
       label = "tab:pt-validation") |>
     kable_styling(latex_options = c("scale_down", "hold_position"),
-                  font_size = 9, full_width = FALSE, threeparttable = TRUE) |>
+                  font_size = 9, full_width = FALSE) |>
     column_spec(1, width = "6cm") |>
     column_spec(2:5, width = "2cm") |>
     footnote(general = paste(
@@ -2159,96 +2135,193 @@ write_tex(
   "TableB4_Parallel_Trends_Validation"
 )
 
-# Extract key p-values for figure annotations
-specA_p  <- pt_all[grepl("Spec A", Specification), `p-value`]
-pooled_p <- pt_all[grepl("Pooled", Specification), `p-value`]
-
-specA_label <- if (is.na(specA_p)) {
-  "Spec A pre-trend F-test: estimation failed\n(check reference year)"
-} else {
-  sprintf(
-    "Spec A pre-trend F-test: p = %.3f\n(%s)",
-    specA_p,
-    fifelse(specA_p > 0.10,
-            "Null of parallel pre-trends NOT rejected",
-            "Null of parallel pre-trends REJECTED")
-  )
+# ---------------------------------------------------------------------------
+# Tank-Level Aggregation & Plotting Helpers (1985-2018)
+# ---------------------------------------------------------------------------
+# Helper: Build State-Year Panel from Tank Inventory
+build_tank_state_year_panel <- function(tank_dt, start_yr = 1985, end_yr = 2018) {
+  dt <- tank_dt[!is.na(tank_installed_date)]
+  res <- lapply(start_yr:end_yr, function(yr) {
+    active <- dt[year(tank_installed_date) <= yr & 
+                 (is.na(tank_closed_date) | year(tank_closed_date) >= yr)]
+    if(nrow(active) == 0) return(NULL)
+    active[, .(
+      panel_year = yr,
+      texas_treated = as.integer(first(state) == "TX"),
+      n_active = .N,
+      n_closed = sum(year(tank_closed_date) == yr, na.rm = TRUE)
+    ), by = state]
+  })
+  st_yr_panel <- rbindlist(res)
+  st_yr_panel[, rate := n_closed / n_active]
+  return(st_yr_panel)
 }
 
-# Figure 4 (MAIN TEXT): Spec A
-fig4 <- ggplot(closure_rate_specA,
-               aes(x = panel_year, y = closure_rate, color = Group)) +
-  geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi, fill = Group),
-              alpha = 0.15, color = NA) +
-  geom_line(linewidth = 0.9) +
-  geom_point(size = 2) +
-  geom_vline(xintercept = TREATMENT_YEAR + 0.5, linetype = "dashed",
-             color = "gray40") +
-  annotate("text",
-           x = TREATMENT_YEAR + 0.6,
-           y = max(closure_rate_specA$closure_rate),
-           label = "Dec 22, 1998\nPSTRF cutoff",
-           hjust = 0, size = 3, color = "gray40") +
-  annotate("text",
-           x = 1990.5,
-           y = max(closure_rate_specA$closure_rate) * 0.95,
-           label = specA_label,
-           hjust = 0, size = 3.2, fontface = "italic") +
-  scale_color_manual(values = COL_PAIR) +
-  scale_fill_manual(values = COL_PAIR, guide = "none") +
-  labs(x = "Year", y = "Annual Closure Rate",
-       title = "Pre-Period Closure Rates — Post-1988 Cohort (Spec A)",
-       subtitle = paste0(
-         "Facilities with 100% post-1988 tanks (N = ",
-         format(uniqueN(annual_data[spec_A_eligible == 1, panel_id]),
-                big.mark = ","),
-         "). Exempt from TX phased mandate (1989-1993). Shaded = 95% Wilson CI."),
-       color = NULL) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1))
+# Helper 1: Plot Raw Tank Rates
+plot_tank_raw_rates <- function(st_yr_panel, title_text, subtitle_text) {
+  agg <- st_yr_panel[, .(
+    rate = sum(n_closed) / sum(n_active),
+    n = sum(n_active)
+  ), by = .(panel_year, Group = fifelse(texas_treated == 1, "Texas", "Control"))]
+  
+  agg[, se := sqrt(rate * (1 - rate) / n)]
+  agg[, ci_lo := rate - 1.96 * se]
+  agg[, ci_hi := rate + 1.96 * se]
+  
+  p <- ggplot(agg, aes(x = panel_year, y = rate, color = Group)) +
+    geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi, fill = Group), alpha = 0.15, color = NA) +
+    geom_line(linewidth = 0.9) +
+    geom_point(size = 2) +
+    geom_vline(xintercept = TREATMENT_YEAR + 0.5, linetype = "dashed", color = "gray40") +
+    scale_color_manual(values = COL_PAIR) +
+    scale_fill_manual(values = COL_PAIR, guide = "none") +
+    labs(x = "Year", y = "Annual Tank Closure Rate",
+         title = title_text, subtitle = subtitle_text, color = NULL) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+    scale_x_continuous(breaks = seq(1985, 2018, by = 3))
+  return(p)
+}
 
-save_fig(fig4, "Figure4_PrePeriod_SpecA_MainText", width = 8, height = 5)
+# Helper 2: Plot Tank Mean Difference 
+plot_tank_mean_diff <- function(st_yr_panel, title_text, subtitle_text) {
+  agg <- st_yr_panel[, .(
+    rate = sum(n_closed) / sum(n_active),
+    n = sum(n_active)
+  ), by = .(panel_year, Group = fifelse(texas_treated == 1, "Texas", "Control"))]
+  
+  wide <- dcast(agg, panel_year ~ Group, value.var = c("rate", "n"))
+  wide[, diff := rate_Texas - rate_Control]
+  wide[, se := sqrt((rate_Texas * (1 - rate_Texas) / n_Texas) + 
+                    (rate_Control * (1 - rate_Control) / n_Control))]
+  wide[, ci_lo := diff - 1.96 * se]
+  wide[, ci_hi := diff + 1.96 * se]
+  
+  p <- ggplot(wide[!is.na(diff)], aes(x = panel_year, y = diff)) +
+    geom_hline(yintercept = 0, color = "black", linewidth = 0.8) +
+    geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi), fill = COL_TX, alpha = 0.2) +
+    geom_line(color = COL_TX, linewidth = 1) +
+    geom_point(color = COL_TX, size = 2.5) +
+    geom_vline(xintercept = TREATMENT_YEAR + 0.5, linetype = "dashed", color = "gray40") +
+    labs(x = "Year", y = "Raw Difference (Texas - Control)",
+         title = title_text, subtitle = subtitle_text) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+    scale_x_continuous(breaks = seq(1985, 2018, by = 3))
+  return(p)
+}
 
-# Figure 4B (APPENDIX): Pooled
-fig4_pooled <- ggplot(closure_rate_pooled,
-                      aes(x = panel_year, y = closure_rate, color = Group)) +
-  geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi, fill = Group),
-              alpha = 0.15, color = NA) +
-  geom_line(linewidth = 0.9) +
-  geom_point(size = 2) +
-  geom_vline(xintercept = TREATMENT_YEAR + 0.5, linetype = "dashed",
-             color = "gray40") +
-  annotate("rect",
-           xmin = TX_MANDATE_START - 0.5, xmax = TX_MANDATE_END + 0.5,
-           ymin = -Inf, ymax = Inf,
-           fill = "gold", alpha = 0.10) +
-  annotate("text",
-           x = (TX_MANDATE_START + TX_MANDATE_END) / 2,
-           y = min(closure_rate_pooled$closure_rate) * 1.05,
-           label = "TX phased mandate\nwindow (1989-1993)",
-           size = 2.8, color = "goldenrod4", fontface = "italic") +
-  annotate("text",
-           x = 1990.5,
-           y = max(closure_rate_pooled$closure_rate) * 0.95,
-           label = "Pooled Wald F-test: p < 0.001\nRejects due to mandate contamination\n(see Figure 4 / Spec A for clean test)",
-           hjust = 0, size = 3, color = "gray40", fontface = "italic") +
-  scale_color_manual(values = COL_PAIR) +
-  scale_fill_manual(values = COL_PAIR, guide = "none") +
-  labs(x = "Year", y = "Annual Closure Rate",
-       title = "Pre-Period Closure Rates — Pooled Sample (Appendix Only)",
-       subtitle = paste0(
-         "Includes pre-1988 facilities subject to TX phased mandate. ",
-         "Gold band = mandate years. NOT used for identification."),
-       color = NULL) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1))
+# Helper 3: TWFE Event Study (State & Year FEs, weighted by tank counts) 
+plot_tank_event_study <- function(st_yr_panel, title_text, subtitle_text) {
+  mod <- tryCatch(
+    feols(rate ~ i(panel_year, texas_treated, ref = TREATMENT_YEAR) | 
+          state + panel_year, 
+          weights = ~n_active,
+          data = st_yr_panel, 
+          cluster = ~state),
+    error = function(e) NULL
+  )
+  
+  if (is.null(mod)) return(ggplot() + annotate("text", x=1998, y=0, label="TWFE Failed"))
+  
+  dt_coef <- as.data.table(broom::tidy(mod, conf.int = TRUE))
+  dt_coef[, year := as.numeric(stringr::str_extract(term, "[0-9]{4}"))]
+  
+  ref_row <- data.table(term = "reference", estimate = 0, std.error = 0, 
+                        statistic = 0, p.value = NA, conf.low = 0, conf.high = 0, 
+                        year = TREATMENT_YEAR)
+  dt_coef <- rbind(dt_coef, ref_row, fill = TRUE)
+  setorder(dt_coef, year)
+  
+  p <- ggplot(dt_coef[!is.na(year)], aes(x = year, y = estimate)) +
+    geom_hline(yintercept = 0, color = "black", linewidth = 0.8) +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = COL_TX, alpha = 0.2) +
+    geom_line(color = COL_TX, linewidth = 1) +
+    geom_point(color = COL_TX, size = 2.5) +
+    geom_vline(xintercept = TREATMENT_YEAR + 0.5, linetype = "dashed", color = "gray40") +
+    labs(x = "Year", y = "TWFE Estimate (State & Year FEs)",
+         title = title_text, subtitle = subtitle_text) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+    scale_x_continuous(breaks = seq(1985, 2018, by = 3))
+  return(p)
+}
 
-save_fig(fig4_pooled, "Figure4B_PrePeriod_Pooled_Appendix", width = 8, height = 5)
+# ---------------------------------------------------------------------------
+# Generate Spec A Figures (All 3 Views - True Tank-Level)
+# ---------------------------------------------------------------------------
+tanks_specA <- tanks[year(tank_installed_date) > 1988]
+st_yr_specA <- build_tank_state_year_panel(tanks_specA)
+
+fig4A_tank_raw <- plot_tank_raw_rates(st_yr_specA, 
+  "Tank Closure Rates - Post-1988 Cohort (Spec A)", 
+  "True tank-level subset. Mechanically begins in 1989. Shaded = 95% CI.")
+save_fig(fig4A_tank_raw, "Figure4A_Tank_SpecA_RawRates", width = 8, height = 5)
+
+fig4B_tank_diff <- plot_tank_mean_diff(st_yr_specA, 
+  "Tank Closure Rate Difference - Post-1988 Cohort (Spec A)", 
+  "Raw unadjusted mean difference (Texas minus Control). Shaded = 95% CI.")
+save_fig(fig4B_tank_diff, "Figure4B_Tank_SpecA_MeanDiff", width = 8, height = 5)
+
+fig4C_tank_twfe <- plot_tank_event_study(st_yr_specA, 
+  "Tank Event Study (TWFE) - Post-1988 Cohort (Spec A)", 
+  "Weighted by tank counts. State & Year FEs. Reference year = 1998.")
+save_fig(fig4C_tank_twfe, "Figure4C_Tank_SpecA_EventStudy", width = 8, height = 5)
 
 
-# 8.2 Figure B-1 (Appendix): Full 4-panel pre-trends
-cat("\n--- 8.2: Figure B-1 (Appendix) — Full 4-Panel Pre-Trends ---\n")
+# ---------------------------------------------------------------------------
+# Generate Pooled Figures (All 3 Views - Appendix / Contaminated)
+# ---------------------------------------------------------------------------
+st_yr_pooled <- build_tank_state_year_panel(tanks)
+mandate_layer <- annotate("rect", xmin = TX_MANDATE_START - 0.5, xmax = TX_MANDATE_END + 0.5, 
+                          ymin = -Inf, ymax = Inf, fill = "gold", alpha = 0.10)
+
+fig_app_pooled_raw <- plot_tank_raw_rates(st_yr_pooled, 
+  "Tank Closure Rates - Pooled Sample (Appendix)", 
+  "Includes pre-1988 tanks. Gold band = mandate years. Shaded = 95% CI.") + 
+  mandate_layer
+save_fig(fig_app_pooled_raw, "Figure_Appx_Tank_Pooled_RawRates", width = 8, height = 5)
+
+fig_app_pooled_diff <- plot_tank_mean_diff(st_yr_pooled, 
+  "Tank Closure Rate Difference - Pooled Sample (Appendix)", 
+  "Raw mean difference. Gold band = mandate years. Shaded = 95% CI.") + 
+  mandate_layer
+save_fig(fig_app_pooled_diff, "Figure_Appx_Tank_Pooled_MeanDiff", width = 8, height = 5)
+
+fig_app_pooled_twfe <- plot_tank_event_study(st_yr_pooled, 
+  "Tank Event Study (TWFE) - Pooled Sample (Appendix)", 
+  "Contaminated identification. Fails parallel trends. Shaded = 95% CI.") + 
+  mandate_layer
+save_fig(fig_app_pooled_twfe, "Figure_Appx_Tank_Pooled_EventStudy", width = 8, height = 5)
+
+
+# ---------------------------------------------------------------------------
+# Generate Spec B Figures (All 3 Views - Appendix / Contaminated)
+# ---------------------------------------------------------------------------
+tanks_specB <- tanks[year(tank_installed_date) <= 1988]
+st_yr_specB <- build_tank_state_year_panel(tanks_specB)
+
+fig_app_specB_raw <- plot_tank_raw_rates(st_yr_specB, 
+  "Tank Closure Rates - Pre-1988 Cohort (Spec B)", 
+  "Exclusively mandate-exposed tanks. Gold band = mandate years. Shaded = 95% CI.") + 
+  mandate_layer
+save_fig(fig_app_specB_raw, "Figure_Appx_Tank_SpecB_RawRates", width = 8, height = 5)
+
+fig_app_specB_diff <- plot_tank_mean_diff(st_yr_specB, 
+  "Tank Closure Rate Difference - Pre-1988 Cohort (Spec B)", 
+  "Raw mean difference. Gold band = mandate years. Shaded = 95% CI.") + 
+  mandate_layer
+save_fig(fig_app_specB_diff, "Figure_Appx_Tank_SpecB_MeanDiff", width = 8, height = 5)
+
+fig_app_specB_twfe <- plot_tank_event_study(st_yr_specB, 
+  "Tank Event Study (TWFE) - Pre-1988 Cohort (Spec B)", 
+  "Exclusively mandate-exposed tanks. Rejects parallel trends. Shaded = 95% CI.") + 
+  mandate_layer
+save_fig(fig_app_specB_twfe, "Figure_Appx_Tank_SpecB_EventStudy", width = 8, height = 5)
+
+
+# 8.2 Figure B-1 (Appendix): Full 4-panel event trends (1985-2018)
+cat("\n--- 8.2: Figure B-1 (Appendix) - Full 4-Panel Trends ---\n")
 
 pre_trends_full <- annual_data[
-  panel_year >= 1990 & panel_year <= TREATMENT_YEAR, .(
+  panel_year >= 1985 & panel_year <= 2018, .(
     closure_rate   = mean(closure_event, na.rm = TRUE),
     exit_rate      = mean(exit_flag,     na.rm = TRUE),
     leak_incidence = mean(leak_year,     na.rm = TRUE),
@@ -2258,7 +2331,8 @@ pre_trends_full <- annual_data[
          treatment_group = fifelse(texas_treated == 1, "Texas", "Control"))
 ]
 
-closure_age_pre <- pre_period_closures[, .(
+closure_age_pre <- closed_tanks[
+  closure_year >= 1985 & closure_year <= 2018, .(
   mean_closure_age = mean(age_at_closure, na.rm = TRUE)
 ), by = .(panel_year   = closure_year,
           treatment_group = fifelse(texas_treated == 1, "Texas", "Control"))]
@@ -2272,6 +2346,7 @@ make_panel <- function(dt, yvar, ylab, title) {
     geom_vline(xintercept = TREATMENT_YEAR + 0.5, linetype = "dashed",
                color = "gray50") +
     scale_color_manual(values = COL_PAIR) +
+    scale_x_continuous(breaks = seq(1985, 2018, by = 4)) +
     labs(x = NULL, y = ylab, title = title, color = NULL) +
     theme(legend.position = "none")
 }
@@ -2287,17 +2362,17 @@ p_d <- make_panel(pre_trends_full, "exit_rate",
 
 fig_b1 <- gridExtra::grid.arrange(
   p_a, p_b, p_c, p_d, ncol = 2,
-  top = textGrob("Pre-Period Trends (1990-1998)",
+  top = textGrob("Trend Comparison (1985-2018)",
                  gp = gpar(fontsize = 14, fontface = "bold"))
 )
 save_fig(fig_b1, "FigureB1_PreTrends_Full_4Panel", width = 12, height = 8)
 
 
 #==============================================================================
-# SECTION 8.3: FIGURES 1, 2, 3 — CAPITAL STOCK CHARACTERIZATION (NEW)
+# SECTION 8.3: FIGURES 1, 2, 3 - CAPITAL STOCK CHARACTERIZATION (NEW)
 #==============================================================================
 
-cat("\n--- 8.3: Figures 1, 2, 3 — Capital Stock Characterization ---\n")
+cat("\n--- 8.3: Figures 1, 2, 3 - Capital Stock Characterization ---\n")
 
 # Verify tanks_1998 has required columns
 stopifnot("age_bin"      %in% names(tanks_1998))
@@ -2392,7 +2467,6 @@ fig3 <- ggplot(wall_vintage,
 
 save_fig(fig3, "Figure3_Wall_Type_By_Vintage", width = 8, height = 5)
 cat("  OK: Figure 3 saved\n")
-
 
 #==============================================================================
 # SECTION 9: RISK FACTOR CV VALIDATION (FULL REPLACEMENT)
@@ -2569,6 +2643,42 @@ if (RUN_FULL) {
       cat("  Calibration table:\n")
       print(calibration_table)
 
+      # -----------------------------------------------------------------------
+      # NEW: CV Goodness of Fit Plots
+      # -----------------------------------------------------------------------
+      # 1. ROC Curve
+      if (exists("roc_no_sfe")) {
+        roc_data <- data.table(
+          specificity = roc_no_sfe$specificities,
+          sensitivity = roc_no_sfe$sensitivities
+        )
+        fig_roc <- ggplot(roc_data, aes(x = 1 - specificity, y = sensitivity)) +
+          geom_line(color = COL_CTRL, linewidth = 1) +
+          geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
+          labs(title = "ROC Curve: Out-of-Bag Predicted Leak Risk",
+               subtitle = sprintf("5-Fold Cross-Validation | AUC = %.3f", auc_no_sfe),
+               x = "False Positive Rate (1 - Specificity)",
+               y = "True Positive Rate (Sensitivity)") +
+          coord_fixed()
+        save_fig(fig_roc, "Figure_CV_ROC_Curve", width = 6, height = 6)
+      }
+
+      # 2. Calibration Plot
+      fig_cal <- ggplot(calibration_table, aes(x = mean_predicted, y = mean_actual)) +
+        geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
+        geom_point(aes(size = n_fac_years), color = COL_TX, alpha = 0.8) +
+        geom_line(color = COL_TX, linewidth = 0.8) +
+        labs(title = "Model Calibration: Predicted vs Actual Leak Rates",
+             subtitle = "Decile bins of out-of-bag predicted first-leak probability",
+             x = "Mean Predicted Probability", 
+             y = "Mean Actual Incidence Rate", 
+             size = "N Fac-Years") +
+        scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+        scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+        theme(legend.position = "right")
+      save_fig(fig_cal, "Figure_CV_Calibration_Plot", width = 7, height = 5)
+      # -----------------------------------------------------------------------
+
       top_rate <- calibration_table[decile == max(decile), mean_actual]
       if (!is.na(bottom_rate) && bottom_rate > 0) {
         cat(sprintf("  Top decile leak rate: %.4f | Bottom decile: %.4f | Lift: %.1fx\n",
@@ -2597,7 +2707,7 @@ if (RUN_FULL) {
             col.names = c("Decile", "Mean Predicted Prob.",
                           "Mean Actual Rate", "N Fac.-Years", "Lift")) |>
           kable_styling(latex_options = c("HOLD_position"), font_size = 10,
-                        full_width = FALSE, threeparttable = TRUE) |>
+                        full_width = FALSE) |>
           footnote(general = paste(
             "5-fold cross-validated logistic regression; outcome is",
             "\\\\texttt{event\\\\_first\\\\_leak}. Covariates: single-walled",
@@ -2615,7 +2725,8 @@ if (RUN_FULL) {
     cat("  WARNING: Insufficient complete predictions for calibration table\n")
   }
 
-  # 9.6 Partial Dependence Summaries
+
+# 9.6 Partial Dependence Summaries
   cat("\n--- 9.6: Partial Dependence Summaries ---\n")
   cv_pd <- cv_data[!is.na(pred_no_sfe)]
 
@@ -2623,24 +2734,25 @@ if (RUN_FULL) {
   pd_wall <- cv_pd[, .(
     mean_pred   = round(mean(pred_no_sfe,      na.rm = TRUE), 4),
     mean_actual = round(mean(event_first_leak, na.rm = TRUE), 4),
-    n_fac_years = .N
-  ), by = .(covariate = "Wall Type",
-            level = fifelse(has_single_walled == 1, "Single-Walled", "Double-Walled"))]
+    n_fac_years = .N,
+    covariate   = "Wall Type"
+  ), by = .(level = fifelse(has_single_walled == 1, "Single-Walled", "Double-Walled"))]
 
   # Pre-1980 vintage
   pd_vintage <- cv_pd[!is.na(rf_pre_1980), .(
     mean_pred   = round(mean(pred_no_sfe,      na.rm = TRUE), 4),
     mean_actual = round(mean(event_first_leak, na.rm = TRUE), 4),
-    n_fac_years = .N
-  ), by = .(covariate = "Pre-1980 Vintage",
-            level = fifelse(rf_pre_1980 == 1, "Pre-1980 = Yes", "Pre-1980 = No"))]
+    n_fac_years = .N,
+    covariate   = "Pre-1980 Vintage"
+  ), by = .(level = fifelse(rf_pre_1980 == 1, "Pre-1980 = Yes", "Pre-1980 = No"))]
 
   # Age bin — all 8 canonical bins in AGE_BIN_LABELS order
   pd_age <- cv_pd[, .(
     mean_pred   = round(mean(pred_no_sfe,      na.rm = TRUE), 4),
     mean_actual = round(mean(event_first_leak, na.rm = TRUE), 4),
-    n_fac_years = .N
-  ), by = .(covariate = "Tank Age (5-yr bins)", level = as.character(age_bin))]
+    n_fac_years = .N,
+    covariate   = "Tank Age (5-yr bins)"
+  ), by = .(level = as.character(age_bin))]
 
   # Enforce canonical ordering
   pd_age[, level := factor(level, levels = AGE_BIN_LABELS)]
@@ -2665,7 +2777,7 @@ if (RUN_FULL) {
         col.names = c("Risk Factor", "Level", "Mean Predicted",
                       "Mean Actual", "N Fac.-Years")) |>
       kable_styling(latex_options = c("HOLD_position"), font_size = 10,
-                    full_width = FALSE, threeparttable = TRUE) |>
+                    full_width = FALSE) |>
       add_header_above(c(" " = 2, "Leak Probability" = 2, " " = 1)) |>
       column_spec(1, width = "3.5cm") |>
       column_spec(2, width = "3.5cm") |>
@@ -2804,7 +2916,7 @@ write_tex(
       col.names = c("Cohort (Install Years)", "TX Mandate Deadline",
                     "Federal Deadline", "Years Before Federal")) |>
     kable_styling(latex_options = c("hold_position"), font_size = 10,
-                  full_width = FALSE, threeparttable = TRUE) |>
+                  full_width = FALSE) |>
     column_spec(1:3, width = "3cm") |>
     column_spec(4, width = "2.5cm") |>
     footnote(general = paste(
@@ -2935,7 +3047,7 @@ if (nrow(specA_tanks) > 0) {
         label = "tab:specA-balance",
         col.names = c("Variable", "Texas", "Control", "Difference", "p-value")) |>
       kable_styling(latex_options = c("hold_position"), font_size = 10,
-                    full_width = FALSE, threeparttable = TRUE) |>
+                    full_width = FALSE) |>
       column_spec(1, width = "5cm") |>
       column_spec(2:5, width = "2cm") |>
       footnote(general = paste(
@@ -3276,7 +3388,7 @@ if (!is.null(data_quality_report)) {
                       "\\% Miss. Closure", "\\% Miss. Wall Type",
                       "Pass Install", "Pass Closure", "Pass Wall")) |>
       kable_styling(latex_options = c("scale_down", "hold_position"),
-                    font_size = 9, full_width = FALSE, threeparttable = TRUE) |>
+                    font_size = 9, full_width = FALSE) |>
       column_spec(1:2, width = "2cm") |>
       row_spec(excl_rows, background = "gray90") |>
       row_spec(tx_row, bold = TRUE) |>
@@ -3316,7 +3428,7 @@ write_tex(
       col.names = c("Filter Description", "Filter Applied",
                     "Facilities", "Facility-Years")) |>
     kable_styling(latex_options = c("hold_position"), font_size = 10,
-                  full_width = FALSE, threeparttable = TRUE) |>
+                  full_width = FALSE) |>
     column_spec(1, width = "4cm") |>
     column_spec(2, width = "5cm") |>
     column_spec(3:4, width = "2cm") |>
@@ -3362,7 +3474,7 @@ if (!is.null(balance_glm)) {
         label = "tab:missing-balance",
         col.names = c("Term", "Estimate", "Std. Error", "Statistic", "p-value")) |>
       kable_styling(latex_options = c("hold_position"), font_size = 10,
-                    full_width = FALSE, threeparttable = TRUE) |>
+                    full_width = FALSE) |>
       {if (length(tx_row_b3) > 0)
          row_spec(., tx_row_b3, bold = TRUE) else .}() |>
       footnote(general = paste(

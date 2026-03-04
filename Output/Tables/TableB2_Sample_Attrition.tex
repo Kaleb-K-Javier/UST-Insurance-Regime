@@ -1,0 +1,23 @@
+\begin{table}[!h]
+\centering
+\caption{\label{tab:tab:attrition}Sample construction: sequential filter attrition. Each row reports facility count and facility-year count remaining after the cumulative filter, separately for Texas and the control group.}
+\centering
+\fontsize{10}{12}\selectfont
+\begin{threeparttable}
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{4cm}>{\raggedright\arraybackslash}p{5cm}>{\raggedleft\arraybackslash}p{2cm}>{\raggedleft\arraybackslash}p{2cm}}
+\toprule
+Filter Description & Filter Applied & Facilities & Facility-Years\\
+\midrule
+Raw harmonized panel & All states, all years & 478503 & 12702871\\
+Study window & panel_year in [1985, 2020] & 469681 & 7985050\\
+Analysis states & TX + 19 control states (NJ excluded) & 306731 & 4978288\\
+Incumbent sample & first_observed < 1998 & 286882 & 4705725\\
+Complete tank records & Facility-level missing-date exclusion (§4.3) & 233234 & 3967583\\
+Final analysis sample &  & 233234 & 3967583\\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item Filter 1: 1985--2020 time window. Filter 2: Texas and 19 control states (NJ excluded as post-2003 treated unit). Filter 3: Incumbent facilities first observed before December 22, 1998. Filter 4: Complete tank-level installation and closure dates.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
