@@ -1,11 +1,11 @@
 level,mean_pred,mean_actual,n_fac_years,covariate
-Single-Walled,0.0209,0.0209,973672,Wall Type
-Double-Walled,0.0127,0.0127,276819,Wall Type
-Pre-1980 = No,0.0169,0.0169,727103,Pre-1980 Vintage
-Pre-1980 = Yes,0.0221,0.0221,523388,Pre-1980 Vintage
-0-4,0.0204,0.0204,184572,Tank Age (5-yr bins)
-10-14,0.0179,0.0179,291624,Tank Age (5-yr bins)
-5-9,0.014,0.014,282758,Tank Age (5-yr bins)
-20-24,0.0229,0.0229,211438,Tank Age (5-yr bins)
-15-19,0.0216,0.0216,226290,Tank Age (5-yr bins)
-25-29,0.0216,0.0216,53809,Tank Age (5-yr bins)
+Single-Walled,0.0207,0.0207,930406,Wall Type
+Double-Walled,0.0123,0.0123,256858,Wall Type
+Pre-1980 = No,0.0166,0.0166,675832,Pre-1980 Vintage
+Pre-1980 = Yes,0.0219,0.0219,511432,Pre-1980 Vintage
+0-4,0.0206,0.0206,146396,Tank Age (5-yr bins)
+10-14,0.0177,0.0177,284484,Tank Age (5-yr bins)
+5-9,0.0138,0.0138,276020,Tank Age (5-yr bins)
+20-24,0.0227,0.0227,206777,Tank Age (5-yr bins)
+15-19,0.0214,0.0214,220984,Tank Age (5-yr bins)
+25-29,0.0214,0.0214,52603,Tank Age (5-yr bins)

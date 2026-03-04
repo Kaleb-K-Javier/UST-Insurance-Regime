@@ -1866,16 +1866,39 @@ setorder(tbl3_risk_dist, risk_category, Group)
 cat("  Panel B — Risk score distribution:\n")
 print(tbl3_risk_dist)
 
+# ---- Replacement-selection diagnostic for 0-4 bin ----
+annual_data[, had_recent_closure := frollapply(
+  shift(n_closures, 1L, fill = 0L), n = 2, FUN = function(x) as.integer(any(x > 0))
+), by = panel_id]
+
+diag_04 <- annual_data[
+  panel_year >= 1990 & panel_year <= 1998 &
+  has_previous_leak == 0 &
+  !is.na(has_single_walled) &
+  age_bin == "0-4",
+  .(
+    leak_rate   = round(mean(event_first_leak, na.rm = TRUE) * 1000, 2),
+    n           = .N
+  ),
+  by = .(had_recent_closure)
+]
+cat("  0-4 bin diagnostic (leak rate per 1,000 fac-yrs):\n")
+print(diag_04)
+
+
 # Step 4: Panel C — Pre-period first-leak incidence by age_bin x wall type
 # Uses event_first_leak (incidence) from annual_data
 pre_cv <- annual_data[
   panel_year >= 1990 & panel_year <= 1998 &
   has_previous_leak == 0 &
-  !is.na(has_single_walled)
+  !is.na(has_single_walled) &
+  had_recent_closure == 0          # drop replacement-year contamination
 ]
 
-pre_cv[, wall_label := fifelse(has_single_walled == 1,
-                               "Single-Walled", "Double-Walled")]
+pre_cv[, wall_label := fifelse(has_single_walled == 1, "Single-Walled", "Double-Walled")]
+
+cat(sprintf("  pre_cv after replacement filter: %s fac-years\n",
+            format(nrow(pre_cv), big.mark = ",")))
 
 tbl3_leak_rates <- pre_cv[, .(
   leak_rate_per_1000 = round(sum(event_first_leak, na.rm = TRUE) / .N * 1000, 2),
@@ -2496,8 +2519,10 @@ cv_data <- annual_data[
   panel_year >= 1990 & panel_year <= 1998 &
   has_previous_leak == 0 &
   !is.na(has_single_walled) &
-  !is.na(age_bin)
+  !is.na(age_bin) &
+  had_recent_closure == 0          # match pre_cv filter
 ]
+
 
 # Derive pre-1980 flag; handle missing install_year
 if ("install_year" %in% names(cv_data)) {
@@ -2649,37 +2674,101 @@ if (RUN_FULL) {
       # -----------------------------------------------------------------------
       # NEW: CV Goodness of Fit Plots
       # -----------------------------------------------------------------------
-      # 1. ROC Curve
-      if (exists("roc_no_sfe")) {
-        roc_data <- data.table(
-          specificity = roc_no_sfe$specificities,
-          sensitivity = roc_no_sfe$sensitivities
-        )
-        fig_roc <- ggplot(roc_data, aes(x = 1 - specificity, y = sensitivity)) +
-          geom_line(color = COL_CTRL, linewidth = 1) +
-          geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
-          labs(title = "ROC Curve: Out-of-Bag Predicted Leak Risk",
-               subtitle = sprintf("5-Fold Cross-Validation | AUC = %.3f", auc_no_sfe),
-               x = "False Positive Rate (1 - Specificity)",
-               y = "True Positive Rate (Sensitivity)") +
-          coord_fixed()
-        save_fig(fig_roc, "Figure_CV_ROC_Curve", width = 6, height = 6)
-      }
+      # ---- Combined ROC plot ----
+if (exists("roc_no_sfe") && exists("roc_with_sfe")) {
+  roc_combined <- rbindlist(list(
+    data.table(
+      fpr   = 1 - roc_no_sfe$specificities,
+      tpr   = roc_no_sfe$sensitivities,
+      Model = sprintf("No State FE  (AUC = %.3f)", auc_no_sfe)
+    ),
+    data.table(
+      fpr   = 1 - roc_with_sfe$specificities,
+      tpr   = roc_with_sfe$sensitivities,
+      Model = sprintf("With State FE  (AUC = %.3f)", auc_with_sfe)
+    )
+  ))
 
-      # 2. Calibration Plot
-      fig_cal <- ggplot(calibration_table, aes(x = mean_predicted, y = mean_actual)) +
-        geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
-        geom_point(aes(size = n_fac_years), color = COL_TX, alpha = 0.8) +
-        geom_line(color = COL_TX, linewidth = 0.8) +
-        labs(title = "Model Calibration: Predicted vs Actual Leak Rates",
-             subtitle = "Decile bins of out-of-bag predicted first-leak probability",
-             x = "Mean Predicted Probability", 
-             y = "Mean Actual Incidence Rate", 
-             size = "N Fac-Years") +
-        scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-        scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-        theme(legend.position = "right")
-      save_fig(fig_cal, "Figure_CV_Calibration_Plot", width = 7, height = 5)
+  model_names <- unique(roc_combined$Model)
+  fig_roc_combined <- ggplot(roc_combined,
+                              aes(x = fpr, y = tpr, color = Model)) +
+    geom_abline(slope = 1, intercept = 0,
+                linetype = "dashed", color = "gray60", linewidth = 0.6) +
+    geom_line(linewidth = 1) +
+    scale_color_manual(values = setNames(c(COL_TX, COL_CTRL), model_names)) +
+    coord_fixed() +
+    labs(title = "ROC Curves: Out-of-Bag Predicted Leak Risk",
+         subtitle = "5-Fold Cross-Validation. Dashed = random classifier.",
+         x = "False Positive Rate (1 - Specificity)",
+         y = "True Positive Rate (Sensitivity)",
+         color = NULL) +
+    theme(legend.position = c(0.65, 0.15),
+          legend.background = element_rect(fill = "white", color = "gray85"))
+
+  save_fig(fig_roc_combined, "Figure_CV_ROC_Combined", width = 6, height = 6)
+
+} else if (exists("roc_no_sfe")) {
+  roc_data <- data.table(
+    specificity = roc_no_sfe$specificities,
+    sensitivity = roc_no_sfe$sensitivities
+  )
+  fig_roc <- ggplot(roc_data, aes(x = 1 - specificity, y = sensitivity)) +
+    geom_line(color = COL_CTRL, linewidth = 1) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
+    labs(title = "ROC Curve: Out-of-Bag Predicted Leak Risk",
+         subtitle = sprintf("5-Fold CV | AUC = %.3f", auc_no_sfe),
+         x = "False Positive Rate", y = "True Positive Rate") +
+    coord_fixed()
+  save_fig(fig_roc, "Figure_CV_ROC_Curve", width = 6, height = 6)
+}
+# ---- Per-model calibration plot helper ----
+make_calibration_plot <- function(pred_col, model_label, file_suffix,
+                                   auc_val = NA_real_) {
+  cv_cal_m <- cv_data[!is.na(get(pred_col)) & !is.na(event_first_leak)]
+  if (nrow(cv_cal_m) <= 100) {
+    cat(sprintf("  WARNING: Too few obs for calibration (%s)\n", model_label))
+    return(invisible(NULL))
+  }
+
+  brks <- unique(quantile(cv_cal_m[[pred_col]], probs = seq(0, 1, .1), na.rm = TRUE))
+  if (length(brks) < 3) return(invisible(NULL))
+
+  cv_cal_m[, dec := as.integer(cut(get(pred_col), breaks = brks,
+                                    include.lowest = TRUE, labels = FALSE))]
+  cal_m <- cv_cal_m[!is.na(dec), .(
+    mean_pred   = mean(get(pred_col), na.rm = TRUE),
+    mean_actual = mean(event_first_leak, na.rm = TRUE),
+    n           = .N
+  ), by = dec][order(dec)]
+
+  bot <- cal_m[dec == min(dec), mean_actual]
+  cal_m[, lift := round(mean_actual / bot, 2)]
+
+  fig <- ggplot(cal_m, aes(x = mean_pred, y = mean_actual)) +
+    geom_abline(slope = 1, intercept = 0,
+                linetype = "dashed", color = "gray60") +
+    geom_line(color = COL_TX, linewidth = 0.8) +
+    geom_point(aes(size = n), color = COL_TX, alpha = 0.85) +
+    geom_text(aes(label = paste0(dec)),
+              vjust = -0.8, size = 2.8, color = "gray30") +
+    scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+    labs(title = sprintf("Calibration: %s", model_label),
+         subtitle = ifelse(!is.na(auc_val),
+                           sprintf("Decile bins | AUC = %.3f", auc_val),
+                           "Decile bins of OOB predicted probability"),
+         x = "Mean Predicted Probability",
+         y = "Mean Actual Incidence Rate",
+         size = "N Fac-Years") +
+    theme(legend.position = "right")
+
+  save_fig(fig, paste0("Figure_CV_Calibration_", file_suffix), width = 7, height = 5)
+  save_table(cal_m, paste0("Table_CV_Calibration_", file_suffix))
+  return(cal_m)
+}
+
+cal_nosfe <- make_calibration_plot("pred_no_sfe",   "No State FE",   "NoSFE",  auc_no_sfe)
+cal_sfe   <- make_calibration_plot("pred_with_sfe", "With State FE", "SFE",    auc_with_sfe)
       # -----------------------------------------------------------------------
 
       top_rate <- calibration_table[decile == max(decile), mean_actual]
@@ -2835,7 +2924,7 @@ fig5b_risk <- ggplot(
   labs(x = "Tank Age Bin (5-year intervals)",
        y = "First-Leak Rate (per 1,000 Facility-Years)",
        title = "Pre-Period Leak Incidence by Tank Age and Wall Type (Pooled)",
-       subtitle = "1990-1998. Both lines expected to rise with age; SW steeper.",
+       subtitle = "1990-1998. Facility-years with tank replacements in prior 2 years excluded.",
        color = "Wall Type", linetype = "Wall Type") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.position = "bottom")
@@ -3065,50 +3154,59 @@ if (file.exists(CONTRACT_PATH)) {
   save_fig(fig_coverage, "FigureA_TX_FR_Coverage_Composition", width = 8, height = 6)
   save_table(regime_shares, "FigureA_data_regime_shares")
 
+# ---- §11.2 REPLACEMENT: Top-5 by per-year rank frequency, HHI per-year ----
 
-# 11.2 Market Consolidation: Top 5 Insurers + HHI
 cat("--- 11.2: TX Private Insurance Market - Top 5 & HHI Trend ---\n")
-ins_panel <- panel_data_inst[plot_category == "Private Insurance" & 
-                             !is.na(ISSUER_NAME) & ISSUER_NAME != "NO COVERAGE"]
-
-# Force the literal string "OTHER" into the aggregate bucket
+ins_panel <- panel_data_inst[plot_category == "Private Insurance" &
+                              !is.na(ISSUER_NAME) & ISSUER_NAME != "NO COVERAGE"]
 ins_panel[toupper(ISSUER_NAME) == "OTHER", ISSUER_NAME := "Other Private Insurers"]
 
 ins_panel[, weight := 1.0 / .N, by = .(FACILITY_ID, YEAR, MONTH)]
 insurer_exposure <- ins_panel[, .(fac_months = sum(weight)), by = .(YEAR, ISSUER_NAME)]
 insurer_exposure[, annual_total := sum(fac_months), by = YEAR]
 insurer_exposure[, market_share := fac_months / annual_total]
+
+# HHI computed strictly per-year from per-year market shares
 hhi_trend <- insurer_exposure[, .(HHI = sum((market_share * 100)^2)), by = YEAR]
 
+# Per-year top-5 ranking
 setorder(insurer_exposure, YEAR, -fac_months)
 insurer_exposure[, annual_rank := frank(-fac_months, ties.method = "first"), by = YEAR]
-insurer_exposure[, Plot_Issuer := fifelse(annual_rank <= 5, ISSUER_NAME, "Other Private Insurers")]
 
-plot_data_inst <- insurer_exposure[, .(market_share = sum(market_share)), 
-                                   by = .(YEAR, Plot_Issuer)]
+# *** FIX: Stable top-5 = insurers appearing in per-year top-5 most often ***
+top5_freq <- insurer_exposure[annual_rank <= 5,
+  .(n_years_top5 = uniqueN(YEAR)), by = ISSUER_NAME]
+setorder(top5_freq, -n_years_top5)
+top5_names <- top5_freq[1:min(5, .N), ISSUER_NAME]
+cat(sprintf("  Top 5 insurers (by per-year top-5 frequency): %s\n",
+            paste(top5_names, collapse = "; ")))
 
-overall_sizes <- plot_data_inst[, .(total_share = sum(market_share)), by = Plot_Issuer]
-setorder(overall_sizes, total_share)
-factor_levels_inst <- c("Other Private Insurers", 
-                        setdiff(overall_sizes$Plot_Issuer, "Other Private Insurers"))
-plot_data_inst[, Plot_Issuer := factor(Plot_Issuer, levels = factor_levels_inst)]
+insurer_exposure[, Plot_Issuer := fifelse(
+  ISSUER_NAME %in% top5_names, ISSUER_NAME, "Other Private Insurers"
+)]
 
-HHI_SCALE_FACTOR <- 5000
+plot_data_inst <- insurer_exposure[, .(
+  market_share = sum(market_share)
+), by = .(YEAR, Plot_Issuer)]
 plot_data_inst <- merge(plot_data_inst, hhi_trend, by = "YEAR", all.x = TRUE)
 
-# Apply a distinct color palette instead of a monochromatic scale
-distinct_top5 <- c("#264653", "#2a9d8f", "#e9c46a", "#f4a261", "#e76f51")
-custom_colors <- setNames(
-  c("gray75", distinct_top5[1:(length(factor_levels_inst) - 1)]), 
-  factor_levels_inst
-)
+# Stack order: Other at bottom, named insurers ordered by frequency
+top5_order <- top5_freq[1:min(5, .N)][order(n_years_top5), ISSUER_NAME]
+factor_levels_inst <- c("Other Private Insurers", top5_order)
+plot_data_inst[, Plot_Issuer := factor(Plot_Issuer, levels = factor_levels_inst)]
+
+# Exactly 6 colors (Other + 5 named)
+palette6 <- c("gray80", "#264653", "#2a9d8f", "#e9c46a", "#f4a261", "#e76f51")
+custom_colors <- setNames(palette6[1:length(factor_levels_inst)], factor_levels_inst)
+
+HHI_SCALE_FACTOR <- 5000
 
 fig_top5 <- ggplot(plot_data_inst, aes(x = as.factor(YEAR))) +
   geom_col(aes(y = market_share, fill = Plot_Issuer),
            width = 0.85, color = "white", linewidth = 0.2) +
   geom_line(aes(y = HHI / HHI_SCALE_FACTOR, group = 1),
             color = "black", linewidth = 1.2, linetype = "dashed") +
-  geom_point(aes(y = HHI / HHI_SCALE_FACTOR, group = 1),
+  geom_point(aes(y = HHI / HHI_SCALE_FACTOR),
              color = "black", size = 2.5) +
   scale_y_continuous(
     labels   = scales::percent_format(accuracy = 1),
@@ -3119,7 +3217,7 @@ fig_top5 <- ggplot(plot_data_inst, aes(x = as.factor(YEAR))) +
   scale_fill_manual(values = custom_colors) +
   labs(x = "Year", y = "Market Share (by Facility-Months)",
        title = "Private Insurance Market Consolidation",
-       subtitle = "Top 5 Insurers (Bars) and Market Concentration HHI (Dashed Line)",
+       subtitle = "Top 5 Insurers by Per-Year Rank Frequency (Bars) + Per-Year HHI (Dashed)",
        fill = "Insurer") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.position = "right") +
@@ -3128,73 +3226,103 @@ fig_top5 <- ggplot(plot_data_inst, aes(x = as.factor(YEAR))) +
 save_fig(fig_top5, "Figure_TX_FR_Top5_Dominance_HHI", width = 12, height = 6)
 save_table(plot_data_inst, "Figure_data_Top5_HHI")
 
+# 11.3 Contract Switching Event Study (TWFE)
+cat("--- 11.3: Contract Switching Event Study (TWFE) ---\n")
 
-# 11.3 Insurer Churn with Event Tags & Event Study
-cat("--- 11.3: Insurer Churn & Event Study ---\n")
-fac_yr_issuers <- unique(ins_panel[, .(FACILITY_ID, YEAR, ISSUER_NAME)])
-fac_yr_issuers[, lookup_key := paste(FACILITY_ID, YEAR, ISSUER_NAME, sep = "__")]
-existing_keys <- fac_yr_issuers$lookup_key
-t_lagged <- copy(fac_yr_issuers)
-t_lagged[, next_key  := paste(FACILITY_ID, YEAR + 1L, ISSUER_NAME, sep = "__")]
-t_lagged[, is_dropped := !(next_key %in% existing_keys)]
-fac_churn <- t_lagged[, .(abandoned_insurer = any(is_dropped)),
-                         by = .(FACILITY_ID, YEAR = YEAR + 1L)]
-churn_summary <- fac_churn[YEAR >= 2008 & YEAR <= 2020,
-                             .(total_churn = mean(abandoned_insurer)), by = YEAR]
-setorder(churn_summary, YEAR)
+# Step 1: facility-year panel, primary insurer = most months
+fac_yr_primary <- ins_panel[, .(months = .N), by = .(FACILITY_ID, YEAR, ISSUER_NAME)]
+setorder(fac_yr_primary, FACILITY_ID, YEAR, -months)
+fac_yr_primary <- fac_yr_primary[, .SD[1], by = .(FACILITY_ID, YEAR)]
 
-fig_churn <- ggplot(churn_summary, aes(x = YEAR, y = total_churn)) +
-  geom_line(color = "gray80", linewidth = 1, linetype = "dashed") +
-  geom_point(aes(size = total_churn), color = "gray40", alpha = 0.5) +
-  geom_point(data = churn_summary[YEAR == 2012], aes(y = total_churn),
-             color = COL_TX, size = 5) +
-  geom_point(data = churn_summary[YEAR == 2018], aes(y = total_churn),
-             color = COL_CTRL, size = 5) +
-  annotate("text", x = 2012, y = churn_summary[YEAR == 2012, total_churn] + 0.02,
-           label = "Zurich Exit\n(2012)", color = COL_TX,
-           fontface = "bold", size = 3.5) +
-  annotate("text", x = 2018, y = churn_summary[YEAR == 2018, total_churn] + 0.02,
-           label = "TOMIC Acquisition\n(2018)", color = COL_CTRL,
-           fontface = "bold", size = 3.5) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  labs(x = "Year", y = "Facility Abandonment Rate",
-       title = "Institutional Drivers of Market Churn",
-       subtitle = "Percentage of facilities dropping an incumbent provider.") +
-  theme(legend.position = "none")
+# Step 2: lag to detect switch
+setorder(fac_yr_primary, FACILITY_ID, YEAR)
+fac_yr_primary[, prev_issuer := shift(ISSUER_NAME, 1L), by = FACILITY_ID]
+fac_yr_primary[, prev_year   := shift(YEAR,         1L), by = FACILITY_ID]
+fac_yr_primary[, switched    := as.integer(
+  !is.na(prev_issuer) &
+  prev_year == YEAR - 1L &
+  ISSUER_NAME != prev_issuer
+)]
 
-save_fig(fig_churn, "Figure_TX_FR_Market_Churn_Annotated", width = 8, height = 5)
-save_table(churn_summary, "Figure_data_Market_Churn")
+cat(sprintf("  Overall annual switch rate: %.1f%%\n",
+            100 * mean(fac_yr_primary$switched, na.rm = TRUE)))
 
-# NEW: Relative Time Event Study Plot
-# Zurich relative time (-4 to +4)
-zurich_ev <- churn_summary[YEAR >= 2008 & YEAR <= 2016]
-zurich_ev[, rel_year := YEAR - 2012]
-zurich_ev[, Event := "Zurich Exit (2012)"]
+# ---- TWFE event study helper ----
+run_switching_es <- function(panel_dt, event_year, window = 4L,
+                              ref_offset = -1L, label = "") {
+  es_dt <- panel_dt[YEAR >= event_year - window & YEAR <= event_year + window]
+  es_dt[, rel_year := YEAR - event_year]
 
-# TOMIC relative time (-4 to +2, since data ends in 2020)
-tomic_ev <- churn_summary[YEAR >= 2014 & YEAR <= 2020]
-tomic_ev[, rel_year := YEAR - 2018]
-tomic_ev[, Event := "TOMIC Acquisition (2018)"]
+  if (uniqueN(es_dt[rel_year < 0, YEAR]) < 2 ||
+      uniqueN(es_dt[rel_year > 0, YEAR]) < 1) {
+    cat(sprintf("  WARNING: Insufficient window for %s\n", label))
+    return(NULL)
+  }
 
-ev_churn <- rbind(zurich_ev, tomic_ev)
+  m <- tryCatch(
+    feols(switched ~ i(rel_year, ref = ref_offset) | FACILITY_ID + YEAR,
+          data    = es_dt,
+          cluster = ~FACILITY_ID),
+    error = function(e) { cat("  TWFE failed:", e$message, "\n"); NULL }
+  )
+  if (is.null(m)) return(NULL)
 
-fig_churn_ev <- ggplot(ev_churn, aes(x = rel_year, y = total_churn, color = Event)) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 3) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
-  scale_color_manual(values = c("Zurich Exit (2012)" = COL_TX, 
-                                "TOMIC Acquisition (2018)" = COL_CTRL)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  scale_x_continuous(breaks = -4:4) +
-  labs(x = "Years Relative to Event (t=0)", 
-       y = "Facility Abandonment Rate",
-       title = "Insurance Churn Event Study: Institutional Exits & Acquisitions",
-       subtitle = "Spikes in facility-level insurer abandonment mapped to relative event time.",
-       color = NULL) +
-  theme(legend.position = "bottom")
+  dt <- as.data.table(broom::tidy(m, conf.int = TRUE))
+  dt[, rel_year := as.integer(stringr::str_extract(term, "-?[0-9]+"))]
+  dt <- rbind(dt,
+    data.table(term = "ref", estimate = 0, std.error = 0, statistic = NA,
+               p.value = NA, conf.low = 0, conf.high = 0,
+               rel_year = ref_offset),
+    fill = TRUE)
+  dt[, Event := label]
+  dt[, event_year := event_year]
+  return(dt[!is.na(rel_year)])
+}
 
-save_fig(fig_churn_ev, "Figure_TX_FR_Market_Churn_EventStudy", width = 8, height = 5)
+es_zurich <- run_switching_es(fac_yr_primary, event_year = 2012,
+                               window = 4L, ref_offset = -1L,
+                               label = "Zurich Exit (2012)")
 
+es_tomic  <- run_switching_es(fac_yr_primary, event_year = 2018,
+                               window = 4L, ref_offset = -1L,
+                               label = "TOMIC Acquisition (2018)")
+
+es_combined <- rbindlist(list(es_zurich, es_tomic), fill = TRUE)
+
+if (nrow(es_combined) > 0) {
+  fig_churn_ev <- ggplot(
+    es_combined[!is.na(rel_year)],
+    aes(x = rel_year, y = estimate, color = Event, fill = Event)
+  ) +
+    geom_hline(yintercept = 0, color = "gray50", linewidth = 0.6) +
+    geom_vline(xintercept = -0.5, linetype = "dashed",
+               color = "gray40", linewidth = 0.5) +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
+                alpha = 0.15, color = NA) +
+    geom_line(linewidth = 1) +
+    geom_point(size = 3) +
+    facet_wrap(~ Event, scales = "free_y") +
+    scale_color_manual(values = c("Zurich Exit (2012)"      = COL_TX,
+                                   "TOMIC Acquisition (2018)" = COL_CTRL)) +
+    scale_fill_manual(values  = c("Zurich Exit (2012)"      = COL_TX,
+                                   "TOMIC Acquisition (2018)" = COL_CTRL)) +
+    scale_x_continuous(breaks = -4:4,
+                       labels = function(x) ifelse(x == 0, "Event", x)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+    labs(x = "Years Relative to Event",
+         y = "Effect on Annual Switch Probability\n(vs. Year t-1)",
+         title = "Insurance Churn Event Study (TWFE)",
+         subtitle = "Facility + Year FEs. 95% CI clustered by facility. Reference = t-1.",
+         color = NULL, fill = NULL) +
+    theme(legend.position = "none",
+          strip.text = element_text(face = "bold"))
+
+  save_fig(fig_churn_ev, "Figure_TX_FR_Market_Churn_EventStudy",
+           width = 10, height = 5)
+  save_table(es_combined[, .(Event, rel_year, estimate, std.error,
+                              conf.low, conf.high)],
+             "Figure_data_Churn_EventStudy")
+}
 
 
   # 11.4 Statutory Coverage Limits
