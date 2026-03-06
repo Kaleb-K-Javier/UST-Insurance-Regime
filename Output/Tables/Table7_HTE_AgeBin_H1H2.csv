@@ -1,0 +1,4 @@
+Model,Estimate,Std_Error,t_stat,p_value_conv,p_value_webb,CI_low_webb,CI_high_webb,N_obs
+Spec A (Primary H1/H2),-0.0275,0.0029,-9.343,0,,,,984512
+Pooled + Vintage FE,0.0797,0.0087,9.174,0,,,,3840846
+Falsification (Pre-Period),0.0082,0.0079,1.043,0.3099,,,,343893

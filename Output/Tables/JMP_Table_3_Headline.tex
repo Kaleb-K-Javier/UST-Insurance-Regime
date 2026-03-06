@@ -1,0 +1,30 @@
+\begin{table}[htbp]
+\centering
+\caption{Policy Effects on Facility Decisions -- Pooled + Vintage-Cohort $\times$ Year FE}
+\label{tbl:reg-closure}
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{\textbf{Closure}} & \textbf{Exit$|$Cls} & \textbf{Replace$|$Cls} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-4} \cmidrule(lr){5-5}
+ & (1) & (2) & (3) & (4) \\
+\midrule
+Texas $\times$ Post & -0.0052 & -0.0060 & -0.0581$^{*}$ & 0.0581$^{*}$ \\
+& (0.0057) & (0.0053) & (0.0322) & (0.0322) \\
+\midrule
+Mandate Control & \texttt{active} & \texttt{3yr} & \texttt{active} & \texttt{active} \\
+\midrule
+\textbf{Fixed Effects} & & & & \\
+Facility & Yes & Yes & Yes & Yes \\
+Vintage-Cohort $\times$ Year & Yes & Yes & Yes & Yes \\
+\midrule
+Observations & 3,862,756 & 3,818,925 & 57,288 & 57,288 \\
+\bottomrule
+\multicolumn{5}{p{0.95\textwidth}}{\footnotesize \textit{Notes:}
+Difference-in-differences estimates. Vintage-cohort $\times$ year FE absorb
+cohort-specific temporal patterns (federal compliance ramp-up, aging trends).
+\texttt{mandate\_active} absorbs TX-specific phased mandate impulse (1989--1993).
+Cols (3)--(4) condition on closure occurring.
+Standard errors clustered at state level.
+$^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}
+\end{tabular}
+\end{table}

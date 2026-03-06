@@ -1,0 +1,27 @@
+\begin{table}[htbp]
+\centering
+\caption{Age-at-Treatment Heterogeneous Treatment Effects (H1/H2)}
+\label{tbl:age_treat_hte}
+\begin{tabular}{lcccc}
+\toprule
+ & (1) & (2) & (3) & (4)\\
+ & Pooled & +Age Ctrl & Binary HTE & 4-Bin HTE \\
+\midrule
+\textit{Panel A: Base effect (Young group, age $\leq5$ in 1998)} & & & & \\
+Texas $\times$ Post & -0.0073 & 0.0016 & -0.0450$^{***}$ & --- \\
+ & (0.0083) & (0.0074) & (0.0078) & --- \\
+\addlinespace
+\textit{Panel B: Differential for Old group ($>5$ yrs in 1998)} & & & & \\
+$\times$ Old at treatment & --- & --- & 0.0743$^{***}$ & --- \\
+ & --- & --- & (0.0106) & --- \\
+\midrule
+Age control (panel bins) & No & Yes & Yes & Yes \\
+4-bin age-at-treatment HTE & No & No & No & Yes \\
+Facility FE & Yes & Yes & Yes & Yes \\
+Year FE & Yes & Yes & Yes & Yes \\
+\midrule
+Observations & 319,961 & 319,117 & 316,440 & 316,440 \\
+\bottomrule
+\multicolumn{5}{p{0.95\textwidth}}{\footnotesize \textit{Notes:} Make-model sample (motor fuel, single-tank, single-walled, 1990--1997 install). Panel A = ATT for young tanks (age $\leq5$ in 1998). Panel B = additional effect for old tanks; total ATT for old = Panel A + Panel B. Age control = current-panel-age bin dummies. Age-at-treatment main effects are time-invariant and absorbed by panel FE (collinearity note in estimation output is expected and benign). SE clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}
+\end{tabular}
+\end{table}

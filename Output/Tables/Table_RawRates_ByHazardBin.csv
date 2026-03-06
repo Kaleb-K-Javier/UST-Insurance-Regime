@@ -1,0 +1,157 @@
+panel_year,Group,Stratum,raw_closure_rate,n_fac_years,Panel
+1990,Control,Q1 (Lowest),0.072317524386142,2973,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1991,Control,Q1 (Lowest),0.0648681418611701,3299,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1992,Control,Q1 (Lowest),0.0568965517241379,3480,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1993,Control,Q1 (Lowest),0.0499726925177499,3662,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1994,Control,Q1 (Lowest),0.0473958333333333,3840,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1995,Control,Q1 (Lowest),0.049727857496289,4042,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1996,Control,Q1 (Lowest),0.0467753366406804,4233,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1997,Control,Q1 (Lowest),0.0476951163852122,4382,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1998,Control,Q1 (Lowest),0.0894568690095847,4382,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1999,Control,Q1 (Lowest),0.0333409454213291,4379,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2000,Control,Q1 (Lowest),0.0173790511977454,4258,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2001,Control,Q1 (Lowest),0.0219518014793605,4191,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2002,Control,Q1 (Lowest),0.0211370262390671,4116,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2003,Control,Q1 (Lowest),0.0185873605947955,4035,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2004,Control,Q1 (Lowest),0.017362858580775,3974,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2005,Control,Q1 (Lowest),0.0155970340066479,3911,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2006,Control,Q1 (Lowest),0.0246241575946086,3858,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2007,Control,Q1 (Lowest),0.0225225225225225,3774,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2008,Control,Q1 (Lowest),0.0189291508923743,3698,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2009,Control,Q1 (Lowest),0.0231023102310231,3636,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2010,Control,Q1 (Lowest),0.0261309356560832,3559,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2011,Control,Q1 (Lowest),0.019551466359977,3478,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2012,Control,Q1 (Lowest),0.0277940315974254,3418,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2013,Control,Q1 (Lowest),0.0273027302730273,3333,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2014,Control,Q1 (Lowest),0.0230698246693325,3251,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2015,Control,Q1 (Lowest),0.0185127078757452,3187,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1990,Control,Q4 (Highest),0.106304444116344,6773,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+1991,Control,Q4 (Highest),0.0927485062466051,7364,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+1992,Control,Q4 (Highest),0.0934723831595211,7767,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+1993,Control,Q4 (Highest),0.0925925925925926,8100,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+1994,Control,Q4 (Highest),0.0825871819038643,8488,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+1995,Control,Q4 (Highest),0.0501236232861317,8898,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+1996,Control,Q4 (Highest),0.0453862660944206,9320,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+1997,Control,Q4 (Highest),0.0519454063964148,9818,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+1998,Control,Q4 (Highest),0.0664086371969851,9818,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+1999,Control,Q4 (Highest),0.0117155664221679,9816,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2000,Control,Q4 (Highest),0.0136704697296742,9729,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2001,Control,Q4 (Highest),0.0133056133056133,9620,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2002,Control,Q4 (Highest),0.0163727959697733,9528,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2003,Control,Q4 (Highest),0.0142462258133107,9406,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2004,Control,Q4 (Highest),0.0167741935483871,9300,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2005,Control,Q4 (Highest),0.016890051214994,9177,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2006,Control,Q4 (Highest),0.0212060967528164,9054,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2007,Control,Q4 (Highest),0.0190582959641256,8920,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2008,Control,Q4 (Highest),0.0145669739387732,8787,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2009,Control,Q4 (Highest),0.0185291748187363,8689,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2010,Control,Q4 (Highest),0.020353257690958,8549,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2011,Control,Q4 (Highest),0.0189285714285714,8400,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2012,Control,Q4 (Highest),0.0147592547786112,8266,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2013,Control,Q4 (Highest),0.0182396866201493,8169,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2014,Control,Q4 (Highest),0.0168944099378882,8050,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+2015,Control,Q4 (Highest),0.0168935955622794,7932,"Treatment stratum: Top quartile of cv_hazard
+(highest aging trajectory slope)"
+1991,Texas,Q1 (Lowest),0.0623100303951368,658,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1992,Texas,Q1 (Lowest),0.0529327610872675,699,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1993,Texas,Q1 (Lowest),0.033288948069241,751,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1994,Texas,Q1 (Lowest),0.0306122448979592,784,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1995,Texas,Q1 (Lowest),0.0385078219013237,831,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1996,Texas,Q1 (Lowest),0.0334101382488479,868,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1997,Texas,Q1 (Lowest),0.039908779931585,877,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1998,Texas,Q1 (Lowest),0.0718358038768529,877,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1999,Texas,Q1 (Lowest),0.031927023945268,877,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2000,Texas,Q1 (Lowest),0.0282685512367491,849,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2001,Texas,Q1 (Lowest),0.0108433734939759,830,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2002,Texas,Q1 (Lowest),0.023142509135201,821,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2003,Texas,Q1 (Lowest),0.0087173100871731,803,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2004,Texas,Q1 (Lowest),0.013801756587202,797,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2005,Texas,Q1 (Lowest),0.0139771283354511,787,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2006,Texas,Q1 (Lowest),0.0154639175257732,776,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2007,Texas,Q1 (Lowest),0.0183006535947712,765,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2008,Texas,Q1 (Lowest),0.0172872340425532,752,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2009,Texas,Q1 (Lowest),0.0175438596491228,741,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2010,Texas,Q1 (Lowest),0.0164609053497942,729,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2011,Texas,Q1 (Lowest),0.0319888734353268,719,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2012,Texas,Q1 (Lowest),0.0414878397711016,699,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2013,Texas,Q1 (Lowest),0.050520059435364,673,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2014,Texas,Q1 (Lowest),0.0497667185069984,643,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+2015,Texas,Q1 (Lowest),0.0488599348534202,614,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"
+1990,Texas,Q1 (Lowest),0.06070826306914,593,"Placebo stratum: Bottom quartile of cv_hazard
+(lowest aging trajectory slope)"

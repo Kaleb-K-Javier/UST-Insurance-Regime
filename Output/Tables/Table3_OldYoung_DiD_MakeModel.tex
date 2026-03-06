@@ -1,0 +1,26 @@
+\begin{table}[htbp]
+\centering
+\caption{Treatment Effect by Age at Reform: Old vs.\ Young Facilities (H2)}
+\label{tbl:old_young_did}
+\begin{tabular}{lcccc}
+\toprule
+ & (1) & (2) & (3) & (4) \\
+ & Young only & Old only & Interact & Interact+AgeCtrl \\
+\midrule
+\textit{ATT estimates} & & & & \\
+Texas $\times$ Post & 0.0193 & -0.0024 & -0.0791$^{***}$ & -0.0450$^{***}$ \\
+ & (0.0117) & (0.0100) & (0.0064) & (0.0078) \\
+$\times$ Old ($>$5 in 1998) & & & 0.1165$^{***}$ & 0.0743$^{***}$ \\
+ & & & (0.0076) & (0.0106) \\
+\midrule
+Pre-reform mean & 0.1641 & 0.0775 & \multicolumn{2}{c}{---} \\
+\% effect & 11.7\% & -3.1\% & \multicolumn{2}{c}{---} \\
+\midrule
+Age control (panel bins) & No & No & No & Yes \\
+Facility + Year FE & Yes & Yes & Yes & Yes \\
+\midrule
+Observations & 125,861 & 191,385 & 317,246 & 316,440 \\
+\bottomrule
+\multicolumn{5}{p{0.95\textwidth}}{\footnotesize \textit{Notes:} Make-model sample. Split at mean tank age in 1998 = 5 years. Cols (1)--(2): separate regressions per subgroup. Cols (3)--(4): pooled model with interaction; base = Young ATT, interaction = additional effect for Old group. Prop.\ 3(i): ATT(young) $\approx 0$. Prop.\ 3(ii): ATT(old) $> 0$. SE clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}
+\end{tabular}
+\end{table}

@@ -1,0 +1,6 @@
+Model,Estimate,Std_Error,t_stat,p_value_conv,p_value_webb,CI_low_webb,CI_high_webb,N_obs
+Closure (H1),-0.005186,0.005719,-0.907,0.3758,,,,3862756
+Closure (H2: 3yr),-0.006012,0.005307,-1.133,0.2713,,,,3818925
+Closure (H3: trends),-0.005186,0.005719,-0.907,0.3758,,,,3862756
+Exit|Cls,-0.058056,0.032157,-1.805,0.0869,,,,57288
+Replace|Cls,0.058056,0.032157,1.805,0.0869,,,,57288

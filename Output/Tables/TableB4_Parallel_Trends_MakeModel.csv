@@ -1,0 +1,8 @@
+spec,n_fac,f_stat,p_value,interpretation
+"1. Make-model full, no controls",15407,20.968,0,REJECTED
+2. Make-model full + mandate_active,15407,16.907,0,REJECTED
+3. Make-model full + age_bin control,15407,18.827,0,REJECTED
+"4. Youngest (age<=5), no controls",5983,11.221,0,REJECTED
+5. Youngest (age<=5) + age_bin,5983,10.236,0,REJECTED
+"6. Oldest (age>5), no controls",7913,2.848,0.0225,REJECTED
+7. Oldest (age>5) + age_bin,7913,2.009,0.0903,REJECTED

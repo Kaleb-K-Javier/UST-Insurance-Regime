@@ -1,0 +1,35 @@
+
+\begingroup
+\centering
+\begin{tabular}{lccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{3}{c}{closure\_event} & exit\_flag & replace\_indicator\\
+   Model:                          & (1)                   & (2)                   & (3)                   & (4)              & (5)\\  
+   \midrule
+   \emph{Variables}\\
+   did\_term                       & -0.005186             & -0.006012             & -0.005186             & -0.058056$^{*}$  & 0.058056$^{*}$\\   
+                                   & (0.005719)            & (0.005307)            & (0.005719)            & (0.032157)       & (0.032157)\\   
+   mandate\_active                 & -0.002184             &                       & -0.002184             & -0.041069$^{**}$ & 0.041069$^{**}$\\   
+                                   & (0.001945)            &                       & (0.001945)            & (0.017615)       & (0.017615)\\   
+   mandate\_window\_3yr            &                       & -0.004209             &                       &                  &   \\   
+                                   &                       & (0.002587)            &                       &                  &   \\   
+   \midrule
+   \emph{Fixed-effects}\\
+   panel\_id                       & Yes                   & Yes                   & Yes                   & Yes              & Yes\\  
+   vintage\_cohort-panel\_year     & Yes                   & Yes                   & Yes                   & Yes              & Yes\\  
+   vintage\_cohort                 &                       &                       & Yes                   &                  & \\  
+   \midrule
+   \emph{Varying Slopes}\\
+   panel\_year (vintage\_cohort)   &                       &                       & Yes                   &                  & \\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                    & 3,862,756             & 3,818,925             & 3,862,756             & 57,288           & 57,288\\  
+   R$^2$                           & 0.16403               & 0.16341               & 0.16403               & 0.64670          & 0.64670\\  
+   Within R$^2$                    & $1.49\times 10^{-5}$  & $1.83\times 10^{-5}$  & $1.49\times 10^{-5}$  & 0.00069          & 0.00069\\  
+   \midrule \midrule
+   \multicolumn{6}{l}{\emph{Clustered (state) standard-errors in parentheses}}\\
+   \multicolumn{6}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+

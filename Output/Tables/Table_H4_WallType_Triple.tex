@@ -1,0 +1,33 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{closure\_event}\\
+   Model:                                          & (1)             & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   did\_term                                       & -0.0087$^{*}$   &   \\   
+                                                   & (0.0045)        &   \\   
+   has\_single\_walled                             & -0.0656$^{***}$ & -0.1693$^{***}$\\   
+                                                   & (0.0065)        & (0.0148)\\   
+   did\_term $\times$ has\_single\_walled          & 0.0146$^{***}$  &   \\   
+                                                   & (0.0030)        &   \\   
+   texas\_treated $\times$ has\_single\_walled     &                 & 0.0198\\   
+                                                   &                 & (0.0147)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   panel\_id                                       & Yes             & Yes\\  
+   panel\_year                                     & Yes             & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                    & 991,840         & 350,598\\  
+   R$^2$                                           & 0.05552         & 0.09043\\  
+   Within R$^2$                                    & 0.00502         & 0.02372\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (state) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+

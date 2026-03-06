@@ -1,0 +1,23 @@
+\begin{table}[htbp]
+\centering
+\caption{Policy Effects on Reported Leak Rates}
+\label{tbl:leak-results}
+\begin{tabular}{lccc}
+\toprule
+ & \textbf{Pooled + VFE} & \textbf{Spec A} & \textbf{Spec B} \\
+\cmidrule(lr){2-2} \cmidrule(lr){3-3} \cmidrule(lr){4-4}
+ & (1) & (2) & (3) \\
+\midrule
+Texas $\times$ Post & -0.0096$^{***}$ & -0.0022 & -0.0140$^{***}$ \\
+& (0.0026) & (0.0031) & (0.0032) \\
+\midrule
+Vintage $\times$ Year FE & Yes & No & No \\
+Mandate Control & Yes & No & Yes \\
+\midrule
+Observations & 3,862,756 & 991,840 & 1,711,246 \\
+\bottomrule
+\multicolumn{4}{p{0.9\textwidth}}{\footnotesize \textit{Notes:}
+Standard errors clustered at state level.
+$^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}
+\end{tabular}
+\end{table}

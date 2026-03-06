@@ -1,0 +1,5 @@
+Model,Estimate,SE,t_stat,p_value,N_obs
+Closure (primary),-0.0073,0.0083,-0.88,0.3913,319961
+Closure + mandate ctrl,-0.0073,0.0083,-0.885,0.3884,319777
+Exit|Closure,0.1065,0.0354,3.007,0.0079,3755
+Replace|Closure,-0.1065,0.0354,-3.007,0.0079,3755

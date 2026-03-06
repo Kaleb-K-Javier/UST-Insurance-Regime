@@ -1,0 +1,6 @@
+Hypothesis,Prediction,Coefficient,SE,P_value,Verdict
+"H1/H2 (Age Sensitivity, old tanks, Spec A)",TE increasing in age; near-zero for young tanks,0.03863,0.00758,0.0001,Supported
+"H1/H2 Falsification (pre-period, largest bin)",All interaction terms ≈ 0 in pre-period,0.04971,0.0117,0.0004,FAILED (pre-trend)
+"H3 (Rightward Shift in Age at Closure, Spec A)",TX post-reform closures older than control,,,,Model failed
+H3 Falsification (pre-period age at closure),No TX-control age gap in pre-period closures,,,,Model failed
+"H4 (SW > DW Closure Response, Spec A)",Incremental reform effect > 0 for SW vs DW,0.01457,0.00298,0.0001,Supported

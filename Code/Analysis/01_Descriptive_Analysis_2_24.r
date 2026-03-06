@@ -395,7 +395,7 @@ rate_data <- if (length(rate_files) > 0) {
 #==============================================================================
 # SECTION 3.6: STATE DATA QUALITY REPORT (NEW)
 # Computed from raw tank_inventory (pre-filter) to reflect source data quality.
-# Assigned to data_quality_report; consumed by Section 12.1 (TableB1).
+# Assigned to data_quality_report; consumed by Section 14.1 (TableB1).
 # Replaces the previous data_quality_report <- NULL assignment.
 #==============================================================================
 
@@ -486,7 +486,7 @@ cat(sprintf("  After incumbent filter (first_observed < %d): %s rows | %s facili
             format(uniqueN(annual_data$panel_id), big.mark = ",")))
 attrition_log[["incumbent"]] <- list(
   stage = "Incumbent sample",
-  filter = sprintf("first_observed < %d", TREATMENT_YEAR),
+  filter = sprintf("first observed < %d", TREATMENT_YEAR),
   facilities = uniqueN(annual_data$panel_id),
   fac_years  = nrow(annual_data)
 )
@@ -864,7 +864,7 @@ cat(sprintf("  Pre-period closures (1987-1997): %s\n",
 # WHERE DOES IT COME FROM?
 #
 # event_first_leak is pre-constructed by the upstream panel builder
-# (10_Build_Annual_Panel_Optimized.R, Section 10) using:
+# (10_Build_Annual_Panel_Optimized.R, Section 11) using:
 #
 #   annual[, event_first_leak := as.integer(
 #     leak_year == 1 & cumsum(leak_year) == 1
@@ -2630,8 +2630,14 @@ cat("  OK: Figure 3 saved\n")
 #   Replacement history (past_replacement) enters as a COVARIATE, not a filter:
 #   these are genuinely higher-risk sites; excluding them would bias the age
 #   gradient. See 0-4 anomaly documentation above.
-#   County FE version (9.3) uses county_fips, dropping counties with N < 5
-#   in training fold to avoid separation and unstable FE estimates.
+#   The age × past_replacement interaction absorbs the spurious 0-4 elevation
+#   that arises because replacement events generate age-0 facility-years at
+#   sites that already had a failure.
+#   rf_pre_1980 is included conditionally: when install_year is absent the
+#   variable is all-NA and must be excluded from all model formulas to prevent
+#   NA propagation dropping every observation ("contrasts can only be applied
+#   to factors with 2+ levels" in glm; "All observations contain NA values"
+#   in fixest).
 #==============================================================================
 
 cat("\n========================================\n")
@@ -2643,11 +2649,8 @@ cat("========================================\n\n")
 #------------------------------------------------------------------------------
 cat("--- 9.1: Build estimation sample ---\n")
 
-# pre_panel_leak already constructed in Change 1 above.
 stopifnot("pre_panel_leak" %in% names(annual_data))
 
-# past_replacement: cumulative prior-year closure history.
-# Enters as covariate — replacement is endogenous to latent risk.
 annual_data[, past_replacement := as.integer(
   cumsum(shift(n_closures, 1L, fill = 0L)) > 0
 ), by = panel_id]
@@ -2656,18 +2659,15 @@ cv_data <- annual_data[
   panel_year        >= 1990 &
   panel_year        <= 1998 &
   has_previous_leak == 0    &
-  pre_panel_leak    == 0    &     # KEY FIX: exclude pre-1990 leakers
+  pre_panel_leak    == 0    &
   !is.na(has_single_walled) &
   !is.na(age_bin)
-  # had_recent_closure REMOVED from filter — now enters as past_replacement covariate
 ]
 
-# Integrity checks
 stopifnot(cv_data[, sum(has_previous_leak)] == 0)
 stopifnot(cv_data[, sum(pre_panel_leak)]    == 0)
 stopifnot(cv_data[, sum(panel_year > year_of_first_leak, na.rm = TRUE)] == 0)
 
-# Verify 0-4 anomaly resolved
 rate_04 <- cv_data[age_bin == "0-4" & past_replacement == 0,
                     mean(event_first_leak, na.rm = TRUE) * 1000]
 rate_59 <- cv_data[age_bin == "5-9"  & past_replacement == 0,
@@ -2683,7 +2683,6 @@ cat(sprintf("  Facilities with past replacement in risk set: %s (%.1f%%)\n",
   100 * uniqueN(cv_data[past_replacement == 1, panel_id]) /
         uniqueN(cv_data$panel_id)))
 
-# Derived predictors
 if ("install_year" %in% names(cv_data)) {
   cv_data[, rf_pre_1980 := as.integer(!is.na(install_year) & install_year < 1980)]
 } else if ("pre1998_install" %in% names(cv_data)) {
@@ -2699,7 +2698,6 @@ cv_data[, `:=`(
   age_bin_reg  = age_bin_for_reg(age_bin)
 )]
 
-# Stratified folds: every state appears in every fold
 set.seed(20250128)
 cv_data[, fold := sample(1:5, .N, replace = TRUE), by = state]
 
@@ -2710,83 +2708,131 @@ cat(sprintf("  CV data: %s facility-years | %s first-leak events (%.3f%%)\n",
 cat(sprintf("  Unique counties in CV data: %s\n",
   format(uniqueN(cv_data$county_fips), big.mark = ",")))
 
-# Initialise OOB prediction columns (always, regardless of RUN_FULL)
 cv_data[, `:=`(pred_no_cfe   = NA_real_,
                pred_with_cfe = NA_real_)]
 auc_no_cfe   <- NA_real_
 auc_with_cfe <- NA_real_
 
+#------------------------------------------------------------------------------
+# Build model formulas ONCE, conditioned on rf_pre_1980 availability.
+#
+# KEY FIX: When install_year is absent, rf_pre_1980 is all-NA. Including an
+# all-NA predictor in glm causes every row to be dropped (NA propagation),
+# producing "contrasts can only be applied to factors with 2+ levels".
+# fixest is more explicit: "All observations contain NA values. Breakup: RHS."
+# The fix is to check availability once here and use the same conditional
+# formula in sections 9.2, 9.3, and 9.8 so all models are identical.
+#
+# The age × past_replacement interaction is always included: it absorbs
+# the spurious 0-4 elevation from replacement-site observations.
+#------------------------------------------------------------------------------
+has_rf_pre_1980 <- !all(is.na(cv_data$rf_pre_1980))
+cat(sprintf("  rf_pre_1980 available: %s\n", has_rf_pre_1980))
+
+rhs_no_fe <- if (has_rf_pre_1980) {
+  paste("has_single_walled + age_bin_reg + rf_pre_1980 +",
+        "log_capacity + is_motor_fuel + past_replacement +",
+        "I(age_bin_reg * past_replacement) + factor(panel_year)")
+} else {
+  paste("has_single_walled + age_bin_reg +",
+        "log_capacity + is_motor_fuel + past_replacement +",
+        "I(age_bin_reg * past_replacement) + factor(panel_year)")
+}
+formula_no_fe <- as.formula(paste("event_first_leak ~", rhs_no_fe))
+
+rhs_sfe <- if (has_rf_pre_1980) {
+  paste("has_single_walled + age_bin_reg + rf_pre_1980 +",
+        "log_capacity + is_motor_fuel + past_replacement +",
+        "I(age_bin_reg * past_replacement)")
+} else {
+  paste("has_single_walled + age_bin_reg +",
+        "log_capacity + is_motor_fuel + past_replacement +",
+        "I(age_bin_reg * past_replacement)")
+}
+formula_sfe <- as.formula(paste("event_first_leak ~", rhs_sfe, "| panel_year + state"))
+
+cat(sprintf("  No-FE formula RHS:    %s\n", rhs_no_fe))
+cat(sprintf("  State-FE formula RHS: %s | panel_year + state\n", rhs_sfe))
+
+
+#------------------------------------------------------------------------------
+# 9.2 5-fold CV logit — NO state FE
+#------------------------------------------------------------------------------
+cat("\n--- 9.2: 5-fold CV logit (NO state FE) ---\n")
+
+for (k in 1:5) {
+  train_fold <- cv_data[fold != k & !is.na(has_single_walled) & !is.na(age_bin_reg)]
+
+  fit_no_fe <- tryCatch(
+    glm(formula_no_fe, data = train_fold, family = binomial(link = "logit")),
+    error = function(e) {
+      cat(sprintf("  WARNING: Fold %d (no FE) failed: %s\n", k, e$message)); NULL
+    }
+  )
+  if (!is.null(fit_no_fe)) {
+    cv_data[fold == k,
+            pred_no_cfe := predict(fit_no_fe, newdata = .SD, type = "response")]
+    cat(sprintf("  Fold %d (no FE): train N = %s\n",
+                k, format(nrow(train_fold), big.mark = ",")))
+  }
+}
+
 
 if (RUN_FULL) {
-
+#------------------------------------------------------------------------------
+  # 9.3 5-fold CV logit — state FE
   #----------------------------------------------------------------------------
-  # 9.2 5-fold CV logit — no county FE
-  #----------------------------------------------------------------------------
-  cat("\n--- 9.2: 5-fold CV logit (no county FE) ---\n")
+  cat("\n--- 9.3: 5-fold CV logit (with state FE) ---\n")
 
   for (k in 1:5) {
     train_fold <- cv_data[fold != k]
     test_fold  <- cv_data[fold == k]
 
-    fit <- tryCatch(
-      glm(event_first_leak ~ has_single_walled + age_bin_reg + rf_pre_1980 +
-                             log_capacity + is_motor_fuel + past_replacement +
-                             factor(panel_year),
-          data   = train_fold,
-          family = binomial(link = "logit")),
-      error = function(e) {
-        cat(sprintf("  WARNING: Fold %d (no CFE) failed: %s\n", k, e$message)); NULL
-      }
-    )
-    if (!is.null(fit)) {
-      cv_data[fold == k,
-              pred_no_cfe := predict(fit, newdata = .SD, type = "response")]
-      cat(sprintf("  Fold %d (no CFE): train N = %s | test N = %s\n",
-                  k,
-                  format(nrow(train_fold), big.mark = ","),
-                  format(nrow(test_fold),  big.mark = ",")))
-    }
-  }
+    state_counts <- train_fold[, .N, by = state]
+    valid_states <- state_counts[N >= 5, state]
+    train_sfe    <- train_fold[state %in% valid_states &
+                               !is.na(has_single_walled) &
+                               !is.na(age_bin_reg)]
 
-  #----------------------------------------------------------------------------
-  # 9.3 5-fold CV logit — county FE
-  #----------------------------------------------------------------------------
-  cat("\n--- 9.3: 5-fold CV logit (with county FE) ---\n")
-
-  for (k in 1:5) {
-    train_fold <- cv_data[fold != k]
-    test_fold  <- cv_data[fold == k]
-
-    # Drop counties with < 5 training observations to prevent separation
-    county_counts  <- train_fold[, .N, by = county_fips]
-    valid_counties <- county_counts[N >= 5, county_fips]
-    train_cfe      <- train_fold[county_fips %in% valid_counties]
-    test_cfe       <- test_fold[ county_fips %in% valid_counties]
-
-    if (nrow(train_cfe) < 100 || uniqueN(train_cfe$county_fips) < 10) {
-      cat(sprintf("  WARNING: Fold %d (county FE): too few valid counties — skipped\n", k))
+    if (nrow(train_sfe) < 100 || uniqueN(train_sfe$state) < 2) {
+      cat(sprintf("  WARNING: Fold %d (state FE): too few valid states — skipped\n", k))
       next
     }
 
-    fit_cfe <- tryCatch(
-      glm(event_first_leak ~ has_single_walled + age_bin_reg + rf_pre_1980 +
-                             log_capacity + is_motor_fuel + past_replacement +
-                             factor(panel_year) + factor(county_fips),
-          data   = train_cfe,
-          family = binomial(link = "logit")),
+    fit_sfe <- tryCatch(
+      fixest::feglm(formula_sfe,
+                    data   = train_sfe,
+                    family = binomial(link = "logit"),
+                    notes  = FALSE),
       error = function(e) {
-        cat(sprintf("  WARNING: Fold %d (county FE) failed: %s\n", k, e$message)); NULL
+        cat(sprintf("  WARNING: Fold %d (state FE) failed: %s\n", k, e$message)); NULL
       }
     )
-    if (!is.null(fit_cfe)) {
-      cv_data[fold == k & county_fips %in% valid_counties,
-              pred_with_cfe := predict(fit_cfe, newdata = .SD, type = "response")]
-      cat(sprintf("  Fold %d (county FE): train N = %s | valid counties = %s\n",
+
+    if (!is.null(fit_sfe)) {
+      cv_data[fold == k & state %in% valid_states,
+              pred_with_cfe := predict(fit_sfe, newdata = .SD, type = "response")]
+      cat(sprintf("  Fold %d (state FE): train N = %s | valid states = %s\n",
                   k,
-                  format(nrow(train_cfe),       big.mark = ","),
-                  format(length(valid_counties), big.mark = ",")))
+                  format(nrow(train_sfe),      big.mark = ","),
+                  format(length(valid_states), big.mark = ",")))
     }
   }
+
+  # Full-sample state FE model (used for PD in 9.8b)
+  final_model_sfe <- tryCatch(
+    fixest::feglm(formula_sfe,
+                  data   = cv_data[!is.na(has_single_walled) & !is.na(age_bin_reg)],
+                  family = binomial(link = "logit"),
+                  notes  = FALSE),
+    error = function(e) {
+      cat(sprintf("  WARNING: Full-sample state FE model failed: %s\n", e$message)); NULL
+    }
+  )
+  if (!is.null(final_model_sfe))
+    cat(sprintf("  Full-sample state FE model fitted on %s facility-years\n",
+                format(cv_data[!is.na(has_single_walled) & !is.na(age_bin_reg), .N],
+                       big.mark = ",")))
 
   #----------------------------------------------------------------------------
   # 9.4 AUC-ROC + combined ROC plot
@@ -2797,16 +2843,16 @@ if (RUN_FULL) {
 
   cv_complete_no <- cv_data[!is.na(pred_no_cfe) & !is.na(event_first_leak)]
   if (nrow(cv_complete_no) > 100) {
-    roc_no_cfe   <- pROC::roc(cv_complete_no$event_first_leak,
-                               cv_complete_no$pred_no_cfe, quiet = TRUE)
-    auc_no_cfe   <- as.numeric(pROC::auc(roc_no_cfe))
-    cat(sprintf("  AUC-ROC (No County FE):   %.3f\n", auc_no_cfe))
+    roc_no_cfe <- pROC::roc(cv_complete_no$event_first_leak,
+                             cv_complete_no$pred_no_cfe, quiet = TRUE)
+    auc_no_cfe <- as.numeric(pROC::auc(roc_no_cfe))
+    cat(sprintf("  AUC-ROC (No State FE):   %.3f\n", auc_no_cfe))
     cat(sprintf("  Interpretation: %s\n",
       fcase(auc_no_cfe >= 0.80, "Good discrimination (>= 0.80)",
             auc_no_cfe >= 0.70, "Acceptable discrimination (0.70-0.79)",
             default            = "Modest discrimination (< 0.70 — expected for rare events)")))
   } else {
-    cat("  WARNING: Too few OOB predictions for AUC (no-CFE model)\n")
+    cat("  WARNING: Too few OOB predictions for AUC (no-FE model)\n")
   }
 
   cv_complete_cfe <- cv_data[!is.na(pred_with_cfe) & !is.na(event_first_leak)]
@@ -2814,29 +2860,31 @@ if (RUN_FULL) {
     roc_with_cfe <- pROC::roc(cv_complete_cfe$event_first_leak,
                                cv_complete_cfe$pred_with_cfe, quiet = TRUE)
     auc_with_cfe <- as.numeric(pROC::auc(roc_with_cfe))
-    cat(sprintf("  AUC-ROC (With County FE): %.3f\n", auc_with_cfe))
+    cat(sprintf("  AUC-ROC (With State FE): %.3f\n", auc_with_cfe))
   }
+
+  # Alias so any downstream reference to auc_no_sfe does not error
+  auc_no_sfe <- auc_no_cfe
 
   if (!is.na(auc_no_cfe) && !is.na(auc_with_cfe)) {
     atten <- (1 - auc_with_cfe / auc_no_cfe) * 100
-    cat(sprintf("  AUC attenuation with county FE: %.1f%%\n", atten))
-    if (atten > 30) cat("  NOTE: >30% attenuation — substantial cross-county heterogeneity\n")
-    else if (atten < 0) cat("  NOTE: County FE improves discrimination — local controls informative\n")
-    else cat("  OK: Within-county variation sufficient.\n")
+    cat(sprintf("  AUC attenuation with state FE: %.1f%%\n", atten))
+    if (atten > 30) cat("  NOTE: >30% attenuation — substantial cross-state heterogeneity\n")
+    else if (atten < 0) cat("  NOTE: State FE improves discrimination — local controls informative\n")
+    else cat("  OK: Within-state variation sufficient.\n")
   }
 
-  # Combined ROC plot
   roc_list <- list()
   if (!is.null(roc_no_cfe))
     roc_list[["no_cfe"]] <- data.table(
       fpr   = 1 - roc_no_cfe$specificities,
       tpr   = roc_no_cfe$sensitivities,
-      Model = sprintf("No County FE  (AUC = %.3f)", auc_no_cfe))
+      Model = sprintf("No State FE  (AUC = %.3f)", auc_no_cfe))
   if (!is.null(roc_with_cfe))
     roc_list[["with_cfe"]] <- data.table(
       fpr   = 1 - roc_with_cfe$specificities,
       tpr   = roc_with_cfe$sensitivities,
-      Model = sprintf("With County FE  (AUC = %.3f)", auc_with_cfe))
+      Model = sprintf("With State FE  (AUC = %.3f)", auc_with_cfe))
 
   if (length(roc_list) > 0) {
     roc_combined <- rbindlist(roc_list)
@@ -2863,163 +2911,160 @@ if (RUN_FULL) {
   }
 
   #----------------------------------------------------------------------------
-  # 9.5 Per-model calibration tables + plots
+  # 9.5 Discrimination plots: lift curve + score-separation density
+  #      + calibration check (demoted to supporting role)
   #----------------------------------------------------------------------------
-  cat("\n--- 9.5: Calibration tables & plots ---\n")
+  cat("\n--- 9.5: Discrimination plots (lift, score separation, calibration) ---\n")
 
-  make_calibration_plot <- function(pred_col, model_label, file_suffix,
-                                    auc_val = NA_real_) {
+  make_discrimination_plots <- function(pred_col, model_label, file_suffix,
+                                        auc_val = NA_real_) {
+
     cv_cal <- cv_data[!is.na(get(pred_col)) & !is.na(event_first_leak)]
     if (nrow(cv_cal) <= 100) {
-      cat(sprintf("  WARNING: Too few obs for calibration (%s)\n", model_label))
+      cat(sprintf("  WARNING: Too few obs for discrimination plots (%s)\n", model_label))
       return(invisible(NULL))
     }
+
+    # ---- (A) Lift curve -----------------------------------------------------
+    cv_cal_lift <- copy(cv_cal)
+    setorder(cv_cal_lift, -get(pred_col))
+    cv_cal_lift[, cumulative_pct_screened := seq_len(.N) / .N]
+    cv_cal_lift[, cumulative_pct_events   := cumsum(event_first_leak) /
+                                              sum(event_first_leak, na.rm = TRUE)]
+
+    idx_thin   <- unique(c(1L,
+                           round(seq(1, nrow(cv_cal_lift), length.out = 600L)),
+                           nrow(cv_cal_lift)))
+    lift_model <- cv_cal_lift[idx_thin,
+                               .(x    = cumulative_pct_screened,
+                                 y    = cumulative_pct_events,
+                                 type = model_label)]
+
+    lift_random   <- data.table(x = c(0, 1), y = c(0, 1), type = "Random")
+    lift_combined <- rbindlist(list(lift_random, lift_model), fill = TRUE)
+
+    top10_lift <- cv_cal_lift[cumulative_pct_screened <= 0.101,
+                               max(cumulative_pct_events, na.rm = TRUE)]
+    top20_lift <- cv_cal_lift[cumulative_pct_screened <= 0.201,
+                               max(cumulative_pct_events, na.rm = TRUE)]
+
+    fig_lift <- ggplot(lift_combined,
+                       aes(x = x, y = y, color = type, linetype = type)) +
+      geom_line(linewidth = 1) +
+      geom_segment(aes(x = 0.10, xend = 0.10, y = 0,          yend = top10_lift),
+                   linetype = "dotted", color = "gray50", linewidth = 0.5,
+                   inherit.aes = FALSE) +
+      geom_segment(aes(x = 0,    xend = 0.10, y = top10_lift, yend = top10_lift),
+                   linetype = "dotted", color = "gray50", linewidth = 0.5,
+                   inherit.aes = FALSE) +
+      annotate("text", x = 0.115, y = top10_lift - 0.02, hjust = 0, size = 2.8,
+               color = "gray30",
+               label = sprintf("Top 10%% screens\n%.0f%% of leaks", top10_lift * 100)) +
+      annotate("text", x = 0.215, y = top20_lift + 0.025, hjust = 0, size = 2.8,
+               color = "gray30",
+               label = sprintf("Top 20%% → %.0f%% leaks", top20_lift * 100)) +
+      scale_color_manual(values    = c("Random" = "gray60",
+                                        setNames(COL_TX, model_label))) +
+      scale_linetype_manual(values = c("Random" = "dashed",
+                                        setNames("solid", model_label))) +
+      scale_x_continuous(labels = scales::percent_format(accuracy = 1)) +
+      scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+      labs(title    = sprintf("Lift Curve: %s", model_label),
+           subtitle = ifelse(!is.na(auc_val),
+             sprintf("OOB predictions | AUC = %.3f", auc_val),
+             "OOB predictions"),
+           x     = "Fraction of Facilities Screened (descending risk order)",
+           y     = "Cumulative Fraction of First-Leak Events Captured",
+           color = NULL, linetype = NULL) +
+      theme(legend.position = "bottom")
+
+    # ---- (B) Score-separation density ---------------------------------------
+    cv_cal[, outcome_label := fifelse(event_first_leak == 1L,
+                                       "First Leak (event)", "No Leak")]
+    x_cap_sep <- quantile(cv_cal[[pred_col]], 0.99, na.rm = TRUE)
+
+    fig_sep <- ggplot(
+      cv_cal[get(pred_col) <= x_cap_sep],
+      aes(x = get(pred_col), fill = outcome_label, color = outcome_label)
+    ) +
+      geom_density(alpha = 0.35, linewidth = 0.7) +
+      scale_fill_manual(values  = c("First Leak (event)" = COL_TX,
+                                     "No Leak"           = COL_CTRL)) +
+      scale_color_manual(values = c("First Leak (event)" = COL_TX,
+                                     "No Leak"           = COL_CTRL)) +
+      scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+      labs(title    = sprintf("Score Separation: %s", model_label),
+           subtitle = sprintf(
+             "OOB predicted probability by actual outcome | AUC = %.3f\n%s",
+             ifelse(is.na(auc_val), 0, auc_val),
+             "Good discrimination = little overlap between distributions."),
+           x     = "Predicted P(First Leak)",
+           y     = "Density",
+           fill  = NULL, color = NULL) +
+      theme(legend.position = "bottom")
+
+    # ---- (C) Calibration check (bias, not discrimination) -------------------
     breaks <- unique(quantile(cv_cal[[pred_col]],
                                probs = seq(0, 1, by = 0.1), na.rm = TRUE))
-    if (length(breaks) < 3) {
-      cat(sprintf("  WARNING: Insufficient quantile variation (%s)\n", model_label))
-      return(invisible(NULL))
+    if (length(breaks) >= 3) {
+      cv_cal[, decile := as.integer(cut(get(pred_col), breaks = breaks,
+                                         include.lowest = TRUE, labels = FALSE))]
+      cal_tbl <- cv_cal[!is.na(decile), .(
+        mean_predicted = round(mean(get(pred_col),    na.rm = TRUE), 4),
+        mean_actual    = round(mean(event_first_leak, na.rm = TRUE), 4),
+        mean_sw_share  = round(mean(has_single_walled, na.rm = TRUE), 3),
+        n_fac_years    = .N,
+        n_leaks        = sum(event_first_leak, na.rm = TRUE)
+      ), by = decile][order(decile)]
+
+      bottom_rate <- cal_tbl[decile == min(decile), mean_actual]
+      top_rate    <- cal_tbl[decile == max(decile), mean_actual]
+      cal_tbl[, lift := round(mean_actual / bottom_rate, 2)]
+      if (!is.na(bottom_rate) && bottom_rate > 0)
+        cat(sprintf("  [%s] Top decile: %.4f | Bottom: %.4f | Lift: %.1fx\n",
+                    model_label, top_rate, bottom_rate, top_rate / bottom_rate))
+
+      fig_cal <- ggplot(cal_tbl, aes(x = mean_predicted, y = mean_actual)) +
+        geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray60") +
+        geom_line(color = COL_TX, linewidth = 0.7) +
+        geom_point(aes(size = mean_sw_share), color = COL_TX, alpha = 0.85) +
+        geom_text(aes(label = decile), vjust = -0.8, size = 2.6, color = "gray30") +
+        scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+        scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+        scale_size_continuous(range  = c(2, 8),
+                              labels = scales::percent_format(accuracy = 1)) +
+        labs(title    = sprintf("Calibration Check: %s", model_label),
+             subtitle = "Decile bins of OOB predicted probability. Near-diagonal = well-calibrated.",
+             x    = "Mean Predicted Probability",
+             y    = "Mean Actual Incidence Rate",
+             size = "Avg SW\nShare") +
+        theme(legend.position = "right")
+
+      save_fig(fig_cal, paste0("Figure_CV_Calibration_", file_suffix),
+               width = 6, height = 4.5)
+      save_table(cal_tbl, paste0("Table_CV_Calibration_", file_suffix))
     }
-    cv_cal[, decile := as.integer(cut(get(pred_col), breaks = breaks,
-                                       include.lowest = TRUE, labels = FALSE))]
-    cal_tbl <- cv_cal[!is.na(decile), .(
-      mean_predicted = round(mean(get(pred_col),     na.rm = TRUE), 4),
-      mean_actual    = round(mean(event_first_leak,  na.rm = TRUE), 4),
-      n_fac_years    = .N,
-      n_leaks        = sum(event_first_leak, na.rm = TRUE)
-    ), by = decile][order(decile)]
 
-    bottom_rate <- cal_tbl[decile == min(decile), mean_actual]
-    cal_tbl[, lift := round(mean_actual / bottom_rate, 2)]
+    save_fig(fig_lift, paste0("Figure_CV_Lift_",     file_suffix), width = 6,   height = 5.5)
+    save_fig(fig_sep,  paste0("Figure_CV_ScoreSep_", file_suffix), width = 6,   height = 4.5)
 
-    top_rate <- cal_tbl[decile == max(decile), mean_actual]
-    if (!is.na(bottom_rate) && bottom_rate > 0)
-      cat(sprintf("  [%s] Top decile: %.4f | Bottom: %.4f | Lift: %.1fx\n",
-                  model_label, top_rate, bottom_rate, top_rate / bottom_rate))
+    cat(sprintf("  [%s] Top 10%% screens %.0f%% of leaks | Top 20%% screens %.0f%%\n",
+                model_label, top10_lift * 100, top20_lift * 100))
 
-    fig_cal <- ggplot(cal_tbl, aes(x = mean_predicted, y = mean_actual)) +
-      geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray60") +
-      geom_line(color = COL_TX, linewidth = 0.8) +
-      geom_point(aes(size = n_fac_years), color = COL_TX, alpha = 0.85) +
-      geom_text(aes(label = decile), vjust = -0.8, size = 2.8, color = "gray30") +
-      scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-      scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-      labs(title    = sprintf("Model Calibration: %s", model_label),
-           subtitle = ifelse(!is.na(auc_val),
-             sprintf("Decile bins of OOB predicted probability | AUC = %.3f", auc_val),
-             "Decile bins of OOB predicted probability"),
-           x = "Mean Predicted Probability", y = "Mean Actual Incidence Rate",
-           size = "N Fac-Years") +
-      theme(legend.position = "right")
-    save_fig(fig_cal, paste0("Figure_CV_Calibration_", file_suffix), width = 7, height = 5)
-    save_table(cal_tbl, paste0("Table_CV_Calibration_", file_suffix))
-    invisible(cal_tbl)
+    invisible(NULL)
   }
 
-  make_calibration_plot("pred_no_cfe",   "No County FE",   "NoCountyFE", auc_no_cfe)
-  make_calibration_plot("pred_with_cfe", "With County FE", "CountyFE",   auc_with_cfe)
+  make_discrimination_plots("pred_no_cfe",   "No State FE",   "NoStateFE",  auc_no_cfe)
+  make_discrimination_plots("pred_with_cfe", "With State FE", "SFE",        auc_with_cfe)
 
   #----------------------------------------------------------------------------
-  # 9.6 Partial dependence summaries + plots
+  # 9.6 Partial dependence — level ordering
   #----------------------------------------------------------------------------
-  cat("\n--- 9.6: Partial dependence summaries & plots ---\n")
+  cat("\n--- 9.6: Defining PD level ordering (computation deferred to 9.8b) ---\n")
 
   all_pd_levels <- c("Double-Walled", "Single-Walled",
                      "Pre-1980 = No", "Pre-1980 = Yes",
                      AGE_BIN_LABELS)
-
-  generate_pd_set <- function(prediction_col, desc_label, file_suffix) {
-    cv_pd <- cv_data[!is.na(get(prediction_col))]
-    if (nrow(cv_pd) == 0) {
-      cat(sprintf("  WARNING: No OOB predictions for %s — skipping PD\n", desc_label))
-      return(invisible(NULL))
-    }
-    pd_wall <- cv_pd[, .(
-      mean_pred   = round(mean(get(prediction_col), na.rm = TRUE), 4),
-      mean_actual = round(mean(event_first_leak,    na.rm = TRUE), 4),
-      n_fac_years = .N,
-      covariate   = "Wall Type"
-    ), by = .(level = fifelse(has_single_walled == 1, "Single-Walled", "Double-Walled"))]
-
-    pd_vintage <- cv_pd[!is.na(rf_pre_1980), .(
-      mean_pred   = round(mean(get(prediction_col), na.rm = TRUE), 4),
-      mean_actual = round(mean(event_first_leak,    na.rm = TRUE), 4),
-      n_fac_years = .N,
-      covariate   = "Pre-1980 Vintage"
-    ), by = .(level = fifelse(rf_pre_1980 == 1, "Pre-1980 = Yes", "Pre-1980 = No"))]
-
-    pd_age <- cv_pd[, .(
-      mean_pred   = round(mean(get(prediction_col), na.rm = TRUE), 4),
-      mean_actual = round(mean(event_first_leak,    na.rm = TRUE), 4),
-      n_fac_years = .N,
-      covariate   = "Tank Age (5-yr bins)"
-    ), by = .(level = as.character(age_bin))]
-
-    pd_combined <- rbindlist(list(pd_wall, pd_vintage, pd_age), use.names = TRUE)
-    save_table(pd_combined, paste0("Table_CV_Partial_Dependence_", file_suffix))
-
-    pd_long <- melt(pd_combined,
-                    id.vars      = c("covariate", "level", "n_fac_years"),
-                    measure.vars = c("mean_pred", "mean_actual"),
-                    variable.name = "type", value.name = "rate")
-    pd_long[, type := factor(fcase(
-      type == "mean_pred",   "Predicted (OOB)",
-      type == "mean_actual", "Actual",
-      default = "Other"), levels = c("Predicted (OOB)", "Actual"))]
-    pd_long[, level := factor(as.character(level), levels = all_pd_levels)]
-
-    fig_pd <- ggplot(pd_long, aes(x = level, y = rate, fill = type)) +
-      geom_col(position = position_dodge(width = 0.7), width = 0.65) +
-      facet_wrap(~ covariate, scales = "free_x", nrow = 1) +
-      scale_fill_manual(values = c("Predicted (OOB)" = COL_TX, "Actual" = COL_CTRL)) +
-      scale_y_continuous(labels = scales::percent_format(accuracy = 0.01)) +
-      labs(x = NULL, y = "Leak Probability",
-           title    = sprintf("Risk Factor Partial Dependence: %s", desc_label),
-           subtitle = "5-Fold CV OOB predictions vs Actual | Pre-period 1990–1998 | Never-leaked risk set",
-           fill = NULL) +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1),
-            legend.position = "bottom")
-    save_fig(fig_pd, paste0("Figure5A_CV_Partial_Dependence_", file_suffix),
-             width = 13, height = 5)
-  }
-
-  generate_pd_set("pred_no_cfe",   "No County Fixed Effects",  "NoCountyFE")
-  generate_pd_set("pred_with_cfe", "With County Fixed Effects", "CountyFE")
-
-  #----------------------------------------------------------------------------
-  # 9.7 Figure: Leak risk by wall type x age (pooled) — uses pre_cv
-  #----------------------------------------------------------------------------
-  cat("\n--- 9.7: Figure 5B — Leak risk by wall type x age ---\n")
-
-  # pre_cv already built in Change 1 (with pre_panel_leak fix applied)
-  tbl3_leak_rates_pooled <- pre_cv[, .(
-    leak_rate_per_1000 = round(sum(event_first_leak, na.rm = TRUE) / .N * 1000, 2),
-    n_fac_years        = .N
-  ), by = .(age_bin, wall_label)]
-  tbl3_leak_rates_pooled[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
-
-  fig5b_risk <- ggplot(
-    tbl3_leak_rates_pooled[!is.na(leak_rate_per_1000)],
-    aes(x = age_bin, y = leak_rate_per_1000,
-        color = wall_label, linetype = wall_label, group = wall_label)
-  ) +
-    geom_line(linewidth = 1) +
-    geom_point(size = 2.5) +
-    geom_text(aes(label = sprintf("%.1f", leak_rate_per_1000)),
-              vjust = -0.7, size = 2.5, show.legend = FALSE) +
-    scale_x_discrete(limits = AGE_BIN_LABELS, drop = FALSE) +
-    scale_color_manual(values   = c("Single-Walled" = COL_TX, "Double-Walled" = COL_CTRL)) +
-    scale_linetype_manual(values = c("Single-Walled" = "solid", "Double-Walled" = "dashed")) +
-    labs(x = "Tank Age Bin (5-year intervals)",
-         y = "First-Leak Rate (per 1,000 Facility-Years)",
-         title    = "Pre-Period Leak Incidence by Tank Age and Wall Type (Pooled)",
-         subtitle = "1990–1998. Never-leaked risk set. Replacement-year facility-years excluded.",
-         color = "Wall Type", linetype = "Wall Type") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          legend.position = "bottom")
-
-  save_fig(fig5b_risk, "Figure_leak_risk", width = 8, height = 6)
-  cat("  OK: Figure_leak_risk saved\n")
 
 } # end if (RUN_FULL)
 
@@ -3029,40 +3074,29 @@ if (RUN_FULL) {
 #==============================================================================
 cat("\n--- 9.8: Empirical risk score ---\n")
 
-# Priority: (A) OOB predictions (pred_no_cfe) — unbiased
-#           (B) Final model fit on full pre-period data — fallback
-
-if (RUN_FULL && "pred_no_cfe" %in% names(cv_data)) {
-  oob_preds <- cv_data[!is.na(pred_no_cfe), .(panel_id, panel_year, pred_oob = pred_no_cfe)]
+if (RUN_FULL && "pred_with_cfe" %in% names(cv_data)) {
+  oob_preds <- cv_data[!is.na(pred_with_cfe),
+                        .(panel_id, panel_year, pred_oob = pred_with_cfe)]
   if ("pred_oob" %in% names(cv_data)) cv_data[, pred_oob := NULL]
   cv_data <- merge(cv_data, oob_preds, by = c("panel_id", "panel_year"), all.x = TRUE)
   n_matched <- sum(!is.na(cv_data$pred_oob))
   pct_oob   <- round(100 * n_matched / nrow(cv_data), 1)
   cat(sprintf("  OOB predictions matched: %s / %s (%.1f%%)\n",
-              format(n_matched, big.mark = ","), format(nrow(cv_data), big.mark = ","), pct_oob))
+              format(n_matched, big.mark = ","),
+              format(nrow(cv_data), big.mark = ","), pct_oob))
   if (pct_oob < 80) cat("  WARNING: <80% OOB match rate\n")
 } else {
   cv_data[, pred_oob := NA_real_]
   cat("  OOB predictions not available (RUN_FULL = FALSE)\n")
 }
 
-# Final-model fallback
 n_need_pred <- sum(is.na(cv_data$pred_oob))
 cat(sprintf("  Facility-years needing final-model prediction: %s\n",
             format(n_need_pred, big.mark = ",")))
 
-covariates <- if (!all(is.na(cv_data$rf_pre_1980))) {
-  c("has_single_walled", "age_bin_reg", "rf_pre_1980",
-    "log_capacity", "is_motor_fuel", "past_replacement", "factor(panel_year)")
-} else {
-  c("has_single_walled", "age_bin_reg",
-    "log_capacity", "is_motor_fuel", "past_replacement", "factor(panel_year)")
-}
-
-final_formula <- as.formula(paste("event_first_leak ~", paste(covariates, collapse = " + ")))
-
+# Re-use formula_no_fe (already conditioned on rf_pre_1980) for the fallback model
 final_model <- tryCatch(
-  glm(final_formula,
+  glm(formula_no_fe,
       data   = cv_data[!is.na(has_single_walled) & !is.na(age_bin_reg)],
       family = binomial(link = "logit")),
   error = function(e) { cat(sprintf("  ERROR: Final model failed: %s\n", e$message)); NULL }
@@ -3076,9 +3110,9 @@ if (!is.null(final_model)) {
                             complete_final$pred_final, quiet = TRUE)
     auc_final <- as.numeric(pROC::auc(roc_final))
     cat(sprintf("  Final model in-sample AUC: %.3f (optimistic upper bound)\n", auc_final))
-    if (!is.na(auc_no_cfe))
+    if (!is.na(auc_with_cfe))
       cat(sprintf("  CV OOB AUC was %.3f — gap %.3f = in-sample optimism\n",
-                  auc_no_cfe, auc_final - auc_no_cfe))
+                  auc_with_cfe, auc_final - auc_with_cfe))
   }
 } else {
   cv_data[, pred_final := NA_real_]
@@ -3097,6 +3131,192 @@ cv_data[, pred_source := fcase(
 cat("\n  Prediction source breakdown:\n")
 print(cv_data[, .N, by = pred_source])
 
+
+if (RUN_FULL) {
+
+  #----------------------------------------------------------------------------
+  # 9.7 Figure: Predicted leak risk by wall type x age
+  #----------------------------------------------------------------------------
+  cat("\n--- 9.7: Figure leak_risk — predicted risk by wall type x age ---\n")
+
+  if (!"wall_label" %in% names(cv_data))
+    cv_data[, wall_label := fifelse(has_single_walled == 1,
+                                     "Single-Walled", "Double-Walled")]
+
+  tbl3_leak_rates_pooled <- cv_data[!is.na(pred_emp), .(
+    leak_rate_per_1000 = round(mean(pred_emp, na.rm = TRUE) * 1000, 2),
+    n_fac_years        = .N
+  ), by = .(age_bin, wall_label)]
+
+  tbl3_leak_rates_pooled[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
+  tbl3_leak_rates_pooled[, lbl := sprintf("%.1f", leak_rate_per_1000)]
+
+  fig5b_risk <- ggplot(
+    tbl3_leak_rates_pooled[!is.na(leak_rate_per_1000)],
+    aes(x = age_bin, y = leak_rate_per_1000,
+        color = wall_label, linetype = wall_label, group = wall_label)
+  ) +
+    geom_line(linewidth = 1) +
+    geom_point(size = 2.5) +
+    geom_text(aes(label = lbl), vjust = -0.7, size = 2.5, show.legend = FALSE) +
+    scale_x_discrete(limits = AGE_BIN_LABELS, drop = FALSE) +
+    scale_color_manual(values    = c("Single-Walled" = COL_TX,
+                                      "Double-Walled" = COL_CTRL)) +
+    scale_linetype_manual(values = c("Single-Walled" = "solid",
+                                      "Double-Walled" = "dashed")) +
+    labs(x        = "Tank Age Bin (5-year intervals)",
+         y        = "Predicted First-Leak Rate (per 1,000 Facility-Years)",
+         title    = "Predicted Leak Risk by Tank Age and Wall Type (Pooled)",
+         subtitle = paste0(
+           "1990-1998. Never-leaked risk set. Model-predicted probability from ",
+           "5-fold CV logistic regression; age × replacement interaction removes ",
+           "the spurious 0-4 year elevation driven by replacement-site observations."
+         ),
+         color    = "Wall Type",
+         linetype = "Wall Type") +
+    theme(axis.text.x    = element_text(angle = 45, hjust = 1),
+          legend.position = "bottom",
+          plot.subtitle   = element_text(size = 8, color = "gray30"))
+
+  save_fig(fig5b_risk, "Figure_leak_risk", width = 8, height = 6)
+  cat("  OK: Figure_leak_risk saved\n")
+
+} # end if (RUN_FULL) — Figure_leak_risk
+
+
+#==============================================================================
+# 9.8b TRUE PARTIAL DEPENDENCE PLOTS (uses final_model_sfe)
+#==============================================================================
+cat("\n--- 9.8b: True partial dependence plots ---\n")
+
+if (!is.null(final_model_sfe)) {
+
+  pd_mean <- function(data, col, val) {
+    tmp        <- copy(data)
+    tmp[[col]] <- val
+    mean(predict(final_model_sfe, newdata = tmp, type = "response"), na.rm = TRUE)
+  }
+
+  age_reg_map <- unique(cv_data[!is.na(age_bin) & !is.na(age_bin_reg),
+                                 .(age_bin = as.character(age_bin), age_bin_reg)])
+  age_reg_map <- age_reg_map[age_bin %in% AGE_BIN_LABELS]
+  setorder(age_reg_map, age_bin_reg)
+
+  pd_base <- cv_data[!is.na(has_single_walled) & !is.na(age_bin_reg) &
+                     !is.na(log_capacity) & !is.na(is_motor_fuel) &
+                     !is.na(past_replacement)]
+
+  pd_wall <- rbindlist(list(
+    data.table(
+      level       = "Double-Walled",
+      mean_pred   = round(pd_mean(pd_base, "has_single_walled", 0L), 4),
+      mean_actual = round(cv_data[has_single_walled == 0,
+                                   mean(event_first_leak, na.rm = TRUE)], 4),
+      n_fac_years = cv_data[has_single_walled == 0, .N],
+      covariate   = "Wall Type"
+    ),
+    data.table(
+      level       = "Single-Walled",
+      mean_pred   = round(pd_mean(pd_base, "has_single_walled", 1L), 4),
+      mean_actual = round(cv_data[has_single_walled == 1,
+                                   mean(event_first_leak, na.rm = TRUE)], 4),
+      n_fac_years = cv_data[has_single_walled == 1, .N],
+      covariate   = "Wall Type"
+    )
+  ))
+
+  # pd_vintage only computed when rf_pre_1980 is available
+  if (has_rf_pre_1980) {
+    pd_base_v  <- pd_base[!is.na(rf_pre_1980)]
+    pd_vintage <- rbindlist(list(
+      data.table(
+        level       = "Pre-1980 = No",
+        mean_pred   = round(pd_mean(pd_base_v, "rf_pre_1980", 0L), 4),
+        mean_actual = round(cv_data[rf_pre_1980 == 0,
+                                     mean(event_first_leak, na.rm = TRUE)], 4),
+        n_fac_years = cv_data[rf_pre_1980 == 0, .N],
+        covariate   = "Pre-1980 Vintage"
+      ),
+      data.table(
+        level       = "Pre-1980 = Yes",
+        mean_pred   = round(pd_mean(pd_base_v, "rf_pre_1980", 1L), 4),
+        mean_actual = round(cv_data[rf_pre_1980 == 1,
+                                     mean(event_first_leak, na.rm = TRUE)], 4),
+        n_fac_years = cv_data[rf_pre_1980 == 1, .N],
+        covariate   = "Pre-1980 Vintage"
+      )
+    ))
+  } else {
+    pd_vintage <- data.table()
+    cat("  NOTE: rf_pre_1980 unavailable — Pre-1980 Vintage PD skipped\n")
+  }
+
+  # Age PD: hold past_replacement = 0 to isolate the pure age effect
+  pd_age <- rbindlist(lapply(seq_len(nrow(age_reg_map)), function(i) {
+    lbl     <- age_reg_map$age_bin[i]
+    reg_val <- age_reg_map$age_bin_reg[i]
+    pd_base_clean <- copy(pd_base)
+    pd_base_clean[, past_replacement := 0L]
+    data.table(
+      level       = lbl,
+      mean_pred   = round(pd_mean(pd_base_clean, "age_bin_reg", reg_val), 4),
+      mean_actual = round(cv_data[age_bin == lbl & past_replacement == 0,
+                                   mean(event_first_leak, na.rm = TRUE)], 4),
+      n_fac_years = cv_data[age_bin == lbl & past_replacement == 0, .N],
+      covariate   = "Tank Age (5-yr bins)"
+    )
+  }))
+
+  pd_combined <- rbindlist(list(pd_wall, pd_vintage, pd_age),
+                            use.names = TRUE, fill = TRUE)
+  save_table(pd_combined, "Table_CV_Partial_Dependence_FinalModel")
+
+  cat("  Partial dependence estimates (final model):\n")
+  print(pd_combined[, .(covariate, level, mean_pred, mean_actual, n_fac_years)])
+
+  pd_long <- melt(pd_combined,
+                  id.vars       = c("covariate", "level", "n_fac_years"),
+                  measure.vars  = c("mean_pred", "mean_actual"),
+                  variable.name = "type", value.name = "rate")
+
+  pd_long[, type := factor(fcase(
+    type == "mean_pred",   "Partial Dependence (PD)",
+    type == "mean_actual", "Observed (marginal)",
+    default = "Other"),
+    levels = c("Partial Dependence (PD)", "Observed (marginal)"))]
+
+  # Use only levels present in data (pd_vintage may be empty if rf_pre_1980 absent)
+  active_pd_levels <- all_pd_levels[all_pd_levels %in% pd_long$level]
+  pd_long[, level := factor(as.character(level), levels = active_pd_levels)]
+
+  fig_pd <- ggplot(pd_long, aes(x = level, y = rate, fill = type)) +
+    geom_col(position = position_dodge(width = 0.7), width = 0.65) +
+    facet_wrap(~ covariate, scales = "free_x", nrow = 1) +
+    scale_fill_manual(values = c("Partial Dependence (PD)" = COL_TX,
+                                 "Observed (marginal)"      = COL_CTRL)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 0.01)) +
+    labs(x        = NULL,
+         y        = "Predicted First-Leak Probability",
+         title    = "Risk Factor Partial Dependence (Full-Sample State FE Model)",
+         subtitle = paste0(
+           "Each bar shows the mean predicted probability when every facility is ",
+           "counterfactually assigned that level (other covariates held at observed). ",
+           "Age PD computed holding past_replacement = 0 to isolate the pure age effect. ",
+           "State + year fixed effects absorbed. ",
+           "Observed bars = raw subgroup mean (replacement-free sites). ",
+           "Pre-period 1990-1998 | Never-leaked risk set."
+         ),
+         fill = NULL) +
+    theme(axis.text.x    = element_text(angle = 45, hjust = 1),
+          legend.position = "bottom",
+          plot.subtitle   = element_text(size = 8, color = "gray30"))
+
+  save_fig(fig_pd, "Figure5A_CV_Partial_Dependence_FinalModel", width = 13, height = 5)
+  cat("  OK: Figure5A_CV_Partial_Dependence_FinalModel saved (state FE model)\n")
+
+} else {
+  cat("  WARNING: final_model_sfe is NULL — skipping PD plots\n")
+}
 
 #==============================================================================
 # 9.9 AGGREGATE TO FACILITY LEVEL
@@ -3126,7 +3346,6 @@ if (n_no_score > 0)
 
 #==============================================================================
 # 9.10 ALL-SINGLE-WALLED FLAG
-# Uses tanks_1998 (the December 22, 1998 cross-section built in Section 5.2)
 #==============================================================================
 cat("\n--- 9.10: All-single-walled flag (from tanks_1998) ---\n")
 
@@ -3140,9 +3359,9 @@ fac_wall_type <- tanks_1998[, .(
                        (single_walled == 0 & double_walled == 0), na.rm = TRUE)
 ), by = panel_id]
 
-# Strict: every tank is SW, none DW, none unknown-wall
-fac_wall_type[, fac_all_sw       := as.integer(n_sw == n_tanks & n_dw == 0 & n_unknown_wall == 0)]
-# Loose: no DW tanks among known-wall tanks (allows unknown-wall)
+fac_wall_type[, fac_all_sw       := as.integer(n_sw == n_tanks &
+                                                n_dw == 0 &
+                                                n_unknown_wall == 0)]
 fac_wall_type[, fac_all_sw_loose := as.integer(n_dw == 0 & (n_sw + n_dw) > 0)]
 
 all_sw_counts <- fac_wall_type[
@@ -3193,7 +3412,6 @@ if (ks_test_risk$p.value < 0.05)
   cat("  NOTE: Distributions differ — report both raw and IPW-weighted DiD\n") else
   cat("  OK: Risk score distributions similar across groups\n")
 
-# Pooled quantile breaks
 q_cuts_pooled  <- quantile(fac_risk_1998$fac_emp_risk,
                             probs = c(0, 0.25, 0.50, 0.75, 1.0), na.rm = TRUE)
 q_cuts_tertile <- quantile(fac_risk_1998$fac_emp_risk,
@@ -3255,7 +3473,8 @@ risk_summary <- snap[, .(
   N_fac         = .N,
   Mean_risk     = round(mean(fac_emp_risk, na.rm = TRUE), 4),
   SD_risk       = round(sd(fac_emp_risk,   na.rm = TRUE), 4),
-  Pct_Q4        = round(100 * mean(fac_emp_risk_quartile == "Q4 (Highest)", na.rm = TRUE), 1),
+  Pct_Q4        = round(100 * mean(fac_emp_risk_quartile == "Q4 (Highest)",
+                                   na.rm = TRUE), 1),
   N_all_sw      = sum(fac_all_sw, na.rm = TRUE),
   Pct_all_sw    = round(100 * mean(fac_all_sw, na.rm = TRUE), 1),
   Pct_Q4_all_sw = round(100 * mean(
@@ -3284,7 +3503,9 @@ write_tex(
     footnote(general = paste(
       "Never-leaked risk set excludes facilities with any LUST report before 1990",
       "(pre\\_panel\\_leak) or any within-panel prior leak (has\\_previous\\_leak).",
-      "County FE model used where available; no-FE model as fallback."),
+      "State FE model used where available; no-FE model as fallback.",
+      "All models include age $\\times$ past-replacement interaction to absorb",
+      "the spurious 0--4 year elevation from replacement-site observations."),
       general_title = "", threeparttable = TRUE),
   "Table9_13_FacRisk_Summary"
 )
@@ -3295,28 +3516,81 @@ write_tex(
 #==============================================================================
 cat("\n--- 9.14: Risk score distribution figure ---\n")
 
+risk_stats <- fac_risk_1998[!is.na(fac_emp_risk), .(
+  mean_r   = mean(fac_emp_risk,   na.rm = TRUE),
+  median_r = median(fac_emp_risk, na.rm = TRUE)
+), by = .(Group = fifelse(texas_treated == 1, "Texas", "Control"))]
+
+x_cap <- quantile(fac_risk_1998$fac_emp_risk, 0.99, na.rm = TRUE)
+
+annot_label <- paste0(
+  sprintf("%-10s  %6s  %6s\n", "Group", "Mean", "Median"),
+  paste(
+    risk_stats[order(Group),
+               sprintf("%-10s  %6s  %6s",
+                       Group,
+                       scales::percent(mean_r,   accuracy = 0.1),
+                       scales::percent(median_r, accuracy = 0.1))],
+    collapse = "\n"
+  )
+)
+
 fig_risk_dist <- ggplot(
   fac_risk_1998[!is.na(fac_emp_risk)],
-  aes(x     = fac_emp_risk,
-      fill  = fifelse(texas_treated == 1, "Texas", "Control"),
-      color = fifelse(texas_treated == 1, "Texas", "Control"))
+  aes(x    = fac_emp_risk,
+      fill = fifelse(texas_treated == 1, "Texas", "Control"))
 ) +
-  geom_density(alpha = 0.35, adjust = 1.5) +
+  geom_histogram(
+    aes(y = after_stat(density)),
+    binwidth = 0.005,
+    alpha    = 0.45,
+    position = "identity",
+    color    = NA
+  ) +
   geom_vline(xintercept = q_cuts_pooled[2:4],
              linetype = "dashed", color = "gray40", linewidth = 0.5) +
   annotate("text", x = q_cuts_pooled[2:4], y = Inf,
            vjust = 1.5, hjust = -0.1,
            label = c("Q1|Q2", "Q2|Q3", "Q3|Q4"),
-           size = 2.8, color = "gray30") +
+           size = 2.8, color = "gray35") +
+  geom_vline(data      = risk_stats,
+             aes(xintercept = mean_r, color = Group),
+             linetype  = "solid", linewidth = 1.0) +
+  geom_vline(data      = risk_stats,
+             aes(xintercept = median_r, color = Group),
+             linetype  = "dotted", linewidth = 0.9) +
+  annotate("label",
+           x          = x_cap * 0.68,
+           y          = Inf,
+           vjust      = 1.4,
+           hjust      = 0,
+           size       = 2.5,
+           label.size = 0.3,
+           fill       = "white",
+           color      = "gray20",
+           label      = annot_label) +
   scale_fill_manual(values  = c("Texas" = COL_TX, "Control" = COL_CTRL)) +
   scale_color_manual(values = c("Texas" = COL_TX, "Control" = COL_CTRL)) +
-  scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-  labs(x = "Empirical Risk Score (Predicted P(First Leak))", y = "Density",
+  scale_x_continuous(
+    labels = scales::percent_format(accuracy = 0.1),
+    limits = c(0, x_cap),
+    expand = expansion(mult = c(0.01, 0.02))
+  ) +
+  labs(x        = "Empirical Risk Score (Predicted P(First Leak))",
+       y        = "Density",
        title    = "Empirical Risk Score Distribution at Treatment Date",
-       subtitle = "Facility mean of CV-predicted annual first-leak probability, 1990–1998. Dashed = pooled quartile cutoffs.",
-       fill = NULL, color = NULL)
+       subtitle = paste0(
+         "Facility mean of CV-predicted annual first-leak probability, 1990–1998. ",
+         "Bars = 0.5 pp bins. X-axis capped at 99th pct (",
+         scales::percent(x_cap, accuracy = 0.1), "). ",
+         "Solid lines = group means; dotted = medians. Dashed grey = pooled quartile cutoffs."
+       ),
+       fill  = NULL,
+       color = NULL) +
+  guides(color = "none") +
+  coord_cartesian(clip = "off")
 
-save_fig(fig_risk_dist, "Figure_EmpRisk_Score_Distribution", width = 8, height = 5)
+save_fig(fig_risk_dist, "Figure_EmpRisk_Score_Distribution", width = 9, height = 5)
 
 
 #==============================================================================
@@ -3333,14 +3607,27 @@ build_rate_series <- function(dt, label) {
 }
 
 series_list <- list(
-  build_rate_series(annual_data[fac_all_sw == 1],
-                    "All-SW only"),
-  build_rate_series(annual_data[fac_emp_risk_quartile == "Q4 (Highest)"],
-                    "Top-quartile risk (Q4)"),
-  build_rate_series(annual_data[fac_emp_risk_quartile == "Q1 (Lowest)"],
-                    "Bottom-quartile risk (placebo)")
+  build_rate_series(
+    annual_data[fac_emp_risk_quartile == "Q1 (Lowest)"],
+    "Placebo: Bottom-risk quartile (Q1)"
+  ),
+  build_rate_series(
+    annual_data[fac_all_sw == 1],
+    "All single-walled facilities"
+  ),
+  build_rate_series(
+    annual_data[fac_emp_risk_quartile == "Q4 (Highest)"],
+    "Highest-risk quartile (Q4)"
+  )
 )
 raw_rates_combined <- rbindlist(series_list, fill = TRUE)
+
+stratum_levels <- c(
+  "Placebo: Bottom-risk quartile (Q1)",
+  "All single-walled facilities",
+  "Highest-risk quartile (Q4)"
+)
+raw_rates_combined[, Stratum := factor(Stratum, levels = stratum_levels)]
 
 if (nrow(raw_rates_combined) > 0) {
   fig_risk_rates <- ggplot(raw_rates_combined,
@@ -3350,20 +3637,33 @@ if (nrow(raw_rates_combined) > 0) {
     geom_point(size = 1.5) +
     geom_vline(xintercept = TREATMENT_YEAR + 0.5, linetype = "dashed",
                color = "gray40", linewidth = 0.6) +
+    annotate("text", x = TREATMENT_YEAR + 0.7, y = Inf,
+             label = "Dec 1998\ndeadline", vjust = 1.4, hjust = 0,
+             size = 2.6, color = "gray35") +
     facet_wrap(~ Stratum, nrow = 1, scales = "free_y") +
     scale_color_manual(values    = c("Texas" = COL_TX, "Control" = COL_CTRL)) +
     scale_linetype_manual(values = c("Texas" = "solid", "Control" = "dashed")) +
     scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
     scale_x_continuous(breaks = seq(1990, 2015, 5)) +
-    labs(x = "Year", y = "Annual Closure Rate",
-         title    = "Raw Closure Rates — Empirical Risk Strata (Spec A Only)",
-         subtitle = "Dashed vertical = treatment date. Bottom-quartile panel is placebo.",
-         color = NULL, linetype = NULL) +
+    labs(x        = "Year",
+         y        = "Annual Tank-Closure Rate",
+         title    = "Annual Tank-Closure Rates by Pre-Period Empirical Risk Stratum (Spec A)",
+         subtitle = paste0(
+           "Each panel is a risk sub-sample defined by pre-1999 characteristics. ",
+           "Left panel (Q1) is a placebo — these facilities faced the same deadline ",
+           "but had low predicted leak risk, so we expect little response. ",
+           "Right panel (Q4) contains the highest-risk facilities, where the ",
+           "deadline should bite hardest. Texas (orange) vs. control-state peers (blue)."
+         ),
+         color    = NULL,
+         linetype = NULL) +
     theme(axis.text.x     = element_text(angle = 45, hjust = 1),
           legend.position = "bottom",
-          strip.text      = element_text(face = "bold"))
+          strip.text      = element_text(face = "bold", size = 9),
+          plot.subtitle   = element_text(size = 8, color = "gray30")) +
+    coord_cartesian(clip = "off")   # prevents blank PDF from y = Inf annotation
 
-  save_fig(fig_risk_rates, "Figure_EmpRisk_RawRates", width = 13, height = 5)
+  save_fig(fig_risk_rates, "Figure_EmpRisk_RawRates", width = 13, height = 5.5)
 }
 
 cat("\n========================================\n")
@@ -3383,18 +3683,820 @@ cat(sprintf("  Q4 (Spec A, at treatment year): TX = %s | CTL = %s\n",
   format(annual_data[texas_treated == 0 & panel_year == TREATMENT_YEAR &
                      spec_A_eligible == 1 &
                      fac_emp_risk_quartile == "Q4 (Highest)", .N], big.mark = ",")))
+cat(sprintf("  AUC: No State FE = %.3f | With State FE = %.3f\n",
+  ifelse(is.na(auc_no_cfe),   0, auc_no_cfe),
+  ifelse(is.na(auc_with_cfe), 0, auc_with_cfe)))
 cat("========================================\n\n")
 
 rm(fac_wall_type, series_list, raw_rates_combined, snap)
 gc()
 
 
+#------------------------------------------------------------------------------
+# 10.1 MOTIVATION FIGURES
+# These follow Figures 2-3 in paper order. Figures 2-3 show vintage
+# composition looks balanced overall but wall-type shares diverge
+# within each cohort. Section 10.1 shows that within-cohort wall-type
+# divergence produces different cv_hazard distributions, i.e., different
+# aging trajectories, which the vintage x year FE cannot absorb.
+#
+# All figures use raw data only: ECDFs, histograms, raw scatter.
+# No smoothing except where noted as LOWESS (nonparametric).
+#------------------------------------------------------------------------------
+
+cat("--- 10.1: Motivation figures (raw data, no smoothing) ---\n")
+
+# Facility-level vintage bin from tanks_1998 install years
+fac_vintage_snap <- tanks_1998[, .(
+  vintage_bin = factor(fcase(
+    min(install_year, na.rm = TRUE) < 1980,                         "Pre-1980",
+    min(install_year, na.rm = TRUE) >= 1980 &
+      min(install_year, na.rm = TRUE) <= 1988,                      "1980-1988",
+    min(install_year, na.rm = TRUE) >= 1989,                        "1989-1998",
+    default = NA_character_
+  ), levels = c("Pre-1980", "1980-1988", "1989-1998"))
+), by = panel_id]
+
+cs_match <- merge(cs_match, fac_vintage_snap, by = "panel_id", all.x = TRUE)
+
+
+# ---- Figure 7A: Within-vintage cv_hazard ECDF --------------------------
+# Shows the within-cohort trajectory gap using empirical CDFs.
+# No smoothing. The x-axis is cv_hazard (aging trajectory proxy).
+# Separation between TX and Control curves within each facet =
+# the composition threat that survives facility and vintage x year FEs.
+#
+# KS statistic is the vertical distance between the two ECDF curves
+# at the point of maximum separation, shown directly on the figure.
+
+ks_by_vintage <- cs_match[!is.na(vintage_bin), {
+  tx_r <- cv_hazard[texas_treated == 1]
+  ct_r <- cv_hazard[texas_treated == 0]
+  if (length(tx_r) < 5 | length(ct_r) < 5) {
+    .(ks_d = NA_real_, ks_p = NA_real_,
+      tx_mean = NA_real_, ct_mean = NA_real_,
+      tx_p50  = NA_real_, ct_p50  = NA_real_, n = .N)
+  } else {
+    ks <- ks.test(tx_r, ct_r)
+    .(ks_d   = round(ks$statistic, 3),
+      ks_p   = round(ks$p.value,   4),
+      tx_mean = mean(tx_r,           na.rm = TRUE),
+      ct_mean = mean(ct_r,           na.rm = TRUE),
+      tx_p50  = median(tx_r,         na.rm = TRUE),
+      ct_p50  = median(ct_r,         na.rm = TRUE),
+      n       = .N)
+  }
+}, by = vintage_bin]
+
+ks_by_vintage[, annot := sprintf(
+  "KS D = %.3f  p = %.3f%s\nMedian TX: %.3f%%  CTL: %.3f%%",
+  ks_d, ks_p,
+  fifelse(!is.na(ks_p) & ks_p < 0.01, "***",
+  fifelse(!is.na(ks_p) & ks_p < 0.05, "**",
+  fifelse(!is.na(ks_p) & ks_p < 0.10, "*", ""))),
+  tx_p50 * 100, ct_p50 * 100
+)]
+
+cat("  Within-vintage KS results (aging trajectory gap):\n")
+print(ks_by_vintage[, .(vintage_bin, ks_d, ks_p, tx_mean, ct_mean)])
+
+# Annotation x position at 80th percentile of each vintage
+annot_pos <- cs_match[!is.na(vintage_bin) & !is.na(cv_hazard), .(
+  x_pos = quantile(cv_hazard, 0.80, na.rm = TRUE)
+), by = vintage_bin]
+annot_pos <- merge(annot_pos, ks_by_vintage[, .(vintage_bin, annot)],
+                   by = "vintage_bin")
+
+fig7a <- ggplot(
+  cs_match[!is.na(vintage_bin) & !is.na(cv_hazard)],
+  aes(x = cv_hazard, color = Group)
+) +
+  stat_ecdf(linewidth = 0.9, geom = "step") +
+  geom_text(
+    data        = annot_pos,
+    aes(x = x_pos, y = 0.15, label = annot),
+    inherit.aes = FALSE,
+    hjust = 1, size = 2.7, color = "gray25", lineheight = 0.9
+  ) +
+  facet_wrap(~vintage_bin, nrow = 1) +
+  scale_color_manual(values = COL_PAIR) +
+  scale_x_continuous(
+    labels = scales::percent_format(accuracy = 0.1),
+    limits = quantile(cs_match$cv_hazard, c(0.01, 0.99), na.rm = TRUE)
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    title    = "Figure 7A: Within-Vintage Aging Trajectory Gap",
+    subtitle = paste0(
+      "Empirical CDFs of cv_hazard (cross-validated predicted first-leak rate) ",
+      "within each vintage cohort. Figures 2-3 show vintage composition looks ",
+      "balanced overall but TX is 13-20pp more single-walled within every cohort. ",
+      "This figure shows that within-cohort wall-type divergence produces ",
+      "different cv_hazard distributions, i.e., different aging trajectories. ",
+      "The KS statistic = maximum vertical distance between the two ECDF curves. ",
+      "The cohort x year FE absorbs the cohort average but cannot absorb this ",
+      "within-cohort gap."
+    ),
+    x     = "CV Hazard Score (Predicted Annual First-Leak Probability)",
+    y     = "Empirical CDF",
+    color = NULL
+  ) +
+  theme(
+    strip.text    = element_text(face = "bold", size = 10),
+    plot.subtitle = element_text(size = 8, color = "gray30"),
+    legend.position = "bottom"
+  )
+
+save_fig(fig7a, "Figure7A_WithinVintage_HazardGap", width = 11, height = 5)
+save_table(ks_by_vintage, "Table_WithinVintage_KS_Tests")
+cat("  OK: Figure 7A saved (ECDF, no smoothing)\n")
+
+
+# ---- Figure 7B: Cell imbalance scatter ---------------------------------
+# Each dot = one (wall_type x vintage_bin) cell.
+# x = mean cv_hazard in cell (how steep is the aging trajectory?)
+# y = TX share of cell (is TX overrepresented?)
+# Dot size = N facilities in cell.
+# LOWESS line is nonparametric. No linear regression line.
+# Positive slope = TX overrepresented in high-trajectory cells.
+
+cell_scatter <- cs_match[!is.na(vintage_bin), {
+  n_tx  <- sum(texas_treated == 1)
+  n_ct  <- sum(texas_treated == 0)
+  n_tot <- .N
+  .(n_tx       = n_tx,
+    n_ct       = n_ct,
+    n_tot      = n_tot,
+    tx_share   = n_tx / n_tot,
+    mean_hazard = mean(cv_hazard, na.rm = TRUE),
+    p25_hazard  = quantile(cv_hazard, 0.25, na.rm = TRUE),
+    p75_hazard  = quantile(cv_hazard, 0.75, na.rm = TRUE))
+}, by = .(
+  vintage_bin,
+  wall_label = fifelse(
+    !is.na(fac_all_sw) & fac_all_sw == 1,
+    "All Single-Walled", "Not All Single-Walled"
+  )
+)]
+tx_share_unconditional <- cs_match[, mean(texas_treated == 1)]
+
+# Nonparametric Spearman rank correlation as the summary statistic
+spearman_r <- cor(cell_scatter[n_tot >= 5, mean_hazard],
+                  cell_scatter[n_tot >= 5, tx_share],
+                  method = "spearman", use = "complete.obs")
+spearman_p <- cor.test(
+  cell_scatter[n_tot >= 5, mean_hazard],
+  cell_scatter[n_tot >= 5, tx_share],
+  method = "spearman"
+)$p.value
+
+cat(sprintf("  Cell imbalance Spearman r = %.3f | p = %.4f\n",
+    spearman_r, spearman_p))
+
+fig7b <- ggplot(
+  cell_scatter[n_tot >= 5],
+  aes(x = mean_hazard, y = tx_share, size = n_tot, color = vintage_bin)
+) +
+  geom_hline(yintercept = tx_share_unconditional, linetype = "dotted",
+             color = "gray50", linewidth = 0.6) +
+  annotate("text", x = -Inf, y = tx_share_unconditional + 0.01, hjust = -0.1,
+           label = sprintf("%.0f%% TX share = balanced", tx_share_unconditional * 100), size = 2.7, color = "gray45") +
+  # LOWESS smoother, nonparametric, span = 0.9
+  geom_smooth(
+    data        = cell_scatter[n_tot >= 5],
+    aes(x = mean_hazard, y = tx_share),
+    method      = "loess", span = 0.9, se = TRUE,
+    color       = "gray30", fill = "gray85",
+    linewidth   = 0.8, inherit.aes = FALSE, show.legend = FALSE
+  ) +
+  geom_point(alpha = 0.85) +
+  ggrepel::geom_text_repel(
+    aes(label = paste0(wall_label, "\n", vintage_bin)),
+    size = 2.4, max.overlaps = 8,
+    color = "gray25", segment.color = "gray70", segment.size = 0.3
+  ) +
+  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
+           label = sprintf(
+             "Spearman r = %.3f\np = %.3f%s\n(nonparametric rank correlation)",
+             spearman_r, spearman_p,
+             fifelse(spearman_p < 0.01, "***",
+             fifelse(spearman_p < 0.05, "**",
+             fifelse(spearman_p < 0.10, "*", "")))),
+           size = 2.8, color = "gray20") +
+  scale_color_brewer(palette = "Set2") +
+  scale_size_continuous(range = c(2, 10),
+                        labels = scales::comma_format()) +
+  scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     limits = c(0, 1)) +
+  labs(
+    x        = "Mean CV Hazard in Cell (Mean Aging Trajectory Slope)",
+    y        = "Texas Share of Cell",
+    size     = "N Facilities",
+    color    = "Vintage Cohort",
+    title    = "Figure 7B: Texas Is Overrepresented in High-Trajectory Cells",
+    subtitle = paste0(
+      "Each dot is one (wall type x vintage) cell. ",
+      "A positive association means TX facilities cluster in cells with ",
+      "steeper aging trajectories. Facility FEs absorb the level of each ",
+      "cell's closure rate but the slope delta(risk_i x t) differs across ",
+      "cells and survives demeaning. LOWESS line is nonparametric. ",
+      "Summary statistic is Spearman rank correlation."
+    )
+  ) +
+  theme(plot.subtitle = element_text(size = 8, color = "gray30"))
+
+save_fig(fig7b, "Figure7B_CellImbalance_Scatter", width = 9, height = 6)
+save_table(cell_scatter, "Table_Cell_Imbalance_Summary")
+cat("  OK: Figure 7B saved (raw scatter, LOWESS, Spearman)\n")
+
+
+# ---- Figure 7D: Raw closure rates by cv_hazard quartile ----------------
+# Shows the pre- and post-reform raw annual closure rates for the top
+# and bottom quartiles of cv_hazard. No model, no smoothing, no FEs.
+# Just the raw means within each stratum and year.
+# This is the most transparent possible display of the reform effect
+# and the composition threat: if the pre-trends diverge by quartile
+# this is direct visual evidence that trajectories differ.
+
+# Assign cv_hazard quartile using pooled breakpoints
+q_cuts <- quantile(
+  annual_data[panel_year == TREATMENT_YEAR - 1L, cv_hazard],
+  probs = c(0, 0.25, 0.50, 0.75, 1.0), na.rm = TRUE
+)
+
+# Step 1: assign strata at 1998 only, from the pre-treatment cross section
+hazard_strata_1998 <- annual_data[
+  panel_year == TREATMENT_YEAR - 1L & !is.na(cv_hazard),
+  .(panel_id,
+    hazard_stratum_1998 = cut(
+      cv_hazard,
+      breaks         = quantile(cv_hazard,
+                                probs = c(0, 0.25, 0.75, 1.0),
+                                na.rm = TRUE),
+      include.lowest = TRUE,
+      labels         = c("Q1 (Lowest trajectory)",
+                         "Q2-Q3 (Middle)",
+                         "Q4 (Highest trajectory)")
+    ))
+]
+
+# Step 2: merge the 1998 stratum assignment into the full panel
+# Every year for a given facility gets the same stratum label
+annual_data <- merge(annual_data,
+                     hazard_strata_1998[, .(panel_id, hazard_stratum_1998)],
+                     by = "panel_id", all.x = TRUE)
+
+# Step 3: compute raw closure rates using the fixed 1998 stratum,
+# only for Q1 and Q4 (the diagnostic contrast)
+raw_by_stratum <- annual_data[
+  spec_A_eligible == 1 &
+  panel_year >= 1990 & panel_year <= 2015 &
+  hazard_stratum_1998 %in% c("Q1 (Lowest trajectory)",
+                              "Q4 (Highest trajectory)"),
+  .(raw_closure_rate = mean(closure_event, na.rm = TRUE),
+    n_fac_obs        = .N,
+    # track how many of the original 1998 cohort are still active
+    n_fac_active     = uniqueN(panel_id)),
+  by = .(panel_year,
+         Group   = fifelse(texas_treated == 1, "Texas", "Control"),
+         Stratum = hazard_stratum_1998)
+]
+
+
+raw_by_stratum[, Panel := factor(Panel, levels = unique(Panel))]
+
+fig7d <- ggplot(
+  raw_by_stratum,
+  aes(x = panel_year, y = raw_closure_rate,
+      color = Group, shape = Group)
+) +
+  geom_point(size = 2) +
+  geom_line(linewidth = 0.75) +
+  geom_vline(xintercept = TREATMENT_YEAR + 0.5,
+             linetype = "dashed", color = "gray40", linewidth = 0.6) +
+  annotate("text", x = TREATMENT_YEAR + 0.7, y = Inf,
+           label = "Dec 1998", vjust = 1.5, hjust = 0,
+           size = 2.7, color = "gray40") +
+  facet_wrap(~Stratum, nrow = 1, scales = "free_y") +
+  scale_color_manual(values    = COL_PAIR) +
+  scale_shape_manual(values    = c("Texas" = 16, "Control" = 1)) +
+  scale_y_continuous(labels    = scales::percent_format(accuracy = 0.1)) +
+  scale_x_continuous(breaks    = seq(1990, 2015, 5)) +
+  labs(
+    title    = "Figure 7D: Raw Annual Closure Rates by CV Hazard Stratum (Spec A)",
+    subtitle = paste0(
+      "Raw annual means, no smoothing, no model adjustment. ",
+      "The left panel is a placebo: low-trajectory facilities faced the same ",
+      "reform deadline but had little reason to respond. The right panel shows ",
+      "high-trajectory facilities where the reform should bind hardest. ",
+      "Pre-period divergence between TX and Control within the right panel ",
+      "is direct evidence that trajectory distributions differ across groups."
+    ),
+    x      = "Year",
+    y      = "Raw Annual Closure Rate",
+    color  = NULL,
+    shape  = NULL
+  ) +
+  theme(
+    strip.text      = element_text(face = "bold", size = 9),
+    plot.subtitle   = element_text(size = 8, color = "gray30"),
+    legend.position = "bottom",
+    axis.text.x     = element_text(angle = 45, hjust = 1)
+  )
+
+save_fig(fig7d, "Figure7D_RawClosureRates_ByHazardBin",
+         width = 11, height = 5.5)
+save_table(raw_by_quartile, "Table_RawRates_ByHazardBin")
+cat("  OK: Figure 7D saved (raw means, no smoothing)\n")
+
+
+#------------------------------------------------------------------------------
+# 10A: EXACT CELL MATCHING
+#------------------------------------------------------------------------------
+
+cat("\n--- 10A: Exact Cell Matching ---\n")
+
+fac_wall_modal <- tanks_1998[, .(
+  wall_type_modal = fcase(
+    mean(single_walled == 1, na.rm = TRUE) >= 0.5, "single_wall",
+    mean(double_walled == 1, na.rm = TRUE) >= 0.5, "double_wall",
+    default = "mixed_unknown"
+  )
+), by = panel_id]
+
+fac_fuel_modal <- annual_data[panel_year == TREATMENT_YEAR, .(
+  fuel_type_modal = fcase(
+    has_gasoline_year == 1, "gasoline",
+    has_diesel_year   == 1, "diesel",
+    default = "other_fuel"
+  )
+), by = panel_id]
+
+fac_capacity_bin <- tanks_1998[, .(
+  capacity_bin = fcase(
+    sum(capacity, na.rm = TRUE) <  5000,  "small",
+    sum(capacity, na.rm = TRUE) < 15000,  "medium",
+    sum(capacity, na.rm = TRUE) < 30000,  "large",
+    default = "xlarge"
+  )
+), by = panel_id]
+
+for (dt_m in list(fac_wall_modal, fac_fuel_modal, fac_capacity_bin)) {
+  merge_col <- setdiff(names(dt_m), "panel_id")
+  if (any(merge_col %in% names(annual_data)))
+    annual_data[, (merge_col) := NULL]
+  annual_data <- merge(annual_data, dt_m, by = "panel_id", all.x = TRUE)
+}
+
+annual_data[, cell_id := paste(
+  wall_type_modal, vintage_cohort,
+  capacity_bin, fuel_type_modal,
+  sep = "_"
+)]
+
+cat(sprintf("  Unique risk-type cells: %s\n",
+    format(uniqueN(annual_data$cell_id), big.mark = ",")))
+
+cell_coverage <- annual_data[
+  panel_year == TREATMENT_YEAR - 1L,
+  .(has_tx   = any(texas_treated == 1),
+    has_ctrl  = any(texas_treated == 0),
+    n_tx      = sum(texas_treated == 1),
+    n_ctrl    = sum(texas_treated == 0)),
+  by = cell_id]
+
+cells_with_both <- cell_coverage[has_tx == TRUE & has_ctrl == TRUE, cell_id]
+annual_data[, in_cell_matched := cell_id %in% cells_with_both]
+
+n_tx_total <- uniqueN(annual_data[texas_treated == 1 &
+                                    panel_year == TREATMENT_YEAR, panel_id])
+n_tx_cell  <- uniqueN(annual_data[texas_treated == 1 &
+                                    panel_year == TREATMENT_YEAR &
+                                    in_cell_matched == TRUE, panel_id])
+n_ct_total <- uniqueN(annual_data[texas_treated == 0 &
+                                    panel_year == TREATMENT_YEAR, panel_id])
+n_ct_cell  <- uniqueN(annual_data[texas_treated == 0 &
+                                    panel_year == TREATMENT_YEAR &
+                                    in_cell_matched == TRUE, panel_id])
+
+cat(sprintf("  TX  retained: %s / %s (%.1f%%)\n",
+    format(n_tx_cell,  big.mark = ","),
+    format(n_tx_total, big.mark = ","),
+    100 * n_tx_cell / n_tx_total))
+cat(sprintf("  CTL retained: %s / %s (%.1f%%)\n",
+    format(n_ct_cell,  big.mark = ","),
+    format(n_ct_total, big.mark = ","),
+    100 * n_ct_cell / n_ct_total))
+
+if (n_tx_cell / n_tx_total < 0.50) {
+  cat("  WARNING: less than 50% TX retention.\n")
+  cat("  Cells are over-distinguishing trajectories.\n")
+  cat("  Consider collapsing capacity_bin to binary or\n")
+  cat("  removing fuel_type_modal from cell definition.\n")
+}
+
+bal_cell_before <- annual_data[panel_year == TREATMENT_YEAR - 1L, .(
+  label      = "Cell: before",
+  hazard_TX  = mean(cv_hazard[texas_treated == 1], na.rm = TRUE),
+  hazard_CTL = mean(cv_hazard[texas_treated == 0], na.rm = TRUE)
+)]
+bal_cell_after <- annual_data[
+  panel_year == TREATMENT_YEAR - 1L & in_cell_matched == TRUE, .(
+  label      = "Cell: after",
+  hazard_TX  = mean(cv_hazard[texas_treated == 1], na.rm = TRUE),
+  hazard_CTL = mean(cv_hazard[texas_treated == 0], na.rm = TRUE)
+)]
+
+bal_cell_compare <- rbind(bal_cell_before, bal_cell_after)
+bal_cell_compare[, hazard_std_diff := round(
+  (hazard_TX - hazard_CTL) / pooled_sd_hazard, 3)]
+
+cat("\n  Cell matching trajectory balance:\n")
+print(bal_cell_compare[, .(label, hazard_TX, hazard_CTL, hazard_std_diff)])
+
+cell_match_ids <- annual_data[
+  panel_year == TREATMENT_YEAR - 1L,
+  .(panel_id, texas_treated, cell_id, in_cell_matched)
+]
+fwrite(cell_match_ids,
+       file.path(ANALYSIS_DIR, "matching_cell_ids.csv"))
+cat("  Saved: matching_cell_ids.csv\n")
+
+
+#------------------------------------------------------------------------------
+# 10B: CV HAZARD SCORE MATCHING
+#------------------------------------------------------------------------------
+
+cat("\n--- 10B: CV Hazard Score Matching ---\n")
+
+ks_overall <- ks.test(
+  cs_match[texas_treated == 1L, cv_hazard],
+  cs_match[texas_treated == 0L, cv_hazard]
+)
+cat(sprintf("  KS test on cv_hazard distributions:\n"))
+cat(sprintf("    D = %.4f | p = %.4f %s\n",
+    ks_overall$statistic, ks_overall$p.value,
+    stars_fn(ks_overall$p.value)))
+cat(sprintf("  Conclusion: %s\n\n",
+    fifelse(ks_overall$p.value < 0.05,
+      "Trajectory distributions differ. Matching is necessary.",
+      "Trajectory distributions similar. Matching is precautionary.")))
+
+caliper <- 0.20 * pooled_sd_hazard
+cat(sprintf("  Caliper (0.20 x pooled SD): %.5f\n", caliper))
+
+tx_facs   <- cs_match[texas_treated == 1L,
+                       .(panel_id, cv_hazard, vintage_cohort)]
+ctrl_facs <- cs_match[texas_treated == 0L,
+                       .(panel_id, cv_hazard, vintage_cohort)]
+
+match_list <- lapply(seq_len(nrow(tx_facs)), function(i) {
+  tx_h       <- tx_facs$cv_hazard[i]
+  tx_vintage <- tx_facs$vintage_cohort[i]
+  candidates <- ctrl_facs[
+    vintage_cohort == tx_vintage &
+    abs(cv_hazard - tx_h) <= caliper
+  ]
+  if (nrow(candidates) == 0L) return(NULL)
+  data.table(
+    tx_panel_id    = tx_facs$panel_id[i],
+    ctrl_panel_id  = candidates$panel_id,
+    tx_hazard      = tx_h,
+    ctrl_hazard    = candidates$cv_hazard,
+    hazard_distance = abs(candidates$cv_hazard - tx_h),
+    vintage        = tx_vintage
+  )
+})
+
+match_dt <- rbindlist(match_list[!sapply(match_list, is.null)])
+
+matched_tx_ids   <- unique(match_dt$tx_panel_id)
+matched_ctrl_ids <- unique(match_dt$ctrl_panel_id)
+
+annual_data[, in_risk_matched := panel_id %in% matched_tx_ids |
+                                   panel_id %in% matched_ctrl_ids]
+
+cat(sprintf("  TX  matched: %s / %s (%.1f%%)\n",
+    format(length(matched_tx_ids), big.mark = ","),
+    format(nrow(tx_facs),          big.mark = ","),
+    100 * length(matched_tx_ids) / nrow(tx_facs)))
+cat(sprintf("  CTL matched: %s\n",
+    format(length(matched_ctrl_ids), big.mark = ",")))
+cat(sprintf("  TX unmatched: %s\n",
+    format(nrow(tx_facs) - length(matched_tx_ids), big.mark = ",")))
+
+cs_matched_risk <- cs_match[panel_id %in% matched_tx_ids |
+                               panel_id %in% matched_ctrl_ids]
+
+bal_risk_before <- cs_match[, .(
+  label      = "Risk: before",
+  hazard_TX  = mean(cv_hazard[texas_treated == 1L], na.rm = TRUE),
+  hazard_CTL = mean(cv_hazard[texas_treated == 0L], na.rm = TRUE),
+  sw_TX      = mean(fac_all_sw[texas_treated == 1L], na.rm = TRUE),
+  sw_CTL     = mean(fac_all_sw[texas_treated == 0L], na.rm = TRUE)
+)]
+bal_risk_after <- cs_matched_risk[, .(
+  label      = "Risk: after",
+  hazard_TX  = mean(cv_hazard[texas_treated == 1L], na.rm = TRUE),
+  hazard_CTL = mean(cv_hazard[texas_treated == 0L], na.rm = TRUE),
+  sw_TX      = mean(fac_all_sw[texas_treated == 1L], na.rm = TRUE),
+  sw_CTL     = mean(fac_all_sw[texas_treated == 0L], na.rm = TRUE)
+)]
+
+bal_risk_compare <- rbind(bal_risk_before, bal_risk_after)
+bal_risk_compare[, hazard_std_diff := round(
+  (hazard_TX - hazard_CTL) / pooled_sd_hazard, 3)]
+bal_risk_compare[, sw_gap := round(sw_TX - sw_CTL, 3)]
+
+cat("\n  CV hazard matching trajectory balance:\n")
+cat("  hazard_std_diff = standardized gap in aging trajectory slopes\n")
+cat("  Target: |hazard_std_diff| < 0.10 after matching\n")
+print(bal_risk_compare[, .(label, hazard_TX, hazard_CTL,
+                             hazard_std_diff, sw_gap)])
+
+risk_match_ids <- data.table(
+  panel_id        = c(matched_tx_ids, matched_ctrl_ids),
+  texas_treated   = c(rep(1L, length(matched_tx_ids)),
+                      rep(0L, length(matched_ctrl_ids))),
+  cv_hazard       = c(
+    cs_match[match(matched_tx_ids,   panel_id), cv_hazard],
+    cs_match[match(matched_ctrl_ids, panel_id), cv_hazard]
+  ),
+  in_risk_matched = TRUE
+)
+fwrite(risk_match_ids,
+       file.path(ANALYSIS_DIR, "matching_risk_ids.csv"))
+cat("  Saved: matching_risk_ids.csv\n")
+
+
+#------------------------------------------------------------------------------
+# 10.2 FIGURE 7C: Before/After ECDF
+# Shows that after cv_hazard matching the TX and Control empirical
+# CDFs overlap. Uses raw ECDFs, no smoothing.
+# Left panel = before matching, trajectories diverge.
+# Right panel = after matching, trajectories equated.
+# The KS statistic is the maximum vertical gap between the two curves.
+#------------------------------------------------------------------------------
+
+cat("\n--- 10.2: Figure 7C (ECDF before/after) ---\n")
+
+ks_after_match <- ks.test(
+  cs_matched_risk[texas_treated == 1L, cv_hazard],
+  cs_matched_risk[texas_treated == 0L, cv_hazard]
+)
+
+dist_before <- cs_match[, .(
+  cv_hazard, Group = fifelse(texas_treated == 1L, "Texas", "Control"),
+  Sample = "Full sample\n(before matching)"
+)]
+dist_after <- cs_matched_risk[, .(
+  cv_hazard, Group = fifelse(texas_treated == 1L, "Texas", "Control"),
+  Sample = "CV hazard matched sample"
+)]
+
+dist_combined <- rbind(dist_before, dist_after)
+dist_combined[, Sample := factor(Sample,
+  levels = c("Full sample\n(before matching)",
+             "CV hazard matched sample"))]
+
+# KS annotations: one per panel
+ks_annots_7c <- data.table(
+  Sample = factor(
+    c("Full sample\n(before matching)", "CV hazard matched sample"),
+    levels = c("Full sample\n(before matching)", "CV hazard matched sample")
+  ),
+  label = c(
+    sprintf("KS D = %.3f  p = %.3f%s\nTrajectory distributions differ",
+            ks_overall$statistic, ks_overall$p.value,
+            stars_fn(ks_overall$p.value)),
+    sprintf("KS D = %.3f  p = %.3f%s\nTrajectory distributions equated",
+            ks_after_match$statistic, ks_after_match$p.value,
+            stars_fn(ks_after_match$p.value))
+  ),
+  x = rep(quantile(dist_combined$cv_hazard, 0.92, na.rm = TRUE), 2),
+  y = rep(0.15, 2)
+)
+
+fig7c <- ggplot(
+  dist_combined[!is.na(cv_hazard)],
+  aes(x = cv_hazard, color = Group)
+) +
+  stat_ecdf(linewidth = 0.9, geom = "step") +
+  geom_text(
+    data        = ks_annots_7c,
+    aes(x = x, y = y, label = label),
+    inherit.aes = FALSE,
+    hjust = 1, size = 2.7, color = "gray25", lineheight = 0.9
+  ) +
+  facet_wrap(~Sample, ncol = 2) +
+  scale_color_manual(values = COL_PAIR) +
+  scale_x_continuous(
+    labels = scales::percent_format(accuracy = 0.1),
+    limits = quantile(dist_combined$cv_hazard, c(0.01, 0.99), na.rm = TRUE)
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    title    = "Figure 7C: Aging Trajectory Distributions Before and After CV Hazard Matching",
+    subtitle = paste0(
+      "Empirical CDFs of cv_hazard, the cross-validated predicted first-leak ",
+      "probability used as a proxy for the aging trajectory trend_i(t). ",
+      "Facility FEs absorb levels. Parallel trends requires ",
+      "E[trend_i(t)|TX] = E[trend_i(t)|CTL]. ",
+      "Left panel: trajectories differ before matching (KS p significant). ",
+      "Right panel: trajectories equated after matching (KS p not significant). ",
+      "The DID is estimated on facilities with comparable aging slopes."
+    ),
+    x     = "CV Hazard Score (Predicted Annual First-Leak Probability)",
+    y     = "Empirical CDF",
+    color = NULL
+  ) +
+  theme(
+    strip.text      = element_text(face = "bold", size = 9),
+    plot.subtitle   = element_text(size = 8, color = "gray30"),
+    legend.position = "bottom"
+  )
+
+save_fig(fig7c, "Figure7C_HazardScore_BeforeAfter", width = 11, height = 5)
+cat("  OK: Figure 7C saved (ECDF, no smoothing)\n")
+
+
+#------------------------------------------------------------------------------
+# 10.3 COMBINED BALANCE TABLE
+#------------------------------------------------------------------------------
+
+cat("\n--- 10.3: Combined balance table ---\n")
+
+balance_table <- rbindlist(list(
+  data.table(
+    Approach           = "Full sample (no matching)",
+    FE_in_event_study  = "vintage_cohort x year",
+    N_TX               = n_tx_total,
+    N_CTL              = n_ct_total,
+    hazard_std_diff    = round(
+      (bal_risk_before$hazard_TX - bal_risk_before$hazard_CTL) /
+        pooled_sd_hazard, 3),
+    sw_gap             = round(bal_risk_before$sw_TX -
+                                 bal_risk_before$sw_CTL, 3),
+    KS_D               = round(ks_overall$statistic, 4),
+    KS_p               = round(ks_overall$p.value,   4),
+    Trajectories       = fifelse(ks_overall$p.value < 0.05,
+      "Differ", "Similar")
+  ),
+  data.table(
+    Approach           = "Exact cell match (wall x vintage x capacity x fuel)",
+    FE_in_event_study  = "cell_id x year",
+    N_TX               = n_tx_cell,
+    N_CTL              = n_ct_cell,
+    hazard_std_diff    = bal_cell_compare[
+      label == "Cell: after", hazard_std_diff],
+    sw_gap             = NA_real_,
+    KS_D               = NA_real_,
+    KS_p               = NA_real_,
+    Trajectories       = fifelse(
+      abs(bal_cell_compare[
+        label == "Cell: after", hazard_std_diff]) < 0.10,
+      "Equated", "Partially equated")
+  ),
+  data.table(
+    Approach           = "CV hazard match (caliper = 0.20 SD within vintage)",
+    FE_in_event_study  = "vintage_cohort x year",
+    N_TX               = length(matched_tx_ids),
+    N_CTL              = length(matched_ctrl_ids),
+    hazard_std_diff    = bal_risk_compare[
+      label == "Risk: after", hazard_std_diff],
+    sw_gap             = bal_risk_compare[label == "Risk: after", sw_gap],
+    KS_D               = round(ks_after_match$statistic, 4),
+    KS_p               = round(ks_after_match$p.value,   4),
+    Trajectories       = fifelse(ks_after_match$p.value < 0.05,
+      "Still differ. Tighten caliper.", "Equated")
+  )
+), fill = TRUE)
+
+cat("\n=== MATCHING BALANCE SUMMARY ===\n")
+cat("hazard_std_diff = standardized gap in aging trajectory slopes\n")
+cat("Target: |hazard_std_diff| < 0.10\n\n")
+print(balance_table[, .(Approach, N_TX, N_CTL,
+                          hazard_std_diff, KS_p, Trajectories)])
+
+save_table(balance_table, "Table_Matching_Balance_Summary")
+
+write_tex(
+  kbl(balance_table[, .(Approach, FE_in_event_study, N_TX, N_CTL,
+                          hazard_std_diff, KS_D, KS_p, Trajectories)],
+      format    = "latex", booktabs = TRUE, linesep = "", escape = FALSE,
+      caption   = paste(
+        "Matching balance summary.",
+        "\\texttt{hazard\\_std\\_diff} = standardized difference in mean",
+        "cv\\_hazard (cross-validated predicted first-leak probability)",
+        "between Texas and control groups.",
+        "Facility fixed effects absorb levels $\\alpha_i$.",
+        "The relevant balance criterion is trajectory slope similarity,",
+        "not level similarity.",
+        "Target: $|$hazard\\_std\\_diff$| < 0.10$."),
+      label     = "tab:matching-balance",
+      col.names = c("Approach", "Event Study FE", "N TX", "N CTL",
+                    "Traj. Std Diff", "KS D", "KS p",
+                    "Trajectories")) |>
+    kable_styling(latex_options = c("scale_down", "HOLD_position"),
+                  font_size = 9, full_width = FALSE) |>
+    column_spec(1, width = "5cm") |>
+    column_spec(2, width = "3cm") |>
+    footnote(general = paste(
+      "Exact cell: cell = wall type $\\times$ vintage cohort",
+      "$\\times$ capacity bin $\\times$ fuel type.",
+      "CV hazard match: caliper = 0.20 pooled SD of cv\\_hazard,",
+      "exact match on vintage\\_cohort.",
+      "Facility FEs absorb $\\alpha_i$. The surviving threat is",
+      "$\\delta(\\text{risk}_i \\times t)$, risk-type aging trajectories.",
+      "Matching equalizes the distribution of these trajectories",
+      "across TX and Control."),
+      general_title = "", threeparttable = TRUE),
+  "Table_Matching_Balance_Summary"
+)
+cat("  OK: Table_Matching_Balance_Summary saved\n")
+
+
+#------------------------------------------------------------------------------
+# 10.4 SAVE MATCHING METADATA FOR DID SCRIPT
+#------------------------------------------------------------------------------
+
+cat("\n--- 10.4: Save matching metadata ---\n")
+
+matching_metadata <- list(
+  # Cell matching
+  cell_id_definition      = "wall_type_modal x vintage_cohort x capacity_bin x fuel_type_modal",
+  cells_with_both         = cells_with_both,
+  n_tx_cell_matched       = n_tx_cell,
+  n_ct_cell_matched       = n_ct_cell,
+  tx_retention_cell       = n_tx_cell / n_tx_total,
+  bal_cell_std_diff       = bal_cell_compare[
+    label == "Cell: after", hazard_std_diff],
+
+  # CV hazard matching
+  caliper                 = caliper,
+  pooled_sd_hazard        = pooled_sd_hazard,
+  matched_tx_ids          = matched_tx_ids,
+  matched_ctrl_ids        = matched_ctrl_ids,
+  n_tx_risk_matched       = length(matched_tx_ids),
+  n_ct_risk_matched       = length(matched_ctrl_ids),
+  tx_retention_risk       = length(matched_tx_ids) / nrow(tx_facs),
+  bal_hazard_std_diff_before = bal_risk_compare[
+    label == "Risk: before", hazard_std_diff],
+  bal_hazard_std_diff_after  = bal_risk_compare[
+    label == "Risk: after",  hazard_std_diff],
+  ks_before_d             = ks_overall$statistic,
+  ks_before_p             = ks_overall$p.value,
+  ks_after_d              = ks_after_match$statistic,
+  ks_after_p              = ks_after_match$p.value,
+
+  # File paths for DID script
+  path_cell_ids           = file.path(ANALYSIS_DIR, "matching_cell_ids.csv"),
+  path_risk_ids           = file.path(ANALYSIS_DIR, "matching_risk_ids.csv"),
+
+  # Balance table for inline reporting
+  balance_table           = balance_table,
+  run_date                = Sys.time()
+)
+
+saveRDS(matching_metadata,
+        file.path(ANALYSIS_DIR, "matching_metadata.rds"))
+cat("  Saved: matching_metadata.rds\n")
+
+cat("\n========================================\n")
+cat("SECTION 10 COMPLETE\n")
+cat(sprintf(
+  "  Cell match:       %s TX / %s CTL | traj std diff = %.3f\n",
+  format(n_tx_cell,               big.mark = ","),
+  format(n_ct_cell,               big.mark = ","),
+  bal_cell_compare[label == "Cell: after", hazard_std_diff]))
+cat(sprintf(
+  "  CV hazard match:  %s TX / %s CTL | traj std diff = %.3f\n",
+  format(length(matched_tx_ids),   big.mark = ","),
+  format(length(matched_ctrl_ids), big.mark = ","),
+  bal_risk_compare[label == "Risk: after", hazard_std_diff]))
+cat(sprintf(
+  "  KS before: D = %.4f (p = %.4f) | after: D = %.4f (p = %.4f)\n",
+  ks_overall$statistic,     ks_overall$p.value,
+  ks_after_match$statistic, ks_after_match$p.value))
+cat("  Figures: 7A (within-vintage ECDF), 7B (cell scatter),\n")
+cat("           7C (before/after ECDF), 7D (raw rates by quartile)\n")
+cat("  Files: matching_cell_ids.csv, matching_risk_ids.csv,\n")
+cat("         matching_metadata.rds\n")
+cat("========================================\n\n")
+
+rm(fac_wall_modal, fac_fuel_modal, fac_capacity_bin, cell_coverage,
+   cell_scatter, dist_before, dist_after, dist_combined,
+   match_list, fac_vintage_snap, annot_pos)
+gc()
+
+
 #==============================================================================
-# SECTION 10: JMP PUBLICATION TABLES
+# Section 11: JMP PUBLICATION TABLES
 #==============================================================================
 
 cat("\n========================================\n")
-cat("SECTION 10: JMP PUBLICATION TABLES\n")
+cat("Section 11: JMP PUBLICATION TABLES\n")
 cat("========================================\n\n")
 
 # 10.1 Table A1: TX Phased Mandate Schedule
@@ -3465,7 +4567,7 @@ cat("  OK: Table A2 saved (CSV + .tex)\n")
 
 
 #==============================================================================
-# SECTION 10.3: TABLE A3 — SPEC A COMPOSITIONAL BALANCE (PUB FORMAT) (NEW)
+# Section 11.3: TABLE A3 — SPEC A COMPOSITIONAL BALANCE (PUB FORMAT) (NEW)
 #==============================================================================
 
 cat("--- 10.3: Table A3 — Spec A Balance (Publication Format with Diff + Stars) ---\n")
@@ -3611,9 +4713,13 @@ if (file.exists(CONTRACT_PATH)) {
   save_fig(fig_coverage, "FigureA_TX_FR_Coverage_Composition", width = 8, height = 6)
   save_table(regime_shares, "FigureA_data_regime_shares")
 
-# ---- §11.2 REPLACEMENT: Top-5 by per-year rank frequency, HHI per-year ----
 
-cat("--- 11.2: TX Private Insurance Market - Top 5 & HHI Trend ---\n")
+
+#==============================================================================
+# SECTION 11.2: TX Private Insurance Market - Dynamic Top 5 & HHI Trend
+#==============================================================================
+cat("--- 11.2: TX Private Insurance Market - Dynamic Top 5 & HHI Trend ---\n")
+
 ins_panel <- panel_data_inst[plot_category == "Private Insurance" &
                               !is.na(ISSUER_NAME) & ISSUER_NAME != "NO COVERAGE"]
 ins_panel[toupper(ISSUER_NAME) == "OTHER", ISSUER_NAME := "Other Private Insurers"]
@@ -3630,16 +4736,18 @@ hhi_trend <- insurer_exposure[, .(HHI = sum((market_share * 100)^2)), by = YEAR]
 setorder(insurer_exposure, YEAR, -fac_months)
 insurer_exposure[, annual_rank := frank(-fac_months, ties.method = "first"), by = YEAR]
 
-# *** FIX: Stable top-5 = insurers appearing in per-year top-5 most often ***
-top5_freq <- insurer_exposure[annual_rank <= 5,
-  .(n_years_top5 = uniqueN(YEAR)), by = ISSUER_NAME]
-setorder(top5_freq, -n_years_top5)
-top5_names <- top5_freq[1:min(5, .N), ISSUER_NAME]
-cat(sprintf("  Top 5 insurers (by per-year top-5 frequency): %s\n",
-            paste(top5_names, collapse = "; ")))
+# Identify all specific insurers that reached the top 5 in ANY given year (excluding the aggregate)
+ever_top5_names <- unique(insurer_exposure[annual_rank <= 5 & ISSUER_NAME != "Other Private Insurers", ISSUER_NAME])
+cat(sprintf("  Insurers appearing in any annual Top 5: %d firms\n", length(ever_top5_names)))
+
+# Establish static ordering based on aggregate historical exposure (2007-2020)
+historical_volume <- insurer_exposure[ISSUER_NAME %in% ever_top5_names,
+                                      .(total_vol = sum(fac_months)),
+                                      by = ISSUER_NAME]
+setorder(historical_volume, -total_vol) # Largest overall exposure first
 
 insurer_exposure[, Plot_Issuer := fifelse(
-  ISSUER_NAME %in% top5_names, ISSUER_NAME, "Other Private Insurers"
+  ISSUER_NAME %in% ever_top5_names, ISSUER_NAME, "Other Private Insurers"
 )]
 
 plot_data_inst <- insurer_exposure[, .(
@@ -3647,14 +4755,13 @@ plot_data_inst <- insurer_exposure[, .(
 ), by = .(YEAR, Plot_Issuer)]
 plot_data_inst <- merge(plot_data_inst, hhi_trend, by = "YEAR", all.x = TRUE)
 
-# Stack order: Other at bottom, named insurers ordered by frequency
-top5_order <- top5_freq[1:min(5, .N)][order(n_years_top5), ISSUER_NAME]
-factor_levels_inst <- c("Other Private Insurers", top5_order)
+# Stack order: Other at bottom, then named insurers ordered by total historical volume (largest at bottom)
+factor_levels_inst <- c("Other Private Insurers", historical_volume$ISSUER_NAME)
 plot_data_inst[, Plot_Issuer := factor(Plot_Issuer, levels = factor_levels_inst)]
 
-# Exactly 6 colors (Other + 5 named)
-palette6 <- c("gray80", "#264653", "#2a9d8f", "#e9c46a", "#f4a261", "#e76f51")
-custom_colors <- setNames(palette6[1:length(factor_levels_inst)], factor_levels_inst)
+# Dynamic palette generation locked to the volume-based factor levels
+named_colors <- scales::hue_pal()(length(ever_top5_names))
+custom_colors <- setNames(c("gray80", named_colors), factor_levels_inst)
 
 HHI_SCALE_FACTOR <- 5000
 
@@ -3662,7 +4769,7 @@ fig_top5 <- ggplot(plot_data_inst, aes(x = as.factor(YEAR))) +
   geom_col(aes(y = market_share, fill = Plot_Issuer),
            width = 0.85, color = "white", linewidth = 0.2) +
   geom_line(aes(y = HHI / HHI_SCALE_FACTOR, group = 1),
-            color = "black", linewidth = 1.2, linetype = "dashed") +
+             color = "black", linewidth = 1.2, linetype = "dashed") +
   geom_point(aes(y = HHI / HHI_SCALE_FACTOR),
              color = "black", size = 2.5) +
   scale_y_continuous(
@@ -3674,7 +4781,7 @@ fig_top5 <- ggplot(plot_data_inst, aes(x = as.factor(YEAR))) +
   scale_fill_manual(values = custom_colors) +
   labs(x = "Year", y = "Market Share (by Facility-Months)",
        title = "Private Insurance Market Consolidation",
-       subtitle = "Top 5 Insurers by Per-Year Rank Frequency (Bars) + Per-Year HHI (Dashed)",
+       subtitle = "Market Share of All Firms Reaching Top 5 in Any Year (Bars) + Per-Year HHI (Dashed)",
        fill = "Insurer") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.position = "right") +
@@ -3685,8 +4792,10 @@ save_table(plot_data_inst, "Figure_data_Top5_HHI")
 
 
 
-# 11.3 Contract Switching Event Study (TWFE)
-cat("--- 11.3: Contract Switching Event Study (TWFE) ---\n")
+#==============================================================================
+# SECTION 11.3: Contract Switching Rate
+#==============================================================================
+cat("--- 11.3: Contract Switching Rate ---\n")
 
 # Step 1: facility-year panel, primary insurer = most months
 fac_yr_primary <- ins_panel[, .(months = .N), by = .(FACILITY_ID, YEAR, ISSUER_NAME)]
@@ -3703,85 +4812,27 @@ fac_yr_primary[, switched    := as.integer(
   ISSUER_NAME != prev_issuer
 )]
 
+annual_switch_rate <- fac_yr_primary[!is.na(switched), .(
+  switch_rate = mean(switched)
+), by = YEAR]
+setorder(annual_switch_rate, YEAR)
+
 cat(sprintf("  Overall annual switch rate: %.1f%%\n",
             100 * mean(fac_yr_primary$switched, na.rm = TRUE)))
 
-# ---- TWFE event study helper ----
-run_switching_es <- function(panel_dt, event_year, window = 4L,
-                              ref_offset = -1L, label = "") {
-  es_dt <- panel_dt[YEAR >= event_year - window & YEAR <= event_year + window]
-  es_dt[, rel_year := YEAR - event_year]
+fig_churn <- ggplot(annual_switch_rate, aes(x = YEAR, y = switch_rate)) +
+  geom_line(color = "#264653", linewidth = 1.2) +
+  geom_point(color = "#e76f51", size = 3) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1),
+                     limits = c(0, max(annual_switch_rate$switch_rate) * 1.2)) +
+  scale_x_continuous(breaks = min(annual_switch_rate$YEAR):max(annual_switch_rate$YEAR)) +
+  labs(x = "Year", y = "Annual Switch Rate",
+       title = "Facility Insurance Contract Switching Rate",
+       subtitle = "Share of facilities changing primary insurer year-over-year") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-  if (uniqueN(es_dt[rel_year < 0, YEAR]) < 2 ||
-      uniqueN(es_dt[rel_year > 0, YEAR]) < 1) {
-    cat(sprintf("  WARNING: Insufficient window for %s\n", label))
-    return(NULL)
-  }
-
-  m <- tryCatch(
-    feols(switched ~ i(rel_year, ref = ref_offset) | FACILITY_ID + YEAR,
-          data    = es_dt,
-          cluster = ~FACILITY_ID),
-    error = function(e) { cat("  TWFE failed:", e$message, "\n"); NULL }
-  )
-  if (is.null(m)) return(NULL)
-
-  dt <- as.data.table(broom::tidy(m, conf.int = TRUE))
-  dt[, rel_year := as.integer(stringr::str_extract(term, "-?[0-9]+"))]
-  dt <- rbind(dt,
-    data.table(term = "ref", estimate = 0, std.error = 0, statistic = NA,
-               p.value = NA, conf.low = 0, conf.high = 0,
-               rel_year = ref_offset),
-    fill = TRUE)
-  dt[, Event := label]
-  dt[, event_year := event_year]
-  return(dt[!is.na(rel_year)])
-}
-
-es_zurich <- run_switching_es(fac_yr_primary, event_year = 2012,
-                               window = 4L, ref_offset = -1L,
-                               label = "Zurich Exit (2012)")
-
-es_tomic  <- run_switching_es(fac_yr_primary, event_year = 2018,
-                               window = 4L, ref_offset = -1L,
-                               label = "TOMIC Acquisition (2018)")
-
-es_combined <- rbindlist(list(es_zurich, es_tomic), fill = TRUE)
-
-if (nrow(es_combined) > 0) {
-  fig_churn_ev <- ggplot(
-    es_combined[!is.na(rel_year)],
-    aes(x = rel_year, y = estimate, color = Event, fill = Event)
-  ) +
-    geom_hline(yintercept = 0, color = "gray50", linewidth = 0.6) +
-    geom_vline(xintercept = -0.5, linetype = "dashed",
-               color = "gray40", linewidth = 0.5) +
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
-                alpha = 0.15, color = NA) +
-    geom_line(linewidth = 1) +
-    geom_point(size = 3) +
-    facet_wrap(~ Event, scales = "free_y") +
-    scale_color_manual(values = c("Zurich Exit (2012)"      = COL_TX,
-                                   "TOMIC Acquisition (2018)" = COL_CTRL)) +
-    scale_fill_manual(values  = c("Zurich Exit (2012)"      = COL_TX,
-                                   "TOMIC Acquisition (2018)" = COL_CTRL)) +
-    scale_x_continuous(breaks = -4:4,
-                       labels = function(x) ifelse(x == 0, "Event", x)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-    labs(x = "Years Relative to Event",
-         y = "Effect on Annual Switch Probability\n(vs. Year t-1)",
-         title = "Insurance Churn Event Study (TWFE)",
-         subtitle = "Facility + Year FEs. 95% CI clustered by facility. Reference = t-1.",
-         color = NULL, fill = NULL) +
-    theme(legend.position = "none",
-          strip.text = element_text(face = "bold"))
-
-  save_fig(fig_churn_ev, "Figure_TX_FR_Market_Churn_EventStudy",
-           width = 10, height = 5)
-  save_table(es_combined[, .(Event, rel_year, estimate, std.error,
-                              conf.low, conf.high)],
-             "Figure_data_Churn_EventStudy")
-}
+save_fig(fig_churn, "Figure_TX_FR_Annual_Switch_Rate", width = 8, height = 5)
+save_table(annual_switch_rate, "Figure_data_Annual_Switch_Rate")
 
 
   # 11.4 Statutory Coverage Limits
@@ -3913,11 +4964,11 @@ save_fig(fig_t, "FigureT_Regulatory_Timeline", width = 14, height = 6)
 
 
 #==============================================================================
-# SECTION 12: APPENDIX B TABLES
+# Section 14: APPENDIX B TABLES
 #==============================================================================
 
 cat("\n========================================\n")
-cat("SECTION 12: APPENDIX B TABLES\n")
+cat("Section 14: APPENDIX B TABLES\n")
 cat("========================================\n\n")
 
 # 12.1 Table B.1: State Data Quality Report
@@ -4083,11 +5134,11 @@ if (!is.null(balance_glm)) {
 }
 
 #==============================================================================
-# SECTION 13: SAVE ANALYSIS-READY DATASETS (UPDATED)
+# Section 14: SAVE ANALYSIS-READY DATASETS (UPDATED)
 #==============================================================================
 
 cat("\n========================================\n")
-cat("SECTION 13: SAVE ANALYSIS-READY DATASETS\n")
+cat("Section 14: SAVE ANALYSIS-READY DATASETS\n")
 cat("========================================\n\n")
 
 ANALYSIS_DIR <- here("Data", "Analysis")
