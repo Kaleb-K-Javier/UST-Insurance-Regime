@@ -18,7 +18,7 @@
 #   Table_MissingBalance   — missing-date balance test (Table B.3)
 #==============================================================================
 
-source(here::here("Code", "01a_Setup.R"))
+source(here::here("Code",'Analysis','Descrptive Facts', "01a_Setup.R"))
 cat("=== 01l: DATA QUALITY + KEY MOTIVATION FIGURE ===\n")
 
 annual_data         <- load_interim("annual_data")
