@@ -18,7 +18,7 @@
 # Table_CompositionBalance (Table 2 equivalent)
 #==============================================================================
 
-source(here::here("Code", "01a_Setup.R"))
+source(here::here("Code",'Analysis','Descrptive Facts', "01a_Setup.R"))
 cat("=== 01i: COMPOSITION BALANCE ===\n")
 
 annual_data <- load_interim("annual_data")

@@ -1,0 +1,19 @@
+\begin{table}[!h]
+\centering
+\caption{\label{tab:tab:funnel-balance}Sample restriction funnel. Each row adds one restriction to the make-model sample. \textit{Age Gap} = mean tank age TX $-$ CTL (years). \textit{SW Gap} = single-walled share TX $-$ CTL. \textit{Wald p} = p-value from parallel pre-trend F-test on Spec A sub-sample.}
+\centering
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\fontsize{9}{11}\selectfont
+\begin{tabular}[t]{lrrrrr}
+\toprule
+Stage & N_TX & N_CTL & Age Gap & SW Gap & Wald p\\
+\midrule
+0. Full analysis sample & 54034 & 179200 & 0.74 & 0.174 & 0\\
+1. + Single-walled only & 45944 & 140903 & 1.09 & 0.047 & 0\\
+2. + Motor fuel/gasoline & 32764 & 108880 & 0.47 & 0.037 & 0\\
+3. + Single-tank operators & 31651 & 105370 & 0.61 & 0.029 & 0\\
+4. + 1990–1997 install cohort
+(Make-Model sample) & 2872 & 12203 & -0.52 & 0.001 & 0\\
+\bottomrule
+\end{tabular}}
+\end{table}

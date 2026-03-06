@@ -13,7 +13,7 @@
 #   TableB2_Balance_By_Step    (LaTeX)
 #==============================================================================
 
-source(here::here("Code", "01a_Setup.R"))
+source(here::here("Code",'Analysis','Descrptive Facts', "01a_Setup.R"))
 cat("=== 01h: SAMPLE RESTRICTION FUNNEL ===\n")
 
 annual_data    <- load_interim("annual_data")

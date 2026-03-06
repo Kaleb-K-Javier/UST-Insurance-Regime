@@ -24,7 +24,8 @@
 # Table B.4: Parallel trends Wald tests (4 specs)
 #==============================================================================
 
-source(here::here("Code", "01a_Setup.R"))
+source(here::here("Code",'Analysis','Descrptive Facts', "01a_Setup.R"))
+
 cat("=== 01g: PRE-TRENDS FIGURES ===\n")
 
 annual_data <- load_interim("annual_data")

@@ -18,7 +18,7 @@
 #   Combined → Figure3_WallByVintage_Combined
 #==============================================================================
 
-source(here::here("Code", "01a_Setup.R"))
+source(here::here("Code",'Analysis','Descrptive Facts', "01a_Setup.R"))
 cat("=== 01f: CAPITAL STOCK FIGURES ===\n")
 
 tanks_1998 <- load_interim("tanks_1998")

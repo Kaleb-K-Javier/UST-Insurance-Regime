@@ -1,0 +1,7 @@
+Stage,N_TX,N_CTL,Mean_Age_TX,Mean_Age_CTL,Age_Gap,SW_Share_TX,SW_Share_CTL,SW_Gap,Wald_PreTrend_p,Step
+0. Full analysis sample,54034,179200,15.61,14.87,0.74,0.867,0.693,0.174,0,0
+1. + Single-walled only,45944,140903,15.98,14.89,1.09,0.949,0.902,0.047,0,1
+2. + Motor fuel/gasoline,32764,108880,15.33,14.85,0.47,0.941,0.904,0.037,0,2
+3. + Single-tank operators,31651,105370,15.34,14.73,0.61,0.96,0.931,0.029,0,3
+"4. + 1990–1997 install cohort
+(Make-Model sample)",2872,12203,5.81,6.33,-0.52,0.998,0.997,0.001,0,4

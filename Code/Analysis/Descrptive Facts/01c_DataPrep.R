@@ -15,7 +15,7 @@
 #   incumbent_ids.rds       — vector of panel_ids in final sample
 #==============================================================================
 
-source(here::here("Code", "01a_Setup.R"))
+source(here::here("Code",'Analysis','Descrptive Facts', "01a_Setup.R"))
 cat("=== 01c: DATA PREPARATION ===\n")
 
 annual_data    <- load_interim("annual_data_raw")

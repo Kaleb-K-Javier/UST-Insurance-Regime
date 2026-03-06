@@ -1,22 +1,17 @@
 \begin{table}[!h]
 \centering
-\caption{\label{tab:tab:pt-validation}Parallel trends validation: Wald F-tests, 1990--1997 pre-reform window. Each row estimates a TWFE regression of the annual closure indicator on Texas $\times$ relative-year interactions with facility and year fixed effects. Standard errors clustered at the state level. H$_0$: joint nullity of all pre-period interaction coefficients.}
+\caption{\label{tab:tab:pt-validation}Parallel trends Wald F-tests, 1990–1997 pre-reform window. Each row is a TWFE regression of annual closure on Texas $\times$ relative-year interactions with facility and year FEs.}
 \centering
 \resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
 \fontsize{9}{11}\selectfont
-\begin{threeparttable}
-\begin{tabular}[t]{>{\raggedright\arraybackslash}p{6cm}>{\raggedright\arraybackslash}p{2cm}>{\raggedleft\arraybackslash}p{2cm}>{\raggedleft\arraybackslash}p{2cm}>{\raggedright\arraybackslash}p{2cm}}
+\begin{tabular}[t]{llrrl}
 \toprule
 Specification & Mandate Control & F-statistic & p-value & Conclusion\\
 \midrule
-1. Pooled (all facilities), no mandate control & None & 16.744 & 0 & REJECTED\\
-2. Spec A (post-1988 only) - PRIMARY IDENTIFICATION & None & 15.797 & 0 & REJECTED\\
-3. Spec B (pre-1988 only), no mandate control & None & 11.154 & 0 & REJECTED\\
-4. Spec B (pre-1988 only) + mandate_active control & mandate_active & 12.746 & 0 & REJECTED\\
+1. Pooled (all facilities) & None & 16.744 & 0 & REJECTED\\
+2. Spec A (post-1988) — PRIMARY IDENTIFICATION & None & 15.797 & 0 & REJECTED\\
+3. Spec B (pre-1988), no mandate control & None & 11.154 & 0 & REJECTED\\
+4. Spec B + mandate_active control & mandate_active & 12.746 & 0 & REJECTED\\
 \bottomrule
-\end{tabular}
-\begin{tablenotes}
-\item Wild cluster bootstrap p-values with Webb-6 weights where bootstrap is enabled. Pooled and Spec B tests are expected to reject due to Texas phased mandate contamination (1989--1993). Primary identification uses Spec A (Test 2).
-\end{tablenotes}
-\end{threeparttable}}
+\end{tabular}}
 \end{table}

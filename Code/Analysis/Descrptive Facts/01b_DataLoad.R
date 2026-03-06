@@ -11,7 +11,7 @@
 #   rate_data_raw.rds        (NULL if files absent)
 #==============================================================================
 
-source(here::here("Code", "01a_Setup.R"))
+source(here::here("Code",'Analysis','Descrptive Facts', "01a_Setup.R"))
 cat("=== 01b: DATA LOADING ===\n")
 
 # ── Facility-year panel ───────────────────────────────────────────────────────
@@ -47,16 +47,26 @@ fr_year_raw <- if (file.exists(FR_PATH)) {
 }
 
 # ── Mid-Continent rate filings ────────────────────────────────────────────────
-RATE_DIR <- here("Data","Rate FIllings","Mid-Continent Casualty Company - 23418")
-rate_files <- list.files(RATE_DIR,
-  pattern = "^texas_midcontinent_facility_year_premium_.*\\.csv$",
-  full.names = TRUE)
+RATE_DIR <- here(
+  "Data", "Rate FIllings",
+  "Mid-Continent Casualty Company ­– 23418"
+)
+rate_files <-c('Data\\Rate FIllings\\Mid-Continent Casualty Company ­– 23418\\texas_midcontinent_facility_year_premium_2006_to_04_2014.csv',
+'Data\\Rate FIllings\\Mid-Continent Casualty Company ­– 23418\\texas_midcontinent_facility_year_premium_2014_05_to_2019_01.csv',
+'Data\\Rate FIllings\\Mid-Continent Casualty Company ­– 23418\\texas_midcontinent_facility_year_premium_2019_2021.csv',
+'Data\\Rate FIllings\\Mid-Continent Casualty Company ­– 23418\\texas_midcontinent_facility_year_premium_2021_onwards.csv')
+
+
 rate_data_raw <- if (length(rate_files) > 0) {
   dt <- rbindlist(lapply(rate_files, fread), fill = TRUE)
   dt[, YEAR := as.numeric(YEAR)]
   dt <- dt[!is.na(YEAR)]
-  cat(sprintf("  Rate filings: %s rows | %d-%d\n",
-      format(nrow(dt), big.mark=","), min(dt$YEAR), max(dt$YEAR)))
+  cat(sprintf(
+    "  Rate filings: %s rows | %d-%d\n",
+    format(nrow(dt), big.mark = ","),
+    min(dt$YEAR),
+    max(dt$YEAR)
+  ))
   dt
 } else {
   cat("  Rate filings: NOT FOUND\n")

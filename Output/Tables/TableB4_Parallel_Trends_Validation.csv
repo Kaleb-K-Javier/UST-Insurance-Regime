@@ -1,5 +1,5 @@
-Specification,Mandate Control,F-statistic,p-value,df1,Conclusion
-"1. Pooled (all facilities), no mandate control",None,16.744,0,8,REJECTED
-2. Spec A (post-1988 only) - PRIMARY IDENTIFICATION,None,15.797,0,8,REJECTED
-"3. Spec B (pre-1988 only), no mandate control",None,11.154,0,8,REJECTED
-4. Spec B (pre-1988 only) + mandate_active control,mandate_active,12.746,0,8,REJECTED
+Specification,Mandate Control,F-statistic,p-value,Conclusion
+1. Pooled (all facilities),None,16.744,0,REJECTED
+2. Spec A (post-1988) — PRIMARY IDENTIFICATION,None,15.797,0,REJECTED
+"3. Spec B (pre-1988), no mandate control",None,11.154,0,REJECTED
+4. Spec B + mandate_active control,mandate_active,12.746,0,REJECTED
