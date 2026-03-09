@@ -1,0 +1,7 @@
+age_treat_bin,texas,n_facilities,n_exited_pre,n_survived,pct_exit_pre
+1-2 yrs (youngest),Control,4570,2198,4438,0.480962800875274
+3-5 yrs,Control,1173,618,1130,0.526854219948849
+6-8 yrs,Control,5045,2220,4839,0.4400396432111
+1-2 yrs (youngest),Texas,1419,677,1240,0.477096546863989
+3-5 yrs,Texas,295,163,245,0.552542372881356
+6-8 yrs,Texas,1034,589,850,0.56963249516441

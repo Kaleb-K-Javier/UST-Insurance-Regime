@@ -1,0 +1,4 @@
+Model,Estimate,SE,t_stat,p_value,N_obs
+Full Make-Model,0.0074,0.0061,1.21,0.2428,319961
+Youngest,0.0271,0.0097,2.788,0.0132,130425
+Oldest,-0.0007,0.0053,-0.14,0.8905,177114

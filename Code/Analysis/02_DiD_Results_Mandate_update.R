@@ -1,37 +1,32 @@
-#==============================================================================
+################################################################################
 # 02_DiD_Main_MakeModel.R
-# Texas UST Insurance Reform — Causal DiD Estimates
+# Texas UST Insurance Reform -- Causal DiD Estimates
 #
 # PREREQUISITES: Run 00_RunAll.R (or 01m_MakeModelSample.R) first.
 #
 # SECTIONS:
-#   S1   Setup & Data Loading
+#   S1   Setup and Data Loading
 #   S2   Helper Functions
-#   S3   Sample Construction & Diagnostics
+#   S3   Sample Construction and Diagnostics
 #   S4   Parallel Trends Validation
-#   S5   Age-at-Treatment HTE (DiD, Event Study, Tables)
-#   S6   Age-Bin HTE Coefficient Plot (Figure 8)
-#   S7   Robustness -- Age-Group-Specific Year FEs
-#   S8   Hypothesis Tests (Survivorship, H1, H3, H4)
-#   S9   Youngest Subsample (Table 5 + Figure 7A)
-#   S10  Oldest Subsample  (Table 6 + Figure 7B)
-#   S11  Reported Leak DiD (Table 7)
-#   S12  H4: Wall Type on Broader SW Sample (Table 9)
-#   S13  H3: Age at Closure OLS (Table 8 + Figure H3)  [descriptive; see S8 for primary]
-#   S14  Theory-Evidence Summary (Table 10)
-#   S15  Robustness (Tables B.5-B.7)
-#   S16  Survival Models (Cox DiD -- basic; detailed H1/H4 Cox in S8)
+#   S5   Age-at-Treatment Heterogeneous Effects
+#   S6   Age-Bin Coefficient Plot
+#   S7   Robustness: Age-Group-Specific Year Fixed Effects
+#   S8   Duration and Survival Models
+#   S9   Youngest Subsample
+#   S10  Oldest Subsample
+#   S11  Reported Leak DiD
+#   S12  Wall Type Heterogeneity (Broader Sample)
+#   S13  Age at Closure (Descriptive OLS)
+#   S14  Theory-Evidence Summary
+#   S15  Robustness Checks
+#   S16  Cox Proportional Hazard Models
 #   S17  Diagnostic Data Export
 #   S18  Publication LaTeX Tables
-#
-# NOTE ON H3: S13 runs OLS on closed_tanks (descriptive only -- selection bias
-#   caveat applies). The primary H3 test is in S8d (duration model on full panel).
-#==============================================================================
+################################################################################
 
 
-#==============================================================================
-# S1: SETUP & DATA LOADING
-#==============================================================================
+#### S1 Setup and Data Loading ####
 
 suppressPackageStartupMessages({
   library(data.table)
@@ -59,7 +54,7 @@ ANALYSIS_DIR   <- here("Data", "Analysis")
 meta <- readRDS(file.path(ANALYSIS_DIR, "analysis_metadata.rds"))
 list2env(meta, envir = .GlobalEnv)
 
-# Fallback: define any constants missing from metadata
+# Constants (fallback if not in metadata)
 if (!exists("OUTPUT_TABLES"))  OUTPUT_TABLES  <- here("Output", "Tables")
 if (!exists("OUTPUT_FIGURES")) OUTPUT_FIGURES <- here("Output", "Figures")
 if (!exists("POST_YEAR"))      POST_YEAR      <- 1999L
@@ -74,17 +69,27 @@ if (!exists("AGE_BIN_REF"))    AGE_BIN_REF    <- "0-4"
 dir.create(OUTPUT_TABLES,  recursive = TRUE, showWarnings = FALSE)
 dir.create(OUTPUT_FIGURES, recursive = TRUE, showWarnings = FALSE)
 
+# Color palette
 COL_TX    <- "#D55E00"
 COL_CTRL  <- "#0072B2"
 COL_YOUNG <- "#009E73"
 COL_OLD   <- "#CC79A7"
 
-theme_pub <- function(base_size = 12) {
+# Publication theme: minimal, no title/subtitle (those go in LaTeX captions)
+theme_pub <- function(base_size = 11) {
   theme_minimal(base_size = base_size) +
-    theme(plot.title       = element_text(face = "bold", size = base_size + 2),
-          plot.subtitle    = element_text(color = "grey40", size = base_size),
-          panel.grid.minor = element_blank(),
-          legend.position  = "bottom")
+    theme(
+      plot.title       = element_blank(),
+      plot.subtitle    = element_blank(),
+      plot.caption     = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank(),
+      legend.position  = "bottom",
+      legend.title     = element_blank(),
+      axis.title       = element_text(size = base_size),
+      axis.text        = element_text(size = base_size - 1),
+      strip.text       = element_text(face = "bold", size = base_size)
+    )
 }
 theme_set(theme_pub())
 
@@ -94,16 +99,7 @@ tank_inventory <- readRDS(file.path(ANALYSIS_DIR, "analysis_tank_inventory.rds")
 closed_tanks   <- readRDS(file.path(ANALYSIS_DIR, "analysis_closed_tanks.rds"))
 tanks_1999     <- readRDS(file.path(ANALYSIS_DIR, "analysis_tanks_1999.rds"))
 
-cat(sprintf("Loaded: %s rows | %s facilities | %s tanks | %s closures\n",
-  format(nrow(annual_data),             big.mark = ","),
-  format(uniqueN(annual_data$panel_id), big.mark = ","),
-  format(nrow(tank_inventory),          big.mark = ","),
-  format(nrow(closed_tanks),            big.mark = ",")))
-
-#------------------------------------------------------------------------------
 # Variable construction
-#------------------------------------------------------------------------------
-
 annual_data[, any_closure   := closure_event]
 annual_data[, any_leak      := leak_year]
 annual_data[, replace_event := as.integer(closure_event == 1 & exit_flag == 0)]
@@ -150,23 +146,16 @@ rel_max_full     <- ES_END - POST_YEAR
 rel_min_youngest <- 1994L - POST_YEAR
 rel_min_oldest   <- -5L
 
-cat(sprintf("Event study window: pre [%d, -1] post [1, %d]\n",
-            rel_min_full, rel_max_full))
-
 annual_data[, age_treat_bin := cut(
   mean_age_1998,
   breaks = c(0, 5, 6, 9, Inf),
-  labels = c("1-2 yrs (youngest)", "3-5 yrs", "6-8 yrs", "9+ yrs (oldest)"),
+  labels = c("1-2 yrs", "3-5 yrs", "6-8 yrs", "9+ yrs"),
   right  = FALSE, include.lowest = TRUE
 )]
-annual_data[, age_treat_bin := relevel(
-  factor(age_treat_bin), ref = "1-2 yrs (youngest)"
-)]
+annual_data[, age_treat_bin := relevel(factor(age_treat_bin), ref = "1-2 yrs")]
 
 
-#==============================================================================
-# S2: HELPER FUNCTIONS
-#==============================================================================
+#### S2 Helper Functions ####
 
 save_did_table <- function(models, headers, base_name, title,
                            tvar = "did_term", digits = 4) {
@@ -180,20 +169,8 @@ save_did_table <- function(models, headers, base_name, title,
                p_value  = round(ct[idx, "Pr(>|t|)"],   4),
                N_obs    = nobs(m))
   }, models, headers, SIMPLIFY = FALSE)
-
   dt <- rbindlist(results)
   fwrite(dt, file.path(OUTPUT_TABLES, paste0(base_name, ".csv")))
-  sink(file.path(OUTPUT_TABLES, paste0(base_name, ".txt")))
-  cat(title, "\n"); print(as.data.frame(dt))
-  lapply(seq_along(models), function(i) {
-    cat(sprintf("\n--- %s ---\n", headers[[i]])); print(summary(models[[i]]))
-  })
-  sink()
-  suppressWarnings(
-    etable(models, title = title, tex = TRUE, digits = digits,
-           file = file.path(OUTPUT_TABLES, paste0(base_name, ".tex")))
-  )
-  cat(sprintf("  Saved: %s\n", base_name))
   invisible(dt)
 }
 
@@ -204,17 +181,13 @@ extract_did <- function(m, tvar = "did_term") {
        p    = ct[idx,"Pr(>|t|)"], n  = nobs(m))
 }
 
-# For split-sample event study models: no did_term, average post-period coefs
 extract_att_from_es <- function(m) {
   ct  <- coeftable(summary(m, cluster = ~state))
   idx <- grep("rel_year_bin::[^-][0-9]*:texas_treated", rownames(ct))
   if (length(idx) == 0) return(list(beta = NA, se = NA, p = NA_real_, n = nobs(m)))
-  list(
-    beta = mean(ct[idx, "Estimate"],   na.rm = TRUE),
-    se   = mean(ct[idx, "Std. Error"], na.rm = TRUE),
-    p    = NA_real_,
-    n    = nobs(m)
-  )
+  list(beta = mean(ct[idx, "Estimate"], na.rm = TRUE),
+       se   = mean(ct[idx, "Std. Error"], na.rm = TRUE),
+       p    = NA_real_, n = nobs(m))
 }
 
 stars_fn <- function(p) {
@@ -225,75 +198,11 @@ stars_fn <- function(p) {
   ""
 }
 
-plot_es <- function(model, title = "", subtitle = NULL,
-                    ylab = "Effect on Pr(Tank Closure)",
-                    ref_period = -1, color = "grey40",
-                    xlim_lo = NULL, xlim_hi = NULL,
-                    pre_trend_p = NULL, filename = NULL) {
-
-  ct <- as.data.table(tidy(model, conf.int = TRUE))
-  ct <- ct[grepl("rel_year|event_time", term)]
-  ct[, rel_year := as.numeric(gsub(".*::(-?[0-9]+).*", "\\1", term))]
-  ct <- rbind(ct,
-    data.table(term="ref", estimate=0, std.error=0, conf.low=0, conf.high=0,
-               rel_year=ref_period), fill=TRUE)
-  setorder(ct, rel_year)
-  ct[, period := fcase(rel_year < 0, "Pre",
-                        rel_year == ref_period, "Ref",
-                        default = "Post")]
-
-  if (!is.null(pre_trend_p) && is.null(subtitle))
-    subtitle <- sprintf("Pre-trend F-test p = %.3f | ref = t%+d",
-                        pre_trend_p, ref_period)
-
-  xl <- if (is.null(xlim_lo)) min(ct$rel_year) else xlim_lo
-  xh <- if (is.null(xlim_hi)) max(ct$rel_year) else xlim_hi
-
-  p <- ggplot(ct[rel_year %between% c(xl, xh)],
-              aes(x = rel_year, y = estimate)) +
-    annotate("rect", xmin = -Inf, xmax = -0.5, ymin = -Inf, ymax = Inf,
-             fill = "grey90", alpha = 0.5) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.5) +
-    geom_vline(xintercept = -0.5, color = "grey30", linewidth = 0.6) +
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high,
-                    fill = ifelse(rel_year < 0, "pre", "post")), alpha = 0.15) +
-    geom_line(color = "grey40", linewidth = 0.4, alpha = 0.6) +
-    geom_point(aes(color = period), size = 2.5) +
-    geom_errorbar(aes(ymin = conf.low, ymax = conf.high, color = period),
-                  width = 0.25, linewidth = 0.5) +
-    scale_color_manual(values = c(Pre = "#4575B4", Post = "#D73027", Ref = "black"),
-                       guide = "none") +
-    scale_fill_manual(values = c(pre = "#4575B4", post = "#D73027"), guide = "none") +
-    labs(title = title, subtitle = subtitle,
-         x = "Years Relative to Treatment (1999)", y = ylab) +
-    theme_minimal(base_size = 13) +
-    theme(plot.title = element_text(face = "bold"),
-          panel.grid.minor = element_blank(),
-          panel.grid.major.x = element_blank())
-
-  if (!is.null(filename)) {
-    ggsave(filename, p, width = 14, height = 8, dpi = 200, bg = "white")
-    ggsave(sub("\\.png$", ".pdf", filename), p, width = 14, height = 8,
-           device = cairo_pdf)
-  }
-  invisible(list(plot = p, data = ct))
-}
-
 pt_pval <- function(m) {
   nms <- names(coef(m))
   pre <- nms[grepl("::-[2-9]|::-1[0-9]", nms)]
   if (length(pre) == 0) return(NA_real_)
   suppressWarnings(wald(m, keep = pre)$p)
-}
-
-texas_share_by_period <- function(dt, rel_year_col = "rel_year_bin",
-                                  weight_col = NULL) {
-  if (is.null(weight_col)) {
-    dt[, .(texas_share = mean(texas_treated)), by = get(rel_year_col)]
-  } else {
-    dt[, .(texas_share = weighted.mean(texas_treated, get(weight_col))),
-       by = get(rel_year_col)]
-  }
 }
 
 pull_coef <- function(m, pattern) {
@@ -320,12 +229,131 @@ extract_cox_coef <- function(m, pattern) {
   )
 }
 
+texas_share_by_period <- function(dt, rel_year_col = "rel_year_bin",
+                                  weight_col = NULL) {
+  if (is.null(weight_col)) {
+    dt[, .(texas_share = mean(texas_treated)), by = get(rel_year_col)]
+  } else {
+    dt[, .(texas_share = weighted.mean(texas_treated, get(weight_col))),
+       by = get(rel_year_col)]
+  }
+}
 
-#==============================================================================
-# S3: SAMPLE CONSTRUCTION & DIAGNOSTICS
-#==============================================================================
+# Publication event study plot: clean, no titles (LaTeX handles captions)
+plot_es <- function(model, ylab = "Effect on Closure Probability",
+                    ref_period = -1, xlim_lo = NULL, xlim_hi = NULL,
+                    filename = NULL) {
+  ct <- as.data.table(tidy(model, conf.int = TRUE))
+  ct <- ct[grepl("rel_year|event_time", term)]
+  ct[, rel_year := as.numeric(gsub(".*::(-?[0-9]+).*", "\\1", term))]
+  ct <- rbind(ct,
+    data.table(term = "ref", estimate = 0, std.error = 0,
+               conf.low = 0, conf.high = 0, rel_year = ref_period),
+    fill = TRUE)
+  setorder(ct, rel_year)
+  ct[, period := fcase(rel_year < 0, "Pre", rel_year == ref_period, "Ref",
+                        default = "Post")]
 
-cat("\n=== S3: SAMPLE CONSTRUCTION ===\n")
+  xl <- if (is.null(xlim_lo)) min(ct$rel_year) else xlim_lo
+  xh <- if (is.null(xlim_hi)) max(ct$rel_year) else xlim_hi
+
+  p <- ggplot(ct[rel_year %between% c(xl, xh)],
+              aes(x = rel_year, y = estimate)) +
+    annotate("rect", xmin = -Inf, xmax = -0.5, ymin = -Inf, ymax = Inf,
+             fill = "grey90", alpha = 0.5) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50",
+               linewidth = 0.5) +
+    geom_vline(xintercept = -0.5, color = "grey30", linewidth = 0.6) +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.12,
+                fill = "grey40") +
+    geom_line(color = "grey40", linewidth = 0.4, alpha = 0.6) +
+    geom_point(aes(color = period), size = 2.5) +
+    geom_errorbar(aes(ymin = conf.low, ymax = conf.high, color = period),
+                  width = 0.25, linewidth = 0.5) +
+    scale_color_manual(values = c(Pre = COL_CTRL, Post = COL_TX, Ref = "black"),
+                       guide = "none") +
+    labs(x = "Years Relative to Treatment (1999)", y = ylab) +
+    theme_pub()
+
+  if (!is.null(filename)) {
+    ggsave(filename, p, width = 10, height = 5.5, dpi = 300, bg = "white")
+    ggsave(sub("\\.png$", ".pdf", filename), p, width = 10, height = 5.5,
+           device = cairo_pdf)
+  }
+  invisible(list(plot = p, data = ct))
+}
+
+# Publication HTE event study plot: old vs young, no titles
+plot_es_hte <- function(model, filename = NULL,
+                        xlim_lo = -8, xlim_hi = NULL,
+                        col_young = COL_YOUNG, col_old = COL_OLD) {
+  ct <- as.data.table(tidy(model, conf.int = TRUE))
+
+  young <- ct[grepl(":texas_treated$", term) & grepl("rel_year_bin", term)]
+  young[, rel_year := as.numeric(gsub("rel_year_bin::(-?[0-9]+):.*", "\\1", term))]
+  young[, group := "Young (age 5 or less in 1998)"]
+  young[, `:=`(conf.low  = estimate - 1.96 * std.error,
+               conf.high = estimate + 1.96 * std.error)]
+
+  diff_dt <- ct[grepl(":tx_old$", term) & grepl("rel_year_bin", term)]
+  diff_dt[, rel_year := as.numeric(gsub("rel_year_bin::(-?[0-9]+):.*", "\\1", term))]
+
+  old <- merge(
+    young[,   .(rel_year, base = estimate, base_se = std.error)],
+    diff_dt[, .(rel_year, diff = estimate, diff_se = std.error)],
+    by = "rel_year", all.x = TRUE)
+  old[is.na(diff), `:=`(diff = 0, diff_se = 0)]
+  old[, `:=`(
+    estimate  = base + diff,
+    conf.low  = (base + diff) - 1.96 * sqrt(base_se^2 + diff_se^2),
+    conf.high = (base + diff) + 1.96 * sqrt(base_se^2 + diff_se^2),
+    group     = "Old (age over 5 in 1998)"
+  )]
+
+  ref_rows <- data.table(
+    rel_year = -1L, estimate = 0, conf.low = 0, conf.high = 0,
+    group = c("Young (age 5 or less in 1998)", "Old (age over 5 in 1998)"))
+
+  plot_dt <- rbind(
+    young[, .(rel_year, estimate, conf.low, conf.high, group)],
+    old[,   .(rel_year, estimate, conf.low, conf.high, group)],
+    ref_rows, fill = TRUE)
+  setorder(plot_dt, group, rel_year)
+
+  xh <- if (is.null(xlim_hi)) max(plot_dt$rel_year) else xlim_hi
+
+  p <- ggplot(plot_dt[rel_year %between% c(xlim_lo, xh)],
+              aes(x = rel_year, y = estimate, color = group, fill = group)) +
+    annotate("rect", xmin = -Inf, xmax = -0.5,
+             ymin = -Inf, ymax = Inf, fill = "grey92", alpha = 0.6) +
+    geom_hline(yintercept = 0, linetype = "dashed",
+               color = "grey50", linewidth = 0.5) +
+    geom_vline(xintercept = -0.5, color = "grey30", linewidth = 0.7) +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.12,
+                color = NA) +
+    geom_line(linewidth = 0.9) +
+    geom_point(size = 2.5) +
+    scale_color_manual(values = c(
+      "Young (age 5 or less in 1998)" = col_young,
+      "Old (age over 5 in 1998)"      = col_old)) +
+    scale_fill_manual(values = c(
+      "Young (age 5 or less in 1998)" = col_young,
+      "Old (age over 5 in 1998)"      = col_old)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+    labs(x = "Years Relative to Treatment (1999)",
+         y = "Effect on Closure Probability") +
+    theme_pub()
+
+  if (!is.null(filename)) {
+    ggsave(filename, p, width = 10, height = 5.5, dpi = 300, bg = "white")
+    ggsave(sub("\\.png$", ".pdf", filename), p, width = 10, height = 5.5,
+           device = cairo_pdf)
+  }
+  invisible(list(plot = p, data = plot_dt))
+}
+
+
+#### S3 Sample Construction and Diagnostics ####
 
 main_sample <- annual_data[
   single_tanks  == active_tanks  &
@@ -343,52 +371,32 @@ sw_broader_sample <- annual_data[
 youngest_sample <- main_sample[mean_age_1998 <= 5]
 oldest_sample   <- main_sample[mean_age_1998 >  5]
 
-main_sample[,      rel_year_bin := pmax(pmin(rel_year_1999, rel_max_full), -8L)]
-youngest_sample[,  rel_year_bin := pmax(pmin(rel_year_1999, rel_max_full), rel_min_youngest)]
-oldest_sample[,    rel_year_bin := pmax(pmin(rel_year_1999, rel_max_full), rel_min_oldest)]
-sw_broader_sample[,rel_year_bin := pmax(pmin(rel_year_1999, rel_max_full), -8L)]
+main_sample[,       rel_year_bin := pmax(pmin(rel_year_1999, rel_max_full), -8L)]
+youngest_sample[,   rel_year_bin := pmax(pmin(rel_year_1999, rel_max_full), rel_min_youngest)]
+oldest_sample[,     rel_year_bin := pmax(pmin(rel_year_1999, rel_max_full), rel_min_oldest)]
+sw_broader_sample[, rel_year_bin := pmax(pmin(rel_year_1999, rel_max_full), -8L)]
 
-cat(sprintf("  Main (make-model):  %s obs | %s fac | %s TX | %s ctrl\n",
-  format(nrow(main_sample),             big.mark = ","),
-  format(uniqueN(main_sample$panel_id), big.mark = ","),
-  format(uniqueN(main_sample[texas_treated == 1, panel_id]), big.mark = ","),
-  format(uniqueN(main_sample[texas_treated == 0, panel_id]), big.mark = ",")))
-cat(sprintf("  Youngest (<=5):     %s obs | %s fac\n",
-  format(nrow(youngest_sample),             big.mark = ","),
-  format(uniqueN(youngest_sample$panel_id), big.mark = ",")))
-cat(sprintf("  Oldest (>5):        %s obs | %s fac\n",
-  format(nrow(oldest_sample),             big.mark = ","),
-  format(uniqueN(oldest_sample$panel_id), big.mark = ",")))
-cat(sprintf("  Broader SW (H4):    %s obs | %s fac\n",
-  format(nrow(sw_broader_sample),             big.mark = ","),
-  format(uniqueN(sw_broader_sample$panel_id), big.mark = ",")))
-
-# Age distribution plot
+# Age distribution histogram (publication version)
 age_dist_1998 <- main_sample[panel_year == 1998,
-  .(n = .N),
-  by = .(age_bin_yr = cut(mean_age_1998, breaks = seq(0, 10, 1), right = FALSE),
-         group = fifelse(texas_treated == 1, "Texas", "Control"))
+  .(panel_id, mean_age_1998,
+    group = fifelse(texas_treated == 1, "Texas", "Control"))
 ]
-age_dist_1998[, share := n / sum(n), by = group]
 
-p_age_dist <- ggplot(age_dist_1998[!is.na(age_bin_yr)],
-                     aes(x = age_bin_yr, y = share, fill = group)) +
-  geom_col(position = "dodge", alpha = 0.85) +
+p_age_dist <- ggplot(age_dist_1998[!is.na(mean_age_1998)],
+                     aes(x = mean_age_1998, fill = group)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 binwidth = 1, position = "dodge", alpha = 0.8) +
   scale_fill_manual(values = c(Texas = COL_TX, Control = COL_CTRL)) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  labs(title    = "Age Distribution at Treatment Date (1998)",
-       subtitle = "Make-model sample",
-       x = "Mean Tank Age in 1998 (1-year bins)",
-       y = "Share of Facilities", fill = NULL) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  labs(x = "Mean Tank Age in 1998 (years)", y = "Density") +
+  theme_pub()
 
 ggsave(file.path(OUTPUT_FIGURES, "Figure_9_Age_Distribution_1998.png"),
-       p_age_dist, width = 10, height = 6, dpi = 300, bg = "white")
+       p_age_dist, width = 8, height = 5, dpi = 300, bg = "white")
+ggsave(file.path(OUTPUT_FIGURES, "Figure_9_Age_Distribution_1998.pdf"),
+       p_age_dist, width = 8, height = 5, device = cairo_pdf)
 
-age_share_table <- dcast(age_dist_1998, age_bin_yr ~ group, value.var = "share")
-fwrite(age_share_table, file.path(OUTPUT_TABLES, "Diagnostic_Age_Shares_1998.csv"))
-
-# Raw closure rates plot
+# Raw closure rates by group and age split
 raw_trends <- main_sample[
   panel_year %between% c(1992L, 2005L) & !is.na(mean_age_1998),
   .(closure_rate = mean(closure_event, na.rm = TRUE),
@@ -396,16 +404,14 @@ raw_trends <- main_sample[
   by = .(panel_year,
          group   = fifelse(texas_treated == 1, "Texas", "Control"),
          age_grp = fifelse(mean_age_1998 <= 5,
-                           "Young (\u22645 yrs in 1998)",
-                           "Old (>5 yrs in 1998)"))
+                           "Young (age 5 or less in 1998)",
+                           "Old (age over 5 in 1998)"))
 ][!is.na(age_grp)]
 
 raw_trends[, group   := factor(group,   levels = c("Control", "Texas"))]
-raw_trends[, age_grp := factor(age_grp, levels = c("Young (\u22645 yrs in 1998)",
-                                                    "Old (>5 yrs in 1998)"))]
 
 p_raw <- ggplot(
-  raw_trends[n_fac >= 200],          # drop thin early cells (n < 200)
+  raw_trends[n_fac >= 200],
   aes(x = panel_year, y = closure_rate, color = group,
       linetype = age_grp, shape = age_grp)
 ) +
@@ -413,55 +419,28 @@ p_raw <- ggplot(
            ymin = -Inf, ymax = Inf, fill = "grey92", alpha = 0.5) +
   geom_vline(xintercept = 1998.5, linetype = "dashed",
              color = "grey30", linewidth = 0.6) +
-  annotate("text", x = 1998.7, y = Inf, label = "Reform\n(1999)",
-           hjust = 0, vjust = 1.3, size = 3.2, color = "grey30") +
   geom_line(linewidth = 0.9) +
   geom_point(size = 2.2, fill = "white", stroke = 0.8) +
-  scale_color_manual(values = c(Control = "#0072B2", Texas = "#D55E00"), name = NULL) +
-  scale_linetype_manual(
-    values = c("Young (\u22645 yrs in 1998)" = "dashed",
-               "Old (>5 yrs in 1998)"        = "solid"), name = NULL) +
-  scale_shape_manual(
-    values = c("Young (\u22645 yrs in 1998)" = 21,
-               "Old (>5 yrs in 1998)"        = 19), name = NULL) +
-  scale_x_continuous(breaks = seq(1992, 2005, 2),
-                     expand = expansion(mult = c(0.02, 0.05))) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-                     expand = expansion(mult = c(0.02, 0.05))) +
-  labs(title    = "Raw Closure Rates by State Group and Age at Treatment",
-       subtitle = paste0(
-         "Make-model sample (motor fuel, single-tank, single-walled, 1990\u20131997 install).\n",
-         "Age split at mean tank age in 1998 = 5 years. Cells with n < 200 dropped."),
-       x = "Year", y = "Mean Pr(Closure)",
-       caption = "Note: Unadjusted cell means. Facility and year FEs not applied.") +
-  theme_minimal(base_size = 12) +
-  theme(plot.title = element_text(face = "bold", size = 13),
-        plot.subtitle = element_text(color = "grey30", size = 10),
-        panel.grid.minor = element_blank(),
-        panel.grid.major.x = element_blank(),
-        legend.position = "bottom",
-        legend.key.width = unit(1.8, "cm")) +
-  guides(
-    color    = guide_legend(order = 1, nrow = 1,
-                            override.aes = list(linewidth = 1.2)),
-    linetype = guide_legend(order = 2, nrow = 1,
-                            override.aes = list(linewidth = 1.2, color = "grey30")),
-    shape    = guide_legend(order = 2, nrow = 1,
-                            override.aes = list(color = "grey30"))
-  )
+  scale_color_manual(values = c(Control = COL_CTRL, Texas = COL_TX)) +
+  scale_linetype_manual(values = c(
+    "Young (age 5 or less in 1998)" = "dashed",
+    "Old (age over 5 in 1998)"      = "solid")) +
+  scale_shape_manual(values = c(
+    "Young (age 5 or less in 1998)" = 21,
+    "Old (age over 5 in 1998)"      = 19)) +
+  scale_x_continuous(breaks = seq(1992, 2005, 2)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(x = "Year", y = "Mean Annual Closure Rate") +
+  theme_pub() +
+  theme(legend.key.width = unit(1.5, "cm"))
 
 ggsave(file.path(OUTPUT_FIGURES, "Figure_Raw_ClosureRates_OldYoung.png"),
-       p_raw, width = 11, height = 6.5, dpi = 300, bg = "white")
+       p_raw, width = 9, height = 5.5, dpi = 300, bg = "white")
 ggsave(file.path(OUTPUT_FIGURES, "Figure_Raw_ClosureRates_OldYoung.pdf"),
-       p_raw, width = 11, height = 6.5, device = cairo_pdf)
-cat("  Saved: Figure_Raw_ClosureRates_OldYoung\n")
+       p_raw, width = 9, height = 5.5, device = cairo_pdf)
 
 
-#==============================================================================
-# S4: PARALLEL TRENDS VALIDATION
-#==============================================================================
-
-cat("\n=== S4: PARALLEL TRENDS VALIDATION ===\n")
+#### S4 Parallel Trends Validation ####
 
 m_pt_main <- feols(
   closure_event ~ i(rel_year_bin, texas_treated, ref = -1) |
@@ -469,46 +448,17 @@ m_pt_main <- feols(
   main_sample[panel_year < POST_YEAR], cluster = ~state
 )
 
-pt_results <- list(
-  main    = pt_pval(m_pt_main),
-  n_pre   = nrow(main_sample[panel_year < POST_YEAR])
-)
-
-cat(sprintf("  Pre-trend F-test p (main): %.4f\n", pt_results$main))
-cat(sprintf("  Interpretation: %s\n",
-  fifelse(!is.na(pt_results$main) & pt_results$main > 0.10,
-          "PASS -- no evidence of differential pre-trends",
-          "CHECK -- pre-trend may be present")))
+pt_results <- list(main = pt_pval(m_pt_main),
+                   n_pre = nrow(main_sample[panel_year < POST_YEAR]))
 
 
-#==============================================================================
-# S5: AGE-AT-TREATMENT HTE
-#
-# THEORY MAP:
-#   Prop 3(i):  ATT(young) ≈ 0  -- base did_term coef (old_at_treat = 0)
-#   Prop 3(ii): ATT(old)   > 0  -- did_term + did_term:old_at_treat
-#
-# MODEL STRUCTURE (S5c triple-interaction event study):
-#   i(rel_year_bin, texas_treated, ref=-1) = year-by-year ATT for YOUNG
-#       coef names: rel_year_bin::<t>:texas_treated
-#   i(rel_year_bin, tx_old, ref=-1)        = DIFFERENTIAL (old - young)
-#       coef names: rel_year_bin::<t>:tx_old
-#   tx_old = texas_treated * old_at_treat  (pre-computed; i() needs plain var)
-#   Old path in plot = texas_treated coefs + tx_old coefs
-#==============================================================================
+#### S5 Age-at-Treatment Heterogeneous Effects ####
 
-cat("\n=== S5: AGE-AT-TREATMENT HTE ===\n")
-
-#--- S5a: Binary classification ---
+# Binary classification: old (>5 yrs in 1998) vs young (<=5 yrs)
 main_sample[, old_at_treat := as.integer(mean_age_1998 > 5)]
 main_sample[, tx_old       := texas_treated * old_at_treat]
 
-cat(sprintf("  Old (>5 yrs):   %s fac\n",
-  format(uniqueN(main_sample[old_at_treat == 1, panel_id]), big.mark = ",")))
-cat(sprintf("  Young (<=5):    %s fac\n",
-  format(uniqueN(main_sample[old_at_treat == 0, panel_id]), big.mark = ",")))
-
-#--- S5b: Simple DiD by group ---
+# Split-sample DiD
 m_did_young <- feols(
   closure_event ~ did_term | panel_id + panel_year,
   main_sample[old_at_treat == 0], cluster = ~state)
@@ -536,14 +486,7 @@ pre_mean_old <- mean(
   main_sample[old_at_treat == 1 & panel_year < TREATMENT_YEAR, closure_event],
   na.rm = TRUE)
 
-cat(sprintf("  ATT(young): %.5f (p=%.4f) | pre-mean=%.4f\n",
-  d_young$beta, d_young$p, pre_mean_young))
-cat(sprintf("  ATT(old):   %.5f (p=%.4f) | pre-mean=%.4f\n",
-  d_old$beta, d_old$p, pre_mean_old))
-cat(sprintf("  Consistent with Prop 3: %s\n",
-  fifelse(d_old$beta > d_young$beta, "YES", "NO")))
-
-#--- S5c: Triple-interaction event study ---
+# Triple-interaction event study (Figure 6 in paper)
 m_es_hte <- feols(
   closure_event ~
     i(rel_year_bin, texas_treated, ref = -1) +
@@ -551,101 +494,13 @@ m_es_hte <- feols(
     panel_id + panel_year,
   main_sample, cluster = ~state)
 
-cn <- names(coef(m_es_hte))
-cat(sprintf("  Young coefs: %d | Differential coefs: %d | Match: %s\n",
-  sum(grepl(":texas_treated$", cn)),
-  sum(grepl(":tx_old$",        cn)),
-  fifelse(sum(grepl(":texas_treated$", cn)) == sum(grepl(":tx_old$", cn)),
-          "YES", "CHECK")))
-
-#--- S5d: HTE event study plot function ---
-plot_es_hte <- function(model, title = "", subtitle_extra = NULL,
-                        filename = NULL, xlim_lo = -8, xlim_hi = NULL,
-                        col_young = COL_YOUNG, col_old = COL_OLD) {
-
-  ct <- as.data.table(tidy(model, conf.int = TRUE))
-
-  young <- ct[grepl(":texas_treated$", term) & grepl("rel_year_bin", term)]
-  young[, rel_year := as.numeric(gsub("rel_year_bin::(-?[0-9]+):.*", "\\1", term))]
-  young[, group    := "Young (\u22645 yrs in 1998)"]
-  young[, `:=`(conf.low  = estimate - 1.96 * std.error,
-               conf.high = estimate + 1.96 * std.error)]
-
-  diff_dt <- ct[grepl(":tx_old$", term) & grepl("rel_year_bin", term)]
-  diff_dt[, rel_year := as.numeric(gsub("rel_year_bin::(-?[0-9]+):.*", "\\1", term))]
-
-  old <- merge(
-    young[,   .(rel_year, base = estimate, base_se = std.error)],
-    diff_dt[, .(rel_year, diff = estimate, diff_se = std.error)],
-    by = "rel_year", all.x = TRUE)
-  old[is.na(diff), `:=`(diff = 0, diff_se = 0)]
-  old[, `:=`(
-    estimate  = base + diff,
-    conf.low  = (base + diff) - 1.96 * sqrt(base_se^2 + diff_se^2),
-    conf.high = (base + diff) + 1.96 * sqrt(base_se^2 + diff_se^2),
-    group     = "Old (>5 yrs in 1998)"
-  )]
-
-  ref_rows <- data.table(
-    rel_year = -1L, estimate = 0, conf.low = 0, conf.high = 0,
-    group = c("Young (\u22645 yrs in 1998)", "Old (>5 yrs in 1998)"))
-
-  plot_dt <- rbind(young[, .(rel_year, estimate, conf.low, conf.high, group)],
-                   old[,   .(rel_year, estimate, conf.low, conf.high, group)],
-                   ref_rows, fill = TRUE)
-  setorder(plot_dt, group, rel_year)
-
-  sub <- "Single model | Pooled year FEs | Old path = base + differential"
-  if (!is.null(subtitle_extra)) sub <- paste0(sub, "\n", subtitle_extra)
-  xh  <- if (is.null(xlim_hi)) max(plot_dt$rel_year) else xlim_hi
-
-  p <- ggplot(plot_dt[rel_year %between% c(xlim_lo, xh)],
-              aes(x = rel_year, y = estimate, color = group, fill = group)) +
-    annotate("rect", xmin = -Inf, xmax = -0.5,
-             ymin = -Inf, ymax = Inf, fill = "grey92", alpha = 0.6) +
-    geom_hline(yintercept = 0, linetype = "dashed",
-               color = "grey50", linewidth = 0.5) +
-    geom_vline(xintercept = -0.5, color = "grey30", linewidth = 0.7) +
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.15, color = NA) +
-    geom_line(linewidth = 0.9) +
-    geom_point(size = 2.8) +
-    scale_color_manual(values = c(
-      "Young (\u22645 yrs in 1998)" = col_young,
-      "Old (>5 yrs in 1998)"        = col_old)) +
-    scale_fill_manual(values = c(
-      "Young (\u22645 yrs in 1998)" = col_young,
-      "Old (>5 yrs in 1998)"        = col_old)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-    labs(title = title, subtitle = sub,
-         x = "Years Relative to Treatment (1999)",
-         y = "\u0394Pr(Tank Closure)", color = NULL, fill = NULL) +
-    theme_pub() +
-    theme(legend.position = "bottom", panel.grid.major.x = element_blank())
-
-  if (!is.null(filename)) {
-    ggsave(filename, p, width = 14, height = 7, dpi = 200, bg = "white")
-    ggsave(sub("\\.png$", ".pdf", filename), p, width = 14, height = 7,
-           device = cairo_pdf)
-    cat(sprintf("  Saved: %s\n", basename(filename)))
-  }
-  invisible(list(plot = p, data = plot_dt))
-}
-
-att_line <- sprintf(
-  "ATT(young) = %.4f%s  |  ATT(old) = %.4f%s  |  Diff = %.4f",
-  d_young$beta, stars_fn(d_young$p),
-  d_old$beta,   stars_fn(d_old$p),
-  d_old$beta - d_young$beta)
-
 es_hte_out <- plot_es_hte(
-  model          = m_es_hte,
-  title          = "Figure 6: HTE Event Study \u2014 Old vs. Young at Treatment",
-  subtitle_extra = att_line,
-  xlim_lo        = -8,
-  xlim_hi        = rel_max_full,
-  filename       = file.path(OUTPUT_FIGURES, "Figure_6_ES_HTE_OldYoung.png"))
+  model   = m_es_hte,
+  xlim_lo = -8,
+  xlim_hi = rel_max_full,
+  filename = file.path(OUTPUT_FIGURES, "Figure_6_ES_HTE_OldYoung.png"))
 
-#--- S5e: Four-spec DiD table ---
+# Four-specification DiD table
 m_did_pooled <- feols(
   closure_event ~ did_term | panel_id + panel_year,
   main_sample, cluster = ~state)
@@ -664,78 +519,20 @@ m_did_4bin_hte <- feols(
     panel_id + panel_year,
   main_sample, cluster = ~state)
 
-ct4 <- coeftable(summary(m_did_4bin_hte, cluster = ~state))
-bin_labels_4 <- levels(main_sample$age_treat_bin)
-cat("\n  Total ATT by age-at-treatment bin (Prop 3 monotonicity check):\n")
-ests_4bin <- sapply(bin_labels_4, function(bl) {
-  idx <- grep(paste0("did_term:age_treat_bin", bl), rownames(ct4), fixed = TRUE)
-  if (length(idx) > 0) {
-    cat(sprintf("    %s: %.5f (p=%.4f)\n",
-      bl, ct4[idx, "Estimate"], ct4[idx, "Pr(>|t|)"]))
-    return(ct4[idx, "Estimate"])
-  }
-  cat(sprintf("    %s: NOT FOUND\n", bl)); NA_real_
-})
-ests_4bin <- ests_4bin[!is.na(ests_4bin)]
-cat(sprintf("  Monotonically rising: %s\n",
-  fifelse(length(ests_4bin) > 1 & all(diff(ests_4bin) > 0), "YES", "NO")))
-
 save_did_table(
   models    = list(m_did_pooled, m_did_agectrl, m_did_binary_hte, m_did_4bin_hte),
   headers   = c("Pooled DiD", "+ Age Control", "Binary HTE", "4-Bin HTE"),
   base_name = "Table4_AgeTreat_HTE_MakeModel",
-  title     = "Table 4: Age-at-Treatment HTE -- Make-Model Sample")
+  title     = "Age-at-Treatment Heterogeneous Effects")
 
-#--- S5f: LaTeX tables (Table 3 + Table 4) ---
-specs       <- list(m_did_pooled, m_did_agectrl, m_did_binary_hte, m_did_4bin_hte)
-spec_labels <- c("Pooled", "+Age Ctrl", "Binary HTE", "4-Bin HTE")
-did_rows    <- lapply(specs, pull_coef, pattern = "^did_term$")
-old_rows    <- lapply(specs, pull_coef, pattern = "did_term:old_at_treat")
-
+# LaTeX: Table 3 (Old vs Young DiD)
 writeLines(c(
   "\\begin{table}[htbp]\\centering",
-  "\\caption{Age-at-Treatment Heterogeneous Treatment Effects (H1/H2)}",
-  "\\label{tbl:age_treat_hte}",
-  "\\begin{tabular}{lcccc}\\toprule",
-  " & (1) & (2) & (3) & (4)\\\\",
-  sprintf(" & %s \\\\", paste(spec_labels, collapse = " & ")),
-  "\\midrule",
-  "\\textit{Panel A: Young group (age $\\leq5$ in 1998)} & & & & \\\\",
-  sprintf("Texas $\\times$ Post & %s \\\\",
-    paste(sapply(did_rows, `[[`, "b"), collapse = " & ")),
-  sprintf(" & %s \\\\",
-    paste(sapply(did_rows, `[[`, "se"), collapse = " & ")),
-  "\\addlinespace",
-  "\\textit{Panel B: Differential for Old group ($>5$ yrs)} & & & & \\\\",
-  sprintf("$\\times$ Old at treatment & %s \\\\",
-    paste(sapply(old_rows, `[[`, "b"), collapse = " & ")),
-  sprintf(" & %s \\\\",
-    paste(sapply(old_rows, `[[`, "se"), collapse = " & ")),
-  "\\midrule",
-  "Age control (panel bins) & No & Yes & Yes & Yes \\\\",
-  "Facility FE & Yes & Yes & Yes & Yes \\\\",
-  "Year FE & Yes & Yes & Yes & Yes \\\\\\midrule",
-  sprintf("Observations & %s & %s & %s & %s \\\\",
-    format(nobs(specs[[1]]), big.mark = ","),
-    format(nobs(specs[[2]]), big.mark = ","),
-    format(nobs(specs[[3]]), big.mark = ","),
-    format(nobs(specs[[4]]), big.mark = ",")),
-  "\\bottomrule",
-  paste0("\\multicolumn{5}{p{0.95\\textwidth}}{\\footnotesize \\textit{Notes:} ",
-    "Make-model sample. Spec 4: each bin coef is the total ATT for that bin ",
-    "(no base term -- age_treat_bin main effects absorbed by facility FE). ",
-    "SE clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}"),
-  "\\end{tabular}\\end{table}"
-), file.path(OUTPUT_TABLES, "Table4_AgeTreat_HTE_MakeModel.tex"))
-
-writeLines(c(
-  "\\begin{table}[htbp]\\centering",
-  "\\caption{Treatment Effect by Age at Reform: Old vs.\\ Young Facilities (H2)}",
+  "\\caption{Treatment Effect by Age at Reform: Old vs.\\ Young Facilities}",
   "\\label{tbl:old_young_did}",
   "\\begin{tabular}{lcccc}\\toprule",
   " & (1) & (2) & (3) & (4) \\\\",
-  " & Young only & Old only & Interact & Interact+AgeCtrl \\\\\\midrule",
-  "\\textit{ATT estimates} & & & & \\\\",
+  " & Young only & Old only & Interact & Interact+Age \\\\\\midrule",
   sprintf("Texas $\\times$ Post & %s & %s & %s & %s \\\\",
     sprintf("%.4f%s", d_young$beta, stars_fn(d_young$p)),
     sprintf("%.4f%s", d_old$beta,   stars_fn(d_old$p)),
@@ -760,31 +557,55 @@ writeLines(c(
     format(nobs(m_did_interact), big.mark=","),
     format(nobs(m_did_interact_agectrl), big.mark=",")),
   "\\bottomrule",
-  paste0("\\multicolumn{5}{p{0.95\\textwidth}}{\\footnotesize \\textit{Notes:} ",
-    "Make-model sample. SE clustered at state. ",
-    "$^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}"),
+  "\\multicolumn{5}{p{0.95\\textwidth}}{\\footnotesize \\textit{Notes:} ",
+  "Make-model sample. SE clustered at state. ",
+  "$^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
   "\\end{tabular}\\end{table}"
 ), file.path(OUTPUT_TABLES, "Table3_OldYoung_DiD_MakeModel.tex"))
 
-cat("  Saved: Table3_OldYoung_DiD_MakeModel.tex\n")
-cat("  Saved: Table4_AgeTreat_HTE_MakeModel.tex\n")
+# LaTeX: Table 4 (4-spec HTE)
+specs       <- list(m_did_pooled, m_did_agectrl, m_did_binary_hte, m_did_4bin_hte)
+spec_labels <- c("Pooled", "+Age Ctrl", "Binary HTE", "4-Bin HTE")
+did_rows    <- lapply(specs, pull_coef, pattern = "^did_term$")
+old_rows    <- lapply(specs, pull_coef, pattern = "did_term:old_at_treat")
 
-cat("\n====================================================================\n")
-cat("S5 COMPLETE\n")
-cat("====================================================================\n")
+writeLines(c(
+  "\\begin{table}[htbp]\\centering",
+  "\\caption{Age-at-Treatment Heterogeneous Treatment Effects}",
+  "\\label{tbl:age_treat_hte}",
+  "\\begin{tabular}{lcccc}\\toprule",
+  " & (1) & (2) & (3) & (4)\\\\",
+  sprintf(" & %s \\\\", paste(spec_labels, collapse = " & ")),
+  "\\midrule",
+  "\\textit{Panel A: Young group (age $\\leq$5 in 1998)} & & & & \\\\",
+  sprintf("Texas $\\times$ Post & %s \\\\",
+    paste(sapply(did_rows, `[[`, "b"), collapse = " & ")),
+  sprintf(" & %s \\\\",
+    paste(sapply(did_rows, `[[`, "se"), collapse = " & ")),
+  "\\addlinespace",
+  "\\textit{Panel B: Differential for old group ($>$5 yrs)} & & & & \\\\",
+  sprintf("$\\times$ Old at treatment & %s \\\\",
+    paste(sapply(old_rows, `[[`, "b"), collapse = " & ")),
+  sprintf(" & %s \\\\",
+    paste(sapply(old_rows, `[[`, "se"), collapse = " & ")),
+  "\\midrule",
+  "Age control (panel bins) & No & Yes & Yes & Yes \\\\",
+  "Facility FE & Yes & Yes & Yes & Yes \\\\",
+  "Year FE & Yes & Yes & Yes & Yes \\\\\\midrule",
+  sprintf("Observations & %s & %s & %s & %s \\\\",
+    format(nobs(specs[[1]]), big.mark = ","),
+    format(nobs(specs[[2]]), big.mark = ","),
+    format(nobs(specs[[3]]), big.mark = ","),
+    format(nobs(specs[[4]]), big.mark = ",")),
+  "\\bottomrule",
+  "\\multicolumn{5}{p{0.95\\textwidth}}{\\footnotesize \\textit{Notes:} ",
+  "Make-model sample. Spec 4: each bin coefficient is the total ATT for that bin. ",
+  "SE clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
+  "\\end{tabular}\\end{table}"
+), file.path(OUTPUT_TABLES, "Table4_AgeTreat_HTE_MakeModel.tex"))
 
 
-#==============================================================================
-# S6: AGE-BIN HTE COEFFICIENT PLOT (Figure 8)
-#
-# NOTE ON PRE-PERIOD FALSIFICATION:
-#   texas_treated and age_treat_bin are both time-invariant at the facility
-#   level. Their interaction is fully absorbed by panel_id FE and CANNOT be
-#   estimated as a static coefficient. Figure 8 shows post-reform only.
-#   Pre-trend validation is shown in Figure 6 (event study pre-period flat).
-#==============================================================================
-
-cat("\n=== S6: AGE-BIN HTE COEFFICIENT PLOT (Figure 8) ===\n")
+#### S6 Age-Bin Coefficient Plot ####
 
 build_hte_dt <- function(m, base_tvar, label,
                          age_var    = "age_treat_bin",
@@ -807,61 +628,34 @@ build_hte_dt <- function(m, base_tvar, label,
 }
 
 hte_main <- build_hte_dt(m_did_4bin_hte, base_tvar = "did_term",
-                         label = "Post-Reform (Make-Model)")
+                         label = "Post-Reform")
 
-p_hte <- ggplot(
-  hte_main[!is.na(bin)],
-  aes(x = bin, y = estimate, group = 1)
-) +
+p_hte <- ggplot(hte_main[!is.na(bin)], aes(x = bin, y = estimate, group = 1)) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
   geom_line(linewidth = 0.6, color = COL_TX, alpha = 0.7) +
   geom_point(size = 3, color = COL_TX) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
                 width = 0.25, linewidth = 0.5, color = COL_TX) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-  labs(
-    title    = "Figure 8: Treatment Effect on Closure by Age-at-Treatment Bin",
-    subtitle = paste0(
-      "Monotonically rising = Prop 3. Pre-trend validation in Figure 6.\n",
-      "Each bin coef is total ATT (no base term; age_treat_bin absorbed by facility FE)."),
-    x = "Mean Tank Age in 1998", y = "\u0394Pr(Closure) | Texas \u00d7 Post") +
+  labs(x = "Mean Tank Age in 1998", y = "Effect on Closure Probability") +
   theme_pub() +
   theme(axis.text.x = element_text(angle = 30, hjust = 1))
 
 ggsave(file.path(OUTPUT_FIGURES, "Figure_8_HTE_AgeBin_MakeModel.png"),
-       p_hte, width = 11, height = 6, dpi = 300, bg = "white")
+       p_hte, width = 8, height = 5, dpi = 300, bg = "white")
 ggsave(file.path(OUTPUT_FIGURES, "Figure_8_HTE_AgeBin_MakeModel.pdf"),
-       p_hte, width = 11, height = 6, device = cairo_pdf)
-cat("  Saved: Figure_8_HTE_AgeBin_MakeModel\n")
-
-cat("\n====================================================================\n")
-cat("S6 COMPLETE\n")
-cat("====================================================================\n")
+       p_hte, width = 8, height = 5, device = cairo_pdf)
 
 
-#==============================================================================
-# S7: ROBUSTNESS -- AGE-GROUP-SPECIFIC YEAR FEs
-#
-# MOTIVATION: Shared panel_year FEs force a single delta_t estimated as a
-# weighted average across Young and Old control facilities. But raw data shows
-# Control Young and Control Old have very different pre-period trajectories.
-# A shared year FE is not the right counterfactual for either group individually.
-#
-# METHOD A (split=~age_grp): Group-specific year FEs. Preferred visual.
-# METHOD B (panel_year^age_grp): Equivalent single model. Reuses plot_es_hte().
-#==============================================================================
-
-cat("\n=== S7: ROBUSTNESS -- AGE-GROUP-SPECIFIC YEAR FEs ===\n")
+#### S7 Robustness: Age-Group-Specific Year Fixed Effects ####
 
 main_sample[, age_grp := fifelse(mean_age_1998 <= 5, "Young", "Old")]
 
-# Method A: split sample
+# Method A: split sample with group-specific year FEs
 models_split <- feols(
   closure_event ~ i(rel_year_bin, texas_treated, ref = -1) |
     panel_id + panel_year,
   data = main_sample, split = ~age_grp, cluster = ~state)
-
-cat("  Sub-model names: "); print(names(models_split))
 
 nm_old   <- grep("Old",   names(models_split), value = TRUE)
 nm_young <- grep("Young", names(models_split), value = TRUE)
@@ -871,14 +665,18 @@ m_split_young <- models_split[[nm_young]]
 d_split_young <- extract_att_from_es(m_split_young)
 d_split_old   <- extract_att_from_es(m_split_old)
 
-cat(sprintf("  Method A ATT(young): %.5f | ATT(old): %.5f | Old>Young: %s\n",
-  d_split_young$beta, d_split_old$beta,
-  fifelse(d_split_old$beta > d_split_young$beta, "YES", "NO")))
+# Method B: group-time interacted FEs (single model)
+m_es_hte_grpfe <- feols(
+  closure_event ~
+    i(rel_year_bin, texas_treated, ref = -1) +
+    i(rel_year_bin, tx_old,        ref = -1) |
+    panel_id + panel_year^age_grp,
+  main_sample, cluster = ~state)
 
-plot_es_split <- function(m_young, m_old, title = "", subtitle_extra = NULL,
-                          filename = NULL, xlim_lo = -8, xlim_hi = NULL,
+# Split-sample event study plot helper
+plot_es_split <- function(m_young, m_old, filename = NULL,
+                          xlim_lo = -8, xlim_hi = NULL,
                           col_young = COL_YOUNG, col_old = COL_OLD) {
-
   extract_path <- function(m, grp_label) {
     ct <- as.data.table(tidy(m, conf.int = TRUE))
     ct <- ct[grepl("rel_year_bin", term)]
@@ -888,18 +686,15 @@ plot_es_split <- function(m_young, m_old, title = "", subtitle_extra = NULL,
               conf.high = estimate + 1.96 * std.error)]
     ct[, .(rel_year, estimate, conf.low, conf.high, group)]
   }
-
   plot_dt <- rbind(
-    extract_path(m_young, "Young (\u22645 yrs in 1998)"),
-    extract_path(m_old,   "Old (>5 yrs in 1998)"),
+    extract_path(m_young, "Young (age 5 or less in 1998)"),
+    extract_path(m_old,   "Old (age over 5 in 1998)"),
     data.table(rel_year = -1L, estimate = 0, conf.low = 0, conf.high = 0,
-               group = c("Young (\u22645 yrs in 1998)", "Old (>5 yrs in 1998)")),
+               group = c("Young (age 5 or less in 1998)",
+                         "Old (age over 5 in 1998)")),
     fill = TRUE)
   setorder(plot_dt, group, rel_year)
-
-  sub <- "Method A: Split sample | Group-specific year FEs"
-  if (!is.null(subtitle_extra)) sub <- paste0(sub, "\n", subtitle_extra)
-  xh  <- if (is.null(xlim_hi)) max(plot_dt$rel_year) else xlim_hi
+  xh <- if (is.null(xlim_hi)) max(plot_dt$rel_year) else xlim_hi
 
   p <- ggplot(plot_dt[rel_year %between% c(xlim_lo, xh)],
               aes(x = rel_year, y = estimate, color = group, fill = group)) +
@@ -908,49 +703,40 @@ plot_es_split <- function(m_young, m_old, title = "", subtitle_extra = NULL,
     geom_hline(yintercept = 0, linetype = "dashed",
                color = "grey50", linewidth = 0.5) +
     geom_vline(xintercept = -0.5, color = "grey30", linewidth = 0.7) +
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.15, color = NA) +
-    geom_line(linewidth = 0.9) + geom_point(size = 2.8) +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.12,
+                color = NA) +
+    geom_line(linewidth = 0.9) +
+    geom_point(size = 2.5) +
     scale_color_manual(values = c(
-      "Young (\u22645 yrs in 1998)" = col_young,
-      "Old (>5 yrs in 1998)"        = col_old)) +
+      "Young (age 5 or less in 1998)" = col_young,
+      "Old (age over 5 in 1998)"      = col_old)) +
     scale_fill_manual(values = c(
-      "Young (\u22645 yrs in 1998)" = col_young,
-      "Old (>5 yrs in 1998)"        = col_old)) +
+      "Young (age 5 or less in 1998)" = col_young,
+      "Old (age over 5 in 1998)"      = col_old)) +
     scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-    labs(title = title, subtitle = sub,
-         x = "Years Relative to Treatment (1999)",
-         y = "\u0394Pr(Tank Closure)", color = NULL, fill = NULL) +
-    theme_pub() +
-    theme(legend.position = "bottom", panel.grid.major.x = element_blank())
+    labs(x = "Years Relative to Treatment (1999)",
+         y = "Effect on Closure Probability") +
+    theme_pub()
 
   if (!is.null(filename)) {
-    ggsave(filename, p, width = 14, height = 7, dpi = 200, bg = "white")
-    ggsave(sub("\\.png$", ".pdf", filename), p, width = 14, height = 7,
+    ggsave(filename, p, width = 10, height = 5.5, dpi = 300, bg = "white")
+    ggsave(sub("\\.png$", ".pdf", filename), p, width = 10, height = 5.5,
            device = cairo_pdf)
-    cat(sprintf("  Saved: %s\n", basename(filename)))
   }
   invisible(list(plot = p, data = plot_dt))
 }
 
 es_split_out <- plot_es_split(
-  m_young        = m_split_young,
-  m_old          = m_split_old,
-  title          = "Figure B.1: Method A (Split Sample, Group-Specific Year FEs)",
-  subtitle_extra = sprintf(
-    "ATT(young)=%.4f  |  ATT(old)=%.4f  |  Diff=%.4f",
-    d_split_young$beta, d_split_old$beta,
-    d_split_old$beta - d_split_young$beta),
+  m_young  = m_split_young, m_old = m_split_old,
   xlim_lo  = -8, xlim_hi = rel_max_full,
-  filename = file.path(OUTPUT_FIGURES, "FigureB1_Robustness_MethodA_SplitSample.png"))
+  filename = file.path(OUTPUT_FIGURES, "FigureB1_Robustness_SplitSample.png"))
 
-# Method B: group-time interacted FEs
-m_es_hte_grpfe <- feols(
-  closure_event ~
-    i(rel_year_bin, texas_treated, ref = -1) +
-    i(rel_year_bin, tx_old,        ref = -1) |
-    panel_id + panel_year^age_grp,
-  main_sample, cluster = ~state)
+es_hte_grpfe_out <- plot_es_hte(
+  model   = m_es_hte_grpfe,
+  xlim_lo = -8, xlim_hi = rel_max_full,
+  filename = file.path(OUTPUT_FIGURES, "FigureB2_Robustness_GrpYearFE.png"))
 
+# Comparison table
 cn_b <- names(coef(m_es_hte_grpfe))
 post_young_b <- mean(coef(m_es_hte_grpfe)[
   grepl(":texas_treated$", cn_b) & grepl("rel_year_bin::[^-]", cn_b)],
@@ -959,15 +745,6 @@ post_old_b <- post_young_b + mean(coef(m_es_hte_grpfe)[
   grepl(":tx_old$", cn_b) & grepl("rel_year_bin::[^-]", cn_b)],
   na.rm = TRUE)
 
-es_hte_grpfe_out <- plot_es_hte(
-  model          = m_es_hte_grpfe,
-  title          = "Figure B.2: Method B (Group-Time Year FEs, Single Model)",
-  subtitle_extra = sprintf("Avg post ATT(young)=%.4f  |  ATT(old)=%.4f",
-                           post_young_b, post_old_b),
-  xlim_lo  = -8, xlim_hi = rel_max_full,
-  filename = file.path(OUTPUT_FIGURES, "FigureB2_Robustness_MethodB_GrpYearFE.png"))
-
-# Primary spec post-period averages
 post_young_primary <- mean(coef(m_es_hte)[
   grepl(":texas_treated$", names(coef(m_es_hte))) &
   grepl("rel_year_bin::[^-]", names(coef(m_es_hte)))], na.rm = TRUE)
@@ -976,63 +753,25 @@ post_old_primary <- post_young_primary + mean(coef(m_es_hte)[
   grepl("rel_year_bin::[^-]", names(coef(m_es_hte)))], na.rm = TRUE)
 
 comparison_tbl <- data.table(
-  Spec     = c("Primary (shared year FE)", "Method A (split)", "Method B (grp-time FE)"),
+  Spec      = c("Primary (shared year FE)", "Split sample", "Group-time FE"),
   ATT_young = round(c(post_young_primary, d_split_young$beta, post_young_b), 5),
   ATT_old   = round(c(post_old_primary,   d_split_old$beta,   post_old_b),   5),
   Old_gt_Young = c(post_old_primary > post_young_primary,
                    d_split_old$beta > d_split_young$beta,
                    post_old_b       > post_young_b))
-print(comparison_tbl)
+
 fwrite(comparison_tbl,
   file.path(OUTPUT_TABLES, "TableB_Robustness_YearFE_Comparison.csv"))
 
-p_compare <- (es_hte_out$plot       + labs(title = "Primary (Shared Year FE)")) /
-             (es_split_out$plot     + labs(title = "Method A (Split Sample)"))  /
-             (es_hte_grpfe_out$plot + labs(title = "Method B (Group-Time FE)")) +
-  plot_annotation(
-    title    = "Figure B.3: Year FE Specification Comparison",
-    subtitle = "All three should show Old > Young post-1999. Divergence = shared FE contamination.",
-    theme    = theme(plot.title    = element_text(face = "bold", size = 13),
-                     plot.subtitle = element_text(size = 10)))
 
-ggsave(file.path(OUTPUT_FIGURES, "FigureB3_Robustness_YearFE_Comparison.png"),
-       p_compare, width = 14, height = 21, dpi = 200, bg = "white")
+#### S8 Duration and Survival Models ####
 
-cat("\n====================================================================\n")
-cat("S7 COMPLETE\n")
-cat("====================================================================\n")
-
-
-#==============================================================================
-# S8: HYPOTHESIS TESTS -- SURVIVORSHIP, H1 GRADIENT, H3 DURATION, H4 WALL
-#
-#   S8a  Survivorship diagnostic (pre-1999 attrition by age bin)
-#   S8b  H1 binned scatter: closure rate vs age bin, four state-period lines
-#   S8c  H1 Cox DiD with did_term:age_bin -- age gradient in hazard
-#   S8d  H3 discrete-time hazard on full panel (PRIMARY H3 TEST)
-#   S8e  H3 kernel density of age-at-closure by TX/control x pre/post
-#   S8f  H4 Cox DiD on sw_broader_sample with did_term:wall_col
-#   S8g  H4 Kaplan-Meier curves by wall type x state group x pre/post
-#
-# NOTE ON H3 vs S13:
-#   S13 runs OLS on closed_tanks (descriptive -- selection bias caveat applies).
-#   S8d is the primary H3 test: full at-risk panel, age as time scale.
-#==============================================================================
-
-cat("\n=== S8: HYPOTHESIS TESTS ===\n")
-
-if (!requireNamespace("survival",  quietly = TRUE)) install.packages("survival")
-if (!requireNamespace("ggsurvfit", quietly = TRUE)) install.packages("ggsurvfit")
 library(survival)
-library(ggsurvfit)
 
-#------------------------------------------------------------------------------
-# S8a: Survivorship Diagnostic
-# Check how many old-at-treatment facilities exited BEFORE 1999 (pre-shock).
-# High pre-1999 attrition in old bins biases H1 age gradient downward.
-#------------------------------------------------------------------------------
+setorder(main_sample, panel_id, panel_year)
+main_sample[, surv_time := seq_len(.N), by = panel_id]
 
-cat("\n--- S8a: Survivorship Diagnostic ---\n")
+# --- S8a: Survivorship diagnostic ---
 
 surv_diag <- main_sample[,
   .(exited_pre99  = as.integer(any(closure_event == 1 & panel_year < POST_YEAR)),
@@ -1044,31 +783,16 @@ surv_diag <- main_sample[,
 surv_summary <- surv_diag[!is.na(age_treat_bin),
   .(n_facilities = .N,
     n_exited_pre = sum(exited_pre99,  na.rm = TRUE),
-    n_survived   = sum(survived_1999, na.rm = TRUE),
     pct_exit_pre = mean(exited_pre99, na.rm = TRUE)),
   by = .(age_treat_bin,
          texas = fifelse(texas == 1, "Texas", "Control"))
 ][order(texas, age_treat_bin)]
 
-cat("\n  Pre-1999 attrition by age bin and state group:\n")
-print(surv_summary)
 fwrite(surv_summary,
-  file.path(OUTPUT_TABLES, "Table_S8a_Survivorship_Diagnostic.csv"))
+  file.path(OUTPUT_TABLES, "Table_Survivorship_Diagnostic.csv"))
 
-max_pre_exit <- max(surv_summary[
-  age_treat_bin %in% levels(main_sample$age_treat_bin)[3:4], pct_exit_pre],
-  na.rm = TRUE)
-cat(sprintf("  Max pre-1999 exit rate in oldest bins: %.1f%%\n", 100 * max_pre_exit))
-cat(sprintf("  Survivorship caveat material (>20%%): %s\n",
-  fifelse(max_pre_exit > 0.20, "YES -- note in paper", "NO -- caveat minor")))
 
-#------------------------------------------------------------------------------
-# S8b: H1 Binned Scatter
-# Closure rate vs age bin, four lines: TX pre, TX post, Control pre, Control post.
-# H1 prediction: TX post-reform line has steeper positive slope than other three.
-#------------------------------------------------------------------------------
-
-cat("\n--- S8b: H1 Binned Scatter ---\n")
+# --- S8b: Binned scatter -- closure rate vs age bin by group and period ---
 
 h1_scatter_dt <- main_sample[!is.na(age_treat_bin),
   .(closure_rate = mean(closure_event, na.rm = TRUE), n = .N),
@@ -1084,164 +808,310 @@ h1_scatter_dt[, period_group := factor(
 p_h1_scatter <- ggplot(
   h1_scatter_dt[!is.na(age_treat_bin)],
   aes(x = age_treat_bin, y = closure_rate,
-      color = period_group, linetype = period_group, group = period_group)
-) +
+      color = period_group, linetype = period_group, group = period_group)) +
   geom_line(linewidth = 0.9) + geom_point(size = 3) +
   scale_color_manual(
-    values = c("Control Pre-Reform"="#0072B2","Control Post-Reform"="#56B4E9",
-               "Texas Pre-Reform"  ="#D55E00","Texas Post-Reform"  ="#E69F00"),
-    name = NULL) +
+    values = c("Control Pre-Reform"=COL_CTRL, "Control Post-Reform"="#56B4E9",
+               "Texas Pre-Reform"=COL_TX,     "Texas Post-Reform"="#E69F00")) +
   scale_linetype_manual(
-    values = c("Control Pre-Reform"="dashed","Control Post-Reform"="solid",
-               "Texas Pre-Reform"  ="dashed","Texas Post-Reform"  ="solid"),
-    name = NULL) +
+    values = c("Control Pre-Reform"="dashed", "Control Post-Reform"="solid",
+               "Texas Pre-Reform"="dashed",   "Texas Post-Reform"="solid")) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-  labs(
-    title    = "Figure H1.1: Closure Rate by Age Bin (H1 Test)",
-    subtitle = "H1 prediction: TX post-reform line has steeper positive slope than the other three.",
-    x = "Tank Age in 1998 (Age-at-Treatment Bin)",
-    y = "Mean Pr(Closure)",
-    caption = "Unadjusted cell means. Make-model sample.") +
+  labs(x = "Age at Treatment (years)", y = "Mean Annual Closure Rate") +
   theme_pub() +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1),
-        legend.key.width = unit(1.5, "cm"))
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
 
-ggsave(file.path(OUTPUT_FIGURES, "FigureH1_1_BinnedScatter_AgeClosure.png"),
-       p_h1_scatter, width = 11, height = 6.5, dpi = 300, bg = "white")
-ggsave(file.path(OUTPUT_FIGURES, "FigureH1_1_BinnedScatter_AgeClosure.pdf"),
-       p_h1_scatter, width = 11, height = 6.5, device = cairo_pdf)
-cat("  Saved: FigureH1_1_BinnedScatter_AgeClosure\n")
+ggsave(file.path(OUTPUT_FIGURES, "Figure_BinnedScatter_AgeClosure.png"),
+       p_h1_scatter, width = 9, height = 5.5, dpi = 300, bg = "white")
+ggsave(file.path(OUTPUT_FIGURES, "Figure_BinnedScatter_AgeClosure.pdf"),
+       p_h1_scatter, width = 9, height = 5.5, device = cairo_pdf)
 
-#------------------------------------------------------------------------------
-# S8c: H1 Cox DiD -- Age Gradient in the Hazard
-# Estimand: did_term:age_bin interaction in Cox.
-# Positive and rising interaction HR = age gradient steepens under RB = H1.
-# Uses strata(panel_id) for within-facility baseline hazard.
-# NOTE: age_bin is current panel age (time-varying), NOT age_treat_bin.
-#------------------------------------------------------------------------------
 
-cat("\n--- S8c: H1 Cox -- Age Gradient in Hazard ---\n")
+# --- S8c: Cox proportional hazard -- age gradient ---
+# Three specs: base (did_term only), age interactions, full with age controls
 
-setorder(main_sample, panel_id, panel_year)
-main_sample[, surv_time := seq_len(.N), by = panel_id]
-
-cox_h1_base <- coxph(
-  Surv(surv_time, closure_event) ~
-    did_term + did_term:age_bin + strata(panel_id),
+cox_base <- coxph(
+  Surv(surv_time, closure_event) ~ did_term + strata(panel_id),
   data = main_sample, cluster = main_sample$state, ties = "efron")
 
-cox_h1_agectrl <- coxph(
+cox_age_interact <- coxph(
   Surv(surv_time, closure_event) ~
     did_term + age_bin + did_term:age_bin + strata(panel_id),
   data = main_sample, cluster = main_sample$state, ties = "efron")
 
-cat("\n  Cox H1 Spec 1 (base + gradient):\n")
-print(summary(cox_h1_base)$coefficients)
-cat("\n  Cox H1 Spec 2 (+ age_bin control):\n")
-print(summary(cox_h1_agectrl)$coefficients)
+cox_h1_coefs <- extract_cox_coef(cox_age_interact, "did_term")
+interact_hrs <- cox_h1_coefs[grepl("did_term:age_bin", term)]
 
-cox_h1_coefs <- rbindlist(list(
-  cbind(spec = "Spec1", extract_cox_coef(cox_h1_base,    "did_term")),
-  cbind(spec = "Spec2", extract_cox_coef(cox_h1_agectrl, "did_term"))
-), fill = TRUE)
-
-interact_hrs <- cox_h1_coefs[spec == "Spec2" & grepl("did_term:age_bin", term)]
-if (nrow(interact_hrs) > 1) {
-  cat(sprintf("\n  Monotonically rising interaction HRs (H1): %s\n",
-    fifelse(all(diff(interact_hrs$hr) > 0), "YES", "NO")))
-}
-fwrite(cox_h1_coefs,
-  file.path(OUTPUT_TABLES, "Table_S8c_Cox_H1_AgeGradient.csv"))
+# Forest plot: base HR + age-bin interaction HRs
+base_hr_dt <- extract_cox_coef(cox_base, "did_term")
+base_hr_dt[, label := "Pooled"]
 
 if (nrow(interact_hrs) > 0) {
-  p_cox_h1 <- ggplot(
-    interact_hrs,
-    aes(x    = term,
-        y    = hr,
-        ymin = exp(coef - 1.96 * se),
-        ymax = exp(coef + 1.96 * se))
-  ) +
-    geom_hline(yintercept = 1, linetype = "dashed", color = "grey50") +
-    geom_point(size = 3, color = COL_TX) +
-    geom_errorbar(width = 0.25, linewidth = 0.6, color = COL_TX) +
-    scale_x_discrete(labels = function(x) gsub("did_term:age_bin", "", x)) +
-    labs(title    = "Figure H1.2: Cox HR for did_term x Age Bin (H1 Test)",
-         subtitle = "HR > 1 and rising = age gradient steepens under RB. strata(panel_id).",
-         x = "Panel Age Bin",
-         y = "Hazard Ratio (Texas x Post x Age Bin)",
-         caption = "Spec 2 with age_bin main effect. SE clustered at state.") +
-    theme_pub() +
-    theme(axis.text.x = element_text(angle = 30, hjust = 1))
+  interact_hrs[, label := gsub("did_term:age_bin", "", term)]
 
-  ggsave(file.path(OUTPUT_FIGURES, "FigureH1_2_Cox_AgeGradient_HR.png"),
-         p_cox_h1, width = 10, height = 6, dpi = 300, bg = "white")
-  ggsave(file.path(OUTPUT_FIGURES, "FigureH1_2_Cox_AgeGradient_HR.pdf"),
-         p_cox_h1, width = 10, height = 6, device = cairo_pdf)
-  cat("  Saved: FigureH1_2_Cox_AgeGradient_HR\n")
+  forest_dt <- rbind(
+    base_hr_dt[, .(label, hr, coef, se)],
+    interact_hrs[, .(label, hr, coef, se)]
+  )
+  forest_dt[, `:=`(
+    ci_lo = exp(coef - 1.96 * se),
+    ci_hi = exp(coef + 1.96 * se)
+  )]
+  forest_dt[, label := factor(label, levels = rev(forest_dt$label))]
+
+  p_forest <- ggplot(forest_dt,
+    aes(x = hr, y = label, xmin = ci_lo, xmax = ci_hi)) +
+    geom_vline(xintercept = 1, linetype = "dashed", color = "grey50") +
+    geom_pointrange(size = 0.5, linewidth = 0.6, color = COL_TX) +
+    labs(x = "Hazard Ratio", y = NULL) +
+    theme_pub() +
+    theme(panel.grid.major.y = element_line(color = "grey92", linewidth = 0.3))
+
+  ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_ForestPlot.png"),
+         p_forest, width = 7, height = 4.5, dpi = 300, bg = "white")
+  ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_ForestPlot.pdf"),
+         p_forest, width = 7, height = 4.5, device = cairo_pdf)
 }
 
-#------------------------------------------------------------------------------
-# S8d: H3 Duration Model -- Primary H3 Test
-#
-# WHY NOT OLS ON closed_tanks (existing S13):
-#   Conditioning on closure having occurred = selection bias. Units that close
-#   differ in covariate distributions across groups. The correct test uses the
-#   FULL at-risk panel as the estimation sample.
-#
-# Three specs:
-#   cloglog  -- discrete proportional hazard (correct likelihood)
-#   LPM      -- facility FEs, age-scale, directly comparable to main DiD
-#   Cox AFT  -- avg_tank_age as time axis (H3 is literally a time-to-event claim)
-#
-# H3 prediction: did_term > 0 = TX post-reform closure hazard is higher
-#   at any given tank age (reform tips old-enough tanks into closure).
-#------------------------------------------------------------------------------
 
-cat("\n--- S8d: H3 Duration Model (PRIMARY H3 TEST) ---\n")
+# --- S8d: Duration models on full at-risk panel ---
+# Three estimators: cloglog (discrete PH), LPM with facility FE, Cox with age scale
 
 h3_dt <- main_sample[!is.na(avg_tank_age) & !is.na(did_term)]
 
-# Spec 1: complementary log-log (discrete proportional hazard)
 h3_cloglog <- glm(
   closure_event ~ did_term + age_bin + texas_treated,
   family = binomial(link = "cloglog"), data = h3_dt)
 
-# Spec 2: LPM with facility FE -- comparable to main DiD
-h3_lpm_agescale <- feols(
+h3_lpm <- feols(
   closure_event ~ did_term + age_bin | panel_id,
   h3_dt, cluster = ~state)
 
-# Spec 3: Cox with age as time scale
 h3_cox_age <- coxph(
-  Surv(avg_tank_age, closure_event) ~
-    did_term + strata(panel_id),
+  Surv(avg_tank_age, closure_event) ~ did_term + strata(panel_id),
   data = h3_dt, cluster = h3_dt$state, ties = "efron")
 
-cat("\n  H3 cloglog did_term coef:\n")
-print(coef(summary(h3_cloglog))["did_term", ])
-cat("\n  H3 LPM did_term coef:\n")
-print(coeftable(h3_lpm_agescale)["did_term", ])
-cat("\n  H3 Cox (age scale) did_term HR:\n")
-print(summary(h3_cox_age)$coefficients["did_term", ])
 
-hr_h3 <- exp(coef(h3_cox_age)["did_term"])
-cat(sprintf("\n  H3 Cox HR = %.4f: TX post-1999 closure hazard %.1f%% %s at any tank age.\n",
-  hr_h3, abs(100 * (hr_h3 - 1)),
-  fifelse(hr_h3 > 1, "HIGHER (H3 supported)", "lower (opposite of H3)")))
+# --- S8d-fig: Discrete-time hazard profile by age bin ---
+# Predicted closure probability from cloglog, by age bin x TX/Control x period
+# This is the reduced-form analog of the structural Figure 14
+
+pred_dt <- CJ(
+  age_bin     = levels(main_sample$age_bin),
+  did_term    = c(0L, 1L),
+  texas_treated = c(0L, 1L)
+)
+# Keep only: control pre (did=0, tx=0), control post (did=0, tx=0 but post),
+#            TX pre (did=0, tx=1), TX post (did=1, tx=1)
+pred_dt <- pred_dt[
+  (texas_treated == 0 & did_term == 0) |
+  (texas_treated == 1 & did_term == 0) |
+  (texas_treated == 1 & did_term == 1)
+]
+pred_dt[, age_bin := factor(age_bin, levels = levels(main_sample$age_bin))]
+pred_dt[, group := fcase(
+  texas_treated == 0 & did_term == 0, "Control (uniform premium)",
+  texas_treated == 1 & did_term == 0, "Texas pre-reform",
+  texas_treated == 1 & did_term == 1, "Texas post-reform (risk-based)"
+)]
+
+pred_dt[, pred_prob := predict(h3_cloglog, newdata = pred_dt, type = "response")]
+pred_dt[, group := factor(group, levels = c(
+  "Control (uniform premium)", "Texas pre-reform",
+  "Texas post-reform (risk-based)"))]
+
+p_hazard_profile <- ggplot(pred_dt,
+  aes(x = age_bin, y = pred_prob, color = group, group = group)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2.5) +
+  scale_color_manual(values = c(
+    "Control (uniform premium)"        = COL_CTRL,
+    "Texas pre-reform"                 = "#E69F00",
+    "Texas post-reform (risk-based)"   = COL_TX)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+  labs(x = "Tank Age Bin (years)", y = "Predicted Closure Probability") +
+  theme_pub() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+ggsave(file.path(OUTPUT_FIGURES, "Figure_DiscreteHazard_AgeProfile.png"),
+       p_hazard_profile, width = 9, height = 5.5, dpi = 300, bg = "white")
+ggsave(file.path(OUTPUT_FIGURES, "Figure_DiscreteHazard_AgeProfile.pdf"),
+       p_hazard_profile, width = 9, height = 5.5, device = cairo_pdf)
+
+
+# --- S8d-tab: Duration model comparison table (LaTeX) ---
+
+cll_coefs  <- coef(summary(h3_cloglog))
+cll_did    <- cll_coefs["did_term", ]
+lpm_ct     <- coeftable(summary(h3_lpm, cluster = ~state))
+lpm_did    <- lpm_ct["did_term", ]
+cox_s      <- summary(h3_cox_age)$coefficients
+cox_did    <- cox_s["did_term", ]
+
+dur_stars <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.01) return("$^{***}$")
+  if (p < 0.05) return("$^{**}$")
+  if (p < 0.10) return("$^{*}$")
+  ""
+}
+
+writeLines(c(
+  "\\begin{table}[htbp]\\centering",
+  "\\caption{Duration Model Estimates: Effect of Risk-Based Pricing on Closure Hazard}",
+  "\\label{tbl:duration_models}",
+  "\\begin{tabular}{lccc}\\toprule",
+  " & (1) & (2) & (3) \\\\",
+  " & Cloglog & LPM & Cox PH \\\\\\midrule",
+  sprintf("Texas $\\times$ Post & %.4f%s & %.4f%s & \\\\",
+    cll_did["Estimate"], dur_stars(cll_did["Pr(>|z|)"]),
+    lpm_did["Estimate"], dur_stars(lpm_did["Pr(>|t|)"])),
+  sprintf(" & (%.4f) & (%.4f) & \\\\",
+    cll_did["Std. Error"], lpm_did["Std. Error"]),
+  "\\addlinespace",
+  sprintf("Hazard ratio & & & %.4f%s \\\\",
+    exp(cox_did["coef"]), dur_stars(cox_did["Pr(>|z|)"])),
+  sprintf("Log coefficient & & & %.4f \\\\", cox_did["coef"]),
+  sprintf(" & & & (%.4f) \\\\", cox_did["se(coef)"]),
+  "\\midrule",
+  "Age bin controls & Yes & Yes & --- \\\\",
+  "Facility FE / Strata & No & Yes & Strata \\\\",
+  "Time scale & Calendar & Calendar & Tank age \\\\",
+  "\\midrule",
+  sprintf("Observations & %s & %s & %s \\\\",
+    format(nrow(h3_dt), big.mark = ","),
+    format(nobs(h3_lpm), big.mark = ","),
+    format(h3_cox_age$n, big.mark = ",")),
+  sprintf("Events & %s & & %s \\\\",
+    format(sum(h3_dt$closure_event), big.mark = ","),
+    format(h3_cox_age$nevent, big.mark = ",")),
+  "\\bottomrule",
+  "\\multicolumn{4}{p{0.92\\textwidth}}{\\footnotesize \\textit{Notes:} ",
+  "Full at-risk panel (make-model sample). Column 1: complementary log-log ",
+  "(discrete proportional hazard). Column 2: linear probability model with ",
+  "facility fixed effects and state-clustered SE. Column 3: Cox proportional ",
+  "hazard with tank age as the time axis and facility strata. ",
+  "$^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
+  "\\end{tabular}\\end{table}"
+), file.path(OUTPUT_TABLES, "Table_Duration_Models.tex"))
 
 fwrite(
   as.data.table(coef(summary(h3_cloglog)), keep.rownames = "term"),
-  file.path(OUTPUT_TABLES, "Table_S8d_H3_ClogLog_Duration.csv"))
-cat("  Saved: Table_S8d_H3_ClogLog_Duration.csv\n")
+  file.path(OUTPUT_TABLES, "Table_Duration_ClogLog.csv"))
 
-#------------------------------------------------------------------------------
-# S8e: H3 Kernel Density -- Age-at-Closure Distribution
-# Distributional test: theory predicts higher mass at OLD ages post-reform in TX,
-# not a uniform shift. Four densities: TX/control x pre/post.
-# NOTE: conditional on closure event -- see S8d for unconditional primary test.
-#------------------------------------------------------------------------------
 
-cat("\n--- S8e: H3 Kernel Density -- Age-at-Closure ---\n")
+# --- S8e: Cox event study (time-varying HRs parallel to OLS event study) ---
+# Manual dummies excluding reference period, interacted with treatment
+
+es_years <- sort(unique(main_sample$rel_year_bin))
+es_years <- es_years[es_years != -1L]  # drop reference
+
+for (yr in es_years) {
+  vname <- paste0("ry_", ifelse(yr < 0, paste0("m", abs(yr)), yr))
+  main_sample[, (vname) := as.integer(rel_year_bin == yr) * texas_treated]
+}
+
+ry_vars <- grep("^ry_", names(main_sample), value = TRUE)
+cox_fml <- as.formula(paste(
+  "Surv(surv_time, closure_event) ~",
+  paste(ry_vars, collapse = " + "),
+  "+ strata(panel_id)"
+))
+
+cox_es_manual <- coxph(cox_fml, data = main_sample,
+                       cluster = main_sample$state, ties = "efron")
+
+cox_es_dt <- as.data.table(
+  summary(cox_es_manual)$coefficients, keep.rownames = "term")
+setnames(cox_es_dt, c("term","coef","exp_coef","se","z","p"))
+
+# Parse relative year from variable names
+cox_es_dt[, rel_year := as.numeric(gsub("ry_m", "-", gsub("ry_", "", term)))]
+cox_es_dt <- cox_es_dt[!is.na(rel_year)]
+cox_es_dt[, `:=`(
+  hr    = exp_coef,
+  ci_lo = exp(coef - 1.96 * se),
+  ci_hi = exp(coef + 1.96 * se),
+  period = fifelse(rel_year < 0, "Pre", "Post")
+)]
+
+# Add reference point (normalized to HR = 1)
+cox_es_dt <- rbind(cox_es_dt,
+  data.table(term = "ref", coef = 0, exp_coef = 1, se = 0, z = 0, p = 1,
+             rel_year = -1, hr = 1, ci_lo = 1, ci_hi = 1, period = "Ref"),
+  fill = TRUE)
+setorder(cox_es_dt, rel_year)
+
+p_cox_es <- ggplot(cox_es_dt,
+  aes(x = rel_year, y = hr)) +
+  annotate("rect", xmin = -Inf, xmax = -0.5, ymin = -Inf, ymax = Inf,
+           fill = "grey90", alpha = 0.5) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "grey50",
+             linewidth = 0.5) +
+  geom_vline(xintercept = -0.5, color = "grey30", linewidth = 0.6) +
+  geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi), alpha = 0.12, fill = "grey40") +
+  geom_line(color = "grey40", linewidth = 0.4, alpha = 0.6) +
+  geom_point(aes(color = period), size = 2.5) +
+  geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi, color = period),
+                width = 0.25, linewidth = 0.5) +
+  scale_color_manual(values = c(Pre = COL_CTRL, Post = COL_TX, Ref = "black"),
+                     guide = "none") +
+  labs(x = "Years Relative to Treatment (1999)", y = "Hazard Ratio") +
+  theme_pub()
+
+ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_EventStudy.png"),
+       p_cox_es, width = 10, height = 5.5, dpi = 300, bg = "white")
+ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_EventStudy.pdf"),
+       p_cox_es, width = 10, height = 5.5, device = cairo_pdf)
+
+# Clean up temporary dummy variables
+main_sample[, (ry_vars) := NULL]
+
+
+# --- S8f: Kaplan-Meier survival curves ---
+# Four panels: TX pre, TX post, Control pre, Control post
+# Clean faceted KM showing survival probability over panel time
+
+main_sample[, km_group := factor(paste0(
+  fifelse(texas_treated == 1, "Texas", "Control"), ", ",
+  fifelse(panel_year < POST_YEAR, "Pre-Reform", "Post-Reform")),
+  levels = c("Control, Pre-Reform", "Control, Post-Reform",
+             "Texas, Pre-Reform",   "Texas, Post-Reform"))]
+
+# Compute per-group KM fits from the first observation year of each panel spell
+km_fit <- survfit(Surv(surv_time, closure_event) ~ km_group, data = main_sample)
+km_tidy <- as.data.table(broom::tidy(km_fit))
+km_tidy[, group := gsub("km_group=", "", strata)]
+km_tidy[, group := factor(group, levels = c(
+  "Control, Pre-Reform", "Control, Post-Reform",
+  "Texas, Pre-Reform",   "Texas, Post-Reform"))]
+
+p_km <- ggplot(km_tidy, aes(x = time, y = estimate, color = group)) +
+  geom_step(linewidth = 0.8) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group),
+              alpha = 0.08, color = NA, stat = "identity") +
+  scale_color_manual(values = c(
+    "Control, Pre-Reform"  = COL_CTRL,
+    "Control, Post-Reform" = "#56B4E9",
+    "Texas, Pre-Reform"    = "#E69F00",
+    "Texas, Post-Reform"   = COL_TX)) +
+  scale_fill_manual(values = c(
+    "Control, Pre-Reform"  = COL_CTRL,
+    "Control, Post-Reform" = "#56B4E9",
+    "Texas, Pre-Reform"    = "#E69F00",
+    "Texas, Post-Reform"   = COL_TX)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     limits = c(0, 1)) +
+  labs(x = "Years in Panel", y = "Survival Probability") +
+  theme_pub()
+
+ggsave(file.path(OUTPUT_FIGURES, "Figure_KM_Survival.png"),
+       p_km, width = 9, height = 5.5, dpi = 300, bg = "white")
+ggsave(file.path(OUTPUT_FIGURES, "Figure_KM_Survival.pdf"),
+       p_km, width = 9, height = 5.5, device = cairo_pdf)
+
+
+# --- S8g: Age-at-closure histogram ---
 
 h3_closed <- main_sample[
   closure_event == 1 & !is.na(avg_tank_age),
@@ -1254,64 +1124,33 @@ h3_closed[, group := factor(paste(state_group, period), levels = c(
   "Texas Pre-Reform","Texas Post-Reform"))]
 
 h3_stats <- h3_closed[,
-  .(n      = .N,
-    mean   = mean(avg_tank_age),
-    median = median(avg_tank_age),
-    p25    = quantile(avg_tank_age, 0.25),
-    p75    = quantile(avg_tank_age, 0.75)),
+  .(n = .N, mean = mean(avg_tank_age), median = median(avg_tank_age)),
   by = group][order(group)]
 
-cat("\n  Age-at-closure summary statistics:\n"); print(h3_stats)
-fwrite(h3_stats, file.path(OUTPUT_TABLES, "Table_S8e_H3_AgeAtClosure_Stats.csv"))
+fwrite(h3_stats, file.path(OUTPUT_TABLES, "Table_AgeAtClosure_Stats.csv"))
 
-col_h3 <- c("Control Pre-Reform" ="#0072B2","Control Post-Reform"="#56B4E9",
-            "Texas Pre-Reform"   ="#D55E00","Texas Post-Reform"  ="#E69F00")
-lty_h3 <- c("Control Pre-Reform" ="dashed","Control Post-Reform"="solid",
-            "Texas Pre-Reform"   ="dashed","Texas Post-Reform"  ="solid")
-
-p_h3_density <- ggplot(h3_closed,
-  aes(x = avg_tank_age, color = group, linetype = group)) +
-  geom_density(linewidth = 0.9, adjust = 1.2) +
-  geom_vline(data = h3_stats,
-             aes(xintercept = median, color = group, linetype = group),
-             linewidth = 0.4, alpha = 0.6) +
-  scale_color_manual(values = col_h3, name = NULL) +
-  scale_linetype_manual(values = lty_h3, name = NULL) +
+p_h3_hist <- ggplot(h3_closed, aes(x = avg_tank_age, fill = group)) +
+  geom_histogram(binwidth = 1, alpha = 0.85) +
+  facet_wrap(~group, ncol = 2, scales = "free_y") +
+  geom_vline(data = h3_stats, aes(xintercept = median),
+             linetype = "dashed", linewidth = 0.5) +
+  scale_fill_manual(values = c(
+    "Control Pre-Reform" = COL_CTRL, "Control Post-Reform" = "#56B4E9",
+    "Texas Pre-Reform"   = "#E69F00", "Texas Post-Reform"   = COL_TX),
+    guide = "none") +
   scale_x_continuous(breaks = seq(0, 20, 2)) +
-  labs(
-    title    = "Figure H3.1: Distribution of Tank Age at Closure (H3 Test)",
-    subtitle = paste0(
-      "H3 prediction: TX post-reform density has higher mass at old ages.\n",
-      "Vertical lines = group medians. Conditional on closure -- see S8d for primary test."),
-    x = "Tank Age at Closure (years)", y = "Density",
-    caption = "Kernel density (adjust=1.2). Make-model sample.") +
-  theme_pub() +
-  theme(legend.key.width = unit(1.5, "cm"))
+  labs(x = "Tank Age at Closure (years)", y = "Count") +
+  theme_pub()
 
-ggsave(file.path(OUTPUT_FIGURES, "FigureH3_1_KernelDensity_AgeAtClosure.png"),
-       p_h3_density, width = 11, height = 6.5, dpi = 300, bg = "white")
-ggsave(file.path(OUTPUT_FIGURES, "FigureH3_1_KernelDensity_AgeAtClosure.pdf"),
-       p_h3_density, width = 11, height = 6.5, device = cairo_pdf)
-cat("  Saved: FigureH3_1_KernelDensity_AgeAtClosure\n")
+ggsave(file.path(OUTPUT_FIGURES, "Figure_Histogram_AgeAtClosure.png"),
+       p_h3_hist, width = 10, height = 6, dpi = 300, bg = "white")
+ggsave(file.path(OUTPUT_FIGURES, "Figure_Histogram_AgeAtClosure.pdf"),
+       p_h3_hist, width = 10, height = 6, device = cairo_pdf)
 
-#------------------------------------------------------------------------------
-# S8f: H4 Cox DiD -- Wall Type Gradient in Hazard
-# REQUIRES sw_broader_sample (main_sample is SW-only -- H4 not identified there)
-# H4: SW closes faster than DW post-reform in TX (premium burden on SW tanks).
-#------------------------------------------------------------------------------
 
-cat("\n--- S8f: H4 Cox -- Wall Type Gradient ---\n")
+# --- S8h: Wall type Cox (requires sw_broader_sample) ---
 
-if (!exists("sw_broader_sample")) {
-  cat("  WARNING: sw_broader_sample not found. Skipping S8f/S8g.\n")
-} else if (!wall_col %in% names(sw_broader_sample)) {
-  cat(sprintf("  WARNING: '%s' not in sw_broader_sample. Skipping.\n", wall_col))
-} else {
-
-  cat(sprintf("  sw_broader_sample: %s obs | %s fac\n",
-    format(nrow(sw_broader_sample), big.mark = ","),
-    format(uniqueN(sw_broader_sample$panel_id), big.mark = ",")))
-
+if (exists("sw_broader_sample") && wall_col %in% names(sw_broader_sample)) {
   if (!"did_term" %in% names(sw_broader_sample))
     sw_broader_sample[,
       did_term := as.integer(texas_treated == 1 & panel_year >= POST_YEAR)]
@@ -1319,103 +1158,67 @@ if (!exists("sw_broader_sample")) {
   setorder(sw_broader_sample, panel_id, panel_year)
   sw_broader_sample[, surv_time := seq_len(.N), by = panel_id]
 
-  fml_pool <- as.formula(sprintf(
-    "Surv(surv_time, closure_event) ~ did_term + %s + did_term:%s",
-    wall_col, wall_col))
-  cox_h4_pool <- coxph(fml_pool, data = sw_broader_sample,
-                       cluster = sw_broader_sample$state, ties = "efron")
+  cox_wall_base <- coxph(as.formula(sprintf(
+    "Surv(surv_time, closure_event) ~ did_term + %s + strata(panel_id)",
+    wall_col)),
+    data = sw_broader_sample, cluster = sw_broader_sample$state, ties = "efron")
 
-  fml_strata <- as.formula(sprintf(
-    "Surv(surv_time, closure_event) ~ did_term + did_term:%s + strata(panel_id)",
-    wall_col))
-  cox_h4_strata <- coxph(fml_strata, data = sw_broader_sample,
-                         cluster = sw_broader_sample$state, ties = "efron")
+  cox_wall_interact <- coxph(as.formula(sprintf(
+    "Surv(surv_time, closure_event) ~ did_term + %s + did_term:%s + strata(panel_id)",
+    wall_col, wall_col)),
+    data = sw_broader_sample, cluster = sw_broader_sample$state, ties = "efron")
 
-  cat("\n  H4 Cox (pooled):\n"); print(summary(cox_h4_pool)$coefficients)
-  cat("\n  H4 Cox (strata panel_id):\n"); print(summary(cox_h4_strata)$coefficients)
+  # Wall type Cox table (LaTeX)
+  cox_w_base_s <- summary(cox_wall_base)$coefficients
+  cox_w_int_s  <- summary(cox_wall_interact)$coefficients
+
+  writeLines(c(
+    "\\begin{table}[htbp]\\centering",
+    "\\caption{Cox Proportional Hazard: Wall Construction Heterogeneity}",
+    "\\label{tbl:cox_wall}",
+    "\\begin{tabular}{lcc}\\toprule",
+    " & (1) & (2) \\\\",
+    " & Base & Interaction \\\\\\midrule",
+    sprintf("Texas $\\times$ Post (HR) & %.3f%s & %.3f%s \\\\",
+      exp(cox_w_base_s["did_term","coef"]),
+      dur_stars(cox_w_base_s["did_term","Pr(>|z|)"]),
+      exp(cox_w_int_s["did_term","coef"]),
+      dur_stars(cox_w_int_s["did_term","Pr(>|z|)"])),
+    sprintf(" & (%.4f) & (%.4f) \\\\",
+      cox_w_base_s["did_term","se(coef)"],
+      cox_w_int_s["did_term","se(coef)"]),
+    {
+      int_row <- grep(paste0("did_term:", wall_col), rownames(cox_w_int_s))
+      if (length(int_row) > 0) {
+        c(sprintf("$\\times$ Single-walled (HR) & & %.3f%s \\\\",
+          exp(cox_w_int_s[int_row,"coef"]),
+          dur_stars(cox_w_int_s[int_row,"Pr(>|z|)"])),
+          sprintf(" & & (%.4f) \\\\", cox_w_int_s[int_row,"se(coef)"]))
+      } else character(0)
+    },
+    "\\midrule",
+    "Facility strata & Yes & Yes \\\\",
+    sprintf("Observations & %s & %s \\\\",
+      format(cox_wall_base$n, big.mark = ","),
+      format(cox_wall_interact$n, big.mark = ",")),
+    sprintf("Events & %s & %s \\\\",
+      format(cox_wall_base$nevent, big.mark = ","),
+      format(cox_wall_interact$nevent, big.mark = ",")),
+    "\\bottomrule",
+    "\\multicolumn{3}{p{0.85\\textwidth}}{\\footnotesize \\textit{Notes:} ",
+    "Broader sample including single- and double-walled facilities. ",
+    "Hazard ratios reported. SE (of log-HR) in parentheses. ",
+    "Clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
+    "\\end{tabular}\\end{table}"
+  ), file.path(OUTPUT_TABLES, "Table_Cox_WallType.tex"))
 
   fwrite(
-    as.data.table(summary(cox_h4_strata)$coefficients, keep.rownames = "term"),
-    file.path(OUTPUT_TABLES, "Table_S8f_Cox_H4_WallType.csv"))
-  cat("  Saved: Table_S8f_Cox_H4_WallType.csv\n")
-
-  #----------------------------------------------------------------------------
-  # S8g: H4 Kaplan-Meier Curves
-  # Four facets: TX pre / TX post / Control pre / Control post
-  # Within each: KM curves for SW vs DW
-  # H4 prediction: SW-DW gap widens in TX post-1999 only
-  #----------------------------------------------------------------------------
-
-  cat("\n--- S8g: H4 Kaplan-Meier Curves ---\n")
-
-  sw_broader_sample[, period_group := paste0(
-    fifelse(texas_treated == 1, "Texas", "Control"), " | ",
-    fifelse(panel_year < POST_YEAR, "Pre-Reform", "Post-Reform"))]
-
-  km_groups <- unique(sw_broader_sample$period_group)
-  km_list <- lapply(km_groups, function(pg) {
-    sub <- sw_broader_sample[period_group == pg]
-    fit <- survfit(as.formula(sprintf(
-      "Surv(surv_time, closure_event) ~ %s", wall_col)), data = sub)
-    km_tidy <- as.data.table(broom::tidy(fit))
-    km_tidy[, period_group := pg]
-    km_tidy
-  })
-
-  km_dt <- rbindlist(km_list)
-  km_dt[, period_group := factor(period_group, levels = c(
-    "Control | Pre-Reform","Control | Post-Reform",
-    "Texas | Pre-Reform","Texas | Post-Reform"))]
-
-  p_km_h4 <- ggplot(km_dt,
-    aes(x = time, y = estimate, color = strata, linetype = strata)) +
-    geom_step(linewidth = 0.8) +
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = strata),
-                alpha = 0.10, color = NA) +
-    facet_wrap(~period_group, ncol = 2) +
-    scale_color_manual(
-      values = c("wall_col=0"="#0072B2","wall_col=1"="#D55E00"),
-      labels = c("Double-wall","Single-wall"), name = NULL) +
-    scale_linetype_manual(
-      values = c("wall_col=0"="dashed","wall_col=1"="solid"),
-      labels = c("Double-wall","Single-wall"), name = NULL) +
-    scale_fill_manual(
-      values = c("wall_col=0"="#0072B2","wall_col=1"="#D55E00"),
-      labels = c("Double-wall","Single-wall"), name = NULL) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-                       limits = c(0, 1)) +
-    labs(
-      title    = "Figure H4.1: Kaplan-Meier Survival by Wall Type (H4 Test)",
-      subtitle = "H4 prediction: SW-DW gap widens in TX post-1999 (bottom-right) only.",
-      x = "Years in Panel", y = "Survival Pr(No Closure)",
-      caption = "KM estimator. Broader SW/DW sample. Shading = 95% CI.") +
-    theme_pub() +
-    theme(strip.text = element_text(face = "bold", size = 10))
-
-  ggsave(file.path(OUTPUT_FIGURES, "FigureH4_1_KM_WallType.png"),
-         p_km_h4, width = 12, height = 9, dpi = 300, bg = "white")
-  ggsave(file.path(OUTPUT_FIGURES, "FigureH4_1_KM_WallType.pdf"),
-         p_km_h4, width = 12, height = 9, device = cairo_pdf)
-  cat("  Saved: FigureH4_1_KM_WallType\n")
+    as.data.table(cox_w_int_s, keep.rownames = "term"),
+    file.path(OUTPUT_TABLES, "Table_Cox_WallType.csv"))
 }
 
-cat("\n====================================================================\n")
-cat("S8 COMPLETE\n")
-cat("  S8a: Table_S8a_Survivorship_Diagnostic.csv\n")
-cat("  S8b: FigureH1_1_BinnedScatter_AgeClosure\n")
-cat("  S8c: FigureH1_2_Cox_AgeGradient_HR | Table_S8c_Cox_H1_AgeGradient.csv\n")
-cat("  S8d: Table_S8d_H3_ClogLog_Duration.csv  [PRIMARY H3 TEST]\n")
-cat("  S8e: FigureH3_1_KernelDensity_AgeAtClosure\n")
-cat("  S8f: Table_S8f_Cox_H4_WallType.csv  [requires sw_broader_sample]\n")
-cat("  S8g: FigureH4_1_KM_WallType         [requires sw_broader_sample]\n")
-cat("====================================================================\n")
 
-
-#==============================================================================
-# S9: YOUNGEST SUBSAMPLE (Table 5 + Figure 7A)
-#==============================================================================
-
-cat("\n=== S9: YOUNGEST SUBSAMPLE (age <= 5 in 1998) ===\n")
+#### S9 Youngest Subsample ####
 
 m_youngest_simple <- feols(
   closure_event ~ did_term | panel_id + panel_year,
@@ -1423,15 +1226,12 @@ m_youngest_simple <- feols(
 m_youngest_age_ctrl <- feols(
   closure_event ~ did_term + age_bin | panel_id + panel_year,
   youngest_sample, cluster = ~state)
-m_youngest_age_hte <- feols(
-  closure_event ~ did_term * age_bin | panel_id + panel_year,
-  youngest_sample, cluster = ~state)
 
 save_did_table(
-  models    = list(m_youngest_simple, m_youngest_age_ctrl, m_youngest_age_hte),
-  headers   = c("Simple DiD", "+ Age Control", "Age HTE"),
+  models    = list(m_youngest_simple, m_youngest_age_ctrl),
+  headers   = c("Simple DiD", "+ Age Control"),
   base_name = "Table5_Youngest_MakeModel",
-  title     = "Table 5: Youngest Subsample (age <= 5) -- H2 Young ATT")
+  title     = "Youngest Subsample (age 5 or less)")
 
 model_es_youngest <- feols(
   closure_event ~ i(rel_year_bin, texas_treated, ref = -1) |
@@ -1440,20 +1240,10 @@ model_es_youngest <- feols(
 
 es_youngest_out <- plot_es(
   model_es_youngest,
-  title       = "Youngest Facilities (age \u2264 5 in 1998)",
-  subtitle    = sprintf("Lifecycle acceleration | Pre-trend p = %.3f",
-                        pt_pval(model_es_youngest)),
-  xlim_lo     = rel_min_youngest, xlim_hi = rel_max_full)
-
-cat(sprintf("  Youngest DiD: beta=%.5f | p=%.4f\n",
-  extract_did(m_youngest_simple)$beta, extract_did(m_youngest_simple)$p))
+  xlim_lo = rel_min_youngest, xlim_hi = rel_max_full)
 
 
-#==============================================================================
-# S10: OLDEST SUBSAMPLE (Table 6 + Figure 7B)
-#==============================================================================
-
-cat("\n=== S10: OLDEST SUBSAMPLE (age > 5 in 1998) ===\n")
+#### S10 Oldest Subsample ####
 
 m_oldest_simple <- feols(
   closure_event ~ did_term | panel_id + panel_year,
@@ -1462,15 +1252,11 @@ m_oldest_age_ctrl <- feols(
   closure_event ~ did_term + age_bin | panel_id + panel_year,
   oldest_sample, cluster = ~state)
 
-# Age HTE omitted for oldest subsample -- near-empty baseline bin creates
-# mechanical collinearity (t-stats of 55-77 are a data artifact, not real)
-cat("  NOTE: Age HTE suppressed (collinearity in baseline age bin).\n")
-
 save_did_table(
   models    = list(m_oldest_simple, m_oldest_age_ctrl),
   headers   = c("Simple DiD", "+ Age Control"),
   base_name = "Table6_Oldest_MakeModel",
-  title     = "Table 6: Oldest Subsample (age > 5) -- H2 Old ATT")
+  title     = "Oldest Subsample (age over 5)")
 
 model_es_oldest <- feols(
   closure_event ~ i(rel_year_bin, texas_treated, ref = -1) |
@@ -1479,32 +1265,25 @@ model_es_oldest <- feols(
 
 es_oldest_out <- plot_es(
   model_es_oldest,
-  title    = "Oldest Facilities (age > 5 in 1998)",
-  subtitle = sprintf("Near-end-of-life | Pre-trend p = %.3f",
-                     pt_pval(model_es_oldest)),
-  xlim_lo  = rel_min_oldest, xlim_hi = rel_max_full)
+  xlim_lo = rel_min_oldest, xlim_hi = rel_max_full)
 
-cat(sprintf("  Oldest DiD: beta=%.5f | p=%.4f\n",
-  extract_did(m_oldest_simple)$beta, extract_did(m_oldest_simple)$p))
-
-p_combined_es <- (es_youngest_out$plot + labs(title = "A: Youngest (age \u2264 5)")) /
-                 (es_oldest_out$plot   + labs(title = "B: Oldest (age > 5)")) +
-  plot_annotation(
-    title    = "Figure 7: HTE Event Studies -- Youngest vs. Oldest",
-    subtitle = "Make-model sample. Sustained effect (A) vs. front-loaded effect (B).",
-    theme    = theme(plot.title = element_text(face = "bold", size = 14)))
+# Figure 7: combined youngest vs oldest event studies
+p_combined_es <- (es_youngest_out$plot +
+    labs(y = "Effect on Closure Probability") +
+    annotate("text", x = -Inf, y = Inf, label = "A",
+             hjust = -0.5, vjust = 1.5, fontface = "bold", size = 5)) /
+  (es_oldest_out$plot +
+    labs(y = "Effect on Closure Probability") +
+    annotate("text", x = -Inf, y = Inf, label = "B",
+             hjust = -0.5, vjust = 1.5, fontface = "bold", size = 5))
 
 ggsave(file.path(OUTPUT_FIGURES, "Figure_7_ES_Youngest_Oldest.png"),
-       p_combined_es, width = 14, height = 14, dpi = 200, bg = "white")
+       p_combined_es, width = 10, height = 10, dpi = 300, bg = "white")
 ggsave(file.path(OUTPUT_FIGURES, "Figure_7_ES_Youngest_Oldest.pdf"),
-       p_combined_es, width = 14, height = 14, device = cairo_pdf)
+       p_combined_es, width = 10, height = 10, device = cairo_pdf)
 
 
-#==============================================================================
-# S11: REPORTED LEAK DiD (Table 7)
-#==============================================================================
-
-cat("\n=== S11: REPORTED LEAK DiD ===\n")
+#### S11 Reported Leak DiD ####
 
 m_leak_main     <- feols(leak_year ~ did_term | panel_id + panel_year,
                          main_sample,     cluster = ~state)
@@ -1517,7 +1296,7 @@ save_did_table(
   models    = list(m_leak_main, m_leak_youngest, m_leak_oldest),
   headers   = c("Full Make-Model", "Youngest", "Oldest"),
   base_name = "Table7_Leak_MakeModel",
-  title     = "Table 7: Reported Leak Probability -- Make-Model Sample")
+  title     = "Reported Leak Probability")
 
 model_es_leak <- feols(
   leak_year ~ i(rel_year_bin, texas_treated, ref = -1) |
@@ -1525,20 +1304,12 @@ model_es_leak <- feols(
   main_sample, cluster = ~state)
 
 plot_es(model_es_leak,
-  title    = "Effect of Insurance Privatization on Reported Leak Probability",
-  subtitle = sprintf("Make-Model | Pre-trend p = %.3f", pt_pval(model_es_leak)),
-  ylab     = "Effect on Pr(Reported Leak)",
-  xlim_lo  = -8, xlim_hi = rel_max_full,
+  ylab    = "Effect on Reported Leak Probability",
+  xlim_lo = -8, xlim_hi = rel_max_full,
   filename = file.path(OUTPUT_FIGURES, "Figure_Leak_ES_MakeModel.png"))
 
 
-#==============================================================================
-# S12: H4 -- WALL TYPE ON BROADER SW SAMPLE (Table 9)
-# NOTE: H4 cannot be tested in main_sample (SW-only by construction).
-#==============================================================================
-
-cat("\n=== S12: H4 WALL TYPE (Broader SW Sample) ===\n")
-cat(sprintf("  Wall type variable: %s\n", wall_col))
+#### S12 Wall Type Heterogeneity (Broader Sample) ####
 
 fml_wall_broad <- as.formula(sprintf(
   "closure_event ~ did_term + did_term:%s + %s | panel_id + panel_year",
@@ -1552,28 +1323,12 @@ m_h4_pre <- feols(as.formula(sprintf(
 
 save_did_table(
   models    = list(m_hte_wall_broad, m_h4_pre),
-  headers   = c("Broader SW Sample", "Pre-Period Falsification"),
-  base_name = "Table9_H4_WallType_BroaderSW",
-  title     = "Table 9: H4 Wall Type (Broader SW Sample)")
-
-h4_term <- grep(paste0("did_term:", wall_col), names(coef(m_hte_wall_broad)), value = TRUE)
-h4_coef <- coef(m_hte_wall_broad)[h4_term]
-cat(sprintf("  H4 TX x Post x %s = %.5f | %s\n", wall_col, h4_coef,
-  fifelse(!is.na(h4_coef) & h4_coef > 0, "CONSISTENT WITH H4", "Null/negative H4")))
+  headers   = c("Broader Sample", "Pre-Period Falsification"),
+  base_name = "Table9_WallType_BroaderSW",
+  title     = "Wall Type Heterogeneity")
 
 
-#==============================================================================
-# S13: H3 -- AGE AT CLOSURE OLS (Table 8 + Figure H3)
-#
-# NOTE: This is a DESCRIPTIVE analysis. OLS on closed_tanks conditions on
-# the closure event having occurred, introducing selection bias. The primary
-# causal H3 test is in S8d (duration model on full at-risk panel).
-# Results here should be interpreted as "among closures that occur, does the
-# average age shift?" not as "does the reform cause older tanks to close?"
-#==============================================================================
-
-cat("\n=== S13: H3 AGE AT CLOSURE (DESCRIPTIVE OLS) ===\n")
-cat("  NOTE: Primary H3 causal test is in S8d. This section is descriptive.\n")
+#### S13 Age at Closure (Descriptive OLS) ####
 
 if (!"spec_A_eligible" %in% names(closed_tanks)) {
   closed_tanks <- merge(closed_tanks,
@@ -1603,9 +1358,6 @@ h3_data <- closed_tanks[
 h3_mm    <- h3_data[in_make_model == 1]
 h3_specA <- h3_data
 
-cat(sprintf("  H3 make-model: %s closures | H3 Spec A: %s closures\n",
-  format(nrow(h3_mm), big.mark = ","), format(nrow(h3_specA), big.mark = ",")))
-
 m_h3_mm    <- feols(age_at_closure ~ texas_post | county_fips_fac + closure_year,
                     h3_mm, cluster = ~state)
 m_h3_specA <- feols(age_at_closure ~ texas_post | county_fips_fac + closure_year,
@@ -1615,11 +1367,12 @@ m_h3_pre   <- feols(age_at_closure ~ texas | county_fips_fac + closure_year,
 
 save_did_table(
   models    = list(m_h3_mm, m_h3_specA, m_h3_pre),
-  headers   = c("Make-Model Closures", "Spec A Closures", "Pre-Period Falsification"),
-  base_name = "Table8_H3_AgeAtClosure",
-  title     = "Table 8: H3 -- Age at Closure (Descriptive OLS -- see S8d for causal test)",
+  headers   = c("Make-Model Closures", "Spec A Closures", "Pre-Period"),
+  base_name = "Table8_AgeAtClosure",
+  title     = "Age at Closure (Descriptive OLS)",
   tvar      = "texas_post")
 
+# Age at closure time series
 age_ts <- closed_tanks[
   spec_A_eligible == 1 & closure_year %between% c(1990, 2018) & !is.na(age_at_closure),
   .(mean_age = mean(age_at_closure, na.rm = TRUE), n = .N),
@@ -1635,20 +1388,16 @@ p_h3 <- ggplot(age_ts, aes(x = closure_year, y = mean_age,
   geom_line(aes(y = mean_age_smooth), linewidth = 1, na.rm = TRUE) +
   scale_color_manual(values = c(Texas = COL_TX, Control = COL_CTRL)) +
   scale_x_continuous(breaks = seq(1990, 2018, 4)) +
-  labs(title    = "H3: Mean Age at Tank Closure Over Time",
-       subtitle = "3-year rolling mean. Spec A. Post-reform TX rise = H3 (descriptive).",
-       x = "Year of Closure", y = "Mean Tank Age at Closure (years)",
-       color = NULL, shape = NULL)
+  labs(x = "Year of Closure", y = "Mean Tank Age at Closure (years)") +
+  theme_pub()
 
-ggsave(file.path(OUTPUT_FIGURES, "Figure_H3_AgeAtClosure.png"),
-       p_h3, width = 10, height = 6, dpi = 300, bg = "white")
+ggsave(file.path(OUTPUT_FIGURES, "Figure_AgeAtClosure_TimeSeries.png"),
+       p_h3, width = 9, height = 5, dpi = 300, bg = "white")
+ggsave(file.path(OUTPUT_FIGURES, "Figure_AgeAtClosure_TimeSeries.pdf"),
+       p_h3, width = 9, height = 5, device = cairo_pdf)
 
 
-#==============================================================================
-# S14: THEORY-EVIDENCE SUMMARY (Table 10)
-#==============================================================================
-
-cat("\n=== S14: THEORY-EVIDENCE SUMMARY ===\n")
+#### S14 Theory-Evidence Summary ####
 
 extract_h <- function(m, pattern, label, prediction, null_expected = FALSE) {
   ct  <- coeftable(summary(m, cluster = ~state))
@@ -1661,52 +1410,42 @@ extract_h <- function(m, pattern, label, prediction, null_expected = FALSE) {
   verdict <- if (null_expected) {
     fifelse(p > 0.10, "Supported (null as expected)", "FAILED (pre-trend)")
   } else {
-    fcase(is.na(p),                     "N/A",
+    fcase(is.na(p), "N/A",
           p < 0.05 & r["Estimate"] > 0, "Supported",
-          p >= 0.10,                     "Not rejected (null)",
-          default =                      "Partial")
+          p >= 0.10, "Not rejected (null)",
+          default = "Partial")
   }
   data.table(Hypothesis = label, Prediction = prediction,
-             Estimate = round(r["Estimate"],   5),
-             SE       = round(r["Std. Error"], 5),
-             P        = round(p, 4),
-             Verdict  = verdict)
+             Estimate = round(r["Estimate"], 5),
+             SE = round(r["Std. Error"], 5),
+             P = round(p, 4), Verdict = verdict)
 }
 
 theory_tbl <- rbindlist(list(
-  # H1/H2: age gradient -- use 4-bin HTE for oldest bin
   extract_h(m_did_4bin_hte, "did_term:age_treat_bin",
-            "H1/H2 Age Gradient (4-bin HTE, oldest bin)",
-            "ATT rising in age; oldest bin largest"),
-  # H2: Young vs Old ATT
+            "Age gradient (4-bin, oldest bin)",
+            "ATT rising in age"),
   extract_h(m_youngest_simple, "did_term",
-            "H2 ATT(young, age<=5)",
-            "ATT(young) ≈ 0 or small positive"),
+            "ATT(young, age 5 or less)",
+            "ATT small or zero"),
   extract_h(m_oldest_simple, "did_term",
-            "H2 ATT(old, age>5)",
+            "ATT(old, age over 5)",
             "ATT(old) > ATT(young)"),
-  # H3: Age at closure (OLS descriptive)
   extract_h(m_h3_mm, "texas_post",
-            "H3 Age-at-Closure Shift (make-model OLS, descriptive)",
+            "Age-at-closure shift (make-model OLS)",
             "TX post-reform closures older"),
   extract_h(m_h3_pre, "texas",
-            "H3 Falsification (pre-period)",
+            "Pre-period falsification",
             "No TX-control age gap pre-reform", null_expected = TRUE),
-  # H4: Wall type
   extract_h(m_hte_wall_broad, paste0("did_term:", wall_col),
-            "H4 Wall Sensitivity (broader SW sample)",
-            "SW responds more than DW")
+            "Wall type sensitivity (broader sample)",
+            "Single-wall responds more than double-wall")
 ))
 
-print(theory_tbl)
-fwrite(theory_tbl, file.path(OUTPUT_TABLES, "Table10_Theory_Evidence_MakeModel.csv"))
+fwrite(theory_tbl, file.path(OUTPUT_TABLES, "Table10_Theory_Evidence.csv"))
 
 
-#==============================================================================
-# S15: ROBUSTNESS
-#==============================================================================
-
-cat("\n=== S15: ROBUSTNESS ===\n")
+#### S15 Robustness Checks ####
 
 m_noMD_main     <- feols(closure_event ~ did_term | panel_id + panel_year,
                          main_sample[state != "MD"],     cluster = ~state)
@@ -1717,9 +1456,9 @@ m_noMD_oldest   <- feols(closure_event ~ did_term | panel_id + panel_year,
 
 save_did_table(
   models    = list(m_noMD_main, m_noMD_youngest, m_noMD_oldest),
-  headers   = c("Full Make-Model (no MD)", "Youngest (no MD)", "Oldest (no MD)"),
-  base_name = "TableB5_MD_Excluded_MakeModel",
-  title     = "Table B.5: MD-Excluded Robustness")
+  headers   = c("Full (no MD)", "Youngest (no MD)", "Oldest (no MD)"),
+  base_name = "TableB5_MD_Excluded",
+  title     = "Maryland-Excluded Robustness")
 
 m_mandate_main <- feols(
   closure_event ~ did_term + mandate_active | panel_id + panel_year,
@@ -1730,9 +1469,9 @@ m_mandate_youngest <- feols(
 
 save_did_table(
   models    = list(m_did_pooled, m_mandate_main, m_youngest_simple, m_mandate_youngest),
-  headers   = c("Main (no mandate)", "Main + mandate", "Youngest", "Youngest + mandate"),
-  base_name = "TableB6_Mandate_Sensitivity_MakeModel",
-  title     = "Table B.6: Mandate Control Sensitivity")
+  headers   = c("Main", "Main + mandate", "Youngest", "Youngest + mandate"),
+  base_name = "TableB6_Mandate_Sensitivity",
+  title     = "Mandate Control Sensitivity")
 
 main_tight <- annual_data[
   single_tanks == active_tanks & has_gasoline_year == 1 &
@@ -1744,18 +1483,15 @@ m_tight <- feols(closure_event ~ did_term | panel_id + panel_year,
 
 save_did_table(
   models    = list(m_did_pooled, m_tight),
-  headers   = c("1990-1997 install (primary)", "1992-1997 install (tight)"),
-  base_name = "TableB7_InstallWindow_Sensitivity",
-  title     = "Table B.7: Install Year Window Sensitivity")
+  headers   = c("1990-1997 install", "1992-1997 install"),
+  base_name = "TableB7_InstallWindow",
+  title     = "Install Year Window Sensitivity")
 
 
-#==============================================================================
-# S16: SURVIVAL MODELS -- BASIC COX DiD
-# Detailed H1/H4 Cox with interactions in S8c/S8f.
-# This section: simple did_term HR on main_sample for robustness comparison.
-#==============================================================================
+#### S16 Cox Proportional Hazard Models ####
 
-cat("\n=== S16: COX DiD (Make-Model Sample) ===\n")
+# Calendar-time and age-time Cox on make-model sample
+# These complement the S8 duration models with alternative time origins
 
 cox_main <- copy(main_sample)
 cox_main[, `:=`(tstart    = panel_year - 1L,
@@ -1764,38 +1500,74 @@ cox_main[, `:=`(tstart    = panel_year - 1L,
                 age_stop  = avg_tank_age)]
 cox_main <- cox_main[tstop > tstart]
 
-m_cox_main_cal <- coxph(
+m_cox_cal <- coxph(
   Surv(tstart, tstop, closure_event) ~ did_term + mandate_active,
   data = cox_main, cluster = state)
 
 cox_main_age <- cox_main[age_start >= 0 & age_stop > age_start]
-m_cox_main_age <- coxph(
+m_cox_age <- coxph(
   Surv(age_start, age_stop, closure_event) ~ did_term + mandate_active + panel_year,
   data = cox_main_age, cluster = state)
 
 cox_results <- rbindlist(lapply(list(
-  list(m = m_cox_main_cal, label = "Calendar Origin"),
-  list(m = m_cox_main_age, label = "Age Origin")
+  list(m = m_cox_cal, label = "Calendar time"),
+  list(m = m_cox_age, label = "Tank age")
 ), function(x) {
   s <- summary(x$m)$coefficients
   data.table(Model    = x$label,
-             HR       = round(exp(s["did_term","coef"]),       4),
-             coef     = round(s["did_term","coef"],            4),
-             se       = round(s["did_term","se(coef)"],        4),
-             p        = round(s["did_term","Pr(>|z|)"],        4),
+             HR       = round(exp(s["did_term","coef"]), 4),
+             coef     = round(s["did_term","coef"], 4),
+             se       = round(s["did_term","se(coef)"], 4),
+             p        = round(s["did_term","Pr(>|z|)"], 4),
              n_events = x$m$nevent)
 }))
 
-print(cox_results)
 fwrite(cox_results, file.path(OUTPUT_TABLES, "Table_Cox_DiD_MakeModel.csv"))
-cat("  NOTE: H1 age-gradient Cox in S8c | H4 wall-type Cox in S8f\n")
+
+# LaTeX table: Cox DiD comparison
+cal_s <- summary(m_cox_cal)$coefficients
+age_s <- summary(m_cox_age)$coefficients
+
+writeLines(c(
+  "\\begin{table}[htbp]\\centering",
+  "\\caption{Cox Proportional Hazard Estimates: Calendar Time vs.\\ Tank Age Origin}",
+  "\\label{tbl:cox_did}",
+  "\\begin{tabular}{lcc}\\toprule",
+  " & (1) & (2) \\\\",
+  " & Calendar time & Tank age \\\\\\midrule",
+  sprintf("Texas $\\times$ Post (HR) & %.3f%s & %.3f%s \\\\",
+    exp(cal_s["did_term","coef"]),
+    stars_fn(cal_s["did_term","Pr(>|z|)"]),
+    exp(age_s["did_term","coef"]),
+    stars_fn(age_s["did_term","Pr(>|z|)"])),
+  sprintf("Log coefficient & %.4f & %.4f \\\\",
+    cal_s["did_term","coef"], age_s["did_term","coef"]),
+  sprintf(" & (%.4f) & (%.4f) \\\\",
+    cal_s["did_term","se(coef)"], age_s["did_term","se(coef)"]),
+  "\\addlinespace",
+  sprintf("Mandate control & %.3f%s & %.3f%s \\\\",
+    exp(cal_s["mandate_active","coef"]),
+    stars_fn(cal_s["mandate_active","Pr(>|z|)"]),
+    exp(age_s["mandate_active","coef"]),
+    stars_fn(age_s["mandate_active","Pr(>|z|)"])),
+  "\\midrule",
+  "Time origin & Calendar year & Tank age \\\\",
+  sprintf("Observations & %s & %s \\\\",
+    format(m_cox_cal$n, big.mark = ","),
+    format(m_cox_age$n, big.mark = ",")),
+  sprintf("Events & %s & %s \\\\",
+    format(m_cox_cal$nevent, big.mark = ","),
+    format(m_cox_age$nevent, big.mark = ",")),
+  "\\bottomrule",
+  "\\multicolumn{3}{p{0.85\\textwidth}}{\\footnotesize \\textit{Notes:} ",
+  "Make-model sample. Counting-process Cox models. Hazard ratios reported; ",
+  "log-HR SE in parentheses. Clustered at state. ",
+  "$^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
+  "\\end{tabular}\\end{table}"
+), file.path(OUTPUT_TABLES, "Table_Cox_DiD_MakeModel.tex"))
 
 
-#==============================================================================
-# S17: DIAGNOSTIC DATA EXPORT
-#==============================================================================
-
-cat("\n=== S17: DIAGNOSTIC EXPORT ===\n")
+#### S17 Diagnostic Data Export ####
 
 saveRDS(model_es_youngest, file.path(ANALYSIS_DIR, "mm_youngest_event_study.rds"))
 saveRDS(model_es_oldest,   file.path(ANALYSIS_DIR, "mm_oldest_event_study.rds"))
@@ -1810,21 +1582,10 @@ fwrite(texas_share_by_period(youngest_sample),
 fwrite(texas_share_by_period(oldest_sample),
   file.path(OUTPUT_TABLES, "Diag_TXShare_Oldest.csv"))
 
-cat("  Exported: 5 model objects + 3 composition diagnostics\n")
 
+#### S18 Publication LaTeX Tables ####
 
-#==============================================================================
-# S18: PUBLICATION LaTeX TABLES
-#==============================================================================
-
-cat("\n=== S18: LaTeX TABLES ===\n")
-
-write_tex <- function(lines, name) {
-  writeLines(lines, file.path(OUTPUT_TABLES, paste0(name, ".tex")))
-  cat(sprintf("  Saved: %s.tex\n", name))
-}
-
-# Cross-spec summary CSV (no LaTeX needed)
+# Cross-spec summary
 spec_summary <- data.table(
   Model = c("Make-Model Full","Youngest","Oldest",
             "Leak (Main)","Leak (Youngest)","Leak (Oldest)"),
@@ -1838,16 +1599,15 @@ spec_summary <- data.table(
                       m_leak_main, m_leak_youngest, m_leak_oldest),
                  function(m) extract_did(m)$p))
 
-print(spec_summary)
 fwrite(spec_summary, file.path(OUTPUT_TABLES, "Cross_Spec_Summary_MakeModel.csv"))
 
-# Age split table (youngest vs oldest)
+# Age split LaTeX table (youngest vs oldest)
 cy <- lapply(list(m_youngest_simple, m_youngest_age_ctrl), extract_did)
 co <- lapply(list(m_oldest_simple,   m_oldest_age_ctrl),   extract_did)
 
-write_tex(c(
+writeLines(c(
   "\\begin{table}[htbp]\\centering",
-  "\\caption{Age Heterogeneity -- Youngest vs.\\ Oldest Subsamples (H2)}",
+  "\\caption{Age Heterogeneity: Youngest vs.\\ Oldest Subsamples}",
   "\\label{tbl:mm_age_hte}",
   "\\begin{tabular}{lcccc}\\toprule",
   " & \\multicolumn{2}{c}{\\textbf{Youngest ($\\leq$5 yrs)}} & \\multicolumn{2}{c}{\\textbf{Oldest ($>$5 yrs)}}\\\\",
@@ -1867,13 +1627,12 @@ write_tex(c(
     format(cy[[1]]$n,big.mark=","), format(cy[[2]]$n,big.mark=","),
     format(co[[1]]$n,big.mark=","), format(co[[2]]$n,big.mark=",")),
   "\\bottomrule",
-  paste0("\\multicolumn{5}{p{0.95\\textwidth}}{\\footnotesize \\textit{Notes:} ",
-    "Make-model sample split at mean tank age in 1998 = 5 years. ",
-    "SE clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}"),
+  "\\multicolumn{5}{p{0.95\\textwidth}}{\\footnotesize \\textit{Notes:} ",
+  "Make-model sample split at mean tank age in 1998 = 5 years. ",
+  "SE clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
   "\\end{tabular}\\end{table}"
-), "JMP_Table56_AgeSplit_MakeModel")
+), file.path(OUTPUT_TABLES, "JMP_Table56_AgeSplit_MakeModel.tex"))
 
-cat("\n====================================================================\n")
-cat(sprintf("02_DiD_Main_MakeModel.R COMPLETE | %s\n", Sys.time()))
-cat(sprintf("  Tables: %s\n  Figures: %s\n", OUTPUT_TABLES, OUTPUT_FIGURES))
-cat("====================================================================\n")
+message(sprintf("02_DiD_Main_MakeModel.R complete | %s", Sys.time()))
+message(sprintf("  Tables: %s", OUTPUT_TABLES))
+message(sprintf("  Figures: %s", OUTPUT_FIGURES))

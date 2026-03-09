@@ -1,0 +1,3 @@
+Model,Estimate,SE,t_stat,p_value,N_obs
+Simple DiD,-0.0046,0.0103,-0.443,0.6634,177114
++ Age Control,-0.0032,0.0099,-0.322,0.7511,176729
