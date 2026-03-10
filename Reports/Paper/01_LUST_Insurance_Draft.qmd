@@ -18,6 +18,7 @@ format:
     template-partials:
       - before-body.tex
     fontsize: 11.5pt
+    fig-pos: "H"           # <-- add this
 bibliography: UST_lit.bib
 fig-cap-location: top
 geometry: top=0.5in,  bottom=1in,  paperwidth= 8.5in,  paperheight= 11in, 
@@ -27,7 +28,6 @@ header-includes:
   - \usepackage{amsmath}
   - \usepackage{float}
   - \usepackage{tablefootnote}
-  - \floatplacement{figure}{H}
   - \usepackage{tikz}
   - \usepackage{pdflscape}
   - \usepackage{etoolbox}
@@ -137,8 +137,7 @@ The private market that absorbed the Texas UST population after December 1998 pr
 ```{r}
 #| label: fig-fr-coverage
 #| fig-cap: "Financial responsibility compliance in Texas, 2007--2021. Left panel: share of active retail facilities satisfying the EPA financial responsibility requirement via private insurance versus self-insurance. Right panel: total count of covered facilities. The near-universal adoption of private coverage within the first policy year confirms the reform was absorbed rapidly across the facility population. Source: TCEQ financial responsibility administrative records."
-#| fig-width: 7
-#| fig-height: 5
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "FigureA_TX_FR_Coverage_Composition.pdf")
@@ -155,8 +154,7 @@ The private market is dominated by a small number of specialist environmental in
 ```{r}
 #| label: fig-fr-hhi
 #| fig-cap: "Financial responsibility compliance in Texas, 2007--2021. Left panel: share of active retail facilities satisfying the EPA financial responsibility requirement via private insurance versus self-insurance. Right panel: total count of covered facilities. The near-universal adoption of private coverage within the first policy year confirms the reform was absorbed rapidly across the facility population. Source: TCEQ financial responsibility administrative records."
-#| fig-width: 7
-#| fig-height: 5
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "Figure_TX_FR_Top5_Dominance_HHI.pdf")
@@ -177,8 +175,7 @@ if (file.exists(fig_path)) {
 ```{r}
 #| label: fig-premium-level
 #| fig-cap: "Reconstructed annual premium levels for Texas UST facilities, 2006--2021. Left panel: median premium by year, with pre- and post-transition shading. Center panel: premium index (1995 = 100) for single-wall and double-wall tanks separately. Right panel: log premium against tank age, with fitted lines by wall type. Premiums are strictly increasing in age and strictly higher for single-wall construction at every age, consistent with the Mid-Continent rate filing structure. Source: SERFF rate filings."
-#| fig-width: 7
-#| fig-height: 4
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "FigureB_MidContinent_Pricing.pdf")
@@ -436,8 +433,7 @@ The theory in Section 3 delivers two related empirical requirements. First, for 
 ```{r}
 #| label: fig-age-density
 #| fig-cap: "Distribution of tank age at December 22, 1998 (the PSTRF cutoff date). Left panel: kernel density estimates for Texas (solid) and the control group (dashed). Right panel: empirical CDFs. The distributions overlap substantially, indicating comparable capital vintage entering the treatment window, but the single-wall share differs across age bins in ways that motivate the make-model restriction. Source: 01f."
-#| fig-width: 7
-#| fig-height: 4
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "Figure1_AgeDensity_Combined.png")
@@ -453,8 +449,7 @@ if (file.exists(fig_path)) {
 ```{r}
 #| label: fig-sw-composition
 #| fig-cap: "Single-wall tank share at December 22, 1998. Left panel: share by three vintage bins (pre-1980, 1980--1988, 1989--1998) for Texas and the control group. Right panel: share by five-year installation cohort, with dot size proportional to cohort count. Texas exhibits a higher single-wall share at every vintage, reflecting historical market differences and pre-1988 survivor selection. Source: 01f."
-#| fig-width: 7
-#| fig-height: 4
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "Figure3_WallByVintage_Combined.png")
@@ -476,8 +471,7 @@ A necessary condition for the pricing mechanism to operate is that observable fa
 ```{r}
 #| label: fig-roc-curves
 #| fig-cap: "Cross-validated ROC curves for predicting confirmed releases from observable facility characteristics (age bin, wall construction type). Left panel: model without state fixed effects. Right panel: model with state fixed effects. The AUC exceeds the no-skill baseline (dashed diagonal) in both specifications, confirming that private insurers have an actuarially feasible pricing margin. Estimated on pre-treatment control-state facility-years. Source: 01n."
-#| fig-width: 7
-#| fig-height: 4
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "Figure_CV_ROC_Combined.png")
@@ -492,8 +486,7 @@ if (file.exists(fig_path)) {
 ```{r}
 #| label: fig-pdp-age-wall
 #| fig-cap: "Partial dependence of predicted leak probability on age bin, separately for single-wall (solid) and double-wall (dashed) tanks, with observed facility-year means overlaid. The hazard is increasing in age for both wall types and the single-wall penalty widens with age, validating the structural assumption $h'(a) > 0$ and the extension of the mechanism to wall type. Source: 01n."
-#| fig-width: 7
-#| fig-height: 4
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "Figure_CV_PartialDep_Combined.png")
@@ -508,8 +501,7 @@ if (file.exists(fig_path)) {
 ```{r}
 #| label: fig-calibration
 #| fig-cap: "Calibration plot: mean observed release rate against mean predicted risk score within deciles of the predicted score distribution. Points near the 45-degree line indicate a well-calibrated model. Source: 01n."
-#| fig-width: 5
-#| fig-height: 5
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "Figure_CV_Calibration_Combined.png")
@@ -529,8 +521,7 @@ I link administrative facility identifiers to payment ledgers of state undergrou
 ```{r}
 #| label: fig-cost-distribution
 #| fig-cap: "Pooled distribution of realized cleanup costs per confirmed release across six state trust funds (Colorado, Louisiana, New Mexico, Pennsylvania, Tennessee, Utah), deflated to 2023 dollars. Log-scale density with vertical lines at the median (dashed red) and mean (dot-dash orange)."
-#| fig-width: 7
-#| fig-height: 4.5
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "Figure_cost_distribution_pooled.png")
@@ -572,8 +563,8 @@ if (file.exists(table_path)) {
 ```{r}
 #| label: fig-cost-distribution-states
 #| fig-cap: "State-level distribution of realized cleanup costs per confirmed release, deflated to 2023 dollars. Each panel plots the log-scale density for one state with vertical lines at the state-specific median and mean. The consistency of the heavy upper tail across all six states supports treating the skewed cost distribution as a structural feature of UST liability."
-#| fig-width: 7
-#| fig-height: 7
+#| out-width: "100%"
+#| out-height: "0.85\\textheight"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "Figure_cost_distribution_by_state.png")
@@ -760,8 +751,7 @@ if (file.exists(table_path)) {
 ```{r}
 #| label: fig-es-closure-specA
 #| fig-cap: "Event study: effect of insurance privatization on tank closure probability. Make-model comparison sample. Reference period is k = −1 (1998). Shaded region denotes pre-treatment window. Vertical line marks the reform. 95% confidence intervals based on state-clustered standard errors."
-#| fig-width: 10
-#| fig-height: 6
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "JMP_Figure_6A_Event_Study_SpecA.png")
@@ -776,8 +766,7 @@ if (file.exists(fig_path)) {
 ```{r}
 #| label: fig-es-leak
 #| fig-cap: "Event study: effect of insurance privatization on reported leak probability. Make-model comparison sample. Reference period is k = −1. 95% confidence intervals based on state-clustered standard errors."
-#| fig-width: 10
-#| fig-height: 6
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Figures", "JMP_Figure_7_Leak_Event_Study.png")
@@ -987,8 +976,7 @@ The joint pattern of $|\hat{\gamma}_{\text{price}}| > 1$ and $\hat{\gamma}_{\tex
 ```{r}
 #| label: fig-fleet-survival
 #| fig-cap: "Fleet cleansing dynamics under four policy scenarios. Survival curve of a single-wall cohort under risk-based pricing, initial age 15 years. The social optimum produces the fastest turnover. The mandate achieves comparable speed for targeted tanks but leaves the rest of the fleet untouched. The closure subsidy provides modest acceleration. Simulated data."
-#| fig-width: 10
-#| fig-height: 6
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Estimation_Results", "Fleet_Survival.png")
@@ -1003,8 +991,7 @@ if (file.exists(fig_path)) {
 ```{r}
 #| label: fig-moral-hazard
 #| fig-cap: "Insurance regime and closure incentives. Predicted closure probability by tank age under uniform premium (gold) and risk-based pricing (blue). The flat profile under uniform pricing confirms that the zero premium elasticity generates no age-dependent exit incentive. The rising profile under risk-based pricing reflects the premium-burden mechanism of Proposition 1. Simulated data."
-#| fig-width: 10
-#| fig-height: 6
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Estimation_Results", "Moral_Hazard.png")
@@ -1019,8 +1006,8 @@ if (file.exists(fig_path)) {
 ```{r}
 #| label: fig-policy-heterogeneity
 #| fig-cap: "Policy impact heterogeneity. Change in closure probability (percentage points) relative to baseline across the state space $(A, w, \\rho)$ under three counterfactual scenarios. The mandate targets old single-wall tanks; the subsidy shifts closure uniformly; the social optimum produces the largest and most heterogeneous effects. Simulated data."
-#| fig-width: 10
-#| fig-height: 7
+#| out-width: "100%"
+#| out-height: "0.85\\textheight"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Estimation_Results", "Policy_Heterogeneity.png")
@@ -1037,8 +1024,7 @@ if (file.exists(fig_path)) {
 ```{r}
 #| label: fig-welfare-decomposition
 #| fig-cap: "Welfare decomposition across counterfactual policy scenarios. Blue bars represent the change in firm surplus, green bars represent avoided external damages, orange bars represent government cost (subsidy fiscal expenditure). Dots mark the net social welfare gain. The social optimum generates the largest avoided damages but also the largest firm surplus loss. The mandate achieves a positive net welfare gain by targeting the highest-risk subpopulation. Simulated data."
-#| fig-width: 10
-#| fig-height: 6
+#| out-width: "100%"
 #| echo: false
 #| warning: false
 fig_path <- here::here("Output", "Estimation_Results", "Welfare_Decomposition.png")
