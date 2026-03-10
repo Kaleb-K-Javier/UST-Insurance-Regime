@@ -1,0 +1,34 @@
+\begin{table}[htbp]\centering
+\caption{Duration Model Estimates: Effect of Risk-Based Pricing on Closure Hazard}
+\label{tbl:duration_models}
+\begin{tabular}{lcccc}\toprule
+ & (1) & (2) & (3) & (4) \\
+ & OLS LPM & Cloglog FE & Cox Cal. & Cox Age \\
+ & (reference) & (headline) & & \\\midrule
+Texas $\times$ Post & 0.0016 & -0.3485 & & \\
+ & (0.0074) & (0.2300) & & \\
+\addlinespace
+Hazard ratio & & & NA & 0.9547 \\
+Log coefficient & & & NA & -0.0463 \\
+ & & & (0.0000) & (0.7557) \\
+\midrule
+Estimand & Prob. & Log-hazard & Log-hazard & Log-hazard \\
+Time conditioning & Unconditional & Survival to $t$ & Survival to $t$ & Survival to age \\
+Age bin controls & Yes & Yes & Yes & --- \\
+Facility FE / Strata & Yes & Yes & Strata & Strata \\
+Year FE & Yes & Yes & Dummies & Covariate \\
+Time axis & Calendar & Calendar & Calendar & Tank age \\
+\midrule
+Observations & 319,117 & 157,597 & 320,419 & 319,985 \\
+Events & 10,513 & 10,513 & 10,513 & 10,349 \\
+\bottomrule
+\multicolumn{5}{p{0.98\textwidth}}{\footnotesize \textit{Notes:} 
+Make-model sample (single-product, gasoline, installed 1990--1997, non-mandate). 
+Col.~(1): OLS TWFE reference, estimates ATT on unconditional closure probability. 
+Col.~(2): Prentice--Gloeckler complementary log-log, preferred specification; 
+estimates ATT on closure hazard conditional on survival to $t$; 
+identical sample, FE structure, and identifying variation as Col.~(1). 
+Cols.~(3)--(4): counting-process Cox; (3) calendar-time axis with year dummies; 
+(4) tank-age axis. All models cluster SE at state. 
+$^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}
+\end{tabular}\end{table}

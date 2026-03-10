@@ -1,15 +1,15 @@
 \begin{table}[htbp]\centering
-\caption{Age-at-Treatment Heterogeneous Treatment Effects (H1/H2)}
+\caption{Age-at-Treatment Heterogeneous Treatment Effects}
 \label{tbl:age_treat_hte}
 \begin{tabular}{lcccc}\toprule
  & (1) & (2) & (3) & (4)\\
  & Pooled & +Age Ctrl & Binary HTE & 4-Bin HTE \\
 \midrule
-\textit{Panel A: Young group (age $\leq5$ in 1998)} & & & & \\
+\textit{Panel A: Young group (age $\leq$5 in 1998)} & & & & \\
 Texas $\times$ Post & -0.0073 & 0.0016 & -0.0450$^{***}$ & --- \\
  & (0.0083) & (0.0074) & (0.0075) & --- \\
 \addlinespace
-\textit{Panel B: Differential for Old group ($>5$ yrs)} & & & & \\
+\textit{Panel B: Differential for old group ($>$5 yrs)} & & & & \\
 $\times$ Old at treatment & --- & --- & 0.0748$^{***}$ & --- \\
  & --- & --- & (0.0106) & --- \\
 \midrule
@@ -18,5 +18,7 @@ Facility FE & Yes & Yes & Yes & Yes \\
 Year FE & Yes & Yes & Yes & Yes \\\midrule
 Observations & 319,961 & 319,117 & 306,772 & 306,772 \\
 \bottomrule
-\multicolumn{5}{p{0.95\textwidth}}{\footnotesize \textit{Notes:} Make-model sample. Spec 4: each bin coef is the total ATT for that bin (no base term -- age_treat_bin main effects absorbed by facility FE). SE clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}
+\multicolumn{5}{p{0.95\textwidth}}{\footnotesize \textit{Notes:} 
+Make-model sample. Spec 4: each bin coefficient is the total ATT for that bin. 
+SE clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}
 \end{tabular}\end{table}

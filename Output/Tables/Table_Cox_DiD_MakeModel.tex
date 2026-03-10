@@ -1,0 +1,23 @@
+\begin{table}[htbp]\centering
+\caption{Cox Proportional Hazard Estimates: Calendar Time vs.\ Tank Age Origin}
+\label{tbl:cox_did}
+\begin{tabular}{lcc}\toprule
+ & (1) & (2) \\
+ & Calendar time & Tank age \\\midrule
+Texas $\times$ Post (HR) & NA & 1.049 \\
+Log coefficient & NA & 0.0482 \\
+ & (0.0000) & (0.7352) \\
+\addlinespace
+Mandate control & NA & NA \\
+\midrule
+Year FE & Dummies & Covariate \\
+Facility strata & Yes & Yes \\
+Time origin & Calendar year & Tank age \\
+Observations & 323,766 & 307,412 \\
+Events & 14,010 & 5,575 \\
+\bottomrule
+\multicolumn{3}{p{0.85\textwidth}}{\footnotesize \textit{Notes:} 
+Make-model sample. Counting-process Cox models with facility strata and 
+year fixed effects. Hazard ratios reported; log-HR SE in parentheses. 
+Clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}
+\end{tabular}\end{table}

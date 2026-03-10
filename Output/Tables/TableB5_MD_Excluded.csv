@@ -1,3 +1,4 @@
-Model,Estimate,Std_Error,t_stat,p_value_conv,p_value_webb,CI_low_webb,CI_high_webb,N_obs
-Headline (no MD),-0.0052,0.0057,-0.907,0.3758,,,,3862756
-Spec A (no MD),-0.0025,0.0052,-0.479,0.6375,,,,991840
+Model,Estimate,SE,t_stat,p_value,N_obs
+Full (no MD),-0.0073,0.0083,-0.88,0.3913,319961
+Youngest (no MD),0.0194,0.0112,1.731,0.1026,130425
+Oldest (no MD),-0.0046,0.0103,-0.443,0.6634,177114

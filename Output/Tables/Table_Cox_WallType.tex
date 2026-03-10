@@ -1,0 +1,22 @@
+\begin{table}[htbp]\centering
+\caption{Cox Proportional Hazard: Wall Construction Heterogeneity}
+\label{tbl:cox_wall}
+\begin{tabular}{lcc}\toprule
+ & (1) & (2) \\
+ & Base & Interaction \\\midrule
+Texas $\times$ Post (HR) & NA & NA \\
+ & (0.0000) & (0.0000) \\
+$\times$ Single-walled (HR) & & NA \\
+ & & (0.0000) \\
+\midrule
+Year FE & Yes & Yes \\
+Facility strata & Yes & Yes \\
+Observations & 410,768 & 410,768 \\
+Events & 14,405 & 14,405 \\
+\bottomrule
+\multicolumn{3}{p{0.85\textwidth}}{\footnotesize \textit{Notes:} 
+Broader sample including single- and double-walled facilities. 
+Counting-process Cox with calendar-year dummies and facility strata. 
+Hazard ratios reported. SE (of log-HR) in parentheses. 
+Clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}
+\end{tabular}\end{table}

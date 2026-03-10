@@ -769,7 +769,27 @@ fwrite(comparison_tbl,
 library(survival)
 
 setorder(main_sample, panel_id, panel_year)
-main_sample[, surv_time := seq_len(.N), by = panel_id]
+
+# Counting-process time columns (used by all Cox specs below)
+# tstart/tstop: calendar-time intervals (direct analog to OLS panel_year FE)
+# age_start/age_stop: tank-age intervals (structural age-time Cox)
+main_sample[, tstart    := panel_year - 1L]
+main_sample[, tstop     := panel_year]
+main_sample[, age_start := pmax(avg_tank_age - 1, 0)]
+main_sample[, age_stop  := avg_tank_age]
+
+# Mirror onto subsamples (same rows, same columns)
+youngest_sample[, `:=`(
+  tstart    = panel_year - 1L,
+  tstop     = panel_year,
+  age_start = pmax(avg_tank_age - 1, 0),
+  age_stop  = avg_tank_age)]
+oldest_sample[, `:=`(
+  tstart    = panel_year - 1L,
+  tstop     = panel_year,
+  age_start = pmax(avg_tank_age - 1, 0),
+  age_stop  = avg_tank_age)]
+
 
 # --- S8a: Survivorship diagnostic ---
 
@@ -828,15 +848,21 @@ ggsave(file.path(OUTPUT_FIGURES, "Figure_BinnedScatter_AgeClosure.pdf"),
 
 
 # --- S8c: Cox proportional hazard -- age gradient ---
-# Three specs: base (did_term only), age interactions, full with age controls
+# Uses counting-process (tstart, tstop) so delayed entry is handled correctly.
+# strata(panel_id) = facility FE analog (nonparametric baseline per facility).
+# Year dummies added explicitly to match OLS panel_year FE.
+
+year_levels <- sort(unique(main_sample$panel_year))
+main_sample[, year_fac := factor(panel_year, levels = year_levels)]
 
 cox_base <- coxph(
-  Surv(surv_time, closure_event) ~ did_term + strata(panel_id),
+  Surv(tstart, tstop, closure_event) ~
+    did_term + year_fac + strata(panel_id),
   data = main_sample, cluster = main_sample$state, ties = "efron")
 
 cox_age_interact <- coxph(
-  Surv(surv_time, closure_event) ~
-    did_term + age_bin + did_term:age_bin + strata(panel_id),
+  Surv(tstart, tstop, closure_event) ~
+    did_term + age_bin + did_term:age_bin + year_fac + strata(panel_id),
   data = main_sample, cluster = main_sample$state, ties = "efron")
 
 cox_h1_coefs <- extract_cox_coef(cox_age_interact, "did_term")
@@ -875,47 +901,81 @@ if (nrow(interact_hrs) > 0) {
 
 
 # --- S8d: Duration models on full at-risk panel ---
-# Three estimators: cloglog (discrete PH), LPM with facility FE, Cox with age scale
+# Headline: Prentice-Gloeckler discrete-time PH via feglm cloglog.
+#   - Identical sample, FE structure, and identifying variation as OLS TWFE.
+#   - did_term coefficient = log-hazard ratio conditional on survival to t.
+# Secondary: LPM (exact OLS reference), Cox calendar-time, Cox age-time.
 
-h3_dt <- main_sample[!is.na(avg_tank_age) & !is.na(did_term)]
+h3_dt <- main_sample[!is.na(avg_tank_age) & !is.na(did_term) & tstop > tstart]
 
-h3_cloglog <- glm(
-  closure_event ~ did_term + age_bin + texas_treated,
-  family = binomial(link = "cloglog"), data = h3_dt)
+# HEADLINE: Prentice-Gloeckler cloglog — same FEs as OLS, correct estimand
+h3_cloglog_fe <- feglm(
+  closure_event ~ did_term + age_bin | panel_id + panel_year,
+  family  = binomial(link = "cloglog"),
+  data    = h3_dt,
+  cluster = ~state)
 
+# HTE version: binary old/young interaction (mirrors m_did_interact)
+h3_cloglog_hte <- feglm(
+  closure_event ~ did_term + did_term:old_at_treat + age_bin |
+    panel_id + panel_year,
+  family  = binomial(link = "cloglog"),
+  data    = h3_dt,
+  cluster = ~state)
+
+# HTE version: youngest subsample
+h3_cloglog_young <- feglm(
+  closure_event ~ did_term + age_bin | panel_id + panel_year,
+  family  = binomial(link = "cloglog"),
+  data    = youngest_sample[!is.na(avg_tank_age) & !is.na(did_term)],
+  cluster = ~state)
+
+# HTE version: oldest subsample
+h3_cloglog_old <- feglm(
+  closure_event ~ did_term + age_bin | panel_id + panel_year,
+  family  = binomial(link = "cloglog"),
+  data    = oldest_sample[!is.na(avg_tank_age) & !is.na(did_term)],
+  cluster = ~state)
+
+# OLS reference (exact same sample as cloglog headline for direct comparison)
 h3_lpm <- feols(
-  closure_event ~ did_term + age_bin | panel_id,
+  closure_event ~ did_term + age_bin | panel_id + panel_year,
   h3_dt, cluster = ~state)
 
-h3_cox_age <- coxph(
-  Surv(avg_tank_age, closure_event) ~ did_term + strata(panel_id),
+# Cox calendar-time (counting process, year dummies, facility strata)
+h3_dt[, year_fac := factor(panel_year, levels = year_levels)]
+h3_cox_cal <- coxph(
+  Surv(tstart, tstop, closure_event) ~
+    did_term + age_bin + year_fac + strata(panel_id),
   data = h3_dt, cluster = h3_dt$state, ties = "efron")
+
+# Cox age-time (tank age as time axis — structural spec)
+h3_cox_age <- coxph(
+  Surv(age_start, age_stop, closure_event) ~
+    did_term + year_fac + strata(panel_id),
+  data    = h3_dt[age_stop > age_start],
+  cluster = h3_dt[age_stop > age_start]$state, ties = "efron")
 
 
 # --- S8d-fig: Discrete-time hazard profile by age bin ---
-# Predicted closure probability from cloglog, by age bin x TX/Control x period
-# This is the reduced-form analog of the structural Figure 14
+# In-sample fitted hazard from feglm cloglog, averaged over FEs by group x age bin.
+# Three groups: control, TX pre-reform, TX post-reform (risk-based pricing).
 
-pred_dt <- CJ(
-  age_bin     = levels(main_sample$age_bin),
-  did_term    = c(0L, 1L),
-  texas_treated = c(0L, 1L)
-)
-# Keep only: control pre (did=0, tx=0), control post (did=0, tx=0 but post),
-#            TX pre (did=0, tx=1), TX post (did=1, tx=1)
-pred_dt <- pred_dt[
-  (texas_treated == 0 & did_term == 0) |
-  (texas_treated == 1 & did_term == 0) |
-  (texas_treated == 1 & did_term == 1)
+h3_dt[, pred_prob_insample := predict(h3_cloglog_fe, type = "response")]
+
+pred_dt <- h3_dt[!is.na(pred_prob_insample) & !is.na(age_bin),
+  .(pred_prob = mean(pred_prob_insample, na.rm = TRUE)),
+  by = .(
+    age_bin,
+    group = fcase(
+      texas_treated == 0,                           "Control (uniform premium)",
+      texas_treated == 1 & panel_year < POST_YEAR,  "Texas pre-reform",
+      texas_treated == 1 & panel_year >= POST_YEAR, "Texas post-reform (risk-based)"
+    )
+  )
 ]
+pred_dt <- pred_dt[!is.na(group)]
 pred_dt[, age_bin := factor(age_bin, levels = levels(main_sample$age_bin))]
-pred_dt[, group := fcase(
-  texas_treated == 0 & did_term == 0, "Control (uniform premium)",
-  texas_treated == 1 & did_term == 0, "Texas pre-reform",
-  texas_treated == 1 & did_term == 1, "Texas post-reform (risk-based)"
-)]
-
-pred_dt[, pred_prob := predict(h3_cloglog, newdata = pred_dt, type = "response")]
 pred_dt[, group := factor(group, levels = c(
   "Control (uniform premium)", "Texas pre-reform",
   "Texas post-reform (risk-based)"))]
@@ -940,13 +1000,19 @@ ggsave(file.path(OUTPUT_FIGURES, "Figure_DiscreteHazard_AgeProfile.pdf"),
 
 
 # --- S8d-tab: Duration model comparison table (LaTeX) ---
+# Columns: (1) OLS LPM, (2) cloglog FE [headline], (3) Cox calendar, (4) Cox age
 
-cll_coefs  <- coef(summary(h3_cloglog))
-cll_did    <- cll_coefs["did_term", ]
-lpm_ct     <- coeftable(summary(h3_lpm, cluster = ~state))
-lpm_did    <- lpm_ct["did_term", ]
-cox_s      <- summary(h3_cox_age)$coefficients
-cox_did    <- cox_s["did_term", ]
+lpm_ct    <- coeftable(summary(h3_lpm, cluster = ~state))
+lpm_did   <- lpm_ct["did_term", ]
+
+cll_ct    <- coeftable(summary(h3_cloglog_fe, cluster = ~state))
+cll_did   <- cll_ct["did_term", ]
+
+cox_c_s   <- summary(h3_cox_cal)$coefficients
+cox_c_did <- cox_c_s["did_term", ]
+
+cox_a_s   <- summary(h3_cox_age)$coefficients
+cox_a_did <- cox_a_s["did_term", ]
 
 dur_stars <- function(p) {
   if (is.na(p)) return("")
@@ -960,44 +1026,58 @@ writeLines(c(
   "\\begin{table}[htbp]\\centering",
   "\\caption{Duration Model Estimates: Effect of Risk-Based Pricing on Closure Hazard}",
   "\\label{tbl:duration_models}",
-  "\\begin{tabular}{lccc}\\toprule",
-  " & (1) & (2) & (3) \\\\",
-  " & Cloglog & LPM & Cox PH \\\\\\midrule",
-  sprintf("Texas $\\times$ Post & %.4f%s & %.4f%s & \\\\",
-    cll_did["Estimate"], dur_stars(cll_did["Pr(>|z|)"]),
-    lpm_did["Estimate"], dur_stars(lpm_did["Pr(>|t|)"])),
-  sprintf(" & (%.4f) & (%.4f) & \\\\",
-    cll_did["Std. Error"], lpm_did["Std. Error"]),
+  "\\begin{tabular}{lcccc}\\toprule",
+  " & (1) & (2) & (3) & (4) \\\\",
+  " & OLS LPM & Cloglog FE & Cox Cal. & Cox Age \\\\",
+  " & (reference) & (headline) & & \\\\\\midrule",
+  sprintf("Texas $\\times$ Post & %.4f%s & %.4f%s & & \\\\",
+    lpm_did["Estimate"],  dur_stars(lpm_did["Pr(>|t|)"]),
+    cll_did["Estimate"],  dur_stars(cll_did["Pr(>|t|)"])),
+  sprintf(" & (%.4f) & (%.4f) & & \\\\",
+    lpm_did["Std. Error"], cll_did["Std. Error"]),
   "\\addlinespace",
-  sprintf("Hazard ratio & & & %.4f%s \\\\",
-    exp(cox_did["coef"]), dur_stars(cox_did["Pr(>|z|)"])),
-  sprintf("Log coefficient & & & %.4f \\\\", cox_did["coef"]),
-  sprintf(" & & & (%.4f) \\\\", cox_did["se(coef)"]),
+  sprintf("Hazard ratio & & & %.4f%s & %.4f%s \\\\",
+    exp(cox_c_did["coef"]), dur_stars(cox_c_did["Pr(>|z|)"]),
+    exp(cox_a_did["coef"]), dur_stars(cox_a_did["Pr(>|z|)"])),
+  sprintf("Log coefficient & & & %.4f & %.4f \\\\",
+    cox_c_did["coef"], cox_a_did["coef"]),
+  sprintf(" & & & (%.4f) & (%.4f) \\\\",
+    cox_c_did["se(coef)"], cox_a_did["se(coef)"]),
   "\\midrule",
-  "Age bin controls & Yes & Yes & --- \\\\",
-  "Facility FE / Strata & No & Yes & Strata \\\\",
-  "Time scale & Calendar & Calendar & Tank age \\\\",
+  "Estimand & Prob. & Log-hazard & Log-hazard & Log-hazard \\\\",
+  "Time conditioning & Unconditional & Survival to $t$ & Survival to $t$ & Survival to age \\\\",
+  "Age bin controls & Yes & Yes & Yes & --- \\\\",
+  "Facility FE / Strata & Yes & Yes & Strata & Strata \\\\",
+  "Year FE & Yes & Yes & Dummies & Covariate \\\\",
+  "Time axis & Calendar & Calendar & Calendar & Tank age \\\\",
   "\\midrule",
-  sprintf("Observations & %s & %s & %s \\\\",
-    format(nrow(h3_dt), big.mark = ","),
-    format(nobs(h3_lpm), big.mark = ","),
-    format(h3_cox_age$n, big.mark = ",")),
-  sprintf("Events & %s & & %s \\\\",
+  sprintf("Observations & %s & %s & %s & %s \\\\",
+    format(nobs(h3_lpm),        big.mark = ","),
+    format(nobs(h3_cloglog_fe), big.mark = ","),
+    format(h3_cox_cal$n,        big.mark = ","),
+    format(h3_cox_age$n,        big.mark = ",")),
+  sprintf("Events & %s & %s & %s & %s \\\\",
     format(sum(h3_dt$closure_event), big.mark = ","),
-    format(h3_cox_age$nevent, big.mark = ",")),
+    format(sum(h3_dt$closure_event), big.mark = ","),
+    format(h3_cox_cal$nevent,        big.mark = ","),
+    format(h3_cox_age$nevent,        big.mark = ",")),
   "\\bottomrule",
-  "\\multicolumn{4}{p{0.92\\textwidth}}{\\footnotesize \\textit{Notes:} ",
-  "Full at-risk panel (make-model sample). Column 1: complementary log-log ",
-  "(discrete proportional hazard). Column 2: linear probability model with ",
-  "facility fixed effects and state-clustered SE. Column 3: Cox proportional ",
-  "hazard with tank age as the time axis and facility strata. ",
+  "\\multicolumn{5}{p{0.98\\textwidth}}{\\footnotesize \\textit{Notes:} ",
+  "Make-model sample (single-product, gasoline, installed 1990--1997, non-mandate). ",
+  "Col.~(1): OLS TWFE reference, estimates ATT on unconditional closure probability. ",
+  "Col.~(2): Prentice--Gloeckler complementary log-log, preferred specification; ",
+  "estimates ATT on closure hazard conditional on survival to $t$; ",
+  "identical sample, FE structure, and identifying variation as Col.~(1). ",
+  "Cols.~(3)--(4): counting-process Cox; (3) calendar-time axis with year dummies; ",
+  "(4) tank-age axis. All models cluster SE at state. ",
   "$^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
   "\\end{tabular}\\end{table}"
 ), file.path(OUTPUT_TABLES, "Table_Duration_Models.tex"))
 
+# Also export cloglog FE coefficients for diagnostics
 fwrite(
-  as.data.table(coef(summary(h3_cloglog)), keep.rownames = "term"),
-  file.path(OUTPUT_TABLES, "Table_Duration_ClogLog.csv"))
+  as.data.table(coeftable(h3_cloglog_fe), keep.rownames = "term"),
+  file.path(OUTPUT_TABLES, "Table_Duration_ClogLog_FE.csv"))
 
 
 # --- S8e: Cox event study (time-varying HRs parallel to OLS event study) ---
@@ -1013,7 +1093,7 @@ for (yr in es_years) {
 
 ry_vars <- grep("^ry_", names(main_sample), value = TRUE)
 cox_fml <- as.formula(paste(
-  "Surv(surv_time, closure_event) ~",
+  "Surv(tstart, tstop, closure_event) ~",
   paste(ry_vars, collapse = " + "),
   "+ strata(panel_id)"
 ))
@@ -1029,9 +1109,9 @@ setnames(cox_es_dt, c("term","coef","exp_coef","se","z","p"))
 cox_es_dt[, rel_year := as.numeric(gsub("ry_m", "-", gsub("ry_", "", term)))]
 cox_es_dt <- cox_es_dt[!is.na(rel_year)]
 cox_es_dt[, `:=`(
-  hr    = exp_coef,
-  ci_lo = exp(coef - 1.96 * se),
-  ci_hi = exp(coef + 1.96 * se),
+  hr     = exp_coef,
+  ci_lo  = exp(coef - 1.96 * se),
+  ci_hi  = exp(coef + 1.96 * se),
   period = fifelse(rel_year < 0, "Pre", "Post")
 )]
 
@@ -1072,6 +1152,9 @@ main_sample[, (ry_vars) := NULL]
 # Four panels: TX pre, TX post, Control pre, Control post
 # Clean faceted KM showing survival probability over panel time
 
+# tenure = years-in-panel (distinct from calendar tstart/tstop used in Cox)
+main_sample[, tenure := seq_len(.N), by = panel_id]
+
 main_sample[, km_group := factor(paste0(
   fifelse(texas_treated == 1, "Texas", "Control"), ", ",
   fifelse(panel_year < POST_YEAR, "Pre-Reform", "Post-Reform")),
@@ -1079,7 +1162,7 @@ main_sample[, km_group := factor(paste0(
              "Texas, Pre-Reform",   "Texas, Post-Reform"))]
 
 # Compute per-group KM fits from the first observation year of each panel spell
-km_fit <- survfit(Surv(surv_time, closure_event) ~ km_group, data = main_sample)
+km_fit  <- survfit(Surv(tenure, closure_event) ~ km_group, data = main_sample)
 km_tidy <- as.data.table(broom::tidy(km_fit))
 km_tidy[, group := gsub("km_group=", "", strata)]
 km_tidy[, group := factor(group, levels = c(
@@ -1156,15 +1239,18 @@ if (exists("sw_broader_sample") && wall_col %in% names(sw_broader_sample)) {
       did_term := as.integer(texas_treated == 1 & panel_year >= POST_YEAR)]
 
   setorder(sw_broader_sample, panel_id, panel_year)
-  sw_broader_sample[, surv_time := seq_len(.N), by = panel_id]
+  sw_broader_sample[, `:=`(
+    tstart = panel_year - 1L,
+    tstop  = panel_year)]
+  sw_broader_sample[, year_fac := factor(panel_year, levels = year_levels)]
 
   cox_wall_base <- coxph(as.formula(sprintf(
-    "Surv(surv_time, closure_event) ~ did_term + %s + strata(panel_id)",
+    "Surv(tstart, tstop, closure_event) ~ did_term + %s + year_fac + strata(panel_id)",
     wall_col)),
     data = sw_broader_sample, cluster = sw_broader_sample$state, ties = "efron")
 
   cox_wall_interact <- coxph(as.formula(sprintf(
-    "Surv(surv_time, closure_event) ~ did_term + %s + did_term:%s + strata(panel_id)",
+    "Surv(tstart, tstop, closure_event) ~ did_term + %s + did_term:%s + year_fac + strata(panel_id)",
     wall_col, wall_col)),
     data = sw_broader_sample, cluster = sw_broader_sample$state, ties = "efron")
 
@@ -1197,6 +1283,7 @@ if (exists("sw_broader_sample") && wall_col %in% names(sw_broader_sample)) {
       } else character(0)
     },
     "\\midrule",
+    "Year FE & Yes & Yes \\\\",
     "Facility strata & Yes & Yes \\\\",
     sprintf("Observations & %s & %s \\\\",
       format(cox_wall_base$n, big.mark = ","),
@@ -1207,6 +1294,7 @@ if (exists("sw_broader_sample") && wall_col %in% names(sw_broader_sample)) {
     "\\bottomrule",
     "\\multicolumn{3}{p{0.85\\textwidth}}{\\footnotesize \\textit{Notes:} ",
     "Broader sample including single- and double-walled facilities. ",
+    "Counting-process Cox with calendar-year dummies and facility strata. ",
     "Hazard ratios reported. SE (of log-HR) in parentheses. ",
     "Clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
     "\\end{tabular}\\end{table}"
@@ -1500,13 +1588,17 @@ cox_main[, `:=`(tstart    = panel_year - 1L,
                 age_stop  = avg_tank_age)]
 cox_main <- cox_main[tstop > tstart]
 
+cox_main[, year_fac := factor(panel_year, levels = year_levels)]
+
 m_cox_cal <- coxph(
-  Surv(tstart, tstop, closure_event) ~ did_term + mandate_active,
+  Surv(tstart, tstop, closure_event) ~
+    did_term + mandate_active + year_fac + strata(panel_id),
   data = cox_main, cluster = state)
 
 cox_main_age <- cox_main[age_start >= 0 & age_stop > age_start]
 m_cox_age <- coxph(
-  Surv(age_start, age_stop, closure_event) ~ did_term + mandate_active + panel_year,
+  Surv(age_start, age_stop, closure_event) ~
+    did_term + mandate_active + year_fac + strata(panel_id),
   data = cox_main_age, cluster = state)
 
 cox_results <- rbindlist(lapply(list(
@@ -1551,6 +1643,8 @@ writeLines(c(
     exp(age_s["mandate_active","coef"]),
     stars_fn(age_s["mandate_active","Pr(>|z|)"])),
   "\\midrule",
+  "Year FE & Dummies & Covariate \\\\",
+  "Facility strata & Yes & Yes \\\\",
   "Time origin & Calendar year & Tank age \\\\",
   sprintf("Observations & %s & %s \\\\",
     format(m_cox_cal$n, big.mark = ","),
@@ -1560,20 +1654,24 @@ writeLines(c(
     format(m_cox_age$nevent, big.mark = ",")),
   "\\bottomrule",
   "\\multicolumn{3}{p{0.85\\textwidth}}{\\footnotesize \\textit{Notes:} ",
-  "Make-model sample. Counting-process Cox models. Hazard ratios reported; ",
-  "log-HR SE in parentheses. Clustered at state. ",
-  "$^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
+  "Make-model sample. Counting-process Cox models with facility strata and ",
+  "year fixed effects. Hazard ratios reported; log-HR SE in parentheses. ",
+  "Clustered at state. $^{*}p<0.1$; $^{**}p<0.05$; $^{***}p<0.01$.}",
   "\\end{tabular}\\end{table}"
 ), file.path(OUTPUT_TABLES, "Table_Cox_DiD_MakeModel.tex"))
 
 
 #### S17 Diagnostic Data Export ####
 
-saveRDS(model_es_youngest, file.path(ANALYSIS_DIR, "mm_youngest_event_study.rds"))
-saveRDS(model_es_oldest,   file.path(ANALYSIS_DIR, "mm_oldest_event_study.rds"))
-saveRDS(m_did_pooled,      file.path(ANALYSIS_DIR, "mm_headline_did_model.rds"))
-saveRDS(pt_results,        file.path(ANALYSIS_DIR, "mm_pt_validation_results.rds"))
-saveRDS(m_es_hte,          file.path(ANALYSIS_DIR, "mm_hte_event_study.rds"))
+saveRDS(model_es_youngest,  file.path(ANALYSIS_DIR, "mm_youngest_event_study.rds"))
+saveRDS(model_es_oldest,    file.path(ANALYSIS_DIR, "mm_oldest_event_study.rds"))
+saveRDS(m_did_pooled,       file.path(ANALYSIS_DIR, "mm_headline_did_model.rds"))
+saveRDS(pt_results,         file.path(ANALYSIS_DIR, "mm_pt_validation_results.rds"))
+saveRDS(m_es_hte,           file.path(ANALYSIS_DIR, "mm_hte_event_study.rds"))
+saveRDS(h3_cloglog_fe,      file.path(ANALYSIS_DIR, "mm_headline_cloglog.rds"))
+saveRDS(h3_cloglog_hte,     file.path(ANALYSIS_DIR, "mm_cloglog_hte.rds"))
+saveRDS(h3_cloglog_young,   file.path(ANALYSIS_DIR, "mm_cloglog_youngest.rds"))
+saveRDS(h3_cloglog_old,     file.path(ANALYSIS_DIR, "mm_cloglog_oldest.rds"))
 
 fwrite(texas_share_by_period(main_sample),
   file.path(OUTPUT_TABLES, "Diag_TXShare_Main.csv"))
@@ -1601,6 +1699,29 @@ spec_summary <- data.table(
 
 fwrite(spec_summary, file.path(OUTPUT_TABLES, "Cross_Spec_Summary_MakeModel.csv"))
 
+# Duration model cross-spec: cloglog log-hazard ratios alongside OLS ATTs
+dur_spec_summary <- data.table(
+  Model    = c("OLS Full", "OLS Youngest", "OLS Oldest",
+               "Cloglog Full", "Cloglog Youngest", "Cloglog Oldest"),
+  Estimand = c(rep("ATT (prob.)", 3), rep("Log-hazard ratio", 3)),
+  coef     = c(
+    extract_did(m_did_pooled)$beta,
+    extract_did(m_youngest_simple)$beta,
+    extract_did(m_oldest_simple)$beta,
+    coeftable(h3_cloglog_fe)["did_term",    "Estimate"],
+    coeftable(h3_cloglog_young)["did_term", "Estimate"],
+    coeftable(h3_cloglog_old)["did_term",   "Estimate"]),
+  se       = c(
+    extract_did(m_did_pooled)$se,
+    extract_did(m_youngest_simple)$se,
+    extract_did(m_oldest_simple)$se,
+    coeftable(h3_cloglog_fe)["did_term",    "Std. Error"],
+    coeftable(h3_cloglog_young)["did_term", "Std. Error"],
+    coeftable(h3_cloglog_old)["did_term",   "Std. Error"]))
+
+fwrite(dur_spec_summary,
+  file.path(OUTPUT_TABLES, "Cross_Spec_Duration_vs_OLS.csv"))
+
 # Age split LaTeX table (youngest vs oldest)
 cy <- lapply(list(m_youngest_simple, m_youngest_age_ctrl), extract_did)
 co <- lapply(list(m_oldest_simple,   m_oldest_age_ctrl),   extract_did)
@@ -1624,8 +1745,8 @@ writeLines(c(
   "Age bin control & No & Yes & No & Yes\\\\",
   "Facility + Year FE & Yes & Yes & Yes & Yes\\\\\\midrule",
   sprintf("Observations & %s & %s & %s & %s\\\\",
-    format(cy[[1]]$n,big.mark=","), format(cy[[2]]$n,big.mark=","),
-    format(co[[1]]$n,big.mark=","), format(co[[2]]$n,big.mark=",")),
+    format(cy[[1]]$n, big.mark=","), format(cy[[2]]$n, big.mark=","),
+    format(co[[1]]$n, big.mark=","), format(co[[2]]$n, big.mark=",")),
   "\\bottomrule",
   "\\multicolumn{5}{p{0.95\\textwidth}}{\\footnotesize \\textit{Notes:} ",
   "Make-model sample split at mean tank age in 1998 = 5 years. ",
