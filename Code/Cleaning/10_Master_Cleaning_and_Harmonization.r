@@ -274,6 +274,99 @@ pct_fips <- round(sum(!is.na(master_tanks$county_fips)) / nrow(master_tanks) * 1
 message(paste0("Final FIPS Coverage: ", pct_fips, "%"))
 
 
+# 3.5 Tank-Level Make-Model Classification --------------------------------
+# Pure function of immutable tank physical characteristics.
+# Six new columns (mm_wall, mm_fuel, mm_capacity, mm_install_year,
+# mm_install_cohort, make_model_tank) are written onto master_tanks rows
+# and flow out via the existing Step 5 fwrite with no changes to that block.
+message("\n--- Step 3.5: Tank-Level Make-Model Classification ---")
+
+# --- 3.5.1: Wall Type ---
+# Check unknown_walled FIRST. It is a distinct recorded-but-unclassifiable
+# state, not a missing value. single_walled may be 0 (not NA) on these rows,
+# so checking it before unknown_walled would silently misclassify them.
+master_tanks[, mm_wall := fcase(
+  !is.na(unknown_walled) & unknown_walled == 1,       "Unknown-Wall",
+  is.na(single_walled)   & is.na(double_walled),      "Unknown-Wall",
+  single_walled == 0     & double_walled == 0,         "Unknown-Wall",
+  single_walled == 1     & double_walled == 0,         "Single-Walled",
+  double_walled == 1     & single_walled == 0,         "Double-Walled",
+  single_walled == 1     & double_walled == 1,         "Mixed-Wall",
+  default = "Unknown-Wall"
+)]
+
+# --- 3.5.2: Fuel Type ---
+master_tanks[, mm_fuel := fcase(
+  is_gasoline == 1 & is_diesel == 0,                   "Gasoline-Only",
+  is_diesel   == 1 & is_gasoline == 0,                 "Diesel-Only",
+  is_gasoline == 1 & is_diesel   == 1,                 "Motor-Fuel-Mixed",
+  is_oil_kerosene == 1 | is_jet_fuel == 1,             "Other-Fuel",
+  is_other    == 1,                                    "Other-Fuel",
+  default = "Unknown-Fuel"
+)]
+
+# --- 3.5.3: Capacity Bin ---
+# Insurer rate schedules apply discrete loading factors by capacity tier.
+# Bins match the standard commercial breakpoints.
+# NA capacity = cannot assign to a capacity cell.
+master_tanks[, mm_capacity := fcase(
+  is.na(capacity),                                     NA_character_,
+  capacity < 1000,                                     "Under-1k",
+  capacity >= 1000  & capacity < 5000,                 "1k-5k",
+  capacity >= 5000  & capacity < 12000,                "5k-12k",
+  capacity >= 12000 & capacity < 25000,                "12k-25k",
+  capacity >= 25000,                                   "25k-Plus"
+)]
+
+# --- 3.5.4: Install Year Cohort (3-year bins) ---
+# Use tank_installed_date directly (exact).
+# Pre-1970 tanks are a real cohort -- do NOT use tank_panel_start_date
+# (bounded to 1970-01-01), which collapses them into a pseudo-cohort.
+# 3-year bins provide resolution within the 1989-1998 non-mandate window
+# while maintaining adequate cell sizes.
+master_tanks[, mm_install_year := as.integer(
+  fifelse(!is.na(tank_installed_date),
+          year(tank_installed_date),
+          NA_integer_)
+)]
+
+master_tanks[, mm_install_cohort := fcase(
+  is.na(mm_install_year),                              NA_character_,
+  mm_install_year < 1980,                              "Pre-1980",
+  mm_install_year %between% c(1980, 1982),             "1980-1982",
+  mm_install_year %between% c(1983, 1985),             "1983-1985",
+  mm_install_year %between% c(1986, 1988),             "1986-1988",
+  mm_install_year %between% c(1989, 1991),             "1989-1991",
+  mm_install_year %between% c(1992, 1994),             "1992-1994",
+  mm_install_year %between% c(1995, 1997),             "1995-1997",
+  mm_install_year %between% c(1998, 2000),             "1998-2000",
+  mm_install_year > 2000,                              "Post-2000"
+)]
+
+# --- 3.5.5: Tank-Level Cell Identifier ---
+master_tanks[, make_model_tank := fifelse(
+  !is.na(mm_install_cohort) & !is.na(mm_capacity),
+  paste(mm_wall, mm_fuel, mm_capacity, mm_install_cohort, sep = "_"),
+  NA_character_
+)]
+
+message(sprintf("  Wall: %s",
+  paste(master_tanks[, .N, by = mm_wall][order(-N),
+    sprintf("%s=%s", mm_wall, format(N, big.mark=","))], collapse = "; ")))
+message(sprintf("  Fuel: %s",
+  paste(master_tanks[, .N, by = mm_fuel][order(-N),
+    sprintf("%s=%s", mm_fuel, format(N, big.mark=","))], collapse = "; ")))
+message(sprintf("  Capacity: %s",
+  paste(master_tanks[, .N, by = mm_capacity][order(-N),
+    sprintf("%s=%s", mm_capacity, format(N, big.mark=","))], collapse = "; ")))
+message(sprintf("  Install Cohort: %s",
+  paste(master_tanks[, .N, by = mm_install_cohort][order(-N),
+    sprintf("%s=%s", mm_install_cohort, format(N, big.mark=","))], collapse = "; ")))
+message(sprintf("  Tanks with NA cell (missing install or capacity): %s",
+  format(sum(is.na(master_tanks$make_model_tank)), big.mark=",")))
+message("  Tank-level make-model classification complete.")
+
+
 # 4. Comprehensive Final Report -------------------------------------------
 message("\n--- Step 4: Final Data Quality Report ---")
 

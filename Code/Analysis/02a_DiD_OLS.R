@@ -69,6 +69,46 @@ annual_data  <- readRDS(file.path(ANALYSIS_DIR, "analysis_annual_data.rds"))
 closed_tanks <- readRDS(file.path(ANALYSIS_DIR, "analysis_closed_tanks.rds"))
 tanks_1999   <- readRDS(file.path(ANALYSIS_DIR, "analysis_tanks_1999.rds"))
 
+# -------------------------------------------------------------------------
+# S1.1: DEFENSIVE MERGE — Facility Make-Model Cell & Biography
+# -------------------------------------------------------------------------
+# These may already exist on annual_data if 01_BuildSamples.R was rerun
+# after the panel builder v2 rewrite. The defensive merge handles both cases:
+# if columns exist, they are overwritten with the authoritative RDS versions;
+# if they don't exist, they are added.
+
+# Facility make-model cell (Section 2.5 of panel builder)
+fac_mm <- readRDS(file.path(ANALYSIS_DIR, "facility_make_model.rds"))
+mm_merge_cols <- c("panel_id", "make_model_fac", "fac_wall", "fac_fuel",
+                   "fac_oldest_age_bin", "n_tanks_at_reform")
+# Drop any pre-existing versions to avoid .x/.y suffixes
+drop_cols <- intersect(setdiff(mm_merge_cols, "panel_id"), names(annual_data))
+if (length(drop_cols) > 0) annual_data[, (drop_cols) := NULL]
+annual_data <- merge(annual_data, fac_mm[, ..mm_merge_cols],
+                     by = "panel_id", all.x = TRUE)
+
+# Facility biography (Section 2.6 of panel builder)
+fac_bio <- readRDS(file.path(ANALYSIS_DIR, "facility_biography.rds"))
+bio_merge_cols <- c("panel_id", "facility_first_install", "facility_first_install_yr",
+                    "facility_last_install", "facility_last_install_yr",
+                    "total_tanks_ever", "total_tanks_closed_ever", "total_tanks_open_ever",
+                    "had_pre1989_tanks", "all_tanks_post1988",
+                    "fac_reg_vintage", "fac_is_incumbent")
+drop_cols_bio <- intersect(setdiff(bio_merge_cols, "panel_id"), names(annual_data))
+if (length(drop_cols_bio) > 0) annual_data[, (drop_cols_bio) := NULL]
+annual_data <- merge(annual_data, fac_bio[, ..bio_merge_cols],
+                     by = "panel_id", all.x = TRUE)
+
+rm(fac_mm, fac_bio)
+
+cat(sprintf("  annual_data: %s rows, %s facilities\n",
+  format(nrow(annual_data), big.mark=","),
+  format(uniqueN(annual_data$panel_id), big.mark=",")))
+cat(sprintf("  make_model_fac coverage: %.1f%%\n",
+  100 * mean(!is.na(annual_data$make_model_fac))))
+cat(sprintf("  facility_first_install_yr coverage: %.1f%%\n",
+  100 * mean(!is.na(annual_data$facility_first_install_yr))))
+
 
 #### S2 Variable Construction ####
 
@@ -350,6 +390,9 @@ write_tex <- function(lines, filename) {
 
 #### S4 Sample Construction ####
 
+# -------------------------------------------------------------------------
+# S4.1: EXISTING SAMPLE (retained as legacy benchmark)
+# -------------------------------------------------------------------------
 main_sample <- annual_data[
   single_tanks      == active_tanks &
   has_gasoline_year == 1            &
@@ -377,6 +420,50 @@ oldest_sample[,   rel_year_bin := pmax(pmin(rel_year_1999, rel_max_full),
                                         rel_min_oldest)]
 sw_broader_sample[, rel_year_bin :=
                     pmax(pmin(rel_year_1999, rel_max_full), -8L)]
+
+# -------------------------------------------------------------------------
+# S4.2: MAKE-MODEL PRIMARY SAMPLE (facility-level, from design doc)
+# -------------------------------------------------------------------------
+# Excludes Unknown cells and restricts to non-mandate cohorts.
+# Uses fac_wall (frozen at reform date) instead of time-varying wall_type.
+# Uses install_year (now = facility_first_install_yr, time-invariant).
+mm_fac_primary <- annual_data[
+  !is.na(make_model_fac)             &
+  fac_wall != "Unknown-Wall"         &
+  fac_fuel != "Unknown-Fuel"         &
+  !is.na(fac_oldest_age_bin)
+]
+
+mm_fac_primary[, rel_year_bin := pmax(pmin(rel_year_1999, rel_max_full), -8L)]
+
+cat(sprintf("  mm_fac_primary: %s rows, %s facilities, %s unique cells\n",
+  format(nrow(mm_fac_primary), big.mark=","),
+  format(uniqueN(mm_fac_primary$panel_id), big.mark=","),
+  format(uniqueN(mm_fac_primary$make_model_fac), big.mark=",")))
+
+# Cell coverage diagnostic (from design doc Part 5)
+fac_cell_diag <- mm_fac_primary[, .(
+  n_total  = .N,
+  n_tx     = sum(texas_treated == 1),
+  n_ctl    = sum(texas_treated == 0),
+  has_both = as.integer(
+    sum(texas_treated == 1) > 0 & sum(texas_treated == 0) > 0)
+), by = .(make_model_fac, panel_year)]
+
+cell_coverage <- fac_cell_diag[, .(
+  total_cell_years         = .N,
+  identified_cell_years    = sum(has_both),
+  pct_identified           = round(mean(has_both) * 100, 1),
+  fac_years_identified     = sum(n_total * has_both),
+  pct_fac_years_identified = round(
+    sum(n_total * has_both) / sum(n_total) * 100, 1)
+)]
+
+cat("  Facility-level cell coverage:\n")
+print(cell_coverage)
+fwrite(cell_coverage, file.path(OUTPUT_TABLES, "Diag_FacCell_Coverage.csv"))
+
+rm(fac_cell_diag)
 
 
 #### S5 Descriptive Figures ####
@@ -446,16 +533,26 @@ ggsave(file.path(OUTPUT_FIGURES, "Figure_Raw_ClosureRates_ByAge.pdf"),
 
 #### S6 Parallel Trends Validation ####
 
+# Legacy: shared panel_year FE
 m_pt_main <- feols(
   closure_event ~ i(rel_year_bin, texas_treated, ref = -1) |
     panel_id + panel_year,
   main_sample[panel_year < POST_YEAR],
   cluster = ~state)
 
+# NEW: parallel trends within facility make-model cell
+m_pt_fac_mm <- feols(
+  closure_event ~ i(rel_year_bin, texas_treated, ref = -1) |
+    panel_id + make_model_fac^panel_year,
+  mm_fac_primary[panel_year < POST_YEAR],
+  cluster = ~state)
+
 pt_pval_joint <- pt_pval(m_pt_main)
+pt_pval_mm    <- pt_pval(m_pt_fac_mm)
 pt_n_pre_obs  <- nrow(main_sample[panel_year < POST_YEAR])
 
-saveRDS(list(pval = pt_pval_joint, n_pre_obs = pt_n_pre_obs),
+saveRDS(list(pval = pt_pval_joint, pval_mm = pt_pval_mm,
+             n_pre_obs = pt_n_pre_obs),
         file.path(ANALYSIS_DIR, "ols_pt_validation.rds"))
 
 
@@ -469,19 +566,28 @@ m_did_agectrl <- feols(
   closure_event ~ did_term + age_bin | panel_id + panel_year,
   main_sample, cluster = ~state)
 
+# NEW: facility make-model cell FE specification (design doc Section 4.4)
+m_did_fac_mm <- feols(
+  closure_event ~ did_term | panel_id + make_model_fac^panel_year,
+  mm_fac_primary, cluster = ~state)
+
 d_pooled  <- extract_did(m_did_pooled)
 d_agectrl <- extract_did(m_did_agectrl)
+d_fac_mm  <- extract_did(m_did_fac_mm)
 
 pre_mean_full <- mean(
   main_sample[panel_year < TREATMENT_YEAR, closure_event], na.rm = TRUE)
+pre_mean_mm   <- mean(
+  mm_fac_primary[panel_year < TREATMENT_YEAR, closure_event], na.rm = TRUE)
 
 fwrite(data.table(
-  Specification = c("TWFE DiD", "TWFE DiD with age controls"),
-  Estimate      = round(c(d_pooled$beta,  d_agectrl$beta), 4),
-  SE            = round(c(d_pooled$se,    d_agectrl$se),   4),
-  P_value       = round(c(d_pooled$p,     d_agectrl$p),    4),
-  Pre_mean      = round(pre_mean_full, 4),
-  N             = c(d_pooled$n, d_agectrl$n)),
+  Specification = c("TWFE DiD", "TWFE DiD with age controls",
+                    "TWFE DiD with facility make-model cell FE"),
+  Estimate      = round(c(d_pooled$beta,  d_agectrl$beta, d_fac_mm$beta), 4),
+  SE            = round(c(d_pooled$se,    d_agectrl$se,   d_fac_mm$se),   4),
+  P_value       = round(c(d_pooled$p,     d_agectrl$p,    d_fac_mm$p),    4),
+  Pre_mean      = round(c(pre_mean_full, pre_mean_full, pre_mean_mm), 4),
+  N             = c(d_pooled$n, d_agectrl$n, d_fac_mm$n)),
   file.path(OUTPUT_TABLES, "Table_Main_DiD_Summary.csv"))
 
 
@@ -835,6 +941,7 @@ ggsave(file.path(OUTPUT_FIGURES, "Figure_ES_YoungOld_Combined.pdf"),
 
 #### S15 Reported Leak DiD ####
 
+# Legacy specifications (shared panel_year FE)
 m_leak_main     <- feols(leak_year ~ did_term | panel_id + panel_year,
                          main_sample,     cluster = ~state)
 m_leak_youngest <- feols(leak_year ~ did_term | panel_id + panel_year,
@@ -842,51 +949,72 @@ m_leak_youngest <- feols(leak_year ~ did_term | panel_id + panel_year,
 m_leak_oldest   <- feols(leak_year ~ did_term | panel_id + panel_year,
                          oldest_sample,   cluster = ~state)
 
+# NEW: leak DiD with facility make-model cell FE (design doc Section 4.4)
+m_leak_fac_mm <- feols(
+  leak_year ~ did_term | panel_id + make_model_fac^panel_year,
+  mm_fac_primary, cluster = ~state)
+
 m_es_leak <- feols(
   leak_year ~ i(rel_year_bin, texas_treated, ref = -1) |
     panel_id + panel_year,
   main_sample, cluster = ~state)
+
+# NEW: leak event study with facility make-model cell FE
+m_es_leak_mm <- feols(
+  leak_year ~ i(rel_year_bin, texas_treated, ref = -1) |
+    panel_id + make_model_fac^panel_year,
+  mm_fac_primary, cluster = ~state)
 
 plot_es(m_es_leak,
         ylab     = "Effect on Annual Reported Leak Probability",
         xlim_lo  = -8, xlim_hi = rel_max_full,
         filename = file.path(OUTPUT_FIGURES, "Figure_Leak_ES.png"))
 
-d_leak_m <- extract_did(m_leak_main)
-d_leak_y <- extract_did(m_leak_youngest)
-d_leak_o <- extract_did(m_leak_oldest)
+plot_es(m_es_leak_mm,
+        ylab     = "Effect on Annual Reported Leak Probability (MM Cell FE)",
+        xlim_lo  = -8, xlim_hi = rel_max_full,
+        filename = file.path(OUTPUT_FIGURES, "Figure_Leak_ES_FacMM.png"))
 
-lk_m_est <- fmt_est(d_leak_m$beta, d_leak_m$p)
-lk_m_se  <- fmt_se(d_leak_m$se)
-lk_y_est <- fmt_est(d_leak_y$beta, d_leak_y$p)
-lk_y_se  <- fmt_se(d_leak_y$se)
-lk_o_est <- fmt_est(d_leak_o$beta, d_leak_o$p)
-lk_o_se  <- fmt_se(d_leak_o$se)
-n_lk_m   <- fmt_n(d_leak_m$n)
-n_lk_y   <- fmt_n(d_leak_y$n)
-n_lk_o   <- fmt_n(d_leak_o$n)
+d_leak_m  <- extract_did(m_leak_main)
+d_leak_y  <- extract_did(m_leak_youngest)
+d_leak_o  <- extract_did(m_leak_oldest)
+d_leak_mm <- extract_did(m_leak_fac_mm)
+
+lk_m_est  <- fmt_est(d_leak_m$beta, d_leak_m$p)
+lk_m_se   <- fmt_se(d_leak_m$se)
+lk_y_est  <- fmt_est(d_leak_y$beta, d_leak_y$p)
+lk_y_se   <- fmt_se(d_leak_y$se)
+lk_o_est  <- fmt_est(d_leak_o$beta, d_leak_o$p)
+lk_o_se   <- fmt_se(d_leak_o$se)
+lk_mm_est <- fmt_est(d_leak_mm$beta, d_leak_mm$p)
+lk_mm_se  <- fmt_se(d_leak_mm$se)
+n_lk_m    <- fmt_n(d_leak_m$n)
+n_lk_y    <- fmt_n(d_leak_y$n)
+n_lk_o    <- fmt_n(d_leak_o$n)
+n_lk_mm   <- fmt_n(d_leak_mm$n)
 
 write_tex(c(
   "\\begin{table}[htbp]",
   "\\centering",
   "\\caption{Annual Reported Leak Probability: Difference-in-Differences Estimates}",
   "\\label{tbl:leak_did}",
-  "\\begin{tabular}{lccc}",
+  "\\begin{tabular}{lcccc}",
   "\\toprule",
-  " & (1) & (2) & (3) \\\\",
-  " & Full sample & Young only & Old only \\\\",
+  " & (1) & (2) & (3) & (4) \\\\",
+  " & Full sample & Young only & Old only & MM Cell FE \\\\",
   "\\midrule",
-  sprintf("Texas $\\times$ Post & %s & %s & %s \\\\",
-          lk_m_est, lk_y_est, lk_o_est),
-  sprintf(" & %s & %s & %s \\\\", lk_m_se, lk_y_se, lk_o_se),
+  sprintf("Texas $\\times$ Post & %s & %s & %s & %s \\\\",
+          lk_m_est, lk_y_est, lk_o_est, lk_mm_est),
+  sprintf(" & %s & %s & %s & %s \\\\", lk_m_se, lk_y_se, lk_o_se, lk_mm_se),
   "\\midrule",
-  "Facility fixed effects & Yes & Yes & Yes \\\\",
-  "Year fixed effects     & Yes & Yes & Yes \\\\",
+  "Facility fixed effects & Yes & Yes & Yes & Yes \\\\",
+  "Year fixed effects     & Yes & Yes & Yes & --- \\\\",
+  "MM Cell $\\times$ Year FE & --- & --- & --- & Yes \\\\",
   "\\midrule",
-  sprintf("Observations & %s & %s & %s \\\\", n_lk_m, n_lk_y, n_lk_o),
+  sprintf("Observations & %s & %s & %s & %s \\\\", n_lk_m, n_lk_y, n_lk_o, n_lk_mm),
   "\\bottomrule",
-  "\\multicolumn{4}{p{0.75\\linewidth}}{\\footnotesize",
-  "\\textit{Notes:} Make-model sample.",
+  "\\multicolumn{5}{p{0.85\\linewidth}}{\\footnotesize",
+  "\\textit{Notes:} Make-model sample (cols 1--3) or facility MM primary sample (col 4).",
   "Outcome is an indicator for a confirmed underground storage tank",
   "release in the facility-year.",
   "Standard errors clustered at the state level.",
@@ -1211,8 +1339,10 @@ saveRDS(main_sample,       file.path(ANALYSIS_DIR, "main_sample.rds"))
 saveRDS(youngest_sample,   file.path(ANALYSIS_DIR, "youngest_sample.rds"))
 saveRDS(oldest_sample,     file.path(ANALYSIS_DIR, "oldest_sample.rds"))
 saveRDS(sw_broader_sample, file.path(ANALYSIS_DIR, "sw_broader_sample.rds"))
+saveRDS(mm_fac_primary,    file.path(ANALYSIS_DIR, "mm_fac_primary.rds"))
 
 saveRDS(m_did_pooled,      file.path(ANALYSIS_DIR, "ols_headline_did.rds"))
+saveRDS(m_did_fac_mm,      file.path(ANALYSIS_DIR, "ols_fac_mm_did.rds"))
 saveRDS(m_es_hte,          file.path(ANALYSIS_DIR, "ols_hte_event_study.rds"))
 saveRDS(model_es_youngest, file.path(ANALYSIS_DIR, "ols_youngest_es.rds"))
 saveRDS(model_es_oldest,   file.path(ANALYSIS_DIR, "ols_oldest_es.rds"))
