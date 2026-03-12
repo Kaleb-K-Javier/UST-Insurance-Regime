@@ -18,8 +18,9 @@
 #   Combined → Figure3_WallByVintage_Combined
 #==============================================================================
 
-source(here::here("Code",'Analysis','Descrptive Facts', "01a_Setup.R"))
-cat("=== 01f: CAPITAL STOCK FIGURES ===\n")
+source(here::here("Code", "Analysis", "Descrptive Facts", "01a_Setup.R"))
+open_log("01f_CapitalStock")
+log_cat("=== 01f: CAPITAL STOCK FIGURES ===\n")
 
 tanks_1998 <- load_interim("tanks_1998")
 
@@ -47,7 +48,7 @@ tanks_1998[, vintage_5yr := factor(fcase(
 # ─────────────────────────────────────────────────────────────────────────────
 # Figure 1: Tank Age Density
 # ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- Figure 1: Tank Age Density ---\n")
+log_cat("\n--- Figure 1: Tank Age Density ---\n")
 
 mean_age <- tanks_1998[!is.na(tank_age_1998),
   .(mean_age = mean(tank_age_1998, na.rm=TRUE)), by = Group]
@@ -69,10 +70,11 @@ p1_A <- ggplot(tanks_1998[!is.na(tank_age_1998)],
   scale_color_manual(values = COL_PAIR) +
   scale_x_continuous(breaks = AGE_BIN_BREAKS[is.finite(AGE_BIN_BREAKS)],
                      limits = c(0, 42)) +
-  labs(title    = "A: Tank Age Density",
-       subtitle = "Active tanks Dec 22, 1998. Dotted = 5-yr bin bounds. Dashed = group means.",
-       x = "Tank Age (years)", y = "Density",
-       fill = NULL, color = NULL)
+    labs(title    = NULL,
+      subtitle = "Active tanks Dec 22, 1998. Dotted = 5-yr bin bounds. Dashed = group means.",
+      x = "Tank Age (years)", y = "Density",
+      fill = NULL, color = NULL)
+  
 
 p1_B <- ggplot(tanks_1998[!is.na(tank_age_1998)],
                aes(x = tank_age_1998, color = Group)) +
@@ -84,26 +86,18 @@ p1_B <- ggplot(tanks_1998[!is.na(tank_age_1998)],
   scale_color_manual(values = COL_PAIR) +
   scale_x_continuous(breaks = seq(0, 40, 5), limits = c(0, 42)) +
   scale_y_continuous(labels = percent_format(accuracy = 1)) +
-  labs(title    = "B: Cumulative Age Distribution (ECDF)",
-       subtitle = "Vertical gap = share of tanks in that age range TX vs Control.",
-       x = "Tank Age (years)", y = "Cumulative Share",
-       color = NULL)
+    labs(title    = NULL,
+      subtitle = "Vertical gap = share of tanks in that age range TX vs Control.",
+      x = "Tank Age (years)", y = "Cumulative Share",
+      color = NULL)
 
-save_panels(
-  panels        = list(A = p1_A, B = p1_B),
-  base_name     = "Figure1_AgeDensity",
-  combined_name = "Figure1_AgeDensity_Combined",
-  panel_width   = 8, panel_height = 5,
-  combined_width = 16, combined_height = 5,
-  ncol = 2,
-  title    = "Figure 1: Tank Age Distribution at Treatment Date (Dec 22, 1998)",
-  subtitle = "Incumbent tanks active December 22, 1998. Pre-1989 vintage tanks dominate the older tail."
-)
+save_fig(p1_A, "Figure1_AgeDensity_Density", width = 8, height = 5)
+save_fig(p1_B, "Figure1_AgeDensity_ECDF", width = 8, height = 5)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Figure 2: Vintage Composition
 # ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- Figure 2: Vintage Composition ---\n")
+log_cat("\n--- Figure 2: Vintage Composition ---\n")
 
 vintage_shares <- tanks_1998[!is.na(vintage_bin),
   .(N = .N), by = .(Group, vintage_bin)]
@@ -121,10 +115,11 @@ p2_A <- ggplot(vintage_shares, aes(x = Group, y = share, fill = vintage_bin)) +
                "1989\u20131998"   = "#9090cc"),
     name = "Vintage"
   ) +
-  labs(title    = "A: Installation Vintage (Stacked Share)",
-       subtitle = "Active tanks Dec 22, 1998.",
-       x = NULL, y = "Share of Incumbent Tanks") +
+    labs(title    = NULL,
+      subtitle = "Active tanks Dec 22, 1998.",
+      x = NULL, y = "Share of Incumbent Tanks") +
   theme(legend.position = "right")
+
 
 # Diverging bar: TX − Control share gap per vintage bin
 vintage_wide <- dcast(vintage_shares, vintage_bin ~ Group, value.var = "share")
@@ -141,25 +136,16 @@ p2_B <- ggplot(vintage_wide,
   scale_fill_manual(values = c("TX Higher" = COL_TX, "CTL Higher" = COL_CTRL),
                     guide = "none") +
   scale_y_continuous(labels = percent_format(accuracy = 1)) +
-  labs(title    = "B: Vintage Share Gap (Texas \u2212 Control)",
-       subtitle = "Positive = TX overrepresented in that vintage. Drives pre-trend confound.",
-       x = "Vintage Bin", y = "Share Gap (TX \u2212 CTL, pp)")
-
-save_panels(
-  panels        = list(A = p2_A, B = p2_B),
-  base_name     = "Figure2_VintageComposition",
-  combined_name = "Figure2_VintageComposition_Combined",
-  panel_width   = 7, panel_height = 5,
-  combined_width = 14, combined_height = 5,
-  ncol = 2,
-  title    = "Figure 2: Installation Vintage Composition at Treatment Date",
-  subtitle = "Active tanks December 22, 1998. Darkest = oldest vintage cohort."
-)
+    labs(title    = NULL,
+      subtitle = "Positive = TX overrepresented in that vintage.",
+      x = "Vintage Bin", y = "Share Gap (TX \u2212 CTL, pp)")
+save_fig(p2_A, "Figure2_VintageComposition_Stacked", width = 7, height = 5)
+save_fig(p2_B, "Figure2_VintageComposition_Gap", width = 7, height = 5)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Figure 3: Wall Type by Vintage
 # ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- Figure 3: Wall Type by Vintage ---\n")
+log_cat("\n--- Figure 3: Wall Type by Vintage ---\n")
 
 wall_by_vintage <- tanks_1998[!is.na(vintage_bin) & !is.na(single_walled), .(
   pct_sw = 100 * mean(single_walled == 1, na.rm = TRUE),
@@ -175,10 +161,11 @@ p3_A <- ggplot(wall_by_vintage,
   scale_fill_manual(values = COL_PAIR) +
   scale_y_continuous(limits = c(0, 110),
                      labels = function(x) paste0(x, "%")) +
-  labs(title    = "A: Single-Walled Share by Vintage",
-       subtitle = "Expected: SW% declines in newer vintages (post-mandate DW requirements).",
-       x = "Installation Vintage", y = "Share Single-Walled (%)",
-       fill = NULL)
+    labs(title    = NULL,
+      subtitle = "Expected: SW% declines in newer vintages.",
+      x = "Installation Vintage", y = "Share Single-Walled (%)",
+      fill = NULL)
+
 
 # Panel B: 5-yr cohort level detail
 wall_by_5yr <- tanks_1998[!is.na(vintage_5yr) & !is.na(single_walled), .(
@@ -197,22 +184,13 @@ p3_B <- ggplot(wall_by_5yr,
                         guide  = guide_legend(title = "N Tanks")) +
   scale_y_continuous(limits = c(0, 110),
                      labels = function(x) paste0(x, "%")) +
-  labs(title    = "B: SW Share by 5-Year Install Cohort",
-       subtitle = "Dot size = N tanks. Convergence post-1989 reflects DW mandate compliance.",
-       x = "5-Year Install Cohort", y = "Share Single-Walled (%)",
-       color = NULL) +
+    labs(title    = NULL,
+      subtitle = "Dot size = N tanks. Convergence post-1989 reflects DW mandate compliance.",
+      x = "5-Year Install Cohort", y = "Share Single-Walled (%)",
+      color = NULL) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-save_panels(
-  panels        = list(A = p3_A, B = p3_B),
-  base_name     = "Figure3_WallByVintage",
-  combined_name = "Figure3_WallByVintage_Combined",
-  panel_width   = 8, panel_height = 5,
-  combined_width = 16, combined_height = 5,
-  ncol = 2,
-  title    = "Figure 3: Single-Walled Share by Installation Vintage",
-  subtitle = "Active tanks December 22, 1998. Post-1989 cohorts converge as DW became standard."
-)
+save_fig(p3_A, "Figure3_WallByVintage_Bar", width = 8, height = 5)
+save_fig(p3_B, "Figure3_WallByVintage_Line", width = 8, height = 5)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Summary table: vintage x wall x group
@@ -225,4 +203,5 @@ vintage_wall_summary <- tanks_1998[!is.na(vintage_bin), .(
 ), by = .(vintage_bin, Group)]
 save_table(vintage_wall_summary, "Data_VintageWall_Summary")
 
-cat("=== 01f COMPLETE ===\n")
+log_cat("=== 01f COMPLETE ===\n")
+close_log("01f_CapitalStock")

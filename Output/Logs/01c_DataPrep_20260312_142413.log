@@ -1,0 +1,77 @@
+=== 01c_DataPrep | started 2026-03-12 14:24:13 ===
+=== 01c: DATA PREPARATION ===
+
+
+--- S1: State data quality report ---
+
+  data_quality_report: 50 states
+
+
+--- S2: Filter panel ---
+
+
+--- S3: Missing-date exclusion ---
+
+  Missing-date balance p = 0.5361 OK
+
+  Excluded: 53,648 | Remaining: 233,234 facilities | 3,967,583 rows
+
+
+--- S4: Analysis variables ---
+
+  TX: 54,034 fac | Control: 179,200 fac | 1985-2020
+
+
+--- S4b: Make-model cell merge ---
+
+  Make-model columns already present in annual_data (from CSV)
+
+  [interim] saved: fac_mm
+
+
+--- S5: Tank-level datasets ---
+
+  Active tanks Dec 22 1998: 276,730 (TX: 61,782 | CTL: 214,948)
+
+  Closed tanks in study window: 525,426
+
+
+--- S6: Mandate cohort construction ---
+
+  Spec A: 33,760 fac | Spec B: 60,964 fac
+
+
+--- S7: Pre-panel leak flag ---
+
+  Pre-1990 leakers flagged: 30,516 facilities (13.1%)
+
+
+--- S9: Install year ---
+
+  install_year already present
+
+
+--- Saving intermediates ---
+
+  [interim] saved: annual_data
+
+  [interim] saved: tanks
+
+  [interim] saved: tanks_1998
+
+  [interim] saved: closed_tanks
+
+  [interim] saved: pre_period_closures
+
+  [interim] saved: data_quality_report
+
+  [interim] saved: balance_glm
+
+  [interim] saved: attrition_log
+
+  [interim] saved: incumbent_ids
+
+
+=== 01c COMPLETE | 233,234 facilities | 3,967,583 fac-years ===
+
+=== 01c_DataPrep complete 2026-03-12 14:28:10 ===

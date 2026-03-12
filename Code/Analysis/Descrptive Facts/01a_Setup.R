@@ -25,9 +25,9 @@ suppressPackageStartupMessages({
   library(here)
 })
 
-if (requireNamespace("pROC",    quietly = TRUE)) library(pROC)
-if (requireNamespace("cmprsk",  quietly = TRUE)) library(cmprsk)
-if (requireNamespace("ggrepel", quietly = TRUE)) library(ggrepel)
+library(pROC)
+library(cmprsk)
+library(ggrepel)
 
 options(scipen = 999)
 set.seed(20260202)
@@ -36,10 +36,11 @@ setDTthreads(14)
 # ── Directories ───────────────────────────────────────────────────────────────
 OUTPUT_TABLES  <- here("Output", "Tables")
 OUTPUT_FIGURES <- here("Output", "Figures")
+OUTPUT_LOGS    <- here("Output", "Logs")
 ANALYSIS_DIR   <- here("Data", "Analysis")   # final RDS → 02_DiD reads from here
 INTERIM_DIR    <- here("Data", "Interim")    # intermediate RDS between 01x scripts
 
-for (d in c(OUTPUT_TABLES, OUTPUT_FIGURES, ANALYSIS_DIR, INTERIM_DIR))
+for (d in c(OUTPUT_TABLES, OUTPUT_FIGURES, OUTPUT_LOGS, ANALYSIS_DIR, INTERIM_DIR))
   dir.create(d, recursive = TRUE, showWarnings = FALSE)
 
 # ── Run flags ─────────────────────────────────────────────────────────────────
@@ -73,17 +74,34 @@ TN_FUND_START_YEAR <- 2008L
 MD_NO_FUND         <- TRUE
 
 # ── Make-model cohort window ──────────────────────────────────────────────────
-MM_INSTALL_START <- 1990L   # first full post-mandate vintage year
-MM_INSTALL_END   <- 1997L   # ensures ≥ 2 pre-treatment years in panel
+# The federal technical standard applied to tanks installed ON OR BEFORE
+# December 22, 1988; tanks installed in 1989+ were built to the post-mandate
+# standard from inception and have no compliance-driven pre-period closure.
+# MM_INSTALL_START / MM_INSTALL_END are also used for cohort shading in
+# descriptive figures that reference the install window.
+MM_INSTALL_START <- 1989L
+MM_INSTALL_END   <- 1997L
 
 # Shading boundaries for bar charts (add cohort_shade_layer())
 COHORT_SHADE_START <- MM_INSTALL_START - 0.5
 COHORT_SHADE_END   <- MM_INSTALL_END   + 0.5
 
-# ── Canonical 5-year age bins ─────────────────────────────────────────────────
-AGE_BIN_BREAKS <- c(0, 5, 10, 15, 20, 25, 30, 35, Inf)
-AGE_BIN_LABELS <- c("0-4","5-9","10-14","15-19","20-24","25-29","30-34","35+")
-AGE_BIN_REF    <- "0-4"
+# Make-model primary sample filter strings (used in 01c, 01m, 02a, 02b)
+# These are the ONLY exclusion criteria for the primary regression sample.
+# "Unknown" cells are excluded because the insurer cannot price them.
+MM_WALL_EXCLUDE  <- "Unknown-Wall"
+MM_FUEL_EXCLUDE  <- "Unknown-Fuel"
+
+# Primary cohort window for tank-level regressions
+MM_COHORT_YEARS  <- as.character(MM_INSTALL_START:MM_INSTALL_END)
+# c("1989","1990","1991","1992","1993","1994","1995","1996","1997")
+
+# ── Canonical 3-year age bins ─────────────────────────────────────────────────
+# Panel builder (Section 9.2) uses 3-year breaks; must match or make_age_bin()
+# produces mismatched factor levels when called on avg_tank_age.
+AGE_BIN_BREAKS <- c(0, 3, 6, 9, 12, 15, 18, 21, 24, Inf)
+AGE_BIN_LABELS <- c("0-2","3-5","6-8","9-11","12-14","15-17","18-20","21-23","24+")
+AGE_BIN_REF    <- "0-2"
 
 make_age_bin <- function(age_vec) {
   factor(
@@ -125,7 +143,7 @@ theme_set(theme_pub())
 
 # ── Reusable ggplot layers ────────────────────────────────────────────────────
 
-# Light blue shading over the 1990–1997 analysis cohort install window
+# Light blue shading over the 1989–1997 analysis cohort install window
 cohort_shade_layer <- function(ymin = -Inf, ymax = Inf, alpha = 0.10) {
   list(
     annotate("rect",
@@ -135,7 +153,7 @@ cohort_shade_layer <- function(ymin = -Inf, ymax = Inf, alpha = 0.10) {
     annotate("text",
              x = (COHORT_SHADE_START + COHORT_SHADE_END) / 2,
              y = ymax, vjust = 1.4, size = 2.8, color = "steelblue4",
-             label = "Analysis cohort\n(1990\u20131997)")
+             label = "Analysis cohort\n(1989\u20131997)")
   )
 }
 
@@ -164,6 +182,44 @@ mandate_shade_layer <- function(ymin = -Inf, ymax = Inf, alpha = 0.12) {
   )
 }
 
+# ── Logging helpers ───────────────────────────────────────────────────────────
+# Each script calls open_log(script_name) once at the top.
+# All subsequent log_cat() calls go to both the console and the log file.
+# close_log() flushes and closes the connection.
+
+.LOG_CON <- NULL   # module-level connection handle
+
+open_log <- function(script_name) {
+  ts   <- format(Sys.time(), "%Y%m%d_%H%M%S")
+  path <- file.path(OUTPUT_LOGS, sprintf("%s_%s.log", script_name, ts))
+  con  <- file(path, open = "wt")
+  assign(".LOG_CON", con, envir = .GlobalEnv)
+  writeLines(sprintf("=== %s | started %s ===", script_name,
+                     format(Sys.time(), "%Y-%m-%d %H:%M:%S")), con)
+  invisible(path)
+}
+
+log_cat <- function(...) {
+  msg <- paste0(...)
+  cat(msg)
+  con <- get(".LOG_CON", envir = .GlobalEnv, inherits = FALSE)
+  if (!is.null(con) && inherits(con, "connection") && isOpen(con))
+    writeLines(msg, con)
+  invisible(NULL)
+}
+
+close_log <- function(script_name = "") {
+  con <- get(".LOG_CON", envir = .GlobalEnv, inherits = FALSE)
+  if (!is.null(con) && inherits(con, "connection") && isOpen(con)) {
+    writeLines(sprintf("=== %s complete %s ===", script_name,
+                       format(Sys.time(), "%Y-%m-%d %H:%M:%S")), con)
+    flush(con)
+    close(con)
+  }
+  assign(".LOG_CON", NULL, envir = .GlobalEnv)
+  invisible(NULL)
+}
+
 # ── File I/O helpers ──────────────────────────────────────────────────────────
 
 # Save figure as both PNG and PDF
@@ -172,20 +228,20 @@ save_fig <- function(p, name, width = 10, height = 6, dpi = 300) {
          p, width = width, height = height, dpi = dpi, bg = "white")
   ggsave(file.path(OUTPUT_FIGURES, paste0(name, ".pdf")),
          p, width = width, height = height, device = cairo_pdf)
-  cat(sprintf("  [fig] %s\n", name))
+  log_cat(sprintf("  [fig] %s\n", name))
   invisible(p)
 }
 
 save_table <- function(dt, name) {
   fwrite(dt, file.path(OUTPUT_TABLES, paste0(name, ".csv")))
-  cat(sprintf("  [tbl] %s.csv\n", name))
+  log_cat(sprintf("  [tbl] %s.csv\n", name))
   invisible(dt)
 }
 
 write_tex <- function(kbl_obj, name) {
   writeLines(as.character(kbl_obj),
              file.path(OUTPUT_TABLES, paste0(name, ".tex")))
-  cat(sprintf("  [tex] %s.tex\n", name))
+  log_cat(sprintf("  [tex] %s.tex\n", name))
   invisible(NULL)
 }
 
@@ -198,17 +254,6 @@ stars_fn <- function(p) {
 }
 
 # ── save_panels(): individual panels + patchwork in one call ──────────────────
-#
-# panels        : named list of ggplots; names become the panel letter suffix
-#                 e.g. list(A = p1, B = p2) → saves base_name_PanelA, _PanelB
-# base_name     : stem for individual panel file names
-# combined_name : file name for patchwork (default: base_name_Combined)
-# panel_width/height : dimensions for each individual panel
-# combined_width/height : dimensions for the combined figure
-# layout        : optional patchwork layout string or design matrix
-# title/subtitle: patchwork-level annotation
-# tag_levels    : "A" (letters) or "1" (numbers) for panel tags
-#
 save_panels <- function(panels,
                         base_name,
                         combined_name   = NULL,
@@ -260,7 +305,7 @@ save_panels <- function(panels,
 save_interim <- function(obj, name) {
   path <- file.path(INTERIM_DIR, paste0(name, ".rds"))
   saveRDS(obj, path)
-  cat(sprintf("  [interim] saved: %s\n", name))
+  log_cat(sprintf("  [interim] saved: %s\n", name))
   invisible(path)
 }
 
@@ -272,4 +317,4 @@ load_interim <- function(name) {
   readRDS(path)
 }
 
-cat("01a_Setup.R sourced\n")
+log_cat("01a_Setup.R sourced\n")
