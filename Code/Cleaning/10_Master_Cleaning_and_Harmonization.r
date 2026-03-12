@@ -318,29 +318,22 @@ master_tanks[, mm_capacity := fcase(
   capacity >= 25000,                                   "25k-Plus"
 )]
 
-# --- 3.5.4: Install Year Cohort (3-year bins) ---
-# Use tank_installed_date directly (exact).
-# Pre-1970 tanks are a real cohort -- do NOT use tank_panel_start_date
-# (bounded to 1970-01-01), which collapses them into a pseudo-cohort.
-# 3-year bins provide resolution within the 1989-1998 non-mandate window
-# while maintaining adequate cell sizes.
+# --- 3.5.4: Install Year Cohort (single-year cells) ---
+# Use tank_installed_date directly (exact).  Each calendar year becomes its
+# own cohort label rather than aggregated 3‑year bins.  Pre‑1970 tanks are
+# preserved by year (e.g. "1969", "1950", etc.) and NA install dates produce
+# NA cohorts.
 master_tanks[, mm_install_year := as.integer(
   fifelse(!is.na(tank_installed_date),
           year(tank_installed_date),
           NA_integer_)
 )]
 
-master_tanks[, mm_install_cohort := fcase(
-  is.na(mm_install_year),                              NA_character_,
-  mm_install_year < 1980,                              "Pre-1980",
-  mm_install_year %between% c(1980, 1982),             "1980-1982",
-  mm_install_year %between% c(1983, 1985),             "1983-1985",
-  mm_install_year %between% c(1986, 1988),             "1986-1988",
-  mm_install_year %between% c(1989, 1991),             "1989-1991",
-  mm_install_year %between% c(1992, 1994),             "1992-1994",
-  mm_install_year %between% c(1995, 1997),             "1995-1997",
-  mm_install_year %between% c(1998, 2000),             "1998-2000",
-  mm_install_year > 2000,                              "Post-2000"
+# cohort is simply the year as a character string; keep NA for missing years
+master_tanks[, mm_install_cohort := fifelse(
+  is.na(mm_install_year),
+  NA_character_,
+  as.character(mm_install_year)
 )]
 
 # --- 3.5.5: Tank-Level Cell Identifier ---

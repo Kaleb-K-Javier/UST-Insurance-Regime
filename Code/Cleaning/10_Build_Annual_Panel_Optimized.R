@@ -156,6 +156,50 @@ master_tanks[, `:=`(
 )]
 master_lust[, report_date := coerce_date(report_date)]
 
+#==============================================================================
+# SECTION 2.2b: FACILITY BIOGRAPHY (BEFORE ANY FILTERING)
+# Must be computed from full master_tanks before Section 2.3 drops facilities.
+# fac_max_install_date drives replacement classification in Section 5.2 --
+# if a tank install that happened AFTER a closure gets dropped by 2.3, we
+# would misclassify that replacement closure as permanent.
+#==============================================================================
+
+fac_bio <- master_tanks[, .(
+  facility_first_install      = min(tank_installed_date, na.rm = TRUE),
+  facility_last_install       = max(tank_installed_date, na.rm = TRUE),
+  facility_first_closure      = if (any(!is.na(tank_closed_date)))
+                                  min(tank_closed_date, na.rm = TRUE) else as.IDate(NA),
+  facility_last_closure       = if (any(!is.na(tank_closed_date)))
+                                  max(tank_closed_date, na.rm = TRUE) else as.IDate(NA),
+  total_tanks_ever            = .N,
+  total_tanks_closed_ever     = sum(!is.na(tank_closed_date)),
+  total_tanks_open_ever       = sum(is.na(tank_closed_date)),
+  had_pre1989_tanks           = as.integer(any(year(tank_installed_date) < 1989, na.rm = TRUE)),
+  all_tanks_post1988          = as.integer(all(year(tank_installed_date) >= 1989, na.rm = TRUE)),
+  fac_max_install_date        = max(tank_installed_date, na.rm = TRUE)
+), by = panel_id]
+
+# Derived scalars
+fac_bio[, `:=`(
+  facility_first_install_yr = year(facility_first_install),
+  facility_last_install_yr  = year(facility_last_install)
+)]
+
+fac_bio[, fac_reg_vintage := fcase(
+  facility_first_install_yr < 1988,                    "Pre-RCRA",
+  facility_first_install_yr %between% c(1988, 1998),   "Transition",
+  facility_first_install_yr > 1998,                    "Post-Deadline",
+  default = "Unknown"
+)]
+
+fac_bio[, fac_is_incumbent := as.integer(facility_first_install_yr < 1999)]
+
+saveRDS(fac_bio, here("Data", "Analysis", "facility_biography.rds"))
+log_step(sprintf("Saved: Data/Analysis/facility_biography.rds (%s facilities, pre-filter)",
+  format(nrow(fac_bio), big.mark=",")), 1)
+# Add this line immediately before Section 2.3
+master_tanks_unfiltered <- copy(master_tanks)
+
 # 2.3 Strict Filtering Rules
 log_step("Applying strict facility filtering rules...", 0)
 n_fac_orig <- uniqueN(master_tanks$panel_id)
@@ -308,75 +352,6 @@ log_step(sprintf("Saved: Data/Analysis/facility_make_model.rds (%s facilities)",
 
 rm(tanks_at_reform)
 gc()
-
-#==============================================================================
-# SECTION 2.6: FACILITY BIOGRAPHY (TIME-INVARIANT)
-# Computed from active_panel_tanks ONCE. These are fixed facility attributes
-# that do NOT change over time. They replace the broken derived install_year
-# (which reverse-engineered a fiction from time-varying avg_tank_age).
-#
-# Every variable here answers: "What is true about this facility's ENTIRE
-# tank history?" — not "What does the currently-surviving stock look like?"
-#==============================================================================
-cat("\n========================================\n")
-cat("SECTION 2.6: FACILITY BIOGRAPHY\n")
-cat("========================================\n\n")
-
-log_step("Computing time-invariant facility biography...", 0)
-
-fac_bio <- active_panel_tanks[, .(
-  # --- Birth & Death ---
-  facility_first_install    = min(tank_installed_date, na.rm = TRUE),
-  facility_last_install     = max(tank_installed_date, na.rm = TRUE),
-  facility_first_closure    = if (any(!is.na(tank_closed_date)))
-                                min(tank_closed_date, na.rm = TRUE) else as.Date(NA),
-  facility_last_closure     = if (any(!is.na(tank_closed_date)))
-                                max(tank_closed_date, na.rm = TRUE) else as.Date(NA),
-
-  # --- Counts (lifetime, not point-in-time) ---
-  total_tanks_ever          = .N,
-  total_tanks_closed_ever   = sum(!is.na(tank_closed_date)),
-  total_tanks_open_ever     = sum(is.na(tank_closed_date)),
-
-  # --- Regulatory vintage flags ---
-  had_pre1989_tanks         = as.integer(any(year(tank_installed_date) < 1989, na.rm = TRUE)),
-  all_tanks_post1988        = as.integer(all(year(tank_installed_date) >= 1989, na.rm = TRUE)),
-
-  # --- Max install date (used by Section 5 for closure classification) ---
-  fac_max_install_date      = max(tank_installed_date, na.rm = TRUE)
-
-), by = panel_id]
-
-# Derived scalars
-fac_bio[, facility_first_install_yr := year(facility_first_install)]
-fac_bio[, facility_last_install_yr  := year(facility_last_install)]
-
-# Regulatory vintage (time-invariant, based on facility birth)
-fac_bio[, fac_reg_vintage := fcase(
-  facility_first_install_yr < 1988,                      "Pre-RCRA",
-  facility_first_install_yr %between% c(1988, 1998),     "Transition",
-  facility_first_install_yr > 1998,                      "Post-Deadline",
-  default = "Unknown"
-)]
-
-# Cohort: based on actual facility birth, not panel appearance
-fac_bio[, fac_is_incumbent := as.integer(facility_first_install_yr < 1999)]
-
-log_step(sprintf("  Facilities in biography: %s",
-  format(nrow(fac_bio), big.mark=",")), 1)
-log_step(sprintf("  First install year range: %s to %s",
-  min(fac_bio$facility_first_install_yr, na.rm=TRUE),
-  max(fac_bio$facility_first_install_yr, na.rm=TRUE)), 1)
-log_step(sprintf("  Had pre-1989 tanks: %s (%.1f%%)",
-  format(sum(fac_bio$had_pre1989_tanks), big.mark=","),
-  100 * mean(fac_bio$had_pre1989_tanks)), 1)
-log_step(sprintf("  All tanks post-1988: %s (%.1f%%)",
-  format(sum(fac_bio$all_tanks_post1988), big.mark=","),
-  100 * mean(fac_bio$all_tanks_post1988)), 1)
-
-saveRDS(fac_bio, here("Data", "Analysis", "facility_biography.rds"))
-log_step(sprintf("Saved: Data/Analysis/facility_biography.rds (%s facilities)",
-  format(nrow(fac_bio), big.mark=",")), 1)
 
 #==============================================================================
 # SECTION 3: CREATE FACILITY-MONTH BACKBONE
@@ -609,7 +584,7 @@ gc()
 
 # Shrink Master Files for Section 7
 log_step("Shrinking Master Tables to bare minimum...", 0)
-master_tanks_full <- copy(master_tanks)  # KEEP FULL VERSION FOR SECTION 7.5
+master_tanks_full <- copy(master_tanks_unfiltered)  # KEEP FULL VERSION FOR SECTION 7.5
 # Keep tank_installed_date: Section 7 needs it to scope leak-closure pairs
 # to the same generation of infrastructure
 master_tanks <- master_tanks[!is.na(tank_closed_date), .(panel_id, tank_closed_date, tank_installed_date)]
@@ -1205,12 +1180,12 @@ annual[, `:=`(
 # -------------------------------------------------------------------------
 # Tank age bins: current age of active stock. This IS time-varying and that's
 # correct — it describes the facility's risk profile in each year.
-annual[, age_bins := cut(
-  avg_tank_age_dec,
-  breaks = c(seq(0, 35, 5), Inf),
+annual[, age_bins := cut(avg_tank_age_dec,
+  breaks = c(0, 3, 6, 9, 12, 15, 18, 21, 24, Inf),
   include.lowest = TRUE,
-  labels = c("0-5", "5-10", "10-15", "15-20", "20-25", "25-30", "30-35", "35+")
+  labels = c("0-2", "3-5", "6-8", "9-11", "12-14", "15-17", "18-20", "21-23", "24+")
 )]
+
 
 # Wall type: current composition (time-varying). Useful as DESCRIPTIVE OUTCOME
 # (portfolio composition change) but NEVER as a sample restriction or control
