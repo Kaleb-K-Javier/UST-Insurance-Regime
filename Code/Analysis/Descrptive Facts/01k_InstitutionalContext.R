@@ -264,7 +264,7 @@ if (!is.null(contract_month)) {
     geom_col(position = "fill", width = 0.8) +
     scale_y_continuous(labels = scales::percent_format()) +
     labs(x = "Year", y = "Share of Facilities",
-         title = "Primary Financial Responsibility Mechanism (2007-2020)",
+        #  title = "Primary Financial Responsibility Mechanism (2007-2020)",
          fill = "Mechanism") +
     theme(legend.position = "bottom")
 
@@ -323,8 +323,8 @@ if (!is.null(contract_month)) {
     ) +
     scale_fill_manual(values = custom_colors) +
     labs(x = "Year", y = "Market Share (by Facility-Months)",
-         title = "Private Insurance Market Consolidation",
-         subtitle = "Market Share of All Firms Reaching Top 5 in Any Year (Bars) + Per-Year HHI (Dashed)",
+        #  title = "Private Insurance Market Consolidation",
+        #  subtitle = "Market Share of All Firms Reaching Top 5 in Any Year (Bars) + Per-Year HHI (Dashed)",
          fill = "Insurer") +
     theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "right") +
     guides(fill = guide_legend(ncol = 1, reverse = TRUE))
@@ -388,8 +388,8 @@ if (!is.null(contract_month)) {
                                  "$1M (Statutory)" = "gray60",
                                  "Excess (>$1M)"   = COL_CTRL)) +
     labs(x = "Year", y = "Share of Contracts",
-         title = "Per-Occurrence Coverage Limits",
-         subtitle = "Adherence to the standard $1M statutory minimum vs. excess coverage",
+        #  title = "Per-Occurrence Coverage Limits",
+        #  subtitle = "Adherence to the standard $1M statutory minimum vs. excess coverage",
          fill = "Occurrence Limit") +
     theme(legend.position = "bottom")
 
@@ -422,8 +422,8 @@ if (!is.null(rate_data)) {
     geom_line(aes(y = mean_base), color = COL_TX, linewidth = 1) +
     geom_point(aes(y = mean_base), color = COL_TX, size = 2) +
     labs(x = "Year", y = "Premium ($)",
-         title = "Risk-Differentiated Pricing: Mid-Continent Rate Filings",
-         subtitle = "Shaded band = filed scheduling range (min to max across facilities)",
+        #  title = "Risk-Differentiated Pricing: Mid-Continent Rate Filings",
+        #  subtitle = "Shaded band = filed scheduling range (min to max across facilities)",
          caption = sprintf("N facilities: %s\u2013%s per year",
                            format(min(pricing_range$n_fac), big.mark = ","),
                            format(max(pricing_range$n_fac), big.mark = ","))) +

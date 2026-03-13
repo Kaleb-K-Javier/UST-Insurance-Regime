@@ -1,0 +1,60 @@
+=== 01e_InstallTrends | started 2026-03-12 16:36:37 ===
+=== 01e: INSTALL TRENDS FIGURES ===
+
+
+--- Figure: New Tanks Installed by Year ---
+
+  [fig] Figure_InstallTanks_ByYear
+
+  [fig] Figure_InstallTanks_ByYear_Indexed
+
+  [tbl] Data_InstallTanks_ByYear.csv
+
+
+--- Figure: New Facilities by Year ---
+
+  [fig] Figure_InstallFacilities_ByYear
+
+  [fig] Figure_InstallFacilities_TXShare
+
+  [tbl] Data_InstallFacilities_ByYear.csv
+
+
+--- Figure: SW Share & Capital Mix of Active Tanks Over Time ---
+
+  [fig] Figure_SW_Share_Over_Time
+
+  [fig] Figure_SWShare_TankLevel
+
+  [fig] Figure_SWShare_Gap
+
+  [tbl] Data_SWShare_ByYear.csv
+
+  [tbl] Data_SWShare_Gap_ByYear.csv
+
+
+--- Figure: Wall Type Composition of Active Tanks Over Time ---
+
+  [fig] Figure_WallType_Composition_OverTime
+
+  [tbl] Data_WallType_ByYear.csv
+
+  [fig] Figure_SWShare_StockLevel_Dual
+
+
+--- Figure: 1990 Cohort Survival Curve ---
+
+  [fig] Figure_1990_Cohort_Survival
+
+  [tbl] Data_1990_Cohort_Survival.csv
+
+
+--- Figure: Pooled Stock Level by Wall Type ---
+
+  [fig] Figure_SW_DW_StockLevel_Pooled
+
+  [tbl] Data_StockLevel_Pooled.csv
+
+=== 01e COMPLETE ===
+
+=== 01e_InstallTrends complete 2026-03-12 16:39:09 ===

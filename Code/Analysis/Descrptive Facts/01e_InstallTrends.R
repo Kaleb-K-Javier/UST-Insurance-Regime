@@ -511,7 +511,7 @@ p_pooled_stock <- ggplot(pooled_stock_long,
   scale_y_continuous(labels = percent_format(accuracy = 1), limits = c(0, 1)) +
   labs(
     title    = NULL,
-    subtitle = "Aggregate active capital stock (pooled sample) categorized by primary wall type.",
+    # subtitle = "Aggregate active capital stock (pooled sample) categorized by primary wall type.",
     x = "Year", y = "Aggregate Share (Fleet-Level)",
     color = "Wall Type", linetype = "Wall Type", shape = "Wall Type"
   )

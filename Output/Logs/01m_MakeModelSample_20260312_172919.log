@@ -1,0 +1,53 @@
+=== 01m_MakeModelSample | started 2026-03-12 17:29:19 ===
+=== 01m: MAKE-MODEL SAMPLE CONSTRUCTION + EXPORT ===
+
+
+--- Applying make-model restriction (facility-year) ---
+
+
+Make-Model primary sample summary:
+
+
+--- Applying make-model restriction (tanks_1998) ---
+
+  mm_tanks_1998: 51,205 tanks
+
+
+--- Applying make-model restriction (closed_tanks) ---
+
+  mm_closed_tanks: 22,158 tanks
+
+  Make-model cells: 64 total | 58 with both TX and CTL
+
+
+--- Saving to ANALYSIS_DIR (for 02_DiD) ---
+
+  analysis_annual_data.rds
+
+  analysis_tank_inventory.rds
+
+  analysis_tanks_1998.rds
+
+  analysis_closed_tanks.rds
+
+  analysis_metadata.rds
+
+
+--- Saving make-model subsets to INTERIM_DIR (for 01n) ---
+
+  [interim] saved: mm_annual_data
+
+  [interim] saved: mm_tanks_1998
+
+
+=== FINAL SAMPLE SUMMARY ===
+
+  Full sample:      233,234 facilities (54,034 TX, 179,200 CTL)
+
+  Make-Model:       215,497 facilities (53,009 TX, 162,488 CTL)
+
+  MM cells (total): 64 | with TX+CTL: 58
+
+=== 01m COMPLETE ===
+
+=== 01m_MakeModelSample complete 2026-03-12 17:31:43 ===

@@ -18,54 +18,49 @@
 #   mm_tanks_1998.rds            — make-model subset of tanks_1998
 #==============================================================================
 
-source(here::here("Code",'Analysis','Descrptive Facts', "01a_Setup.R"))
-cat("=== 01m: MAKE-MODEL SAMPLE CONSTRUCTION + EXPORT ===\n")
+source(here::here("Code", "Analysis", "Descrptive Facts", "01a_Setup.R"))
+open_log("01m_MakeModelSample")
+log_cat("=== 01m: MAKE-MODEL SAMPLE CONSTRUCTION + EXPORT ===\n")
 
-annual_data    <- load_interim("annual_data")
-tanks_1998     <- load_interim("tanks_1998")
-tanks          <- load_interim("tanks")
-closed_tanks   <- load_interim("closed_tanks")
-pt_results     <- tryCatch(load_interim("pt_results"), error = function(e) NULL)
+annual_data  <- load_interim("annual_data")
+tanks_1998   <- load_interim("tanks_1998")
+tanks        <- load_interim("tanks")
+closed_tanks <- load_interim("closed_tanks")
+pt_results   <- load_interim("pt_results")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Make-model sample flags (ensure consistent with 01h/01l)
+# Validate that all required mm_* columns are present
 # ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- Applying make-model restriction ---\n")
+required_annual_mm <- c("make_model_fac", "fac_wall", "fac_fuel",
+                        "fac_oldest_age_bin", "n_tanks_at_reform")
+missing_annual <- setdiff(required_annual_mm, names(annual_data))
+if (length(missing_annual) > 0)
+  stop("annual_data missing required mm columns: ",
+       paste(missing_annual, collapse = ", "),
+       "\n  → Rerun 01c to merge facility_make_model.rds.")
 
-# Facility-year flag
+required_tank_mm <- c("mm_wall", "mm_fuel", "mm_capacity", "mm_install_cohort")
+missing_tank <- setdiff(required_tank_mm, names(tanks_1998))
+if (length(missing_tank) > 0)
+  stop("tanks_1998 missing required mm columns: ",
+       paste(missing_tank, collapse = ", "),
+       "\n  → Rerun 10_Master_Cleaning_and_Harmonization.r.")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Make-model primary sample flag on annual_data (mm_fac_primary)
+# Matches the filter applied in 02a S4 exactly.
+# ─────────────────────────────────────────────────────────────────────────────
+log_cat("\n--- Applying make-model restriction (facility-year) ---\n")
+
 annual_data[, is_make_model := as.integer(
-  has_single_walled == 1 &
-  has_gasoline_year == 1 &
-  single_tanks == active_tanks &
-  !is.na(install_year) &
-  install_year > MM_INSTALL_START - 1 &
-  install_year <= MM_INSTALL_END
+  !is.na(make_model_fac)     &
+  fac_wall != "Unknown-Wall" &
+  fac_fuel != "Unknown-Fuel" &
+  !is.na(fac_oldest_age_bin)
 )]
 
-# Age subgroups at treatment (used for H1/H2 in 02_DiD)
-# Threshold: median age within MM sample at 1998
-mm_t98  <- tanks_1998[
-  single_walled == 1 &
-  !is.na(install_year) &
-  install_year > MM_INSTALL_START - 1 &
-  install_year <= MM_INSTALL_END
-]
-median_age_mm <- mm_t98[, median(tank_age_1998, na.rm=TRUE)]
-cat(sprintf("  Median age (MM cohort) at Dec 1998: %.2f years\n", median_age_mm))
-
-# Facility-level mean age at treatment
-fac_mean_age <- mm_t98[, .(mean_age_1998 = mean(tank_age_1998, na.rm=TRUE)),
-                        by = panel_id]
-if ("mean_age_1998" %in% names(annual_data)) annual_data[, mean_age_1998 := NULL]
-annual_data <- merge(annual_data, fac_mean_age, by="panel_id", all.x=TRUE)
-
-annual_data[, age_subgroup := fcase(
-  is_make_model == 1 & !is.na(mean_age_1998) & mean_age_1998 <= median_age_mm,
-  "Youngest",
-  is_make_model == 1 & !is.na(mean_age_1998) & mean_age_1998 > median_age_mm,
-  "Oldest",
-  default = NA_character_
-)]
+# Convenience alias used by 02a
+annual_data[, mm_fac_primary_flag := is_make_model]
 
 mm_summary <- annual_data[is_make_model == 1, .(
   n_fac       = uniqueN(panel_id),
@@ -75,59 +70,72 @@ mm_summary <- annual_data[is_make_model == 1, .(
   yr_start    = min(panel_year),
   yr_end      = max(panel_year)
 )]
-cat("\nMake-Model sample summary:\n")
+log_cat("\nMake-Model primary sample summary:\n")
 print(mm_summary)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Broader single-wall sample (for H4 wall-type heterogeneity in 02_DiD)
-# Only adds multi-tank / non-gasoline; still restricts to post-1989 vintage
-# ─────────────────────────────────────────────────────────────────────────────
-annual_data[, is_sw_broader := as.integer(
-  has_single_walled == 1 &
-  !is.na(install_year) &
-  install_year > MM_INSTALL_START - 1 &
-  install_year <= MM_INSTALL_END
-)]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Relative event-time variable (for event-study plots in 02_DiD)
 # ─────────────────────────────────────────────────────────────────────────────
-annual_data[, rel_year := panel_year - TREATMENT_YEAR]   # 0 = reform year
-# Binned: collapse endpoints for clean event-study display
+annual_data[, rel_year := panel_year - TREATMENT_YEAR]
 annual_data[, rel_year_binned := fcase(
-  rel_year < -8,  -9L,   # bin pre-1990 years
-  rel_year > 12,  13L,   # bin far post years
+  rel_year < -8, -9L,
+  rel_year > 12,  13L,
   default = as.integer(rel_year)
 )]
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stacked DiD cohort identifier (for Callaway-Sant'Anna / stacked)
-# Panel builder assigns each facility to the TREATMENT cohort = 1999
-# All treated facilities have the same treatment date here,
-# so "stacked" collapses to standard 2x2; kept for API compatibility.
+# Stacked DiD cohort identifier (API compatibility)
 # ─────────────────────────────────────────────────────────────────────────────
 annual_data[, treatment_cohort := fifelse(texas_treated == 1, 1999L, NA_integer_)]
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Tanks 1998 — make-model flag
+# tanks_1998 — make-model flag using harmonised mm_* columns
 # ─────────────────────────────────────────────────────────────────────────────
+log_cat("\n--- Applying make-model restriction (tanks_1998) ---\n")
+
 tanks_1998[, is_make_model := as.integer(
-  single_walled == 1 &
-  !is.na(install_year) &
-  install_year > MM_INSTALL_START - 1 &
-  install_year <= MM_INSTALL_END
+  mm_wall == "Single-Walled"          &
+  mm_fuel != "Unknown-Fuel"           &
+  !is.na(mm_capacity)                 &
+  mm_install_cohort %in% MM_COHORT_YEARS
 )]
 mm_tanks_1998 <- tanks_1998[is_make_model == 1]
+log_cat(sprintf("  mm_tanks_1998: %s tanks\n",
+                format(nrow(mm_tanks_1998), big.mark = ",")))
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Closed tanks — make-model flag
+# closed_tanks — make-model flag using harmonised mm_* columns
 # ─────────────────────────────────────────────────────────────────────────────
+log_cat("\n--- Applying make-model restriction (closed_tanks) ---\n")
+
+missing_closed <- setdiff(required_tank_mm, names(closed_tanks))
+if (length(missing_closed) > 0)
+  stop("closed_tanks missing required mm columns: ",
+       paste(missing_closed, collapse = ", "),
+       "\n  → Rerun 10_Master_Cleaning_and_Harmonization.r.")
+
 closed_tanks[, is_make_model := as.integer(
-  single_walled == 1 &
-  !is.na(install_year) &
-  install_year > MM_INSTALL_START - 1 &
-  install_year <= MM_INSTALL_END
+  mm_wall == "Single-Walled"          &
+  mm_fuel != "Unknown-Fuel"           &
+  !is.na(mm_capacity)                 &
+  mm_install_cohort %in% MM_COHORT_YEARS
 )]
+log_cat(sprintf("  mm_closed_tanks: %s tanks\n",
+                format(sum(closed_tanks$is_make_model, na.rm = TRUE), big.mark = ",")))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Make-model cell coverage diagnostic
+# ─────────────────────────────────────────────────────────────────────────────
+n_cells_fac      <- uniqueN(annual_data[is_make_model == 1, make_model_fac])
+# Cells that contain at least one TX and one CTL facility-year
+cells_both <- annual_data[is_make_model == 1,
+  .(has_tx  = any(texas_treated == 1),
+    has_ctl = any(texas_treated == 0)),
+  by = make_model_fac]
+n_cells_fac_both <- cells_both[has_tx == TRUE & has_ctl == TRUE, .N]
+
+log_cat(sprintf("  Make-model cells: %d total | %d with both TX and CTL\n",
+                n_cells_fac, n_cells_fac_both))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Metadata object (loaded by 02_DiD for display in log / tables)
@@ -141,29 +149,41 @@ analysis_metadata <- list(
   CONTROL_STATES     = CONTROL_STATES,
   MM_INSTALL_START   = MM_INSTALL_START,
   MM_INSTALL_END     = MM_INSTALL_END,
-  median_age_mm_1998 = median_age_mm,
+  MM_COHORT_YEARS    = MM_COHORT_YEARS,
+  MM_WALL_EXCLUDE    = MM_WALL_EXCLUDE,
+  MM_FUEL_EXCLUDE    = MM_FUEL_EXCLUDE,
 
-  # Sample sizes
+  # Sample sizes — full
   n_facilities_full   = uniqueN(annual_data$panel_id),
-  n_facilities_tx     = uniqueN(annual_data[texas_treated==1, panel_id]),
-  n_facilities_ctl    = uniqueN(annual_data[texas_treated==0, panel_id]),
+  n_facilities_tx     = uniqueN(annual_data[texas_treated == 1, panel_id]),
+  n_facilities_ctl    = uniqueN(annual_data[texas_treated == 0, panel_id]),
+
+  # Sample sizes — make-model primary
   n_facilities_mm     = mm_summary$n_fac,
   n_facilities_mm_tx  = mm_summary$n_fac_tx,
   n_facilities_mm_ctl = mm_summary$n_fac_ctl,
 
+  # Make-model cell coverage
+  n_cells_fac         = n_cells_fac,
+  n_cells_fac_both    = n_cells_fac_both,
+
   # Parallel trends (from 01g)
   pt_results          = pt_results,
 
-  # Age bins (for DiD heterogeneity plots)
+  # Age bins (for DiD heterogeneity plots — full bin interaction in 02a S9)
   AGE_BIN_BREAKS      = AGE_BIN_BREAKS,
   AGE_BIN_LABELS      = AGE_BIN_LABELS,
-  AGE_BIN_REF         = AGE_BIN_REF
+  AGE_BIN_REF         = AGE_BIN_REF,
+
+  # Retained for backward compatibility; median no longer used as a split threshold
+  median_age_mm_1998  = annual_data[is_make_model == 1 & panel_year == 1998,
+                           median(avg_tank_age, na.rm = TRUE)]
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Save to ANALYSIS_DIR (→ 02_DiD reads from here)
 # ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- Saving to ANALYSIS_DIR (for 02_DiD) ---\n")
+log_cat("\n--- Saving to ANALYSIS_DIR (for 02_DiD) ---\n")
 
 saveRDS(annual_data,       file.path(ANALYSIS_DIR, "analysis_annual_data.rds"))
 saveRDS(tanks,             file.path(ANALYSIS_DIR, "analysis_tank_inventory.rds"))
@@ -171,32 +191,34 @@ saveRDS(tanks_1998,        file.path(ANALYSIS_DIR, "analysis_tanks_1998.rds"))
 saveRDS(closed_tanks,      file.path(ANALYSIS_DIR, "analysis_closed_tanks.rds"))
 saveRDS(analysis_metadata, file.path(ANALYSIS_DIR, "analysis_metadata.rds"))
 
-cat("  analysis_annual_data.rds\n")
-cat("  analysis_tank_inventory.rds\n")
-cat("  analysis_tanks_1998.rds\n")
-cat("  analysis_closed_tanks.rds\n")
-cat("  analysis_metadata.rds\n")
+log_cat("  analysis_annual_data.rds\n")
+log_cat("  analysis_tank_inventory.rds\n")
+log_cat("  analysis_tanks_1998.rds\n")
+log_cat("  analysis_closed_tanks.rds\n")
+log_cat("  analysis_metadata.rds\n")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Save to INTERIM_DIR (→ 01n CV validation reads from here)
 # ─────────────────────────────────────────────────────────────────────────────
-cat("\n--- Saving make-model subsets to INTERIM_DIR (for 01n) ---\n")
+log_cat("\n--- Saving make-model subsets to INTERIM_DIR (for 01n) ---\n")
 save_interim(annual_data[is_make_model == 1], "mm_annual_data")
 save_interim(mm_tanks_1998,                   "mm_tanks_1998")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Print final sample summary for paper
+# Final sample summary
 # ─────────────────────────────────────────────────────────────────────────────
-cat(sprintf("\n=== FINAL SAMPLE SUMMARY ===\n"))
-cat(sprintf("  Full sample:      %s facilities (%s TX, %s CTL)\n",
-    format(analysis_metadata$n_facilities_full,  big.mark=","),
-    format(analysis_metadata$n_facilities_tx,    big.mark=","),
-    format(analysis_metadata$n_facilities_ctl,   big.mark=",")))
-cat(sprintf("  Make-Model:       %s facilities (%s TX, %s CTL)\n",
-    format(analysis_metadata$n_facilities_mm,     big.mark=","),
-    format(analysis_metadata$n_facilities_mm_tx,  big.mark=","),
-    format(analysis_metadata$n_facilities_mm_ctl, big.mark=",")))
-cat(sprintf("  Median age 1998:  %.2f years (make-model cohort)\n",
-    analysis_metadata$median_age_mm_1998))
+log_cat(sprintf("\n=== FINAL SAMPLE SUMMARY ===\n"))
+log_cat(sprintf("  Full sample:      %s facilities (%s TX, %s CTL)\n",
+    format(analysis_metadata$n_facilities_full,  big.mark = ","),
+    format(analysis_metadata$n_facilities_tx,    big.mark = ","),
+    format(analysis_metadata$n_facilities_ctl,   big.mark = ",")))
+log_cat(sprintf("  Make-Model:       %s facilities (%s TX, %s CTL)\n",
+    format(analysis_metadata$n_facilities_mm,     big.mark = ","),
+    format(analysis_metadata$n_facilities_mm_tx,  big.mark = ","),
+    format(analysis_metadata$n_facilities_mm_ctl, big.mark = ",")))
+log_cat(sprintf("  MM cells (total): %d | with TX+CTL: %d\n",
+    analysis_metadata$n_cells_fac,
+    analysis_metadata$n_cells_fac_both))
 
-cat("=== 01m COMPLETE ===\n")
+log_cat("=== 01m COMPLETE ===\n")
+close_log("01m_MakeModelSample")

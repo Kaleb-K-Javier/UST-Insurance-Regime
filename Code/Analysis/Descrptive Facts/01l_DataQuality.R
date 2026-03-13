@@ -185,7 +185,7 @@ write_tex(
   kbl(attrition_dt, format="latex", booktabs=TRUE, linesep="",
       caption="Sequential attrition log. Each row applies one additional filter to the facility-year panel. $\\Delta$ columns show marginal change in observations.",
       label="tab:attrition") |>
-    kable_styling(latex_options=c("scale_down","hold_position"), font_size=9),
+    kable_styling(latex_options = "scale_down", font_size = 9),
   "TableB1_Attrition_Log"
 )
 
@@ -203,26 +203,109 @@ if (!is.null(balance_glm)) {
         format="latex", booktabs=TRUE, linesep="", digits=4,
         caption="Balance test for missing date exclusion. Logistic regression of \\textit{any missing date} indicator on Texas dummy. $p < 0.05$ would indicate differential exclusion.",
         label="tab:missing-balance") |>
-      kable_styling(latex_options=c("scale_down","hold_position"), font_size=9),
+      kable_styling(latex_options = "scale_down", font_size = 9),
     "TableB3_Missing_Date_Balance"
   )
 }
-
 # ─────────────────────────────────────────────────────────────────────────────
-# Table: State data quality
+# Table: State Data Quality
 # ─────────────────────────────────────────────────────────────────────────────
 cat("\n--- Table: State Data Quality ---\n")
 
-save_table(data_quality_report, "TableA0_DataQuality_ByState")
+# Read directly from processed CSV (interim object has different column schema)
+dq <- fread(here::here("Data", "Processed", "Master_Data_Quality_Report.csv"))
 
-write_tex(
-  kbl(data_quality_report[order(state)],
-      format="latex", booktabs=TRUE, linesep="",
-      caption="State-level data quality report. Columns show percent of records missing key date and type fields. States with $>$20\\% missing install dates are excluded from analysis.",
-      label="tab:data-quality") |>
-    kable_styling(latex_options=c("scale_down","hold_position","longtable"),
-                  font_size=8),
-  "TableA0_DataQuality_ByState"
-)
+# Print actual column names so you can verify
+cat("Columns in Master_Data_Quality_Report.csv:\n")
+print(names(dq))
+
+# Compute LUST missing-date share
+dq[, lust_missing_pct := fifelse(
+  !is.na(total_lusts) & total_lusts > 0,
+  round(n_missing_report_date / total_lusts * 100, 1),
+  NA_real_
+)]
+
+# Clean group label
+dq[, group_clean := fcase(
+  study_group %like% "Target",          "Target",
+  study_group %like% "Control Tier 1",  "Control Tier 1",
+  study_group %like% "Control Tier 2",  "Control Tier 2",
+  study_group %like% "Excluded.*Treat", "Excl. (Treated)",
+  study_group %like% "Excluded.*Other", "Excl. (No Fund)",
+  study_group %like% "Remainder",       "Remainder",
+  default = "Other"
+)]
+
+group_order <- c("Target", "Control Tier 1", "Control Tier 2",
+                 "Excl. (Treated)", "Excl. (No Fund)", "Remainder")
+dq[, group_clean := factor(group_clean, levels = group_order)]
+setorder(dq, group_clean, state)
+
+# Format numeric columns: NA → "---", 0 → "0.0"
+fmt_pct <- function(x) {
+  fifelse(is.na(x), "---",
+    fifelse(x == 0,  "0.0",
+      formatC(x, format = "f", digits = 1)))
+}
+
+dq[, pct_closed_missing_date  := fmt_pct(pct_closed_missing_date)]
+dq[, pct_missing_install_date := fmt_pct(pct_missing_install_date)]
+dq[, pct_miss_tank_type       := fmt_pct(pct_miss_tank_type)]
+dq[, lust_missing_pct         := fmt_pct(lust_missing_pct)]
+dq[, total_tanks_fmt          := formatC(total_tanks, format = "d", big.mark = ",")]
+
+# Subset columns for print
+dq_print <- dq[, .(
+  State          = state,
+  group_clean,
+  Tanks          = total_tanks_fmt,
+  `Close Date`   = pct_closed_missing_date,
+  `Install Date` = pct_missing_install_date,
+  `Wall Type`    = pct_miss_tank_type,
+  `LUST Date`    = lust_missing_pct
+)]
+
+# Build pack_rows indices before dropping group col
+grp_idx <- function(g) {
+  rows <- which(dq_print$group_clean == g)
+  if (length(rows) == 0) return(c(1L, 1L))
+  c(min(rows), max(rows))
+}
+
+dq_kbl <- dq_print[, !"group_clean"]
+
+dq_tex <- kbl(
+  dq_kbl,
+  format   = "latex",
+  booktabs = TRUE,
+  linesep  = "",
+  align    = c("l", "r", "r", "r", "r", "r"),
+  caption  = paste(
+    "State-level data completeness on the four dimensions required for panel",
+    "construction. Each cell reports the percentage of records missing the",
+    "indicated field. Remainder states are excluded due to pervasive missingness.",
+    "Washington and Oregon (Excl., No Fund) are excluded on institutional grounds",
+    "regardless of data quality. ``---'' indicates field not applicable or",
+    "denominator is zero."
+  ),
+  label = "tab:data-quality"
+) |>
+  add_header_above(
+    c(" " = 2,
+      "\\% Missing (tanks)" = 3,
+      "\\% Missing (LUSTs)" = 1),
+    escape = FALSE
+  ) |>
+  pack_rows("Target",          grp_idx("Target")[1],          grp_idx("Target")[2]) |>
+  pack_rows("Control Tier 1",  grp_idx("Control Tier 1")[1],  grp_idx("Control Tier 1")[2]) |>
+  pack_rows("Control Tier 2",  grp_idx("Control Tier 2")[1],  grp_idx("Control Tier 2")[2]) |>
+  pack_rows("Excl. (Treated)", grp_idx("Excl. (Treated)")[1], grp_idx("Excl. (Treated)")[2]) |>
+  pack_rows("Excl. (No Fund)", grp_idx("Excl. (No Fund)")[1], grp_idx("Excl. (No Fund)")[2]) |>
+  pack_rows("Remainder",       grp_idx("Remainder")[1],       grp_idx("Remainder")[2]) |>
+  kable_styling(latex_options = "scale_down", font_size = 9)
+
+save_table(dq_print[, !"group_clean"], "TableA0_DataQuality_ByState")
+write_tex(dq_tex, "TableA0_DataQuality_ByState")
 
 cat("=== 01l COMPLETE ===\n")
