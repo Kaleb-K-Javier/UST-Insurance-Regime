@@ -1,0 +1,18 @@
+\begin{table}
+\centering
+\caption{\label{tab:tab:balance}Progressive balance: naive comparison, MM pooled, and MM cell-weighted. Each row tightens the comparison group; shrinkage in the Diff.\ columns measures how much of the raw Texas versus control gap is attributable to compositional sorting that the make-model design removes. \textit{Full Sample (Naive)} is the unconditional pre-reform difference across all analysis facilities, equivalent to a specification with \texttt{panel\_id + year} fixed effects only. \textit{MM Sample (Pooled)} restricts to facilities in the All-SW, Gasoline-Only sub-sample with common cell support (both Texas and control-state facilities present in the same age-bin cell) but still computes a raw pooled TX vs.\ CTL mean. \textit{MM Sample (Cell-Weighted)} is the cell-size-weighted mean of within-cell Texas and control rates across all 77 identified cells --- the quantity directly absorbed by the \texttt{make\_model\_fac\^{}panel\_year} fixed effects in equation~(1). $N$ counts are unique facilities observed in at least one pre-reform year (1990--1997; 1998 excluded). Cell-level diagnostics are reported in Table~\ref{tab:balance_cells} of the online appendix. 8 cell(s) lacking common support (TX-only: 0, CTL-only: 8) are excluded from MM rows.}
+\centering
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\fontsize{10}{12}\selectfont
+\begin{tabular}[t]{lrrrrrrrr}
+\toprule
+\multicolumn{3}{c}{ } & \multicolumn{3}{c}{Closure Rate (%)} & \multicolumn{3}{c}{Leak Rate (%)} \\
+\cmidrule(l{3pt}r{3pt}){4-6} \cmidrule(l{3pt}r{3pt}){7-9}
+Comparison & $N_{TX}$ & $N_{CTL}$ & TX & CTL & Diff. & TX  & CTL  & Diff. \\
+\midrule
+\em{Full Sample (Naive)} & \em{46,768} & \em{157,912} & \em{9.60} & \em{9.88} & \em{-0.28} & \em{1.26} & \em{2.16} & \em{-0.90}\\
+MM Sample (Pooled) & 46,768 & 157,381 & 9.60 & 9.89 & -0.29 & 1.26 & 2.16 & -0.90\\
+\textbf{MM Sample (Cell-Weighted)} & \textbf{46,768} & \textbf{157,381} & \textbf{12.29} & \textbf{12.07} & \textbf{+0.23} & \textbf{1.25} & \textbf{2.33} & \textbf{-1.07}\\
+\bottomrule
+\end{tabular}}
+\end{table}

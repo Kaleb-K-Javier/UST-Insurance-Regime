@@ -413,7 +413,7 @@ write_tex(
         "$\\times$ relative-year interactions with facility and year FEs.",
         "Row 5 uses make-model cell-by-year FE as the primary specification."),
       label = "tab:pt-validation") |>
-    kable_styling(latex_options = c("scale_down", "hold_position"), font_size = 9),
+    kable_styling(latex_options = c("scale_down"), font_size = 9),
   "TableB4_Parallel_Trends_Validation"
 )
 

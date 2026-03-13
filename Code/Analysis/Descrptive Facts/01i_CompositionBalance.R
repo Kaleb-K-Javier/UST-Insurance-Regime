@@ -149,7 +149,7 @@ write_tex(
       format="latex", booktabs=TRUE, linesep="", escape=FALSE,
       caption="Observable risk profile: full vs. make-model sample, Texas vs. control. Make-model restriction equalizes all three observable risk dimensions (columns 3--5) across TX and Control by construction.",
       label="tab:composition-balance") |>
-    kable_styling(latex_options=c("scale_down","hold_position"), font_size=9),
+    kable_styling(latex_options=c("scale_down"), font_size=9),
   "Table2_CompositionBalance"
 )
 

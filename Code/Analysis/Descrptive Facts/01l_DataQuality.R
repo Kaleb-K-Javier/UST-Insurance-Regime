@@ -309,3 +309,450 @@ save_table(dq_print[, !"group_clean"], "TableA0_DataQuality_ByState")
 write_tex(dq_tex, "TableA0_DataQuality_ByState")
 
 cat("=== 01l COMPLETE ===\n")
+
+
+#==============================================================================
+# 01n_DescriptiveTable.R
+# Table 0: Sample Characteristics — Full Sample vs MM Comparison Sample
+#
+# Two-panel descriptive statistics table comparing:
+#   Panel A: Full analysis sample (all states, 1990-1997 pre-period)
+#   Panel B: MM comparison sample (All-SW, Gasoline-Only, 1990-1997)
+#
+# Each panel shows TX mean | CTL mean | Diff (TX - CTL) | p-value
+#
+# Rows (pre-period annual means unless noted):
+#   --- Facility Scale ---
+#   Active tanks (Dec)
+#   Total capacity (gallons, Dec)
+#   Mean tank age (years, Dec)
+#   --- Portfolio Composition ---
+#   Single-walled share (%)        [degenerate = 100% in MM by construction]
+#   Gasoline-only share (%)        [degenerate = 100% in MM by construction]
+#   Pre-1989 install (%)
+#   --- Outcomes (pre-reform) ---
+#   Annual closure rate (%)
+#   Annual leak rate (%)
+#   --- Sample Counts ---
+#   N facilities
+#   N facility-years
+#==============================================================================
+
+source(here::here("Code", "Analysis", "Descrptive Facts", "01a_Setup.R"))
+cat("=== 01n: SAMPLE DESCRIPTION TABLE ===\n")
+
+# ── 0. Load ───────────────────────────────────────────────────────────────────
+annual_data <- load_interim("annual_data")
+
+PRE_START <- 1990L
+PRE_END   <- 1997L
+
+# ── 1. Define samples ─────────────────────────────────────────────────────────
+pre_full <- annual_data[panel_year %between% c(PRE_START, PRE_END)]
+
+pre_mm <- annual_data[
+  fac_wall == "All-SW"        &
+  fac_fuel == "Gasoline-Only" &
+  !is.na(make_model_fac)      &
+  !is.na(fac_oldest_age_bin)  &
+  panel_year %between% c(PRE_START, PRE_END)
+]
+
+# ── 2. Helper: compute one row of stats ──────────────────────────────────────
+# Returns a list: tx_mean, ctl_mean, diff, p_value
+# Uses a two-sample t-test (facility-year observations) for the p-value.
+# For count rows (N fac, N fac-years) p_value is NA.
+desc_row <- function(dt, var_expr, label, pct = FALSE, fmt_digits = 2) {
+  tx_vals  <- dt[texas_treated == 1, eval(parse(text = var_expr))]
+  ctl_vals <- dt[texas_treated == 0, eval(parse(text = var_expr))]
+
+  tx_vals  <- tx_vals[!is.na(tx_vals)]
+  ctl_vals <- ctl_vals[!is.na(ctl_vals)]
+
+  tx_mean  <- mean(tx_vals)
+  ctl_mean <- mean(ctl_vals)
+  diff_val <- tx_mean - ctl_mean
+
+  # Welch t-test; suppress warning when variance is zero (degenerate vars)
+  p_val <- tryCatch(
+    suppressWarnings(t.test(tx_vals, ctl_vals)$p.value),
+    error = function(e) NA_real_
+  )
+
+  mult <- if (pct) 100 else 1
+  list(
+    label    = label,
+    tx_mean  = tx_mean  * mult,
+    ctl_mean = ctl_mean * mult,
+    diff     = diff_val * mult,
+    p_val    = p_val,
+    fmt_digits = fmt_digits,
+    pct      = pct
+  )
+}
+
+# ── 3. Compute all rows for each sample ──────────────────────────────────────
+make_panel <- function(dt, sample_label) {
+
+  rows <- list(
+    # Facility scale
+    desc_row(dt, "active_tanks",      "Active tanks (Dec.)",          fmt_digits = 1),
+    desc_row(dt, "total_capacity",    "Total capacity (gal., Dec.)",  fmt_digits = 0),
+    desc_row(dt, "avg_tank_age",      "Mean tank age (years, Dec.)",  fmt_digits = 1),
+    # Portfolio composition
+    desc_row(dt, "has_single_walled", "Single-walled share",  pct = TRUE, fmt_digits = 1),
+    desc_row(dt, "has_gasoline_year", "Gasoline-only share",  pct = TRUE, fmt_digits = 1),
+    desc_row(dt, "as.integer(install_year < 1989)",
+                                      "Pre-1989 install",     pct = TRUE, fmt_digits = 1),
+    # Outcomes
+    desc_row(dt, "closure_event",     "Annual closure rate",  pct = TRUE, fmt_digits = 2),
+    desc_row(dt, "as.integer(n_leaks > 0)",
+                                      "Annual leak rate",     pct = TRUE, fmt_digits = 2)
+  )
+
+  # Format each row
+  panel_dt <- rbindlist(lapply(rows, function(r) {
+    fmt <- function(x) formatC(x, format = "f", digits = r$fmt_digits, big.mark = ",")
+    stars <- function(p) {
+      if (is.na(p))    return("")
+      if (p < 0.01)    return("$^{***}$")
+      if (p < 0.05)    return("$^{**}$")
+      if (p < 0.10)    return("$^{*}$")
+      return("")
+    }
+    diff_fmt <- sprintf("%s%s%s",
+      ifelse(r$diff > 0, "+", ""),
+      fmt(r$diff),
+      stars(r$p_val))
+
+    data.table(
+      Variable = r$label,
+      TX       = fmt(r$tx_mean),
+      CTL      = fmt(r$ctl_mean),
+      Diff     = diff_fmt
+    )
+  }))
+
+  # Count rows (no t-test)
+  n_fac    <- data.table(
+    Variable = "\\quad $N$ facilities",
+    TX  = format(dt[texas_treated == 1, uniqueN(panel_id)], big.mark = ","),
+    CTL = format(dt[texas_treated == 0, uniqueN(panel_id)], big.mark = ","),
+    Diff = "---"
+  )
+  n_fac_yr <- data.table(
+    Variable = "\\quad $N$ facility-years",
+    TX  = format(nrow(dt[texas_treated == 1]), big.mark = ","),
+    CTL = format(nrow(dt[texas_treated == 0]), big.mark = ","),
+    Diff = "---"
+  )
+
+  rbind(panel_dt, n_fac, n_fac_yr)
+}
+
+panel_full <- make_panel(pre_full, "Full Sample")
+panel_mm   <- make_panel(pre_mm,   "MM Sample")
+
+cat(sprintf("Full sample rows: %d | MM sample rows: %d\n",
+  nrow(panel_full), nrow(panel_mm)))
+
+# ── 4. Combine into wide table ────────────────────────────────────────────────
+# Side-by-side: Variable | Full TX | Full CTL | Full Diff | MM TX | MM CTL | MM Diff
+stopifnot(identical(panel_full$Variable, panel_mm$Variable))
+
+combined <- data.table(
+  Variable     = panel_full$Variable,
+  Full_TX      = panel_full$TX,
+  Full_CTL     = panel_full$CTL,
+  Full_Diff    = panel_full$Diff,
+  MM_TX        = panel_mm$TX,
+  MM_CTL       = panel_mm$CTL,
+  MM_Diff      = panel_mm$Diff
+)
+
+setnames(combined, c(
+  "Variable",
+  "TX", "CTL", "Diff.",
+  "TX ", "CTL ", "Diff. "
+))
+
+cat("\n=== Sample Description Preview ===\n")
+print(combined)
+
+# ── 5. Section separators for LaTeX ──────────────────────────────────────────
+# We want thin rules between groups of rows.
+# Groups: Scale (rows 1-3) | Composition (4-6) | Outcomes (7-8) | Counts (9-10)
+# In kableExtra, use pack_rows() for section headers.
+n_scale  <- 3L
+n_comp   <- 3L
+n_out    <- 2L
+n_counts <- 2L
+
+# ── 6. Render LaTeX ───────────────────────────────────────────────────────────
+desc_tex <- kbl(
+  combined,
+  format    = "latex",
+  booktabs  = TRUE,
+  linesep   = "",
+  escape    = FALSE,
+  align     = c("l","r","r","r","r","r","r"),
+  caption   = paste(
+    "Sample characteristics: full analysis sample versus make-model comparison sample.",
+    "The full sample comprises all analysis-state facilities observed in at least one",
+    "pre-reform year (1990--1997); the make-model (MM) sample further restricts to",
+    "facilities whose reform-date portfolio was entirely single-walled and gasoline-only.",
+    "All means are facility-year averages over 1990--1997 (1998 excluded).",
+    "Stock variables (active tanks, capacity, tank age) use the December end-of-year snapshot.",
+    "Single-walled share and gasoline-only share are degenerate in the MM sample",
+    "by construction (100\\%), confirming the restriction homogenises the comparison",
+    "group on the dimensions along which the treatment effect is theoretically heterogeneous.",
+    "Diff.\\ $=$ Texas minus control; significance stars from two-sample Welch $t$-tests.",
+    "$^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$."
+  ),
+  label = "tab:descriptive"
+) |>
+  add_header_above(c(
+    " "                   = 1,
+    "Full Sample"         = 3,
+    "MM Comparison Sample"= 3
+  ), escape = FALSE) |>
+  pack_rows("Facility Scale",       start_row = 1,
+            end_row = n_scale,                         bold = FALSE, italic = TRUE) |>
+  pack_rows("Portfolio Composition", start_row = n_scale + 1,
+            end_row = n_scale + n_comp,                bold = FALSE, italic = TRUE) |>
+  pack_rows("Pre-Reform Outcomes",   start_row = n_scale + n_comp + 1,
+            end_row = n_scale + n_comp + n_out,        bold = FALSE, italic = TRUE) |>
+  pack_rows("Sample Size",           start_row = n_scale + n_comp + n_out + 1,
+            end_row = n_scale + n_comp + n_out + n_counts,
+                                                       bold = FALSE, italic = TRUE) |>
+  kable_styling(latex_options = "scale_down", font_size = 10)
+
+# ── 7. Save ───────────────────────────────────────────────────────────────────
+save_table(combined, "Table0_Descriptive")
+write_tex(desc_tex, "Table0_Descriptive")
+
+cat("\n=== 01n COMPLETE -> Table0_Descriptive.tex ===\n")
+#==============================================================================
+# 01m_BalanceTable.R
+# Table 1: Progressive Balance — Naive → MM Pooled → MM Cell-Weighted
+#
+# The table has exactly THREE comparison rows, showing how the TX/CTL gap
+# shrinks as the identification strategy tightens:
+#
+#   Row 1: Full Sample (Naive)
+#          Raw TX vs CTL across all analysis facilities.
+#          Equivalent to panel_id + year FE only. The benchmark.
+#
+#   Row 2: MM Sample (Pooled)
+#          Raw TX vs CTL restricted to overlap-cell facilities
+#          (All-SW, Gasoline-Only, both TX and CTL present in cell).
+#          Shows whether sample restriction alone moves the gap.
+#
+#   Row 3: MM Sample (Cell-Weighted)
+#          Cell-size-weighted mean of within-cell TX and CTL rates.
+#          This is what make_model_fac^panel_year actually absorbs.
+#          Shrinkage from Row 1 to Row 3 = composition removed by design.
+#
+# Columns: Comparison | N TX | N CTL | Closure TX | Closure CTL | Diff
+#                                    | Leak TX    | Leak CTL    | Diff
+#
+# Individual cell-level diagnostics are saved separately as a CSV
+# (Table1_Balance_CellDiag.csv) for referee appendix use if needed.
+#==============================================================================
+
+source(here::here("Code", "Analysis", "Descrptive Facts", "01a_Setup.R"))
+cat("=== 01m: PROGRESSIVE BALANCE TABLE ===\n")
+
+# ── 0. Load ───────────────────────────────────────────────────────────────────
+annual_data <- load_interim("annual_data")
+
+PRE_START <- 1990L
+PRE_END   <- 1997L
+
+# ── 1. Three samples ──────────────────────────────────────────────────────────
+
+# Row 1: full analysis sample pre-period
+pre_full <- annual_data[panel_year %between% c(PRE_START, PRE_END)]
+
+# Row 2 & 3: MM slice → overlap restriction
+pre_mm <- annual_data[
+  fac_wall == "All-SW"        &
+  fac_fuel == "Gasoline-Only" &
+  !is.na(make_model_fac)      &
+  !is.na(fac_oldest_age_bin)  &
+  panel_year %between% c(PRE_START, PRE_END)
+]
+
+cell_support  <- pre_mm[, .(
+  has_tx  = any(texas_treated == 1),
+  has_ctl = any(texas_treated == 0)
+), by = make_model_fac]
+
+overlap_cells <- cell_support[has_tx == TRUE & has_ctl == TRUE, make_model_fac]
+n_tx_only     <- cell_support[has_tx == TRUE  & has_ctl == FALSE, .N]
+n_ctl_only    <- cell_support[has_tx == FALSE & has_ctl == TRUE,  .N]
+pre_ov        <- pre_mm[make_model_fac %in% overlap_cells]
+
+cat(sprintf("Row 1 (Naive):       %s fac | %s TX | %s CTL\n",
+  format(uniqueN(pre_full$panel_id),             big.mark = ","),
+  format(pre_full[texas_treated==1, uniqueN(panel_id)], big.mark = ","),
+  format(pre_full[texas_treated==0, uniqueN(panel_id)], big.mark = ",")))
+cat(sprintf("Row 2/3 (MM overlap):%s fac | %s TX | %s CTL | %d cells\n",
+  format(uniqueN(pre_ov$panel_id),               big.mark = ","),
+  format(pre_ov[texas_treated==1, uniqueN(panel_id)],   big.mark = ","),
+  format(pre_ov[texas_treated==0, uniqueN(panel_id)],   big.mark = ","),
+  length(overlap_cells)))
+cat(sprintf("  Cells dropped (no overlap): %d TX-only, %d CTL-only\n",
+  n_tx_only, n_ctl_only))
+
+# ── 2. Per-cell stats (for cell-weighted row and diagnostic CSV) ──────────────
+age_levels <- c("0-2yr","3-5yr","6-8yr","9-11yr","12-14yr","15-19yr","20yr-Plus")
+
+cell_stats <- pre_ov[, .(
+  n_tx             = uniqueN(panel_id[texas_treated == 1]),
+  n_ctl            = uniqueN(panel_id[texas_treated == 0]),
+  closure_TX       = mean(closure_event[texas_treated == 1], na.rm = TRUE) * 100,
+  closure_CTL      = mean(closure_event[texas_treated == 0], na.rm = TRUE) * 100,
+  leak_TX          = mean((n_leaks > 0)[texas_treated == 1], na.rm = TRUE) * 100,
+  leak_CTL         = mean((n_leaks > 0)[texas_treated == 0], na.rm = TRUE) * 100
+), by = .(make_model_fac, fac_oldest_age_bin)]
+
+cell_stats[, `:=`(
+  closure_diff = closure_TX - closure_CTL,
+  leak_diff    = leak_TX    - leak_CTL,
+  age_ord      = factor(fac_oldest_age_bin, levels = age_levels)
+)]
+setorder(cell_stats, age_ord)
+
+# Save cell-level detail as diagnostic CSV (not printed in main table)
+save_table(cell_stats, "Table1_Balance_CellDiag")
+cat(sprintf("  Cell diagnostics saved: Table1_Balance_CellDiag.csv\n"))
+
+# ── 3. Build three summary rows ───────────────────────────────────────────────
+w <- cell_stats$n_tx + cell_stats$n_ctl
+
+summary_rows <- rbind(
+
+  # Row 1: Naive
+  data.table(
+    Comparison   = "Full Sample (Naive)",
+    n_tx         = pre_full[texas_treated == 1, uniqueN(panel_id)],
+    n_ctl        = pre_full[texas_treated == 0, uniqueN(panel_id)],
+    closure_TX   = pre_full[texas_treated == 1, mean(closure_event, na.rm=TRUE)*100],
+    closure_CTL  = pre_full[texas_treated == 0, mean(closure_event, na.rm=TRUE)*100],
+    leak_TX      = pre_full[texas_treated == 1, mean(n_leaks > 0,   na.rm=TRUE)*100],
+    leak_CTL     = pre_full[texas_treated == 0, mean(n_leaks > 0,   na.rm=TRUE)*100]
+  ),
+
+  # Row 2: MM Pooled
+  data.table(
+    Comparison   = "MM Sample (Pooled)",
+    n_tx         = pre_ov[texas_treated == 1, uniqueN(panel_id)],
+    n_ctl        = pre_ov[texas_treated == 0, uniqueN(panel_id)],
+    closure_TX   = pre_ov[texas_treated == 1, mean(closure_event, na.rm=TRUE)*100],
+    closure_CTL  = pre_ov[texas_treated == 0, mean(closure_event, na.rm=TRUE)*100],
+    leak_TX      = pre_ov[texas_treated == 1, mean(n_leaks > 0,   na.rm=TRUE)*100],
+    leak_CTL     = pre_ov[texas_treated == 0, mean(n_leaks > 0,   na.rm=TRUE)*100]
+  ),
+
+  # Row 3: MM Cell-Weighted
+  data.table(
+    Comparison   = "MM Sample (Cell-Weighted)",
+    n_tx         = sum(cell_stats$n_tx),
+    n_ctl        = sum(cell_stats$n_ctl),
+    closure_TX   = weighted.mean(cell_stats$closure_TX,  w = w, na.rm = TRUE),
+    closure_CTL  = weighted.mean(cell_stats$closure_CTL, w = w, na.rm = TRUE),
+    leak_TX      = weighted.mean(cell_stats$leak_TX,     w = w, na.rm = TRUE),
+    leak_CTL     = weighted.mean(cell_stats$leak_CTL,    w = w, na.rm = TRUE)
+  )
+)
+
+summary_rows[, `:=`(
+  closure_diff = closure_TX - closure_CTL,
+  leak_diff    = leak_TX    - leak_CTL
+)]
+
+# ── 4. Format ─────────────────────────────────────────────────────────────────
+fmt_n    <- function(x) formatC(as.integer(x), format = "d", big.mark = ",")
+fmt_rate <- function(x) sprintf("%.2f", x)
+fmt_diff <- function(x) fifelse(x > 0, sprintf("+%.2f", x), sprintf("%.2f", x))
+
+print_dt <- summary_rows[, .(
+  Comparison   = Comparison,
+  `$N_{TX}$`  = fmt_n(n_tx),
+  `$N_{CTL}$` = fmt_n(n_ctl),
+  `TX`          = fmt_rate(closure_TX),
+  `CTL`         = fmt_rate(closure_CTL),
+  `Diff.`       = fmt_diff(closure_diff),
+  `TX `         = fmt_rate(leak_TX),
+  `CTL `        = fmt_rate(leak_CTL),
+  `Diff. `      = fmt_diff(leak_diff)
+)]
+
+cat("\n=== Balance Table ===\n")
+print(print_dt)
+cat(sprintf("\nClosure gap shrinkage: Naive %+.2fpp → Pooled %+.2fpp → Cell-Wt %+.2fpp\n",
+  summary_rows[1, closure_diff],
+  summary_rows[2, closure_diff],
+  summary_rows[3, closure_diff]))
+cat(sprintf("Leak gap shrinkage:    Naive %+.2fpp → Pooled %+.2fpp → Cell-Wt %+.2fpp\n",
+  summary_rows[1, leak_diff],
+  summary_rows[2, leak_diff],
+  summary_rows[3, leak_diff]))
+
+# ── 5. Render LaTeX ───────────────────────────────────────────────────────────
+overlap_note <- if (n_tx_only + n_ctl_only > 0)
+  sprintf(
+    "%d cell(s) lacking common support (TX-only: %d, CTL-only: %d) are excluded from MM rows.",
+    n_tx_only + n_ctl_only, n_tx_only, n_ctl_only)
+  else
+    "All MM cells have common support."
+
+balance_tex <- kbl(
+  print_dt,
+  format    = "latex",
+  booktabs  = TRUE,
+  linesep   = "",
+  escape    = FALSE,
+  align     = c("l","r","r","r","r","r","r","r","r"),
+  caption   = paste(
+    "Progressive balance: naive comparison, MM pooled, and MM cell-weighted.",
+    "Each row tightens the comparison group;",
+    "shrinkage in the Diff.\\ columns measures how much of the raw",
+    "Texas versus control gap is attributable to compositional sorting",
+    "that the make-model design removes.",
+    "\\textit{Full Sample (Naive)} is the unconditional pre-reform difference",
+    "across all analysis facilities, equivalent to a specification with",
+    "\\texttt{panel\\_id + year} fixed effects only.",
+    "\\textit{MM Sample (Pooled)} restricts to facilities in the",
+    "All-SW, Gasoline-Only sub-sample with common cell support",
+    "(both Texas and control-state facilities present in the same age-bin cell)",
+    "but still computes a raw pooled TX vs.\\ CTL mean.",
+    "\\textit{MM Sample (Cell-Weighted)} is the cell-size-weighted mean of",
+    "within-cell Texas and control rates across all",
+    sprintf("%d", length(overlap_cells)),
+    "identified cells --- the quantity directly absorbed by the",
+    "\\texttt{make\\_model\\_fac\\^{}panel\\_year} fixed effects in equation~(1).",
+    "$N$ counts are unique facilities observed in at least one pre-reform year",
+    "(1990--1997; 1998 excluded).",
+    "Cell-level diagnostics are reported in Table~\\ref{tab:balance_cells}",
+    "of the online appendix.",
+    overlap_note
+  ),
+  label = "tab:balance"
+) |>
+  add_header_above(c(
+    " "                  = 3,
+    "Closure Rate (\\%)" = 3,
+    "Leak Rate (\\%)"    = 3
+  ), escape = FALSE) |>
+  row_spec(1, italic = TRUE)  |>   # Naive row — italic to signal it's the benchmark
+  row_spec(3, bold   = TRUE)  |>   # Cell-Weighted row — bold as primary result
+  kable_styling(latex_options = "scale_down", font_size = 10)
+
+# ── 6. Save ───────────────────────────────────────────────────────────────────
+save_table(print_dt, "Table1_Balance")
+write_tex(balance_tex, "Table1_Balance")
+
+cat(sprintf("\n=== 01m COMPLETE -> Table1_Balance.tex (3 rows) ===\n"))
+cat(sprintf("    Cell-level detail -> Table1_Balance_CellDiag.csv\n"))

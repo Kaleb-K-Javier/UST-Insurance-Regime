@@ -53,9 +53,7 @@ if (length(missing_tank) > 0)
 log_cat("\n--- Applying make-model restriction (facility-year) ---\n")
 
 annual_data[, is_make_model := as.integer(
-  !is.na(make_model_fac)     &
-  fac_wall != "Unknown-Wall" &
-  fac_fuel != "Unknown-Fuel" &
+  !is.na(make_model_fac) &
   !is.na(fac_oldest_age_bin)
 )]
 
@@ -93,10 +91,9 @@ annual_data[, treatment_cohort := fifelse(texas_treated == 1, 1999L, NA_integer_
 # ─────────────────────────────────────────────────────────────────────────────
 log_cat("\n--- Applying make-model restriction (tanks_1998) ---\n")
 
+
 tanks_1998[, is_make_model := as.integer(
-  mm_wall == "Single-Walled"          &
-  mm_fuel != "Unknown-Fuel"           &
-  !is.na(mm_capacity)                 &
+  !is.na(mm_capacity) &
   mm_install_cohort %in% MM_COHORT_YEARS
 )]
 mm_tanks_1998 <- tanks_1998[is_make_model == 1]
@@ -115,11 +112,11 @@ if (length(missing_closed) > 0)
        "\n  → Rerun 10_Master_Cleaning_and_Harmonization.r.")
 
 closed_tanks[, is_make_model := as.integer(
-  mm_wall == "Single-Walled"          &
-  mm_fuel != "Unknown-Fuel"           &
-  !is.na(mm_capacity)                 &
+  !is.na(mm_capacity) &
   mm_install_cohort %in% MM_COHORT_YEARS
 )]
+
+
 log_cat(sprintf("  mm_closed_tanks: %s tanks\n",
                 format(sum(closed_tanks$is_make_model, na.rm = TRUE), big.mark = ",")))
 

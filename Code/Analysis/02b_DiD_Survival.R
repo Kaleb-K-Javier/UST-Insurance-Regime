@@ -67,6 +67,8 @@ suppressPackageStartupMessages({
   library(ggplot2)
   library(broom)
   library(scales)
+  library(car)
+
 })
 
 options(scipen = 999)
@@ -478,7 +480,7 @@ tank_year_panel[, age_bin := cut(
 tank_year_panel[, mandate_active := as.integer(
   panel_year %in% 1989:1993 &
   !is.na(mm_install_cohort) &
-  mm_install_cohort %in% c("Pre-1980", "1980-1982", "1983-1985", "1986-1988")
+  as.integer(mm_install_cohort) < 1989L
 )]
 
 # 3-year cohort bin: collapsed version of mm_install_cohort for S6b charts
@@ -514,11 +516,8 @@ cat("========================================\n\n")
 #   7. is.na(did_term)                 → treatment status unknown
 
 mm_tank_primary <- tank_year_panel[
-  !is.na(make_model_tank)                &
-  mm_wall    != "Unknown-Wall"           &
-  mm_fuel    != "Unknown-Fuel"           &
-  !is.na(mm_capacity)                    &
-  mm_install_cohort %in% PRIMARY_YEARS   &
+!is.na(make_model_tank)              &
+  mm_install_cohort %in% PRIMARY_YEARS &
   tstop > tstart                         &
   !is.na(did_term)
 ]
@@ -608,12 +607,9 @@ log_step("Filtering master tanks to primary sample attributes...")
 
 exact_base <- master_tanks[
   !is.na(texas_treated)                  &
-  !is.na(make_model_tank)                &
-  mm_wall    != "Unknown-Wall"           &
-  mm_fuel    != "Unknown-Fuel"           &
-  !is.na(mm_capacity)                    &
-  mm_install_cohort %in% PRIMARY_YEARS   &
-  !is.na(tank_installed_date)            &
+!is.na(make_model_tank)              &
+  mm_install_cohort %in% PRIMARY_YEARS &
+    !is.na(tank_installed_date)            &
   tank_installed_date < STUDY_END,
   .(tank_panel_id, panel_id, facility_id, state, texas_treated,
     mm_wall, mm_fuel, mm_capacity, mm_install_cohort, make_model_tank,
@@ -1694,12 +1690,10 @@ log_step(sprintf("  OLS no-border coef = %.4f", r_nb_ols$coef), 1)
 # The reform estimate should be stable; a large shift would indicate
 # mandate contamination in the main sample is a concern.
 
-pre89_cohorts <- c("Pre-1980", "1980-1982", "1983-1985", "1986-1988")
+pre89_cohorts <- as.character(1970:1988)
+
 panel_expanded <- tank_year_panel[
-  !is.na(make_model_tank)                          &
-  mm_wall    != "Unknown-Wall"                     &
-  mm_fuel    != "Unknown-Fuel"                     &
-  !is.na(mm_capacity)                              &
+!is.na(make_model_tank)                                &
   mm_install_cohort %in% c(PRIMARY_YEARS, pre89_cohorts) &
   tstop > tstart                                   &
   !is.na(did_term)                                 &

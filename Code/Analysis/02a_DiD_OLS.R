@@ -254,9 +254,7 @@ plot_es <- function(model,
 #   - fac_oldest_age_bin is NA     → oldest tank age unavailable
 
 mm_fac_primary <- annual_data[
-  !is.na(make_model_fac)       &
-  fac_wall != "Unknown-Wall"   &
-  fac_fuel != "Unknown-Fuel"   &
+!is.na(make_model_fac) &
   !is.na(fac_oldest_age_bin)
 ]
 
@@ -265,21 +263,7 @@ cat(sprintf("mm_fac_primary: %s rows, %s facilities, %s unique cells\n",
             format(uniqueN(mm_fac_primary$panel_id),     big.mark = ","),
             format(uniqueN(mm_fac_primary$make_model_fac), big.mark = ",")))
 
-# ---- Unknown-cell exclusion report ----
-excl_base <- annual_data[!is.na(make_model_fac) | fac_wall == "Unknown-Wall" |
-                           fac_fuel == "Unknown-Fuel"]
-fwrite(
-  annual_data[, .(
-    N_total        = .N,
-    N_unknown_wall = sum(fac_wall == "Unknown-Wall",   na.rm = TRUE),
-    N_unknown_fuel = sum(fac_fuel == "Unknown-Fuel",   na.rm = TRUE),
-    N_na_cell      = sum(is.na(make_model_fac)),
-    pre_closure_uw = mean(closure_event[fac_wall == "Unknown-Wall"],   na.rm = TRUE),
-    pre_closure_cl = mean(closure_event[fac_wall != "Unknown-Wall" &
-                                          !is.na(fac_wall)], na.rm = TRUE)
-  ), by = .(state_group = fifelse(texas_treated == 1, "Texas", "Control"))],
-  file.path(OUTPUT_TABLES, "Diag_FacExclusion_UnknownCells.csv")
-)
+
 
 # ---- Cell coverage diagnostic (design document Part 5.2) ----
 # Target: pct_fac_years_identified >= 70%.

@@ -1,0 +1,28 @@
+=== 01b_DataLoad | started 2026-03-13 09:30:23 ===
+=== 01b: DATA LOADING ===
+
+  Panel: 12,702,871 rows | 478,503 facilities | 1970-2025
+
+  Tanks: 2,322,592 rows
+
+  LUST: 601,785 rows
+
+  TX FR panel: 1,258,359 rows
+
+  FR contract panel: 4,126,524 rows
+
+  [interim] saved: annual_data_raw
+
+  [interim] saved: tank_inventory_raw
+
+  [interim] saved: master_lust_raw
+
+  [interim] saved: fr_year_raw
+
+  [interim] saved: rate_data_raw
+
+  [interim] saved: contract_month_raw
+
+=== 01b COMPLETE ===
+
+=== 01b_DataLoad complete 2026-03-13 09:33:59 ===

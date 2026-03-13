@@ -237,7 +237,7 @@ write_tex(
         "TX $-$ CTL. \\textit{Wald p} = p-value from parallel pre-trend ",
         "F-test using make-model cell-by-year FE."),
       label = "tab:funnel-balance") |>
-    kable_styling(latex_options = c("scale_down", "hold_position"), font_size = 9),
+    kable_styling(latex_options = c("scale_down"), font_size = 9),
   "TableB2_Balance_By_Step"
 )
 

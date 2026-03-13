@@ -19,6 +19,7 @@ log_cat("=== 01b: DATA LOADING ===\n")
 # ── Facility-year panel ───────────────────────────────────────────────────────
 PANEL_PATH <- here("Data", "Processed", "facility_leak_behavior_annual.csv")
 if (!file.exists(PANEL_PATH))
+
   stop("Panel not found: ", PANEL_PATH)
 annual_data_raw <- fread(PANEL_PATH)
 log_cat(sprintf("  Panel: %s rows | %s facilities | %d-%d\n",
@@ -32,12 +33,6 @@ if (!file.exists(TANK_PATH))
   stop("Tank inventory not found: ", TANK_PATH)
 tank_inventory_raw <- fread(TANK_PATH)
  
-# Critical: harmonisation must have produced mm_wall before this script runs.
-if (!"mm_wall" %in% names(tank_inventory_raw))
-  stop(paste0(
-    "mm_wall column missing from Master_Harmonized_UST_Tanks.csv.\n",
-    "  → Rerun 10_Master_Cleaning_and_Harmonization.r to add harmonised ",
-    "make-model columns before running 01b."))
  
 log_cat(sprintf("  Tanks: %s rows\n", format(nrow(tank_inventory_raw), big.mark = ",")))
  
