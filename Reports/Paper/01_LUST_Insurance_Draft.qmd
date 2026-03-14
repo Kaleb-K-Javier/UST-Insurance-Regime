@@ -115,17 +115,55 @@ The construction choice that creates this risk profile is economically consequen
 
 The regulatory framework reinforces this physical lock-in with a legal one. Under 40 CFR Part 280, UST systems are subject to vintage-differentiated technical standards: tanks installed under the 1988 regulations are grandfathered into the compliance classification they earned at the federal deadline, provided they remain unmodified. Any construction activity that alters the wall structure or piping configuration of an existing system, including the partial upgrades that would otherwise be the natural intermediate response to a rising insurance premium, triggers reclassification of the entire facility under the most current technical standards in effect at the time of modification. The 2005 and subsequent EPA technical revisions substantially raised those standards [@us_epa_milestones_2021]. An owner who initiates a partial upgrade to reduce premium costs therefore faces the prospect of a facility-wide compliance overhaul whose cost dwarfs the incremental premium savings.
 
-This is a direct instance of the mechanism @gruenspecht_differentiated_1982 identifies in the context of auto emissions: vintage-differentiated regulation that exempts existing capital from new standards inadvertently extends the operating life of the oldest and most hazardous stock by making any modification prohibitively costly. The practical effect here is to make the choice set binary: operate the existing system without modification, or close it entirely. As @sallee_retiring_2023 argues more broadly, when new-capital regulation cannot reach the existing stock, retirement-focused instruments are the appropriate complement. The UST setting illustrates precisely why: incremental investment in risk reduction is not an option the regulatory environment makes available, which is why the extensive margin of closure is the sole behavioral margin the empirical analysis can and should target.
+This is a direct instance of the mechanism @gruenspecht_differentiated_1982
+identifies in the context of auto emissions and that
+@stavins_vintage-differentiated_2005 formalizes as a general property of
+vintage-differentiated regulation: exempting existing capital from new standards
+inadvertently extends the operating life of the oldest and most hazardous stock
+by making any modification prohibitively costly. The modification trigger in
+40 CFR Part 280 operates exactly as the analogous New Source Review provision
+does in the Clean Air Act, where @bushnell_enforcement_2012 show that the threat
+of reclassification deterred capital investment at grandfathered coal plants;
+@heutel_plant_2011 provides structural estimates of the same retardation effect
+for boiler vintages. The practical effect here is to make the choice set binary:
+operate the existing system without modification, or close it entirely.
+As @sallee_retiring_2023 and @jacobsen_regulating_2023 argue in the context of
+vehicle fleet decarbonization, when new-capital regulation cannot reach the
+existing stock, retirement-focused instruments are the appropriate complement.
+The UST setting illustrates precisely why: incremental investment in risk
+reduction is not an option the regulatory environment makes available, which is
+why the extensive margin of closure is the sole behavioral margin the empirical
+analysis can and should target.
 
-The environmental challenge posed by underground storage tanks is fundamentally a problem of managing an existing stock, not regulating new flows into it. As @fig-sw-share documents, single-walled tanks constituted the majority of the active fleet at the federal compliance deadline and have declined only gradually over the study window, remaining a substantial share of active facilities through the 2010s. This stock is the source of the vast majority of confirmed releases: single-walled tanks exhibit a higher probability of a confirmed release than double-walled tanks at every age bracket, with the hazard gap widening after 15 years of operation (Section~\ref{sec-risk-predictability}). New installations, by contrast, are overwhelmingly double-walled under post-1988 federal technical standards, so the marginal addition to the operating fleet poses little incremental risk. The remediation liability sitting beneath the surface today was installed decades ago and cannot be neutralized by tightening standards on new entrants. It can only be reduced by accelerating the exit of the single-walled incumbents. Because the hazardous technology is already in the ground, the relevant policy question is not how to screen entrants but how to price the continued operation of the existing fleet so that owners internalize the expected cost of a release.
+
+The environmental challenge posed by underground storage tanks is fundamentally
+a problem of managing an existing stock, not regulating new flows into it.
+@fig-sw-dw-stock documents the composition of the active fleet from 1985 through
+2020. Single-walled tanks accounted for approximately 83% of the active capital
+stock in the mid-1980s and remained the dominant technology at the federal
+compliance deadline in December 1998, when they still constituted roughly 73% of
+active tanks. By 2020, after two decades of post-deadline attrition, their share
+had fallen only to approximately 63%. Double-walled construction, by contrast,
+grew from near zero at the start of the study window to just under 20% of the
+fleet by 2020, reflecting that new installations post-1988 are overwhelmingly
+double-walled while the legacy stock turns over slowly. The figure makes plain
+that the trajectory of environmental risk in this market is determined almost
+entirely by the pace at which the incumbent single-walled stock exits, not by
+the character of new entrants. The remediation liability sitting beneath the
+surface today was installed decades ago and cannot be neutralized by tightening
+standards on new entrants. It can only be reduced by accelerating the exit of
+the single-walled incumbents. Because the hazardous technology is already in the
+ground, the relevant policy question is not how to screen entrants but how to
+price the continued operation of the existing fleet so that owners internalize
+the expected cost of a release.
 
 ```{r}
-#| label: fig-sw-share
-#| fig-cap: "Share of Active Facilities with Any Single-Walled Tank, 1989--2020."
+#| label: fig-sw-dw-stock
+#| fig-cap: "Aggregate Composition of Active Underground Storage Tank Fleet by Wall Type, 1989--2020."
 #| out-width: "100%"
 #| echo: false
 #| warning: false
-fig_path <- here::here("Output", "Figures", "Figure_SW_Share_Over_Time.png")
+fig_path <- here::here("Output", "Figures", "Figure_SW_DW_StockLevel_Pooled.png")
 if (file.exists(fig_path)) {
   knitr::include_graphics(fig_path)
 } else {
@@ -136,18 +174,29 @@ if (file.exists(fig_path)) {
 \vspace{0.2cm}
 \begin{flushleft}
 \footnotesize
-\textit{Notes:} Share of active facilities with at least one single-walled tank
-in each calendar year, separately for Texas (orange) and the control-state pool
-(blue). The vertical dashed line marks the federal EPA upgrade deadline of
-December 22, 1998. The gradual post-deadline decline reflects attrition of the
-legacy single-walled fleet rather than any discrete regulatory shock, confirming
-that stock management rather than new-flow regulation governs the trajectory of
-environmental risk.
+\textit{Notes:} Proportional share of the total active capital stock categorized as single-walled (solid line, circles) and double-walled (dashed line, triangles) across the pooled full sample. The vertical dashed line marks the federal EPA upgrade deadline of December 22, 1998. The gradual post-deadline decline of the legacy single-walled fleet, mirrored by the corresponding accumulation of double-walled infrastructure, reflects the slow attrition of existing capital rather than immediate regulatory replacement. This confirms that stock management, rather than new-flow regulation, governs the long-term trajectory of environmental risk. The combined shares may evaluate to slightly less than 100% in a given year due to a marginal fraction of active tanks with unclassified or unknown structural metadata.
 \end{flushleft}
 
-## The Federal Regulatory Framework and UST Facilities Constrained Choice Set
+## The Federal Compliance Mandate and Pre-Treatment Dynamics
 
-Federal regulation of USTs originates in the 1984 Hazardous and Solid Waste Amendments (HSWA) to the Resource Conservation and Recovery Act, which directed the EPA to establish comprehensive technical and financial standards for tank systems. The EPA finalized these technical standards in 40 CFR Part 280 in 1988, requiring all non-compliant tanks, those lacking corrosion protection, spill and overfill controls, and release detection, to be upgraded, replaced, or closed by a uniform federal compliance deadline of December 22, 1998 [@EPA2017USTCompendium; @us_epa_milestones_2021]. In the years immediately preceding this deadline, the average annual facility-level closure rate spiked as the industry retired the oldest and most non-compliant portion of the capital stock. Following the deadline, the closure rate fell, producing a persistently aging legacy fleet whose slow turnover is an institutional feature of the stock the empirical analysis examines.
+Federal regulation of USTs originates in the 1984 Hazardous and Solid Waste
+Amendments to the Resource Conservation and Recovery Act, which directed the EPA
+to establish comprehensive technical and financial standards for tank systems. The
+EPA finalized these standards in 40 CFR Part 280 in 1988, requiring all
+non-compliant tanks to be upgraded, replaced, or closed by a uniform federal
+compliance deadline of December 22, 1998 [@EPA2017USTCompendium;
+@us_epa_milestones_2021]. @fig-full-closures makes the consequences visible:
+annual facility-level closure rates spike sharply in the years immediately
+preceding the deadline, peak in 1997 and 1998, and fall equally sharply once
+the deadline passes. This spike is a regulatory compliance event. It contaminates
+the pre-1988 capital stock in Texas and the control states simultaneously and
+cannot be interpreted as a behavioral response to insurance pricing. Texas
+compounded this federal problem with a state-level one, imposing a staggered
+upgrade schedule for pre-1988 tanks that ran from 1989 through 1993 and had no
+analogue in any control state. The two problems together render the pre-1988
+installation cohorts unsuitable for the identification design. Section~\ref{sec-mandate}
+documents the Texas staggered mandate in detail and shows the differential
+pre-treatment dynamics empirically.
 
 
 
@@ -243,12 +292,12 @@ if (file.exists(fig_path)) {
 
 
 ```{r}
-#| label: fig-fr-premims
-#| fig-cap: "Financial Responsibility Compliance in Texas, 2007--2021."
+#| label: fig-premium-level
+#| fig-cap: "Reconstructed Annual Premium Levels for Texas UST Facilities, 2006--2021."
 #| out-width: "100%"
 #| echo: false
 #| warning: false
-fig_path <- here::here("Output", "Figures", "midcontinten premims.pdf")
+fig_path <- here::here("Output", "Figures", "FigureB_MidContinent_Pricing.pdf")
 if (file.exists(fig_path)) {
   knitr::include_graphics(fig_path)
 } else {
@@ -259,7 +308,7 @@ if (file.exists(fig_path)) {
 \vspace{0.2cm}
 \begin{flushleft}
 \footnotesize
-\textit{Notes:} Left panel: share of active retail facilities satisfying the EPA financial responsibility requirement via private insurance versus self-insurance. Right panel: total count of covered facilities. The near-universal adoption of private coverage within the first policy year confirms the reform was absorbed rapidly across the facility population. Source: TCEQ financial responsibility administrative records.
+\textit{Notes:} Left panel: median premium by year, with pre- and post-transition shading. Center panel: premium index (1995 = 100) for single-wall and double-wall tanks separately. Right panel: log premium against tank age, with fitted lines by wall type. Premiums are strictly increasing in age and strictly higher for single-wall construction at every age, consistent with the Mid-Continent rate filing structure. Source: SERFF rate filings.
 \end{flushleft}
 
 
@@ -282,35 +331,114 @@ Granular premium microdata are available beginning in 2006. The period from Janu
 
 
 
-## The Texas Phased Mandate: A Pre-Treatment Confound for the Oldest Cohort
+## The Texas Phased Mandate: A Pre-Treatment Confound {#sec-mandate}
 
-Texas's transition to private financial responsibility was preceded by a separate regulatory regime that creates a pre-treatment confound for facilities holding pre-1988 tanks. Under 30 TAC Chapter 334, the Texas Natural Resource Conservation Commission implemented a staggered upgrade schedule for pre-1988 underground storage tanks, assigning compliance deadlines by tank vintage cohort that ran from December 22, 1989 through December 22, 1993 (@tbl-mandate-schedule). No analogous staggered state mandate existed in any of the control states during this period; control state pre-1988 facilities faced only the uniform federal December 22, 1998 deadline. This staggered schedule created a mechanical wave of compliance-induced closures among Texas pre-1988 facilities between 1989 and 1993 with no counterpart among control state facilities during the same years. It also fundamentally altered the composition of the surviving Texas pre-1988 tank stock by December 1998: the tanks still active at the insurance reform cutoff represent the subset whose operators had already decided, when confronted with a cohort-specific compliance deadline five to nine years earlier, to invest in upgrades rather than close. This survivor selection is documented in @tbl-mandate-exposure and represents a direct threat to any naive comparison that pools pre- and post-1988 facilities without accounting for these differential pre-period dynamics. Section 4 documents how the make-model comparison sample addresses this and other sources of pre-treatment imbalance.
+Texas's transition to private financial responsibility was preceded by a separate
+regulatory regime that creates a pre-treatment confound for the oldest installation
+cohorts. Under 30 TAC Chapter 334, the Texas Natural Resource Conservation
+Commission assigned staggered upgrade deadlines to pre-1988 tanks by vintage
+cohort, running from December 22, 1989 for the oldest tanks through December 22,
+1993 for the 1985--1988 cohort (@tbl-mandate-schedule). These deadlines preceded
+the uniform federal date by five to nine years depending on vintage. No control
+state imposed an analogous staggered schedule; facilities in control states faced
+only the federal deadline of December 22, 1998.
+
+The consequence is survivor selection in the Texas pre-1988 stock. By the time the
+insurance reform took effect in 1999, the pre-1988 Texas tanks still operating had
+already survived a cohort-specific compliance decision made years earlier: their
+operators had elected to invest in upgrades rather than close when confronted with
+the rolling state mandate. This is not a random sample of the original pre-1988
+population. It is the subset whose operators revealed a preference for continuing
+operations under regulatory pressure, before any insurance price signal existed.
+Control-state pre-1988 operators faced no such pre-screening. Their closure
+decisions in the years around 1998 reflect the federal mandate alone, not a prior
+self-selection event. Any naive comparison pooling pre- and post-1988 cohorts
+therefore conflates two distinct mechanisms: mandate-driven survivor selection in
+Texas and insurance-driven behavioral response, the object of interest.
+
+@tbl-mandate-exposure documents this differential empirically. Cumulative closure
+rates and surviving fleet characteristics diverge sharply between Texas pre-1988
+cohorts and their control-state counterparts during 1989--1993, the window when
+the staggered mandate was binding in Texas and silent in control states. No
+corresponding divergence appears for post-1988 cohorts, which were never subject
+to the staggered schedule and which enter the treatment window with comparable
+pre-reform closure histories across Texas and the control group.
+
+Both problems identified in this section and in Section~\ref{sec-mandate-intro}
+are resolved by restricting the estimation sample to tanks installed between 1990
+and 1997. This cohort never faced the staggered Texas mandate, was not subject to
+the federal compliance deadline before 1998, and entered the treatment window with
+a clean pre-reform closure history whose dynamics are comparable across Texas and
+the control states. The restriction is documented in @tbl-attrition and the
+parallel pre-trends it earns are confirmed in the event study of
+Section~\ref{sec-results}.
 
 
-
-```{r}
-#| label: tbl-mandate-exposure
-#| tbl-cap: "Mandate Exposure Comparison: Texas Pre-1988 Cohort versus Control States."
-#| echo: false
-#| warning: false
-#| results: asis
-
-table_path <- here::here("Output", "Tables", "Table2_Mandate_Exposure_Comparison.tex")
-if (file.exists(table_path)) {
-  cat(readLines(table_path), sep = "\n")
-} else {
-  cat("\\textit{Table not found. Run 01\\_Descriptive\\_Analysis\\_REFACTORED.R.}")
-}
-```
-
-\vspace{0.2cm} \par \footnotesize \textit{Notes:} Comparison of cumulative closure rates and surviving fleet characteristics for Texas pre-1988 tank cohorts versus matched control-state counterparts. Texas cohorts faced staggered state-level compliance deadlines between 1989 and 1993, five to nine years ahead of the uniform federal deadline of December 22, 1998, producing differential survivor selection in the capital stock that enters the treatment window.
 
 
 ## Control Group Definition and Institutional Restrictions
 
-The control group comprises nineteen states that retained public uniform-premium trust funds continuously throughout the study window of 1985 to 2020, subject to three institutional complications that require explicit treatment.
+The potential control group consists of all states that maintained a public 
+uniform-premium trust fund continuously through the study window and were never 
+subject to a mandatory transition to private financial responsibility. Approximately 
+thirty states satisfy this institutional criterion. After applying four data 
+completeness requirements dictated by the panel construction and identification 
+design, the usable control group contracts to nineteen states.
 
-[THIS SECTION NEEDS TO EXPLAIN WHY WE GO FROM THE 30ISH STATE FUND STATE TO THE 18/19 CONTROL STATES. USE THE HARMOINZED TANK DIAGNOSTICS TO EXPLAIN WHY: MAIN REASOSN ARE FROM THE EPA DATABASE MANY STATES ARE MISSING ONE OR MORE OF THE FOLLOWING DATA FOR ALL TANKS IN A STATE 1) INSTALL DATES OF AL LTANKS, CLOSURE DATES FOR TANKS FLAGGED AS CLOSED, POLLUTION REPORTED DATES FOR LUSTS OR UST CONSTRUCTION MATERIAL DEATILS TO CLASSIFY AS SINGLEW WALLED OR DOUBLE WALLED FACIITS.]
+**Missing installation dates.** The panel backbone requires a confirmed installation 
+date for every tank regardless of status so that the facility can be assigned to an 
+age cohort and the make-model cell can be frozen at the reform date. Where 
+installation dates are missing at high rates, facilities cannot be assigned to an 
+age bin, are excluded from the make-model sample, and generate attrition that is 
+mechanically correlated with vintage — precisely the dimension the identification 
+design exploits.
+
+**Missing closure dates for tanks recorded as closed.** The panel assigns a closure 
+event to a facility-year only when a closed tank has a confirmed closure date; tanks 
+flagged as closed but lacking a closure date are dropped in the filtering step 
+described in Section~\ref{sec-panelbuild} and documented in @tbl-attrition. Where 
+closure-date missingness is high, the denominator of the closure rate is correctly 
+measured but the numerator is understated, biasing the outcome toward zero in the 
+pre-treatment period and attenuating the DiD estimate.
+
+**Missing wall-type classification.** The make-model comparison sample requires 
+that each facility be classifiable as all-single-walled, all-double-walled, or 
+mixed on the dimensions private insurers price. Wall-type is stored in the EPA 
+tank-type field. Where this field is missing at high rates, the matching cell is 
+undefined and the facility cannot contribute to the make-model sample regardless 
+of its institutional eligibility.
+
+**Missing LUST report dates.** The leak outcome requires a confirmed report date 
+for each leaking underground storage tank release, used to assign the release to a 
+facility-year and to classify it under the primary 0--60 day window. States where 
+report-date missingness is total are excluded from the leak analysis sample; states 
+with partial missingness are retained for the closure analysis but excluded from 
+the leak specifications.
+
+@tbl-data-quality documents missingness rates across all candidate states on each 
+of these four dimensions. The twenty-one states that relied solely on the EPA 
+harmonized database without a custom state registry fail one or more of these 
+requirements at rates that make the panel unusable. Closure dates are missing for 
+100 percent of closed tanks in New York, South Carolina, Missouri, Mississippi, 
+Nevada, Nebraska, Georgia, New Hampshire, Rhode Island, Alaska, Utah, Indiana, 
+West Virginia, Wyoming, and Hawaii, and for 80 percent in South Dakota. 
+Installation dates are missing for 100 percent of tanks in South Carolina, 
+Mississippi, and Vermont, and for more than 30 percent in New York, Missouri, 
+Indiana, Illinois, and West Virginia. Delaware satisfies both date requirements 
+but is excluded on a third ground: wall-type classification is missing for 100 
+percent of its tank inventory, making make-model cell assignment impossible. Two 
+further states — Washington and Oregon — are excluded on institutional rather than 
+data-quality grounds: neither operated a public uniform-premium trust fund during 
+the study window and so do not satisfy the control group eligibility criterion 
+regardless of data quality.
+
+The nineteen states that satisfy all four completeness thresholds and maintained 
+public trust funds continuously through 2020 form the control group used in all 
+baseline specifications. Appendix~\ref{app-states} lists the included states, 
+their trust fund histories, and their tank-inventory sizes. The robustness analysis 
+in Section~\ref{sec-robustness} shows that restricting to the nine highest-quality 
+control states does not materially alter the estimates.
+
 
 # Insurance Regimes and the Retirement of Risky Capital
 
@@ -501,120 +629,207 @@ Three empirical patterns would be inconsistent with the premium-burden channel a
 \clearpage
 
 
+# Data {#sec-data}
 
-# Data
+## Source Records
 
-## Panel Architecture and Source Layers
+The analysis draws on administrative records from three sources. The first is a
+tank-level physical inventory assembled from state UST regulatory databases across
+all fifty states, harmonized into a common schema. Each record identifies a
+physical tank by facility, state, and tank identifier, and reports the tank's
+installation date, closure date (if closed), wall construction (single-walled,
+double-walled, or unclassified), stored substance (gasoline, diesel, other
+petroleum products), and nominal capacity in gallons. State databases differ in
+field naming, date formatting, and classification conventions; the harmonization
+standardizes these fields, resolves coordinate systems for facility geolocation,
+and backfills missing county identifiers from ZIP code centroids where native
+geocoding is unavailable. The resulting file contains one row per physical tank
+across all states.
 
-The analysis uses a facility-year panel built by merging three administrative data
-sources. The merge key is a panel identifier constructed from the state-standardized
-facility code and the two-letter state abbreviation. The first source is the
-behavioral backbone: a facility-year panel compiled from state UST administrative
-inventories and EPA summary files covering Texas and the nineteen control states
-from 1985 through 2020. This layer records, for each facility in each year, whether
-the facility closed a tank, permanently exited the market, retrofitted its tank
-stock, or reported a confirmed leak. The second source is a tank-level physical
-inventory recording the installation date, closure date, wall construction type,
-capacity, fuel type, and operational status for every tank associated with each
-facility. The third source is financial: private insurance premium estimates for
-Texas facilities reconstructed from actuarial rate filings, and realized cleanup
-cost records drawn from state trust fund payment ledgers for a subset of control
-states. The unit of observation throughout is the facility-year.
+The second source is a harmonized incident file of confirmed releases reported
+under the Leaking Underground Storage Tank (LUST) program. Each record identifies
+a facility, state, and the date the release was reported to the state regulatory
+authority. States that lack report dates for all or nearly all LUST incidents are
+excluded from the leak analysis, as described below.
+
+The third source, available for Texas only, is the financial responsibility
+compliance record maintained by the Texas Commission on Environmental Quality
+(TCEQ). This file records, at monthly frequency, each facility's compliance
+mechanism (private insurance, self-insurance, or no coverage), the identity of
+the insurer where applicable, and the contract detail type. These records are
+available from 2007 onward and are used to document the post-transition private
+market structure described in Section~2.
 
 
-## Sample Construction and Attrition
+## Panel Construction
 
-The estimation sample is built through five sequential filters, each motivated by a
-specific identification requirement. @tbl-attrition reports the facility count and
-facility-year count remaining after each filter.
+The unit of observation for the behavioral analysis is the facility-year. I
+construct the panel by first computing each facility's active window, the span
+from its earliest tank installation to its latest tank closure or the end of the
+study period, and expanding the facility to a monthly
+time series over that range. For each facility-month, the tank inventory is
+queried to determine the count and characteristics of tanks physically active on
+that date: total active tanks, aggregate capacity, average tank age (computed from
+exact installation dates), counts of single-walled and double-walled tanks, and
+fuel-type indicators. Monthly events (confirmed releases, tank closures, and
+new tank installations) are counted and merged to the facility-month backbone.
 
-The first filter restricts the panel to the 1985 through 2020 study window, the
-period over which administrative data coverage is sufficiently continuous across
-treated and control states to support pre-trend testing and post-treatment tracking.
-The second filter restricts the sample to Texas and the nineteen control states
-defined in Section 2.7. The third filter keeps only incumbent facilities, defined
-as facilities first observed in the administrative records before the 1998 statutory
-treatment year. This restriction ensures that every facility in the sample faced the
-reform as an unanticipated constraint rather than an entry condition, which eliminates
-compositional changes in the market following the reform announcement.
+Tank closures receive a type classification before aggregation. For each closed
+tank, I determine whether the facility installed any replacement tank after that
+closure date. If so, the closure is classified as a *replacement*; if not, as
+*permanent*. The classification uses the facility's full installation history,
+including tanks outside the analysis window, to avoid misclassifying replacement
+closures as permanent when the replacement tank falls outside a restricted sample
+frame.
 
-The fourth filter drops facilities with missing tank-level date records. A facility
-is excluded if any of its tanks lacks a recorded installation date, or if any tank
-recorded as closed lacks a corresponding closure date. @tbl-missing-balance reports
-the balance test for this exclusion. A logistic regression of the missing-date
-indicator on the Texas treatment dummy yields a statistically insignificant
-coefficient ($p = 0.5361$), confirming that the probability of exclusion is
-unrelated to treatment status. The fifth filter applies the make-model common
-support restriction developed in the following section, which retains only facilities whose
-wall type and age profile falls within the range of characteristics observed in both
-Texas and the control group as of December 22, 1998.
+The monthly panel is then collapsed to annual frequency. Stock variables (active
+tank count, capacity, tank age, wall composition) are measured at the December
+snapshot. Flow variables (closures, installations, confirmed releases, retrofits)
+are summed over the calendar year, with binary indicators for whether any event
+of each type occurred. Year-over-year changes in tank count and capacity are
+computed as first differences of the December stocks.
+
+Each confirmed release is paired with tank closures at the same facility and
+classified by timing. A release reported within 60 days after a closure is
+classified as *closure-revealed*: the closure inspection likely discovered a
+latent leak. A release on record more than 180 days before a closure is
+classified as *known pre-existing*: the tank was already leaking. Releases with
+no nearby closure are classified as *standalone*. Pairs are restricted to the
+same generation of infrastructure: a release that predates a tank's installation
+is not matched to that tank. Robustness checks use 30-day and 90-day windows
+for the closure-revealed category.
+
+For the duration analysis of individual tank closures, a second panel is
+constructed at the tank-year level directly from the physical inventory, without
+passing through the facility-level aggregation. Each tank is expanded from its
+installation year through its closure year (or through 2020 for tanks still
+active), yielding one row per tank per calendar year of service. The closure
+event indicator equals one in the year the tank was closed. For the primary Cox
+specification, exact installation and closure dates are retained and the
+counting-process interval for each tank is split at the statutory reform date of
+December 22, 1998, producing at most two records per tank: a pre-reform interval
+and a post-reform interval. This construction allows the treatment indicator to
+switch on at the precise reform date rather than at an annual boundary.
+
+
+## Study States
+
+The control group comprises states that satisfy two criteria: they maintained a
+public uniform-premium trust fund continuously through the study period, providing
+the institutional counterfactual of continued flat-fee coverage; and their
+administrative records are sufficiently complete to support the panel construction
+described above. The completeness requirement operates on four dimensions.
+
+First, installation dates must be recorded for a substantial majority of tanks,
+because the panel assigns each facility to an age cohort and computes time-varying
+tank age from exact installation dates. States where installation dates are missing
+for more than roughly 30 percent of records cannot reliably place facilities in the
+age distribution. Second, closure dates must be recorded for tanks identified as
+closed. Where closure dates are systematically missing, the panel correctly
+measures the denominator of the closure rate (the count of active facilities) but
+understates the numerator (the count of closure events), attenuating the outcome
+toward zero. Third, wall-type classification must be recorded for a sufficient
+share of the tank inventory. The comparison sample matches Texas and control-state
+facilities on wall composition; states where wall type is unrecorded for the
+majority of tanks cannot contribute to this design. Fourth, LUST report dates must
+be available. States where report dates are missing for all incidents are excluded
+from the leak analysis; states with partial missingness are retained for the
+closure analysis but excluded from leak specifications.
+
+These requirements eliminate approximately twenty states. Closure dates are missing
+for all closed tanks in fifteen states. Installation dates are missing for all
+tanks in three states and for more than 30 percent in several others. Delaware
+satisfies both date requirements but lacks wall-type classification entirely.
+Washington and Oregon are excluded on institutional grounds: neither operated a
+public trust fund during the study period.
+
+The facility-level behavioral analysis uses 16 control states. The tank-level
+duration analysis uses an expanded set of 19 control states whose tank-level
+records meet the completeness thresholds for the four-dimensional tank cell but
+whose facility-level records do not fully support the three-dimensional facility
+cell.
+
+Appendix~\ref{app-data} reports the completeness rates across all candidate
+states on each of the four dimensions.
+
+
+## Outcome Variables
+
+The analysis estimates effects on three groups of outcomes, measured at the
+facility-year level unless otherwise noted.
+
+**Closure and exit.** The primary closure indicator equals one if the facility
+closed at least one tank in a given year. Closures are decomposed into
+*replacement closures* (the facility later installed a new tank) and *permanent
+closures* (no subsequent installation). Facility exit equals one in the
+facility's final observed year of operation.
+
+**Portfolio investment.** The analysis measures the net change in tank count,
+the change in total capacity, the count of new installations, and whether any
+single-walled tank was replaced with a double-walled tank. These outcomes are
+estimated both unconditionally and conditional on a retrofit occurring that year.
+
+**Leak incidence.** The total confirmed release indicator equals one if the
+facility reported any LUST incident in a given year. This is decomposed into
+closure-revealed releases (reported 0 to 60 days after a tank closure),
+standalone releases (no nearby closure), and closures of tanks with a known
+pre-existing leak (on record more than 180 days before closure). The
+decomposition separates mechanical effects of increased closure activity from
+changes in leak incidence independent of the closure margin.
+
+For the tank-level duration analysis, the outcome is the closure event: a
+binary indicator equal to one in the year a tank is closed, with exact dates
+used in the Cox specification.
+
+
+## Descriptive Statistics
+
+@tbl-descriptive reports the 1998 cross-section and pre-reform flow averages for
+both the full analysis sample and the make-model comparison sample, separately
+for Texas and the control group. Panel A describes the capital stock at the reform
+date: facility count, total tanks, average tanks per facility, average capacity,
+average tank age, age of the oldest tank, fleet-level single-wall share, and
+within-facility single-wall share. Panel B reports annual flow means over
+1990--1998: closure rates, LUST rates, and replacement rates. Panel C documents
+the cell structure of each regression design, reporting the number of total,
+identified (containing both Texas and control-state observations), and
+group-exclusive cells for both the facility-level and tank-level cell taxonomies.
+
+Within the make-model comparison sample, pre-reform closure rates, leak rates,
+and replacement rates are closely balanced across Texas and the control group
+before any regression adjustment. The restriction achieves the comparability the
+identification strategy requires; Section~\ref{sec-balance} documents this
+formally.
 
 ```{r}
-#| label: tbl-attrition
-#| tbl-cap: "Sample Attrition Across Five Sequential Construction Filters."
+#| label: tbl-descriptive
+#| tbl-cap: "Sample Characteristics: Full Analysis Sample vs. Make-Model Comparison Sample."
 #| echo: false
 #| warning: false
 #| results: asis
 
-table_path <- here::here("Output", "Tables", "TableB1_Attrition_Log.tex")
+table_path <- here::here("Output", "Tables", "Table0_Descriptive.tex")
 if (file.exists(table_path)) {
   cat(readLines(table_path), sep = "\n")
 } else {
-  cat("\\textit{Table not found. Run 01\\_Descriptive\\_Analysis\\_REFACTORED.R.}")
+  cat("\\textit{Table not found. Run 01l\\_DataQuality\\_and\\_Balance.R.}")
 }
 ```
 
-\vspace{0.2cm} \par \footnotesize \textit{Notes:} Each row reports the facility
-count and facility-year count remaining after applying cumulative filters,
-separately for Texas and the control group. Filters are applied sequentially:
-(1) study window restriction, 1985--2020; (2) Texas and nineteen control states;
-(3) incumbent facilities only, first observed prior to 1998; (4) exclusion of
-facilities with missing tank-level installation or closure dates; (5) make-model
-common support restriction on portfolio wall type and oldest-tank age bin as of
-December 22, 1998.
-
-```{r}
-#| label: tbl-missing-balance
-#| tbl-cap: "Balance Test for the Missing-Data Exclusion."
-#| echo: false
-#| warning: false
-#| results: asis
-
-table_path <- here::here("Output", "Tables", "TableB3_Missing_Date_Balance.tex")
-if (file.exists(table_path)) {
-  cat(readLines(table_path), sep = "\n")
-} else {
-  cat("\\textit{Table not found. Run 01\\_Descriptive\\_Analysis\\_REFACTORED.R.}")
-}
-```
-
-\vspace{0.2cm} \par \footnotesize \textit{Notes:} The dependent variable equals
-one if the facility was excluded from the estimation sample due to missing
-tank-level date records. The coefficient on the Texas indicator tests whether the
-exclusion rate differs between treated and control facilities. A statistically
-insignificant coefficient ($p = 0.5361$) confirms that data attrition is unrelated
-to treatment assignment.
+\vspace{0.2cm}
+\par\footnotesize
+\textit{Notes:}
+Panel A reports the December 1998 cross-section.
+Facility-level rows are means over facilities; parentheses report standard errors
+of the mean. State-fleet rows are population-weighted aggregates across all active
+tanks. Panel B reports annual flow means over 1990--1998.
+Panel C reports the make-model cell structure; in Panel C the TX and CTL column
+headers do not apply and the two value columns show the full-sample and
+analysis-sample statistics respectively.
+Diff.\ $=$ TX $-$ CTL; stars from Welch $t$-tests
+($^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$).
 
 
-## Primary Outcome Variables
-
-I construct three binary outcome variables at the facility-year level from the
-behavioral backbone. The primary outcome, $\text{Closure}_{it}$, equals one if
-facility $i$ recorded at least one tank closure in calendar year $t$. Among
-facility-years where $\text{Closure}_{it} = 1$, I construct two mutually exclusive
-conditional outcomes: $\text{Exit} \mid \text{Closure}_{it}$, equal to one if the
-facility permanently ceased operations in year $t$, and
-$\text{Replace} \mid \text{Closure}_{it}$, equal to one if the facility closed a
-tank but continued operating, implying on-site replacement. The environmental
-outcome, $\text{Leak}_{it}$, equals one if facility $i$ reported a confirmed
-release to state regulators in year $t$, drawn from the harmonized Leaking
-Underground Storage Tank (LUST) incident records. All outcomes are defined at the
-facility-year level by aggregating underlying monthly records to an annual frequency.
-
-For the event study specifications, I define relative event time as
-$k = \text{year} - 1999$, indexed to the first full post-treatment calendar year,
-so that $k = -1$ corresponds to calendar year 1998, the omitted baseline period.
-The event study window spans 1985 to 2018.
 
 
 # Observable Risk Characteristics and the Actuarial Pricing Foundation
@@ -622,37 +837,61 @@ The event study window spans 1985 to 2018.
 Risk-based insurance can only discipline facility operators if the characteristics
 private insurers observe actually predict future environmental liability. If tank
 age and wall construction type were unrelated to release probability and cleanup
-cost, insurers would have no basis for charging different premiums across facilities,
-and the premium gradients documented in Section 2.5 would be noise rather than
-signal. This section shows that the two characteristics at the center of the
-theoretical mechanism do in fact predict both confirmed releases and realized
-remediation costs, and that this predictability holds out-of-sample. This
-establishes that the premium schedule documented in the rate filings reflects
-genuine actuarial content, and it motivates the comparison sample construction in
-the following section.
+cost, insurers would have no basis for charging different premiums across
+facilities, and the premium gradients documented in Section 2.5 would be noise
+rather than signal. This section shows that observable facility characteristics
+predict confirmed releases out of sample. This establishes that the premium
+schedule in the rate filings reflects genuine actuarial content, and it motivates
+the comparison sample construction in the following section.
 
 
 ## Release Probability Is Predictable from Observables
 
-Age bin and wall construction type predict confirmed releases out-of-sample.
-@fig-roc-curves presents receiver operating characteristic curves from
-cross-validated models that predict whether a facility reports a confirmed release
-in a given year, using only age bin and wall type as inputs. The models are
-estimated on pre-treatment control-state facility-years and evaluated on held-out
-data. The area under the curve exceeds the no-skill baseline in both the
-specification without state fixed effects (left panel) and the specification with
-state fixed effects (right panel). Observable facility characteristics therefore
-carry genuine predictive content for releases above and beyond cross-state
-differences in baseline release rates, and private insurers have an actuarially
-sound basis for premium differentiation.
+I estimate the annual probability that a facility experiences its first confirmed
+release, conditional on having never previously leaked. The estimand is the
+first-release hazard in the never-yet-leaked risk set:
+
+$$
+h(t \mid x) = P(\text{first confirmed release in year } t \mid
+\text{no prior release through } t{-}1,\; x)
+$$
+
+This directly mirrors the insurer's underwriting problem: given what is observable
+about a facility at the start of a policy year, what is the probability of a claim?
+
+The model is a GRF probability forest with 2,000 trees, estimated on all study
+states (Texas and controls) in the pre-treatment period. The feature set includes
+seven facility-level observables available to a commercial underwriter: a binary
+single-walled indicator, the current age bin of the active stock (encoded as an
+integer), total active tanks, total capacity in gallons, gasoline and diesel fuel
+indicators, and a state identifier. State is included because commercial UST
+insurers file rates by state; omitting it would handicap the model relative to
+actual underwriting practice. State also serves as the cluster identifier,
+ensuring that out-of-bag predictions respect the state-level dependence structure.
+
+First-release events are rare, with an annual base rate of roughly 1 to 3 percent.
+Without correction, the forest learns to predict the majority class everywhere. I
+address this with inverse-frequency case weights that equalize the effective class
+sizes in each tree's bootstrap sample. Hyperparameters (the number of candidate
+splits, minimum node size, and subsample fraction) are selected by grid search
+over 500-tree forests, minimizing out-of-bag Brier score. The final model uses the
+selected hyperparameters with 2,000 trees. Each observation receives an
+out-of-bag prediction without a separate cross-validation loop, because GRF's
+subsampling guarantees that every observation is excluded from a sufficient number
+of trees to produce a stable OOB estimate.
+
+@fig-roc-curves presents the receiver operating characteristic curve from the OOB
+predictions. The area under the curve exceeds the no-skill baseline, confirming
+that observable facility characteristics carry genuine predictive content for
+releases.
 
 ```{r}
 #| label: fig-roc-curves
-#| fig-cap: "Cross-Validated ROC Curves for Predicting Confirmed Releases from Observable Facility Characteristics."
+#| fig-cap: "Out-of-Bag ROC Curve for Predicting First Confirmed Release from Observable Facility Characteristics."
 #| out-width: "100%"
 #| echo: false
 #| warning: false
-fig_path <- here::here("Output", "Figures", "Figure_CV_ROC_Combined.png")
+fig_path <- here::here("Output", "Figures", "Figure_CV_ROC.png")
 if (file.exists(fig_path)) {
   knitr::include_graphics(fig_path)
 } else {
@@ -663,29 +902,31 @@ if (file.exists(fig_path)) {
 \vspace{0.2cm}
 \begin{flushleft}
 \footnotesize
-\textit{Notes:} Predictors are age bin and wall construction type. Left panel:
-model without state fixed effects. Right panel: model with state fixed effects.
-The area under the curve exceeds the no-skill baseline (dashed diagonal) in both
-specifications. Estimated on pre-treatment control-state facility-years.
-Source: 01n.
+\textit{Notes:} Out-of-bag predictions from a GRF probability forest (2,000 trees)
+estimated on pre-treatment facility-years across all study states. Features:
+single-walled indicator, age bin, active tanks, total capacity, gasoline and diesel
+indicators, and state. The area under the curve exceeds the no-skill baseline
+(dashed diagonal).
 \end{flushleft}
 
-@fig-pdp-age-wall shows the direction and shape of these risk gradients. The
-predicted release probability rises with age bin for both single-wall and
-double-wall tanks, consistent with the model assumption $h'(a) > 0$. The gap
-between single-wall and double-wall predicted probabilities also widens with age:
-the single-wall penalty is not a constant offset but grows as tanks age. These
-gradients are estimated from pre-treatment control-state data, not imposed by the
-model, and they match the structural form of the premium schedule in the
-Mid-Continent rate filings.
+@fig-pdp-age-wall shows the direction and shape of these risk gradients using
+marginal partial dependence. For each combination of wall type and age bin, the
+two features are fixed at the target values while all other covariates remain at
+their observed levels across the full estimation sample. The predicted first-release
+probability rises with age for both wall types, consistent with the assumption
+$h'(a) > 0$. The gap between single-walled and double-walled predictions widens
+with age: the single-wall penalty grows as tanks get older. These gradients are
+estimated from pre-treatment data, not imposed by the model, and they match the
+structure of the Mid-Continent rate schedule. Shaded bands show 95 percent
+intervals derived from GRF prediction variance.
 
 ```{r}
 #| label: fig-pdp-age-wall
-#| fig-cap: "Partial Dependence of Predicted Leak Probability on Age Bin by Wall Type."
+#| fig-cap: "Marginal Partial Dependence: Predicted First-Release Rate by Age Bin and Wall Type."
 #| out-width: "100%"
 #| echo: false
 #| warning: false
-fig_path <- here::here("Output", "Figures", "Figure_CV_PartialDep_Combined.png")
+fig_path <- here::here("Output", "Figures", "Figure_CV_PartialDep.png")
 if (file.exists(fig_path)) {
   knitr::include_graphics(fig_path)
 } else {
@@ -696,18 +937,17 @@ if (file.exists(fig_path)) {
 \vspace{0.2cm}
 \begin{flushleft}
 \footnotesize
-\textit{Notes:} Separately for single-wall (solid) and double-wall (dashed) tanks,
-with observed facility-year means overlaid. The predicted hazard rises with age
-for both wall types, and the single-wall penalty widens with age. Source: 01n.
+\textit{Notes:} Marginal partial dependence from the GRF probability forest.
+Single-walled (solid) and double-walled (dashed) predictions shown separately.
+Shaded bands are 95\% intervals from GRF prediction variance. The predicted
+first-release rate is reported per 1,000 facility-years.
 \end{flushleft}
 
-The predicted risk scores are also well-calibrated against observed release rates.
+The predicted risk scores are well calibrated against observed release rates.
 @fig-calibration plots mean observed release rates against mean predicted scores
-within deciles of the score distribution. The data points fall close to the
-45-degree line across the full risk range, confirming that the model produces
-reliable probability estimates and not just a ranking. This calibration supports
-the use of the predicted scores as a continuous risk measure in the structural model
-of Section 8.
+within deciles of the score distribution. The data points fall close to the 45
+degree line across the full range, confirming that the model produces reliable
+probability estimates, not just a ranking.
 
 ```{r}
 #| label: fig-calibration
@@ -715,7 +955,7 @@ of Section 8.
 #| out-width: "100%"
 #| echo: false
 #| warning: false
-fig_path <- here::here("Output", "Figures", "Figure_CV_Calibration_Combined.png")
+fig_path <- here::here("Output", "Figures", "Figure_CV_Calibration.png")
 if (file.exists(fig_path)) {
   knitr::include_graphics(fig_path)
 } else {
@@ -728,8 +968,16 @@ if (file.exists(fig_path)) {
 \footnotesize
 \textit{Notes:} Mean observed release rate against mean predicted risk score within
 deciles of the predicted score distribution. Points near the 45-degree line
-indicate a well-calibrated model. Source: 01n.
+indicate well-calibrated probability estimates. Point size proportional to the
+number of facility-years in the decile.
 \end{flushleft}
+
+The predicted risk scores are exported at two levels. A facility-year file of OOB
+predictions is available for use as a time-varying control in the analysis
+specifications. A facility-level snapshot at December 1998 provides a fixed
+pre-reform risk measure for heterogeneous treatment effect analysis by risk
+quartile.
+
 
 
 ## Remediation Costs Also Scale with Observable Risk
@@ -841,19 +1089,22 @@ dimensions.
 ## The Composition Problem
 
 Texas and the control states entered the treatment window with different capital
-stock compositions on the two dimensions established above as predictors of
-liability. @fig-age-density plots the distribution of tank age at December 22,
-1998, the reform date, for Texas and the control group separately. The distributions
-overlap across most of the support, but Texas has more mass in the 10-to-20-year
-age range, the cohorts where the risk gradients in @fig-pdp-age-wall are steepest.
+stock compositions on the two dimensions established in Section~\ref{sec-risk}
+as predictors of liability. @fig-age-density-kde plots the kernel density of tank
+age at December 22, 1998 for Texas and the control group separately. The
+distributions overlap across most of the support, but Texas carries more mass in
+the 10 to 20 year range, the cohorts where the risk gradients in
+@fig-pdp-age-wall are steepest and where the rate schedule imposes the largest
+incremental premium loads.
 
 ```{r}
-#| label: fig-age-density
-#| fig-cap: "Distribution of Tank Age at December 22, 1998."
-#| out-width: "100%"
+#| label: fig-age-density-kde
+#| fig-cap: "Tank Age Density at December 22, 1998: Texas versus Control Group."
+#| out-width: "70%"
+#| fig-align: center
 #| echo: false
 #| warning: false
-fig_path <- here::here("Output", "Figures", "Figure1_AgeDensity_Combined.png")
+fig_path <- here::here("Output", "Figures", "Figure1_AgeDensity_PanelA.png")
 if (file.exists(fig_path)) {
   knitr::include_graphics(fig_path)
 } else {
@@ -864,30 +1115,20 @@ if (file.exists(fig_path)) {
 \vspace{0.2cm}
 \begin{flushleft}
 \footnotesize
-\textit{Notes:} Left panel: kernel density estimates for Texas (solid) and the
-control group (dashed). Right panel: empirical CDFs. The distributions overlap
-overall, but Texas has more mass in the 10-to-20-year range where the predicted
-hazard gradient is steepest. Source: 01f.
+\textit{Notes:} Kernel density estimates for Texas (orange) and the control group
+(blue) among incumbent tanks active on December 22, 1998. Dashed vertical lines
+mark group means. Texas has more mass in the 10 to 20 year range where the
+predicted release hazard gradient is steepest.
 \end{flushleft}
 
-Texas also entered the reform with a higher single-wall share at every vintage bin.
-@fig-sw-composition plots single-wall share by installation cohort for Texas and
-the control group. The Texas-control gap reflects both the historical prevalence of
-bare-steel construction in the Texas market and the survivor dynamics of the
-pre-1988 cohort discussed in Section 2.6. Because the single-wall cost penalty
-widens with age, these two differences compound: Texas facilities faced a
-systematically higher expected premium burden than the age distribution alone
-implies. A pooled comparison that averages across these compositionally different
-populations would partly pick up pre-existing liability differences rather than the
-behavioral response to risk-based pricing.
-
 ```{r}
-#| label: fig-sw-composition
-#| fig-cap: "Single-Wall Tank Share at December 22, 1998."
-#| out-width: "100%"
+#| label: fig-age-density-ecdf
+#| fig-cap: "Cumulative Age Distribution at December 22, 1998: Texas versus Control Group."
+#| out-width: "70%"
+#| fig-align: center
 #| echo: false
 #| warning: false
-fig_path <- here::here("Output", "Figures", "Figure3_WallByVintage_Combined.png")
+fig_path <- here::here("Output", "Figures", "Figure1_AgeDensity_PanelB.png")
 if (file.exists(fig_path)) {
   knitr::include_graphics(fig_path)
 } else {
@@ -898,89 +1139,272 @@ if (file.exists(fig_path)) {
 \vspace{0.2cm}
 \begin{flushleft}
 \footnotesize
-\textit{Notes:} Left panel: share by three vintage bins (pre-1980, 1980--1988,
-1989--1998) for Texas and the control group. Right panel: share by five-year
-installation cohort, with dot size proportional to cohort count. Texas has a
-higher single-wall share at every vintage. Source: 01f.
+\textit{Notes:} Empirical CDFs for Texas (orange) and the control group (blue).
+The vertical gap at any age equals the difference in the share of tanks below
+that age across the two groups.
+\end{flushleft}
+
+Texas also entered the reform with a higher single-wall share at every vintage
+bin. @fig-sw-by-vintage-bins plots single-wall share by three broad vintage
+categories and @fig-sw-by-cohort disaggregates to five-year installation cohorts.
+The gap reflects both the historical prevalence of bare-steel construction in
+Texas and the survivor dynamics of the pre-1988 cohort documented in
+Section~\ref{sec-mandate}. Because the single-wall cost penalty widens with age
+(Section~\ref{sec-risk}), these two differences compound: Texas facilities faced
+a systematically higher expected premium burden than the age distribution alone
+implies. A pooled comparison that averages across these compositionally different
+populations would partly recover pre-existing liability differences rather than
+the behavioral response to risk-based pricing.
+
+```{r}
+#| label: fig-sw-by-vintage-bins
+#| fig-cap: "Single-Wall Tank Share by Broad Vintage Bin at December 22, 1998."
+#| out-width: "70%"
+#| fig-align: center
+#| echo: false
+#| warning: false
+fig_path <- here::here("Output", "Figures", "Figure3_WallByVintage_PanelA.png")
+if (file.exists(fig_path)) {
+  knitr::include_graphics(fig_path)
+} else {
+  cat(sprintf("Figure file not found at: %s", fig_path))
+}
+```
+
+\vspace{0.2cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Single-wall share by three vintage bins (pre-1980, 1980 to 1988,
+1989 to 1998) for Texas and the control group. Texas has a higher single-wall
+share at every vintage, with the gap widest among the oldest cohorts.
+\end{flushleft}
+
+```{r}
+#| label: fig-sw-by-cohort
+#| fig-cap: "Single-Wall Tank Share by Five-Year Installation Cohort at December 22, 1998."
+#| out-width: "70%"
+#| fig-align: center
+#| echo: false
+#| warning: false
+fig_path <- here::here("Output", "Figures", "Figure3_WallByVintage_PanelB.png")
+if (file.exists(fig_path)) {
+  knitr::include_graphics(fig_path)
+} else {
+  cat(sprintf("Figure file not found at: %s", fig_path))
+}
+```
+
+\vspace{0.2cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Single-wall share by five-year installation cohort, with dot size
+proportional to cohort tank count. Texas exceeds the control group at every
+cohort.
 \end{flushleft}
 
 
 ## Constructing the Comparison Cells
 
-I address the composition problem by restricting the comparison to facilities in
-Texas and the control group that share the same observable risk profile as of the
-reform date. For each facility, I measure two characteristics as of December 22,
-1998: the portfolio wall type and the age of the oldest active tank. These are the
-same two dimensions that predict release probability and cleanup costs in the
-previous section, and they are the dimensions along which the theory in Section 3
-predicts the largest premium differences and therefore the largest behavioral
-responses.
+I address the composition problem by restricting each analysis to units that share
+the same observable risk profile across Texas and the control group. Two cell
+taxonomies are used, one for each level of analysis.
 
-Portfolio wall type takes one of four values. If all tanks at a facility share the
-same wall type, the facility receives that label (All-Single-Walled or
-All-Double-Walled). If the tanks disagree, the facility is classified as Mixed-Wall.
-If any tank's wall type is not recorded in the administrative data, the facility
-receives the Unknown-Wall classification. Oldest-tank age bin assigns the facility
-to one of seven three-year intervals based on the age of its oldest active tank at
-the reform date. The bin boundaries match the age structure used in the risk
-prediction models above. The two dimensions together define the
-facility's comparison cell, denoted $\text{MM}_i$.
+### Facility-Level Cells
 
-Facilities in Unknown-Wall cells are excluded from the primary estimation sample.
-The experience-rating mechanism requires the insurer to observe and price
-construction type. A facility where wall type is unrecorded faces an underwriting
-problem that is different in kind from the risk-based pricing channel being studied
-here, and its behavioral response is not governed by the same incentives. @tbl-descriptive
-reports the count and pre-reform closure rate of Unknown-Wall facilities separately
-so readers can assess the scope of this exclusion.
+For each facility, I measure three characteristics as of December 22, 1998:
+portfolio wall composition, portfolio fuel composition, and the age bin of the
+oldest active tank. Portfolio wall type classifies the facility as All-Single-Walled
+if every active tank is single-walled, All-Double-Walled if every tank is
+double-walled, Mixed-Wall if the tanks disagree, or Unknown-Wall if any tank's
+wall type is unrecorded. Portfolio fuel type follows the same unanimity rule
+(Gasoline-Only, Diesel-Only, Mixed-Or-Other, or Unknown-Fuel). Oldest-tank age
+bin assigns the facility to one of seven three-year intervals based on the age of
+its oldest active tank at the reform date (0 to 2 years through 20-plus years).
+The three dimensions together define the facility's comparison cell.
 
-The identifying assumption for the difference-in-differences design is that Texas
-and control facilities sharing the same comparison cell would have followed parallel
-trends in closure, exit, and leak rates in the absence of the reform. This
-assumption is strictly weaker than requiring parallel trends across the full
-heterogeneous population because it only requires comparability within groups that
-already face similar actuarial risk profiles. The assumption is tested directly in
-the pre-period event study confirms that pre-treatment coefficients for
-$k \in \{-13, \ldots, -2\}$ are jointly indistinguishable from zero within the
-make-model sample, while the same test fails in the full unbalanced sample.
+Facilities classified as Unknown-Wall or Unknown-Fuel are excluded from the
+primary sample. The experience-rating mechanism requires the insurer to observe
+and price construction and fuel type. A facility whose wall type is unrecorded
+cannot be assigned to a rate cell, and its behavioral response is not governed by
+the same incentives the design targets.
+
+The identifying assumption is that Texas and control facilities in the same cell
+would have followed parallel trends in the absence of the reform. This is strictly
+weaker than requiring parallel trends across the full heterogeneous population. It
+only requires comparability within groups that already share the same actuarial
+risk profile.
+
+### Tank-Level Cells
+
+For the duration analysis, each individual tank is classified by four
+characteristics: wall type (Single-Walled or Double-Walled), fuel type
+(Gasoline-Only, Diesel-Only, Motor-Fuel-Mixed, Other-Fuel, or Unknown-Fuel),
+capacity bin (five bins from Under 1,000 to 25,000-plus gallons), and the
+calendar year of installation. These are physical attributes of the individual
+tank, not portfolio-level summaries. The four dimensions define the tank's
+comparison cell.
+
+The primary tank-level sample restricts to tanks installed between 1989 and 1997.
+This cohort window excludes tanks subject to the federal upgrade mandate (pre-1989
+cohorts, which faced compliance-driven closures unrelated to insurance pricing) and
+tanks installed after the reform (post-1997 cohorts, whose entry decision may
+reflect the new pricing regime). The restriction ensures the pre-period is free of
+mandate-driven closures and the sample comprises tanks whose full observed lifetime
+spans both the pre and post-reform periods.
+
+Tanks classified as Unknown-Wall or with missing capacity are excluded. The Cox
+model stratifies by tank cell, so each cell receives its own nonparametric baseline
+hazard. Cell coverage is measured as the share of tank-years falling in cells where
+both Texas and at least one control state are represented.
 
 
-## Balance After the Restriction
+## Pre-Treatment Balance {#sec-balance}
 
-The make-model restriction substantially reduces the composition gap between Texas
-and the control group. Panel A of @tbl-descriptive reports the 1998 cross-section
-for both the full sample and the make-model comparison sample, separately for Texas
-and the control group. The raw Texas-control difference in single-wall share and
-mean tank age is substantially smaller in the make-model sample than in the full
-sample. Panel B reports pre-period flow averages over 1989 through 1997, excluding
-1998 to avoid contamination from anticipatory behavior in the final pre-treatment
-year. Within the make-model sample, pre-period closure rates, exit rates, and leak
-rates are nearly identical across Texas and the control group before any regression
-estimates are introduced. The restriction achieves the comparability the
-identification strategy requires.
+The make-model restriction removes the composition gap between Texas and the
+control group and is what delivers valid pre-treatment parallel trends.
+@fig-full-sample-closure-rate and @fig-mm-sample-closure-rate plot raw annual
+closure rates for Texas and the control group in the full sample and the
+make-model sample. In the full sample, Texas closure rates are elevated during
+the 1989 to 1993 mandate window, producing a pre-treatment divergence that
+violates parallel trends. In the make-model sample, this divergence disappears.
+The two series track closely across the entire pre-reform window and separate only
+after December 1999.
 
 ```{r}
-#| label: tbl-descriptive
-#| tbl-cap: "Descriptive Statistics: 1998 Cross-Section and Pre-Period Flow Averages."
+#| label: fig-full-sample-closure-rate
+#| fig-cap: "Full Sample Annual Closure Rates: Texas versus Control Group."
+#| out-width: "85%"
+#| fig-align: center
+#| echo: false
+#| warning: false
+fig_path <- here::here("Output", "Figures",
+                        "Figure_RestrictionEarnsParallelTrends_Panel1A.png")
+if (file.exists(fig_path)) {
+  knitr::include_graphics(fig_path)
+} else {
+  cat(sprintf("Figure file not found at: %s", fig_path))
+}
+```
+
+\vspace{0.2cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Annual facility-level closure rates for Texas (orange) and the
+control group (blue) in the full incumbent sample, 1990 to 2020. The shaded band
+marks the Texas phased mandate window (1989 to 1993). The elevated Texas closure
+rate during this window is a mandate compliance event and produces a pre-treatment
+divergence that violates parallel trends.
+\end{flushleft}
+
+```{r}
+#| label: fig-full-sample-diff
+#| fig-cap: "Full Sample Texas Minus Control Closure Rate Difference."
+#| out-width: "85%"
+#| fig-align: center
+#| echo: false
+#| warning: false
+fig_path <- here::here("Output", "Figures",
+                        "Figure_RestrictionEarnsParallelTrends_Panel1B.png")
+if (file.exists(fig_path)) {
+  knitr::include_graphics(fig_path)
+} else {
+  cat(sprintf("Figure file not found at: %s", fig_path))
+}
+```
+
+\vspace{0.2cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Texas minus control group annual closure rate, full sample. The
+shaded band is the 95\% confidence interval. The pre-treatment difference is
+positive during the mandate window.
+\end{flushleft}
+
+```{r}
+#| label: fig-mm-sample-closure-rate
+#| fig-cap: "Make-Model Sample Annual Closure Rates: Texas versus Control Group."
+#| out-width: "85%"
+#| fig-align: center
+#| echo: false
+#| warning: false
+fig_path <- here::here("Output", "Figures",
+                        "Figure_RestrictionEarnsParallelTrends_Panel2A.png")
+if (file.exists(fig_path)) {
+  knitr::include_graphics(fig_path)
+} else {
+  cat(sprintf("Figure file not found at: %s", fig_path))
+}
+```
+
+\vspace{0.2cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Annual facility-level closure rates for Texas (orange) and the
+control group (blue) in the make-model comparison sample. The pre-treatment
+series are parallel throughout the 1990 to 1998 window.
+\end{flushleft}
+
+```{r}
+#| label: fig-mm-sample-diff
+#| fig-cap: "Make-Model Sample Texas Minus Control Closure Rate Difference."
+#| out-width: "85%"
+#| fig-align: center
+#| echo: false
+#| warning: false
+fig_path <- here::here("Output", "Figures",
+                        "Figure_RestrictionEarnsParallelTrends_Panel2B.png")
+if (file.exists(fig_path)) {
+  knitr::include_graphics(fig_path)
+} else {
+  cat(sprintf("Figure file not found at: %s", fig_path))
+}
+```
+
+\vspace{0.2cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Texas minus control group annual closure rate, make-model sample.
+The pre-treatment difference is centered at zero throughout the 1990 to 1998
+window. The post-reform separation provides the raw identifying variation for the
+difference-in-differences estimates in Section~\ref{sec-results}.
+\end{flushleft}
+
+@tbl-balance reports progressive balance across three comparison groups. The
+full-sample naive comparison shows the unconditional pre-reform gap between Texas
+and control states. The make-model pooled comparison restricts to overlap cells but
+computes raw means. The cell-weighted comparison takes the cell-size-weighted mean
+of within-cell rates. Shrinkage in the difference column from naive to cell-weighted
+measures how much of the raw gap is attributable to compositional sorting that the
+cell design removes.
+
+```{r}
+#| label: tbl-balance
+#| tbl-cap: "Progressive Balance: Naive, MM Pooled, and Cell-Weighted Comparison."
 #| echo: false
 #| warning: false
 #| results: asis
 
-table_path <- here::here("Output", "Tables", "Table1_Combined_Long.tex")
+table_path <- here::here("Output", "Tables", "Table1_Balance.tex")
 if (file.exists(table_path)) {
   cat(readLines(table_path), sep = "\n")
 } else {
-  cat("\\textit{Table not found. Run 01\\_Descriptive\\_Analysis\\_REFACTORED.R.}")
+  cat("\\textit{Table not found. Run 01l\\_DataQuality\\_and\\_Balance.R.}")
 }
 ```
 
-\vspace{0.2cm} \par \footnotesize \textit{Notes:} Panel A: facility and tank
-characteristics as of December 22, 1998, separately for Texas and the control
-group in the full sample and the make-model comparison sample. Panel B: pre-period
-flow averages over 1989--1997; calendar year 1998 is excluded to avoid
-contamination from anticipatory behavior. The make-model restriction substantially
-reduces the Texas-control gap on single-wall share and mean tank age. Pre-period
-behavioral rates in the restricted sample are nearly identical across the two groups.
+\vspace{0.2cm}
+\par\footnotesize
+\textit{Notes:}
+Read top to bottom as a progressive narrowing of the comparison group.
+Full Sample (Naive) is the unconditional pre-reform difference across all
+analysis facilities. MM Sample (Pooled) restricts to overlap-cell facilities
+but computes raw pooled means. MM Sample (Cell-Weighted) is the cell-size-weighted
+mean of within-cell rates.
+Shrinkage in the Diff.\ column from Naive to Cell-Weighted measures how much of
+the raw TX/CTL gap is attributable to compositional sorting the design removes.
+$N$ counts are unique facilities observed in at least one pre-reform year
+(1990 to 1998).
+
 
 # Empirical Framework
 
@@ -1663,28 +2087,65 @@ The success of this price-based mechanism in reducing environmental risk invites
 
 
 
-
 ```{r}
-#| label: fig-premium-level
-#| fig-cap: "Reconstructed Annual Premium Levels for Texas UST Facilities, 2006--2021."
-#| out-width: "100%"
+#| label: tbl-attrition
+#| tbl-cap: "Sequential Attrition Log."
 #| echo: false
 #| warning: false
-fig_path <- here::here("Output", "Figures", "FigureB_MidContinent_Pricing.pdf")
-if (file.exists(fig_path)) {
-  knitr::include_graphics(fig_path)
+#| results: asis
+
+table_path <- here::here("Output", "Tables", "TableB1_Attrition_Log.tex")
+if (file.exists(table_path)) {
+  cat(readLines(table_path), sep = "\n")
 } else {
-  cat(sprintf("Figure file not found at: %s", fig_path))
+  cat("\\textit{Table not found. Run 01l\\_DataQuality.R.}")
 }
 ```
 
-\vspace{0.2cm}
-\begin{flushleft}
-\footnotesize
-\textit{Notes:} Left panel: median premium by year, with pre- and post-transition shading. Center panel: premium index (1995 = 100) for single-wall and double-wall tanks separately. Right panel: log premium against tank age, with fitted lines by wall type. Premiums are strictly increasing in age and strictly higher for single-wall construction at every age, consistent with the Mid-Continent rate filing structure. Source: SERFF rate filings.
-\end{flushleft}
+\vspace{0.2cm} \par \footnotesize \textit{Notes:} Each row applies one additional filter to the facility-year panel. $\Delta$ columns show the marginal change in facilities and facility-years at each step. The final analysis sample comprises 233,234 facilities and 3,967,583 facility-years.
 
 
+
+```{r}
+#| label: tbl-missing-balance
+#| tbl-cap: "Balance Test for the Missing-Data Exclusion."
+#| echo: false
+#| warning: false
+#| results: asis
+
+table_path <- here::here("Output", "Tables", "TableB3_Missing_Date_Balance.tex")
+if (file.exists(table_path)) {
+  cat(readLines(table_path), sep = "\n")
+} else {
+  cat("\\textit{Table not found. Run 01\\_Descriptive\\_Analysis\\_REFACTORED.R.}")
+}
+```
+
+\vspace{0.2cm} \par \footnotesize \textit{Notes:} The dependent variable equals
+one if the facility was excluded from the estimation sample due to missing
+tank-level date records. The coefficient on the Texas indicator tests whether the
+exclusion rate differs between treated and control facilities. A statistically
+insignificant coefficient ($p = 0.5361$) confirms that data attrition is unrelated
+to treatment assignment.
+
+
+
+```{r}
+#| label: tbl-data-quality
+#| tbl-cap: "State-Level Data Completeness on Key Panel Dimensions."
+#| echo: false
+#| warning: false
+#| results: asis
+
+table_path <- here::here("Output", "Tables", "TableA0_DataQuality_ByState.tex")
+if (file.exists(table_path)) {
+  cat(readLines(table_path), sep = "\n")
+} else {
+  cat("\\textit{Table not found. Run 01l\\_DataQuality.R.}")
+}
+```
+
+\vspace{0.2cm} \par \footnotesize \textit{Notes:} Each cell reports the percentage of records missing the indicated field. Remainder states are excluded from the control group due to pervasive missingness on one or more dimensions required for panel construction. Washington and Oregon are excluded on institutional grounds --- neither operated a public uniform-premium trust fund during the study window. ``---'' indicates the field is not applicable or the denominator is zero.
 
 
 ```{r}
@@ -1716,6 +2177,23 @@ tibble::tribble(
 ```
 
 
+
+```{r}
+#| label: tbl-mandate-exposure
+#| tbl-cap: "Mandate Exposure Comparison: Texas Pre-1988 Cohort versus Control States."
+#| echo: false
+#| warning: false
+#| results: asis
+
+table_path <- here::here("Output", "Tables", "Table2_Mandate_Exposure_Comparison.tex")
+if (file.exists(table_path)) {
+  cat(readLines(table_path), sep = "\n")
+} else {
+  cat("\\textit{Table not found. Run 01\\_Descriptive\\_Analysis\\_REFACTORED.R.}")
+}
+```
+
+\vspace{0.2cm} \par \footnotesize \textit{Notes:} Comparison of cumulative closure rates and surviving fleet characteristics for Texas pre-1988 tank cohorts versus matched control-state counterparts. Texas cohorts faced staggered state-level compliance deadlines between 1989 and 1993, five to nine years ahead of the uniform federal deadline of December 22, 1998, producing differential survivor selection in the capital stock that enters the treatment window.
 
 
 
