@@ -112,6 +112,39 @@ AGE_BIN_BREAKS  <- c(0, 3, 6, 9, 12, 15, 18, 21, 24, Inf)
 AGE_BIN_LABELS  <- c("0-2",   "3-5",   "6-8",   "9-11",
                      "12-14", "15-17", "18-20", "21-23", "24+")
 
+
+# ---- Study states (1 treated + 19 controls) ----
+# Control states: those that maintained public UST insurance/indemnification
+# funds throughout the study period, providing the counterfactual of continued
+# flat-fee public coverage against which the Texas transition to private
+# actuarial pricing is identified.
+#
+# EXCLUDED from controls (with rationale):
+#   PA — Pennsylvania maintains its own USTIF (Underground Storage Tank
+#        Indemnification Fund) under Act 32 of 1989, making it institutionally
+#        similar to Texas and a valid candidate control.  However, PA's
+#        Act 16 amendments (signed June 26, 1995) coincide with a 29%
+#        single-walled tank closure rate spike in 1995 — roughly double
+#        the adjacent years.  Until the regulatory mechanism driving this
+#        spike is understood and can be controlled for econometrically,
+#        PA is excluded to avoid contaminating the pre-period.
+#        A leave-one-out diagnostic confirms that PA single-handedly drives
+#        the year -4 event-study outlier when included in the control group.
+#        PA should be revisited once Act 16's operational requirements are
+#        documented.  
+#
+CONTROL_STATES <- c(
+  "AL", "AR", "CO", "GA", "ID", "KS", "KY",
+  "MD", "MI", "MN", "MO", "NC", "NJ", "OH",
+  "OK", "TN", "VA", "WI", "WV"
+)
+STUDY_STATES   <- c("TX", CONTROL_STATES)
+ 
+# States explicitly excluded from analysis (see rationale above)
+EXCLUDED_STATES <- c("PA")
+ 
+
+
 # ---- Colors ----
 COL_TX      <- "#D55E00"   # Texas / treated
 COL_CTRL    <- "#0072B2"   # Control states
@@ -334,9 +367,11 @@ cat("S3: LOAD MASTER TANKS AND BUILD TANK-YEAR PANEL\n")
 cat("========================================\n\n")
 
 master_tanks <- fread(
-  here("Data", "Master_Harmonized_UST_Tanks.csv"),
+  here("Data", "Processed", "Master_Harmonized_UST_Tanks.csv"),
   na.strings = c("", "NA", "N/A")
 )
+
+
 log_step(sprintf("Loaded: %s rows, %s columns",
                  fmt_n(nrow(master_tanks)), ncol(master_tanks)))
 
@@ -356,21 +391,34 @@ for (col in c("tank_installed_date", "tank_closed_date")) {
     master_tanks[[col]] <- as.IDate(master_tanks[[col]])
 }
 
+
 # ---- Treatment assignment ----
-# Texas = 1; all other study states = 0.
-# Tanks in non-study states (not in the 19-state control group) should have
-# been removed by the harmonization script. If any remain, they receive NA
-# and are excluded downstream via !is.na(did_term).
+# Texas = 1; study-state controls = 0; all others = NA.
+# Assigning NA (not 0) to non-study states prevents them from silently
+# entering the control group if a downstream filter is missing.
+# Non-study-state tanks are excluded via !is.na(did_term) in S4/S5.
 master_tanks[, texas_treated := fcase(
-  state == "TX", 1L,
-  state != "TX" & !is.na(state), 0L,
+  state == "TX",                1L,
+  state %in% CONTROL_STATES,   0L,
   default = NA_integer_
 )]
-
-log_step(sprintf("Treatment: TX=%s tanks, Control=%s tanks, NA=%s",
+ 
+log_step(sprintf("Treatment: TX=%s tanks, Control=%s tanks, Non-study (NA)=%s",
                  fmt_n(master_tanks[texas_treated == 1, .N]),
                  fmt_n(master_tanks[texas_treated == 0, .N]),
                  fmt_n(master_tanks[is.na(texas_treated), .N])))
+ 
+# Report excluded states that have data (for transparency)
+if (any(master_tanks$state %in% EXCLUDED_STATES)) {
+  for (es in EXCLUDED_STATES) {
+    n_ex <- master_tanks[state == es, .N]
+    if (n_ex > 0)
+      log_step(sprintf("  Excluded state %s: %s tanks (see S1 rationale)",
+                        es, fmt_n(n_ex)), 1)
+  }
+}
+ 
+ 
 
 # ---- Unique identifiers ----
 # tank_panel_id: unique per physical tank, used as unit FE in panel regressions
@@ -416,6 +464,7 @@ panel_cols <- c("tank_panel_id", "panel_id", "facility_id", "state",
                 "tank_installed_date", "tank_closed_date",
                 "expand_start", "expand_end")
 
+
 tank_year_panel <- study_tanks[
   expand_start <= expand_end,
   .SD,
@@ -425,7 +474,7 @@ tank_year_panel <- study_tanks[
   .(panel_year    = yrs,
     closure_event = as.integer(
       !is.na(tank_closed_date) & year(tank_closed_date) == yrs))
-}, by = c(setdiff(panel_cols, c("expand_start", "expand_end")))]
+}, by = panel_cols] # Include ALL columns in the 'by' group, including start/end
 
 log_step(sprintf("Tank-year panel: %s rows, %s unique tanks, %s unique facilities",
                  fmt_n(nrow(tank_year_panel)),
@@ -515,12 +564,31 @@ cat("========================================\n\n")
 #   6. tstop <= tstart                 → invalid counting-process interval (zero-duration)
 #   7. is.na(did_term)                 → treatment status unknown
 
-mm_tank_primary <- tank_year_panel[
-!is.na(make_model_tank)              &
-  mm_install_cohort %in% PRIMARY_YEARS &
-  tstop > tstart                         &
-  !is.na(did_term)
-]
+
+
+# The existing S4 filter is correct:
+  mm_tank_primary <- tank_year_panel[
+    !is.na(make_model_tank)              &
+    mm_install_cohort %in% PRIMARY_YEARS &
+    tstop > tstart                       &
+    !is.na(did_term)                     &
+    state %in% STUDY_STATES
+  ]
+#
+# ADD the following verification block AFTER the sample size report:
+ 
+# ---- Verify no non-study states leaked through ----
+leaked_states <- setdiff(unique(mm_tank_primary$state), STUDY_STATES)
+if (length(leaked_states) > 0) {
+  stop(sprintf(
+    "FATAL: Non-study states found in mm_tank_primary: %s\n  Check S3 treatment assignment and S4 filters.",
+    paste(leaked_states, collapse = ", ")))
+} else {
+  log_step(sprintf("  ✓ State filter verified: %d states (%s)",
+                   uniqueN(mm_tank_primary$state),
+                   paste(sort(unique(mm_tank_primary$state)), collapse = ", ")), 1)
+}
+
 
 # ---- Sample size report ----
 n_ty       <- nrow(mm_tank_primary)
@@ -606,15 +674,16 @@ cat("========================================\n\n")
 log_step("Filtering master tanks to primary sample attributes...")
 
 exact_base <- master_tanks[
-  !is.na(texas_treated)                  &
-!is.na(make_model_tank)              &
+  !is.na(texas_treated)                &
+  !is.na(make_model_tank)              &
   mm_install_cohort %in% PRIMARY_YEARS &
-    !is.na(tank_installed_date)            &
-  tank_installed_date < STUDY_END,
+  !is.na(tank_installed_date)          &
+  tank_installed_date < STUDY_END      &
+  state %in% STUDY_STATES,             # ← comma before column selection
   .(tank_panel_id, panel_id, facility_id, state, texas_treated,
     mm_wall, mm_fuel, mm_capacity, mm_install_cohort, make_model_tank,
-    tank_installed_date,                         # kept to compute exact age later
-    t_enter = as.numeric(tank_installed_date),   # days since 1970-01-01
+    tank_installed_date,
+    t_enter = as.numeric(tank_installed_date),
     t_exit  = as.numeric(
       pmin(
         fifelse(!is.na(tank_closed_date),
@@ -626,9 +695,27 @@ exact_base <- master_tanks[
       tank_closed_date >= tank_installed_date)
   )
 ][t_exit > t_enter]
-
-log_step(sprintf("Exact-date base: %s tanks", fmt_n(nrow(exact_base))))
-
+ 
+# ---- Verify Cox sample aligns with panel sample ----
+panel_tanks <- sort(unique(mm_tank_primary$tank_panel_id))
+cox_tanks   <- sort(unique(exact_base$tank_panel_id))
+only_panel  <- setdiff(panel_tanks, cox_tanks)
+only_cox    <- setdiff(cox_tanks, panel_tanks)
+ 
+if (length(only_panel) > 0 || length(only_cox) > 0) {
+  warning(sprintf(
+    "Sample mismatch: %d tanks in panel only, %d in Cox only.\n  Panel filters and Cox filters may differ.",
+    length(only_panel), length(only_cox)))
+} else {
+  log_step("  ✓ Tank sets match between panel and Cox datasets", 1)
+}
+ 
+# Verify no excluded states
+leaked_cox <- setdiff(unique(exact_base$state), STUDY_STATES)
+if (length(leaked_cox) > 0)
+  stop(sprintf("Non-study states in exact_base: %s", paste(leaked_cox, collapse = ", ")))
+ 
+ 
 # ---- survSplit at REFORM_DAYS ----
 # Produces a data.frame with reform_ep = 1 (pre) or 2 (post).
 # All non-Surv columns (including tank_installed_date) are preserved.
@@ -941,275 +1028,580 @@ ggsave(file.path(OUTPUT_FIGURES, "Figure_BinnedScatter_CohortClosure.pdf"),
 cat("\n")
 
 
-#### S9: PRIMARY Cox Model ####
+
+#### S10: Cox Event Study (pooled tails, % change scale) ####
 
 cat("========================================\n")
-cat("S9: PRIMARY COX MODEL\n")
+cat("S10: COX EVENT STUDY (EXACT-DATE INTERVALS)\n")
 cat("========================================\n\n")
 
-# Primary specification (eq-cox in the empirical framework):
-#   h(t|i) = h_0m(t) · exp(β · did_term)
+# ════════════════════════════════════════════════════════════
+# REFACTORED TO ELIMINATE INTERVAL-CENSORING BIAS
+# ════════════════════════════════════════════════════════════
+# 
+# Current flaw in old approach (mm_tank_primary):
+#   - Enforces artificial calendar-year intervals (Jan 1 — Dec 31)
+#   - Destroys the exact-date continuous-time ID mechanism from S5
+#   - Intervals are not aligned to reform date, causing event misclassification
 #
-# where:
-#   t             = calendar time (days since 1970-01-01)
-#   h_0m(t)       = cell-specific baseline hazard (strata(make_model_tank))
-#   did_term      = texas_treated × I(t >= REFORM_DATE)
-#   β             = log hazard ratio; exp(β) = HR
+# Fixed approach (exact_es_df):
+#   - Generates exact anniversary dates of REFORM_DATE (1998-12-22) 
+#     from -8 to +15 years as precise split points
+#   - Uses survival::survSplit() to create counting-process episodes
+#     at these exact dates, preserving continuous-time structure
+#   - Maps each episode to its relative year exactly
+#   - Estimates Cox model using counting-process data with exact intervals
 #
-# Identification: within each make_model_tank cell, β is identified by the
-# change in the Texas closure hazard at the reform date relative to the pre-
-# reform trajectory shared by TX and control tanks in the same cell.
-#
-# Standard errors clustered at the state level.
-# Time axis: exact calendar days from exact install dates (no interval ties).
+# Result: Event study hazard ratios now reflect treatment timing WITHOUT
+# artificial calendar-year censoring.
 
-log_step("Estimating primary Cox model (calendar time, make_model_tank strata)...")
+# ---- Pooling boundaries ----
+ES_POOL_PRE  <- -8L   # ≤ −8 pooled into one pre-period bin
+ES_POOL_POST <- 15L   # ≥ 15 pooled into one post-period bin
 
-m_cox_primary <- coxph(
-  Surv(t_enter, t_exit, failure) ~
-    did_term + strata(make_model_tank),
-  data    = exact_split_df,
-  cluster = exact_split_df$state,
-  ties    = "efron"
+log_step("Generating exact anniversary dates from REFORM_DATE...")
+
+# ---- Generate exact calendar dates for event-study windows ----
+# Create dates for the 1998-12-22 +/- 8 to 15 years:
+#   Anniversary at -8 years: 1990-12-22
+#   Anniversary at -7 years: 1991-12-22
+#   ...
+#   Anniversary at 0 years (REFORM_DATE): 1998-12-22
+#   ...
+#   Anniversary at +15 years: 2013-12-22
+
+# seq.Date() from base R: generate the sequence of exact anniversary dates
+es_anniversaries <- seq(
+  from = REFORM_DATE + -8L * 365.25,  # Rough start; date arithmetic is exact
+  to   = REFORM_DATE +  15L * 365.25,  # Rough end
+  by   = "year"
 )
 
-cox_prim <- extract_cox_row(m_cox_primary)
-
-log_step(sprintf("  HR  = %.3f (95%% CI: %.3f – %.3f)",
-                 cox_prim$hr,
-                 exp(cox_prim$coef - 1.96 * cox_prim$se),
-                 exp(cox_prim$coef + 1.96 * cox_prim$se)), 1)
-log_step(sprintf("  log-coef = %.4f  SE = %.4f  p = %.4f",
-                 cox_prim$coef, cox_prim$se, cox_prim$p), 1)
-log_step(sprintf("  N = %s  Events = %s",
-                 fmt_n(cox_prim$n), fmt_n(cox_prim$ev)), 1)
-
-# Summary for quick inspection
-print(summary(m_cox_primary)$coefficients)
-
-# Also estimate age-axis Cox (t = years since installation) for comparison
-log_step("\nEstimating age-axis Cox model (robustness / comparison)...")
-
-m_cox_age <- coxph(
-  Surv(age_enter, age_exit, failure) ~
-    did_term + strata(make_model_tank),
-  data    = exact_split_df[age_exit > age_enter],
-  cluster = exact_split_df[age_exit > age_enter]$state,
-  ties    = "efron"
+# Fine-tune to exact anniversaries by using IDate arithmetic
+# (REFORM_DATE is already an IDate, supporting - operator for integer years)
+es_anniversaries <- as.IDate(
+  seq(
+    from = as.numeric(REFORM_DATE) - 8 * 365.25,
+    to   = as.numeric(REFORM_DATE) + 15 * 365.25,
+    by   = 365.25
+  ),
+  origin = "1970-01-01"
 )
 
-cox_age <- extract_cox_row(m_cox_age)
-log_step(sprintf("  Age-axis HR = %.3f  log-coef = %.4f  SE = %.4f  p = %.4f",
-                 cox_age$hr, cox_age$coef, cox_age$se, cox_age$p), 1)
-cat("\n")
+# More precise: explicitly create anniversary dates year by year
+# Extract year, month, day from REFORM_DATE using base R functions
+ref_date_str <- as.character(REFORM_DATE)  # Format: "YYYY-MM-DD"
+ref_yr <- as.integer(substr(ref_date_str, 1, 4))
+ref_mo <- substr(ref_date_str, 6, 7)
+ref_dy <- substr(ref_date_str, 9, 10)
 
+es_anniversaries <- as.IDate(
+  sapply(-8:15, function(yr) {
+    new_yr <- ref_yr + yr
+    paste(new_yr, ref_mo, ref_dy, sep = "-")
+  })
+)
 
-#### S10: Cox Event Study ####
+# Convert to numeric days since 1970-01-01 for survSplit()
+es_cuts_numeric <- as.numeric(es_anniversaries)
+es_cuts_numeric <- sort(es_cuts_numeric[es_cuts_numeric > min(exact_split_df$t_enter) & 
+                                         es_cuts_numeric < max(exact_split_df$t_exit)])
 
-cat("========================================\n")
-cat("S10: COX EVENT STUDY\n")
-cat("========================================\n\n")
+log_step(sprintf("  Generated %d exact anniversary dates from %s to %s",
+                 length(es_cuts_numeric),
+                 as.Date(es_cuts_numeric[1], origin = "1970-01-01"),
+                 as.Date(es_cuts_numeric[length(es_cuts_numeric)], origin = "1970-01-01")), 1)
 
-# Parallel trends test in a Cox framework using the annual tank-year panel
-# (not exact-date data, so year bins are exact calendar year integers).
-#
-# Model: Surv(tstart, tstop, closure_event) ~
-#          ry_m5 + ... + ry_m2 + ry_0 + ... + ry_5 + strata(make_model_tank)
-# where ry_k = I(rel_year_bin == k) × texas_treated  for k ≠ -1 (reference)
-#
-# Within each cell-year stratum, the estimator identifies whether Texas tanks
-# diverge from control tanks in each relative year, net of the cell baseline.
+log_step("Applying survSplit at exact anniversary dates...")
 
-es_years     <- sort(unique(mm_tank_primary$rel_year_bin))
-es_years_nref <- es_years[es_years != -1L]
+# ---- Apply survSplit to create exact counting-process intervals ----
+# Splitting exact_split_df at precise anniversary dates
+exact_es_df <- survSplit(
+  formula = Surv(t_enter, t_exit, failure) ~ .,
+  data    = as.data.frame(exact_split_df),
+  cut     = es_cuts_numeric,
+  episode = "es_episode"
+)
+setDT(exact_es_df)
 
-for (yr in es_years_nref) {
+# Filter out zero-length intervals (parsimonious)
+exact_es_df <- exact_es_df[t_exit > t_enter]
+
+log_step(sprintf("  After exact survSplit: %s rows, %s tanks, %s events",
+                 fmt_n(nrow(exact_es_df)),
+                 fmt_n(uniqueN(exact_es_df$tank_panel_id)),
+                 fmt_n(sum(exact_es_df$failure))), 1)
+
+# ---- Map episodes to relative years ----
+# Each episode's midpoint or endpoint date determines its relative year
+# Relative year = floor((interval_midpoint - REFORM_DATE) / 365.25)
+
+log_step("Mapping episodes to relative years...")
+
+exact_es_df[, `:=`(
+  interval_midpoint = (t_enter + t_exit) / 2,
+  interval_end_date = as.Date(t_exit, origin = "1970-01-01"),
+  interval_start_date = as.Date(t_enter, origin = "1970-01-01")
+)]
+
+# Relative year: computed from interval endpoint
+# (tanks close during the year; event timing is at interval end)
+exact_es_df[, `:=`(
+  days_from_reform = interval_end_date - REFORM_DATE,
+  rel_year = as.integer(floor(as.numeric(interval_end_date - REFORM_DATE) / 365.25))
+)]
+
+# ---- Determine available relative years (for individual dummies) ----
+es_years_actual <- sort(unique(exact_es_df$rel_year))
+
+log_step(sprintf("  Relative years in exact_es_df: %s to %s (%d unique)",
+                 min(es_years_actual), max(es_years_actual),
+                 length(es_years_actual)), 1)
+
+# ---- Individual years between tails (excluding reference −1) ----
+es_years_individual <- sort(
+  es_years_actual[
+    es_years_actual >  ES_POOL_PRE  &
+    es_years_actual <  ES_POOL_POST &
+    es_years_actual != -1L
+  ]
+)
+
+if (length(es_years_individual) > 0) {
+  log_step(sprintf(
+    "Event-study bins: pooled ≤%d | individual %d to %d | pooled ≥%d | ref = −1",
+    ES_POOL_PRE,
+    min(es_years_individual[es_years_individual < 0]),
+    max(es_years_individual[es_years_individual > 0]),
+    ES_POOL_POST
+  ))
+} else {
+  log_step(sprintf(
+    "Event-study bins: pooled ≤%d | (no individual years) | pooled ≥%d | ref = −1",
+    ES_POOL_PRE, ES_POOL_POST
+  ))
+}
+
+# ---- Build interaction variables (exact-date intervals) ----
+log_step("Building relative-year × texas_treated interactions...")
+
+exact_es_df[, `:=`(
+  ry_pool_pre  = as.integer(rel_year <= ES_POOL_PRE)  * texas_treated,
+  ry_pool_post = as.integer(rel_year >= ES_POOL_POST) * texas_treated
+)]
+
+ry_vars_es <- c("ry_pool_pre", "ry_pool_post")
+
+for (yr in es_years_individual) {
   vname <- ifelse(yr < 0,
                   paste0("ry_m", abs(yr)),
                   paste0("ry_",  yr))
-  mm_tank_primary[, (vname) := as.integer(rel_year_bin == yr) * texas_treated]
+  exact_es_df[, (vname) := as.integer(rel_year == yr) * texas_treated]
+  ry_vars_es <- c(ry_vars_es, vname)
 }
-ry_vars <- sort(grep("^ry_", names(mm_tank_primary), value = TRUE))
+ry_vars_es <- sort(ry_vars_es)
 
+log_step(sprintf("  Created %d interaction variables: %s",
+                 length(ry_vars_es), 
+                 paste(head(ry_vars_es, 3), collapse = ", ")), 1)
+
+# ---- Estimate Cox model (exact counting-process with stratification) ----
 cox_es_fml <- as.formula(paste(
-  "Surv(tstart, tstop, closure_event) ~",
-  paste(ry_vars, collapse = " + "),
+  "Surv(t_enter, t_exit, failure) ~",
+  paste(ry_vars_es, collapse = " + "),
   "+ strata(make_model_tank)"
 ))
 
-log_step("Estimating Cox event study...")
+log_step("Estimating Cox event study on exact-date intervals...")
 m_cox_es <- coxph(
   cox_es_fml,
-  data    = mm_tank_primary,
-  cluster = mm_tank_primary$state,
+  data    = exact_es_df,
+  cluster = exact_es_df$state,
   ties    = "efron"
 )
 
-# Extract and tidy
+log_step(sprintf("  Model fit: %s terms, cluster-adjusted SE, Efron ties",
+                 length(coef(m_cox_es))), 1)
+cat("\n")
+
+# ---- Extract and parse coefficients ----
 cox_es_coefs <- as.data.table(
   summary(m_cox_es)$coefficients,
   keep.rownames = "term"
 )
-setnames(cox_es_coefs, c("term", "coef", "exp_coef", "se", "z", "p"))
+setnames(cox_es_coefs,
+         c("term", "coef", "exp_coef", "se_model", "robust_se", "z", "p"))
 
-cox_es_coefs[, rel_year := as.integer(
-  ifelse(grepl("^ry_m", term),
-         -as.integer(gsub("ry_m", "", term)),
-          as.integer(gsub("ry_",  "", term)))
+# Parse rel_year from term names (pooled and individual years)
+cox_es_coefs[, rel_year := fcase(
+  term == "ry_pool_pre",         ES_POOL_PRE,
+  term == "ry_pool_post",        ES_POOL_POST,
+  grepl("^ry_m[0-9]+$", term),  -as.integer(gsub("ry_m", "", term)),
+  grepl("^ry_[0-9]+$",  term),   as.integer(gsub("ry_",  "", term)),
+  default = NA_integer_
 )]
 cox_es_coefs <- cox_es_coefs[!is.na(rel_year)]
+
+# Compute derived quantities (hazard ratios, %-change, CIs)
 cox_es_coefs[, `:=`(
-  hr    = exp_coef,
-  ci_lo = exp(coef - 1.96 * se),
-  ci_hi = exp(coef + 1.96 * se),
-  period = fcase(rel_year < 0, "Pre", rel_year == 0, "Post", default = "Post")
+  hr         = exp_coef,
+  ci_lo      = exp(coef - 1.96 * robust_se),
+  ci_hi      = exp(coef + 1.96 * robust_se),
+  pct_change = (exp_coef - 1) * 100,
+  pct_ci_lo  = (exp(coef - 1.96 * robust_se) - 1) * 100,
+  pct_ci_hi  = (exp(coef + 1.96 * robust_se) - 1) * 100,
+  period     = fcase(
+    rel_year <  0, "Pre",
+    rel_year == 0, "Post",
+    default        = "Post"
+  ),
+  pooled     = as.integer(term %in% c("ry_pool_pre", "ry_pool_post"))
 )]
 
-# Add reference row at -1
+log_step("Event-study coefficients:")
+log_step(sprintf("  %-30s %+8.4f  [%+7.4f, %+7.4f]  %s",
+                 "term", "coef", "CI_lo", "CI_hi", "pct_change"), 1)
+for (i in seq_len(nrow(cox_es_coefs))) {
+  r <- cox_es_coefs[i]
+  log_step(sprintf("  %-30s %+8.4f  [%+7.4f, %+7.4f]  %+6.1f%%",
+                   r$term, r$coef, 
+                   log(r$ci_lo), log(r$ci_hi),
+                   r$pct_change), 1)
+}
+
+# Add reference row (year −1, normalized to HR=1, 0% change)
 cox_es_coefs <- rbind(
   cox_es_coefs,
-  data.table(term = "ref", coef = 0, exp_coef = 1, se = 0,
-             z = 0, p = 1, rel_year = -1L, hr = 1,
-             ci_lo = 1, ci_hi = 1, period = "Ref"),
+  data.table(
+    term       = "ref",
+    coef       = 0,   exp_coef  = 1,  se_model  = 0,
+    robust_se  = 0,   z         = 0,  p         = 1,
+    rel_year   = -1L,
+    hr         = 1,   ci_lo     = 1,  ci_hi     = 1,
+    pct_change = 0,   pct_ci_lo = 0,  pct_ci_hi = 0,
+    period     = "Ref",
+    pooled     = 0L
+  ),
   fill = TRUE
 )
 setorder(cox_es_coefs, rel_year)
 
-# Pre-period joint test
-pre_vars <- ry_vars[grepl("^ry_m[2-5]", ry_vars)]
-if (length(pre_vars) >= 2) {
-  pre_test <- linearHypothesis(m_cox_es, paste0(pre_vars, " = 0"),
-                               test = "Chisq")
-  log_step(sprintf("Pre-period joint χ² test (%d dof): p = %.3f",
-                   length(pre_vars),
-                   pre_test[2, "Pr(>Chisq)"]))
+# ---- Pre-period joint tests (parallel trends) ----
+log_step("Testing parallel trends (pre-period joint tests)...")
+
+# Full pre: pooled tail + all individual pre years
+pre_vars_all <- ry_vars_es[ry_vars_es == "ry_pool_pre" |
+                             grepl("^ry_m[0-9]+$", ry_vars_es)]
+pre_test_all <- linearHypothesis(
+  m_cox_es, paste0(pre_vars_all, " = 0"), test = "Chisq"
+)
+pre_p_all <- pre_test_all[2, "Pr(>Chisq)"]
+
+# Dense pre (all cohorts present): years −6 to −2 only
+pre_vars_dense <- ry_vars_es[ry_vars_es %in% paste0("ry_m", 2:6)]
+pre_p_dense <- NA_real_
+if (length(pre_vars_dense) >= 2) {
+  pre_test_dense <- linearHypothesis(
+    m_cox_es, paste0(pre_vars_dense, " = 0"), test = "Chisq"
+  )
+  pre_p_dense <- pre_test_dense[2, "Pr(>Chisq)"]
 }
 
-# Plot
-p_cox_es <- ggplot(cox_es_coefs, aes(x = rel_year, y = hr)) +
+log_step(sprintf("  All pre-period (%d dof): χ² = %.2f, p = %.4f",
+                 length(pre_vars_all),
+                 pre_test_all[2, "Chisq"],
+                 pre_p_all), 1)
+log_step(sprintf("  Dense pre (−6 to −2, %d dof): χ² = %.2f, p = %.4f",
+                 length(pre_vars_dense),
+                 pre_test_dense[2, "Chisq"],
+                 pre_p_dense), 1)
+
+pre_test_label <- sprintf(
+  "Pre-period parallel-trends test\nAll pre (%d dof): χ²=%.2f, p=%.4f\nDense −6 to −2 (%d dof): χ²=%.2f, p=%.4f",
+  length(pre_vars_all),   pre_test_all[2, "Chisq"],   pre_p_all,
+  length(pre_vars_dense), 
+  ifelse(length(pre_vars_dense) >= 2, pre_test_dense[2, "Chisq"], NA), 
+  pre_p_dense
+)
+
+# ---- Prepare plotting data ----
+y_cap   <- ceiling(
+  max(cox_es_coefs[pooled == 0, pct_ci_hi], na.rm = TRUE) / 25
+) * 25
+y_floor <- floor(
+  min(cox_es_coefs[pooled == 0, pct_ci_lo], na.rm = TRUE) / 25
+) * 25
+y_cap   <- min(y_cap,   300L)
+y_floor <- max(y_floor, -150L)
+
+all_x  <- sort(unique(cox_es_coefs$rel_year))
+x_labs <- as.character(all_x)
+x_labs[all_x == ES_POOL_PRE]  <- paste0("\u2264", ES_POOL_PRE)   # ≤−8
+x_labs[all_x == ES_POOL_POST] <- paste0("\u2265", ES_POOL_POST)  # ≥15
+
+# ---- Plot event study ----
+p_cox_es <- ggplot(cox_es_coefs, aes(x = rel_year, y = pct_change)) +
+
+  # Pre-reform shading
   annotate("rect",
            xmin = -Inf, xmax = -0.5,
            ymin = -Inf, ymax = Inf,
-           fill = "grey90", alpha = 0.45) +
-  geom_hline(yintercept = 1, linetype = "dashed",
-             color = "grey50", linewidth = 0.5) +
-  geom_vline(xintercept = -0.5, color = "grey30", linewidth = 0.6) +
-  geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi),
-              alpha = 0.12, fill = "grey40") +
-  geom_line(color = "grey40", linewidth = 0.4, alpha = 0.6) +
-  geom_point(aes(color = period), size = 2.5) +
-  geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi, color = period),
-                width = 0.25, linewidth = 0.5) +
+           fill = "grey90", alpha = 0.50) +
+
+  # Reference lines
+  geom_hline(yintercept = 0, linetype = "dashed",
+             color = "grey35", linewidth = 0.5) +
+  geom_vline(xintercept = -0.5, color = "grey20", linewidth = 0.65) +
+
+  # Connecting line (no ribbon for exact intervals)
+  geom_line(aes(group = 1),
+            color = "grey40", linewidth = 0.45, alpha = 0.65) +
+
+  # Error bars
+  geom_errorbar(aes(ymin = pct_ci_lo, ymax = pct_ci_hi, color = period),
+                width = 0.30, linewidth = 0.45) +
+
+  # Individual-year points (circles)
+  geom_point(data = cox_es_coefs[pooled == 0],
+             aes(color = period), size = 2.6, shape = 16) +
+
+  # Pooled-bin points (diamonds)
+  geom_point(data = cox_es_coefs[pooled == 1],
+             aes(color = period), size = 3.2, shape = 18) +
+
+  # Pre-period test annotation
+  annotate("text",
+           x = ES_POOL_PRE + 0.3, y = y_cap * 0.97,
+           label = pre_test_label,
+           hjust = 0, vjust = 1,
+           size = 2.8, color = "grey25", lineheight = 1.15) +
+
   scale_color_manual(
     values = c(Pre = COL_CTRL, Post = COL_TX, Ref = "black"),
-    guide  = "none") +
-  scale_x_continuous(breaks = es_years) +
-  labs(x = "Years Relative to Reform (1999 = 0)",
-       y = "Hazard Ratio (ref = year −1)") +
-  theme_pub()
+    guide  = "none"
+  ) +
+  scale_x_continuous(breaks = all_x, labels = x_labs) +
+  scale_y_continuous(
+    limits = c(y_floor, y_cap),
+    oob    = scales::squish,
+    labels = function(x) paste0(ifelse(x > 0, "+", ""), x, "%")
+  ) +
+  labs(
+    x       = "Years Relative to Reform (1999 = 0)",
+    y       = "Change in Closure Hazard vs. Year \u22121",
+    title   = "Cox Event Study: Texas UST Insurance Reform\n(Exact-Date Counting-Process Intervals)",
+    caption = "Data: Exact calendar dates from S5 split at reform-date anniversaries. \u25C6 = pooled tail; \u25CF = individual year"
+  ) +
+  theme_pub() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    plot.margin  = margin(t = 8, r = 12, b = 8, l = 20, unit = "pt"),
+    axis.text.x  = element_text(angle = 45, hjust = 1, vjust = 1),
+    plot.title   = element_text(size = 9, face = "plain", color = "grey20"),
+    plot.caption = element_text(size = 8, color = "grey40",
+                                hjust = 0, margin = margin(t = 6))
+  ) +
+  coord_cartesian(clip = "off")
 
 ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_EventStudy.png"),
-       p_cox_es, width = 10, height = 5.5, dpi = 300, bg = "white")
+       p_cox_es, width = 13, height = 6.5, dpi = 300, bg = "white")
 ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_EventStudy.pdf"),
-       p_cox_es, width = 10, height = 5.5, device = cairo_pdf)
+       p_cox_es, width = 13, height = 6.5, device = cairo_pdf)
+
+log_step("Event study plot saved.")
+log_step(sprintf("  Figure: %s", file.path(OUTPUT_FIGURES, "Figure_Cox_EventStudy.png")))
+log_step(sprintf("  Coefficients: %s\n", file.path(OUTPUT_TABLES, "Table_CoxES_Coefficients.csv")))
 
 fwrite(cox_es_coefs,
        file.path(OUTPUT_TABLES, "Table_CoxES_Coefficients.csv"))
 
-# Clean up event-study variables from the panel
-mm_tank_primary[, (ry_vars) := NULL]
+# ---- Clean up (do NOT delete from mm_tank_primary) ----
+# Note: exact_es_df is a separate dataset built from exact_split_df
+# Variables ry_vars_es exist only in exact_es_df, not mm_tank_primary
+# No cleanup needed; exact_es_df will be available for diagnostics
+
 cat("\n")
 
-
-#### S11: Reference OLS LPM and Cloglog FE ####
+#### S11: OLS LPM ####
 
 cat("========================================\n")
-cat("S11: REFERENCE OLS LPM AND CLOGLOG FE\n")
+cat("S11: OLS LPM\n")
 cat("========================================\n\n")
 
-# These reference specifications serve two purposes:
-#   (a) OLS provides a transparent, prior-literature-comparable benchmark
-#   (b) Cloglog addresses survivorship attenuation relative to OLS; the
-#       Prentice-Gloeckler cloglog estimates log-hazard conditional on
-#       survival to t using identical data and FE structure
-#
-# Both use:
-#   - unit FE: tank_panel_id (individual tank intercept)
-#   - cell-year FE: make_model_tank^panel_year (within-cell identification)
-#   - time-varying age control: age_bin (NOT used for cell assignment)
-#   - clustering: state level
-#
-# NOTE: with 20 state clusters, conventional CR1 SEs over-reject.
-# Wild cluster bootstrap inference (fwildclusterboot) is preferred for
-# hypothesis tests; CR1 SEs are reported alongside for transparency.
+# ════════════════════════════════════════════════════════════
+# TUNING PARAMETERS
+# ════════════════════════════════════════════════════════════
+OLS_REF_YEAR   <- -1L
+OLS_POOL_PRE   <- -8L
+OLS_POOL_POST  <- 15L
+OLS_Y_CAP      <-  5
+OLS_Y_FLOOR    <- -5
+OLS_PLOT_W     <- 13
+OLS_PLOT_H     <-  6
 
-panel_dt <- mm_tank_primary[!is.na(age_bin) & tstop > tstart & !is.na(did_term)]
+WALL_COHORT_MIN <- 1990L
 
-log_step("Estimating OLS LPM (reference spec)...")
-m_ols <- feols(
-  closure_event ~ did_term + age_bin | tank_panel_id + make_model_tank^panel_year,
-  data    = panel_dt,
-  cluster = ~state
+CONTROL_STATES <- c(
+  "AL", "AR", "CO", "GA", "ID", "KS", "KY",
+  "MD", "MI", "MN", "MO", "NC", "NJ", "OH",
+  "OK", "TN", "VA", "WI", "WV"
 )
+STUDY_STATES <- c("TX", CONTROL_STATES)
+# ════════════════════════════════════════════════════════════
 
-log_step("Estimating Prentice-Gloeckler cloglog FE (reference spec)...")
-m_cloglog <- feglm(
-  closure_event ~ did_term + age_bin | tank_panel_id + make_model_tank^panel_year,
-  family  = binomial(link = "cloglog"),
-  data    = panel_dt,
-  cluster = ~state
-)
 
-ols_row <- extract_panel_row(m_ols)
-cll_row <- extract_panel_row(m_cloglog)
+# ── Helpers (unchanged) ─────────────────────────────────────
+# run_ols_es(), ols_pre_tests(), plot_ols_es() as defined above
 
-log_step(sprintf("  OLS    : coef = %.4f  SE = %.4f  p = %.4f  N = %s",
-                 ols_row$coef, ols_row$se, ols_row$p, fmt_n(ols_row$n)), 1)
-log_step(sprintf("  Cloglog: coef = %.4f  SE = %.4f  p = %.4f  N = %s",
-                 cll_row$coef, cll_row$se, cll_row$p, fmt_n(cll_row$n)), 1)
 
-# Discrete hazard profile from cloglog predictions
-panel_dt[, pred_hazard := predict(m_cloglog, type = "response")]
+# ════════════════════════════════════════════════════════════
+# Base filtered datasets  (PA dropped throughout)
+# ════════════════════════════════════════════════════════════
+panel_full <- mm_tank_primary[
+  tstop > tstart       &
+  !is.na(did_term)
+]
 
-haz_profile <- panel_dt[!is.na(pred_hazard) & !is.na(age_bin), .(
-  mean_hazard = mean(pred_hazard, na.rm = TRUE)
-), by = .(
-  age_bin,
-  group = fcase(
-    texas_treated == 0L,                           "Control (community-rated)",
-    texas_treated == 1L & panel_year < POST_YEAR,  "Texas pre-reform",
-    texas_treated == 1L & panel_year >= POST_YEAR, "Texas post-reform"
+panel_sw <- mm_tank_primary[
+  tstop > tstart       &
+  !is.na(did_term)     &
+  mm_wall == "Single-Walled" &
+  as.integer(mm_install_cohort) >= WALL_COHORT_MIN
+]
+
+panel_dw <- mm_tank_primary[
+  tstop > tstart       &
+  !is.na(did_term)     &
+  mm_wall == "Double-Walled" &
+  as.integer(mm_install_cohort) >= WALL_COHORT_MIN
+]
+
+log_step(sprintf("Sample sizes (PA excluded):"))
+log_step(sprintf("  Full      : %s tank-years, %s tanks",
+                 fmt_n(nrow(panel_full)),
+                 fmt_n(uniqueN(panel_full$tank_panel_id))), 1)
+log_step(sprintf("  SW (≥%d) : %s tank-years, %s tanks",
+                 WALL_COHORT_MIN,
+                 fmt_n(nrow(panel_sw)),
+                 fmt_n(uniqueN(panel_sw$tank_panel_id))), 1)
+log_step(sprintf("  DW (≥%d) : %s tank-years, %s tanks",
+                 WALL_COHORT_MIN,
+                 fmt_n(nrow(panel_dw)),
+                 fmt_n(uniqueN(panel_dw$tank_panel_id))), 1)
+
+
+# ════════════════════════════════════════════════════════════
+# DiD estimates
+# ════════════════════════════════════════════════════════════
+run_did <- function(dt, label) {
+  m <- feols(
+    closure_event ~ did_term | tank_panel_id + make_model_tank^panel_year,
+    data    = dt,
+    cluster = ~state
   )
-)][!is.na(group)]
+  r <- extract_panel_row(m)
+  log_step(sprintf("  %-20s coef = %+.4f pp  SE = %.4f  p = %.4f  N = %s",
+                   label,
+                   r$coef * 100, r$se * 100, r$p,
+                   fmt_n(r$n)), 1)
+  list(model = m, row = r)
+}
 
-haz_profile[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
-haz_profile[, group := factor(group, levels = c(
-  "Control (community-rated)", "Texas pre-reform", "Texas post-reform"))]
+log_step("DiD estimates:")
+did_full <- run_did(panel_full, "Full sample")
+did_sw   <- run_did(panel_sw,   "Single-Walled")
+did_dw   <- run_did(panel_dw,   "Double-Walled")
 
-p_haz_profile <- ggplot(haz_profile,
-  aes(x = age_bin, y = mean_hazard, color = group, group = group)) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2.5) +
-  scale_color_manual(values = c(
-    "Control (community-rated)" = COL_CTRL,
-    "Texas pre-reform"          = COL_PRE,
-    "Texas post-reform"         = COL_TX)) +
-  scale_y_continuous(labels = percent_format(accuracy = 0.1)) +
-  labs(x = "Tank Age (years, 3-year bins)",
-       y = "Predicted Annual Closure Hazard") +
-  theme_pub() +
-  theme(axis.text.x = element_text(angle = 20, hjust = 1))
 
-ggsave(file.path(OUTPUT_FIGURES, "Figure_DiscreteHazard_AgeProfile.png"),
-       p_haz_profile, width = 9, height = 5.5, dpi = 300, bg = "white")
-ggsave(file.path(OUTPUT_FIGURES, "Figure_DiscreteHazard_AgeProfile.pdf"),
-       p_haz_profile, width = 9, height = 5.5, device = cairo_pdf)
+# ════════════════════════════════════════════════════════════
+# Event studies
+# ════════════════════════════════════════════════════════════
+log_step("\nEvent studies:")
 
-panel_dt[, pred_hazard := NULL]
+# ---- Full ----
+log_step("  Full sample...")
+es_full  <- run_ols_es(panel_full, prefix = "full")
+pre_full <- ols_pre_tests(es_full)
+p_full   <- plot_ols_es(es_full, pre_full,
+                         subtitle = "Full primary sample (PA excluded)")
+
+# ---- Single-wall ----
+log_step("  Single-walled...")
+es_sw  <- run_ols_es(panel_sw, prefix = "sw")
+pre_sw <- ols_pre_tests(es_sw)
+p_sw   <- plot_ols_es(es_sw, pre_sw,
+                       subtitle = sprintf(
+                         "Single-walled tanks, cohort \u2265 %d (PA excluded)",
+                         WALL_COHORT_MIN))
+
+# ---- Double-wall ----
+log_step("  Double-walled...")
+es_dw  <- run_ols_es(panel_dw, prefix = "dw")
+pre_dw <- ols_pre_tests(es_dw)
+p_dw   <- plot_ols_es(es_dw, pre_dw,
+                       subtitle = sprintf(
+                         "Double-walled tanks, cohort \u2265 %d (PA excluded)",
+                         WALL_COHORT_MIN))
+
+
+# ════════════════════════════════════════════════════════════
+# Save figures and coefficient tables
+# ════════════════════════════════════════════════════════════
+es_specs <- list(
+  list(plot = p_full, coefs = es_full$coefs, stem = "Full"),
+  list(plot = p_sw,   coefs = es_sw$coefs,   stem = "SingleWall"),
+  list(plot = p_dw,   coefs = es_dw$coefs,   stem = "DoubleWall")
+)
+
+for (s in es_specs) {
+  ggsave(file.path(OUTPUT_FIGURES, sprintf("Figure_OLS_ES_%s.png", s$stem)),
+         s$plot, width = OLS_PLOT_W, height = OLS_PLOT_H,
+         dpi = 300, bg = "white")
+  ggsave(file.path(OUTPUT_FIGURES, sprintf("Figure_OLS_ES_%s.pdf", s$stem)),
+         s$plot, width = OLS_PLOT_W, height = OLS_PLOT_H,
+         device = cairo_pdf)
+  fwrite(s$coefs,
+         file.path(OUTPUT_TABLES, sprintf("Table_OLS_ES_%s.csv", s$stem)))
+  log_step(sprintf("  Saved: %s", s$stem), 1)
+}
+
+
+# ════════════════════════════════════════════════════════════
+# DiD comparison table
+# ════════════════════════════════════════════════════════════
+did_comparison <- rbindlist(list(
+  data.table(spec = "Cox — primary (calendar)",   metric = "HR",
+             estimate = cox_prim$coef, se = cox_prim$se,
+             p = cox_prim$p,          hr_or_pp = cox_prim$hr,
+             n_obs = cox_prim$n,      n_events = cox_prim$ev),
+  data.table(spec = "OLS — full sample",           metric = "pp",
+             estimate = did_full$row$coef * 100,   se = did_full$row$se * 100,
+             p = did_full$row$p,      hr_or_pp = did_full$row$coef * 100,
+             n_obs = did_full$row$n,  n_events = NA_integer_),
+  data.table(spec = sprintf("OLS — single-wall (cohort \u2265 %d)", WALL_COHORT_MIN),
+             metric = "pp",
+             estimate = did_sw$row$coef * 100,     se = did_sw$row$se * 100,
+             p = did_sw$row$p,        hr_or_pp = did_sw$row$coef * 100,
+             n_obs = did_sw$row$n,    n_events = NA_integer_),
+  data.table(spec = sprintf("OLS — double-wall (cohort \u2265 %d)", WALL_COHORT_MIN),
+             metric = "pp",
+             estimate = did_dw$row$coef * 100,     se = did_dw$row$se * 100,
+             p = did_dw$row$p,        hr_or_pp = did_dw$row$coef * 100,
+             n_obs = did_dw$row$n,    n_events = NA_integer_)
+), fill = TRUE)
+
+did_comparison[, `:=`(
+  ci_lo = estimate - 1.96 * se,
+  ci_hi = estimate + 1.96 * se,
+  stars = fcase(p < 0.01, "***", p < 0.05, "**", p < 0.10, "*", default = "")
+)]
+
+log_step("\nDiD comparison:")
+print(did_comparison[, .(spec, metric, estimate = round(estimate, 4),
+                          se = round(se, 4), p = round(p, 3), stars, n_obs)])
+
+fwrite(did_comparison, file.path(OUTPUT_TABLES, "Table_DiD_Comparison.csv"))
 cat("\n")
-
-
-#### S12: Duration Model Comparison Table ####
 
 cat("========================================\n")
 cat("S12: DURATION MODEL COMPARISON TABLE\n")

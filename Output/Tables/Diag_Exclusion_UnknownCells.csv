@@ -1,0 +1,3 @@
+state_group,N_total,N_unknown_wall,N_unknown_fuel,N_na_cell,pre_closure_rate_uw,pre_closure_rate_cls
+Control,6050066,1916181,0,328741,0.00370633045625648,0.0110905359002488
+Texas,358820,1812,0,705,0.0778145695364238,0.0141005243579976

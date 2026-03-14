@@ -1,0 +1,92 @@
+=== 01l_DataQuality_and_Balance | started 2026-03-13 13:56:18 ===
+=== 01l: DATA QUALITY + DESCRIPTIVE + BALANCE ===
+
+
+--- S1: MM sample + overlap restriction ---
+
+  Total cells: 85 | Overlap cells: 77 | Dropped: 0 TX-only, 8 CTL-only
+
+  MM overlap facilities: 232,703 (54,034 TX, 178,669 CTL)
+
+
+--- S2: Subsets ---
+
+  1998 cross-section: Full=113,708 fac | MM=113,177 fac
+
+  1998 tanks: Full=276,730 | MM=275,764
+
+  Pre-reform flows: Full=1,232,101 fac-yr | MM=1,229,324 fac-yr
+
+
+
+========== PART I: PARALLEL TRENDS FIGURE ==========
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel1A
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel1B
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel2A
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel2B
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Combined
+
+
+
+========== PART II: TABLE 0 (DESCRIPTIVE) ==========
+
+  [tbl] Table0_Descriptive.csv
+
+  [tex] Table0_Descriptive.tex
+
+
+
+========== PART III: TABLE 1 (PROGRESSIVE BALANCE) ==========
+
+  [tbl] Table1_Balance.csv
+
+  [tex] Table1_Balance.tex
+
+
+
+========== PART IV: CELL-LEVEL BALANCE DETAIL ==========
+
+  [tbl] TableA_Balance_CellDetail.csv
+
+  [tex] TableA_Balance_CellDetail.tex
+
+
+
+========== PART V: APPENDIX TABLES ==========
+
+  [tbl] TableB1_Attrition_Log.csv
+
+  [tex] TableB1_Attrition_Log.tex
+
+  [tbl] TableB3_Missing_Date_Balance.csv
+
+  [tex] TableB3_Missing_Date_Balance.tex
+
+  [tbl] TableA0_DataQuality_ByState.csv
+
+  [tex] TableA0_DataQuality_ByState.tex
+
+
+
+=== 01l COMPLETE ===
+
+  Figure: RestrictionEarnsParallelTrends (2x2 + 4 panels)
+
+  Table0_Descriptive.tex      (11 rows, Panels A+B)
+
+  Table1_Balance.tex          (3-row progressive)
+
+  TableA_Balance_CellDetail   (77 cells)
+
+  TableB1_Attrition_Log.tex
+
+  TableB3_Missing_Date_Balance.tex
+
+  TableA0_DataQuality_ByState.tex
+
+=== 01l_DataQuality_and_Balance complete 2026-03-13 13:57:59 ===

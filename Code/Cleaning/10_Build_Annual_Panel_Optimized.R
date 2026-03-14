@@ -175,7 +175,7 @@ fac_bio <- master_tanks[, .(
   total_tanks_closed_ever     = sum(!is.na(tank_closed_date)),
   total_tanks_open_ever       = sum(is.na(tank_closed_date)),
   had_pre1989_tanks           = as.integer(any(year(tank_installed_date) < 1989, na.rm = TRUE)),
-  all_tanks_post1988          = as.integer(all(year(tank_installed_date) >= 1989, na.rm = TRUE)),
+all_tanks_post1988 = as.integer(  sum(!is.na(tank_installed_date)) > 0 &  all(year(tank_installed_date) >= 1989, na.rm = TRUE)),
   fac_max_install_date        = max(tank_installed_date, na.rm = TRUE)
 ), by = panel_id]
 

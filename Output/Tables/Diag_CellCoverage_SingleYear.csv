@@ -1,0 +1,1081 @@
+mm_wall,mm_fuel,mm_capacity,cohort,group,n,group_total,share
+Double-Walled,Diesel-Only,12k-25k,1989,Texas,489,358115,0.00136548315485249
+Double-Walled,Diesel-Only,12k-25k,1989,Control States,12172,5721325,0.00212747921154628
+Double-Walled,Diesel-Only,12k-25k,1990,Texas,853,358115,0.00238191642349525
+Double-Walled,Diesel-Only,12k-25k,1990,Control States,12365,5721325,0.00216121265615919
+Double-Walled,Diesel-Only,12k-25k,1991,Texas,532,358115,0.00148555631570864
+Double-Walled,Diesel-Only,12k-25k,1991,Control States,12829,5721325,0.00224231275097989
+Double-Walled,Diesel-Only,12k-25k,1992,Texas,851,358115,0.00237633162531589
+Double-Walled,Diesel-Only,12k-25k,1992,Control States,11022,5721325,0.00192647682136568
+Double-Walled,Diesel-Only,12k-25k,1993,Texas,670,358115,0.00187090739008419
+Double-Walled,Diesel-Only,12k-25k,1993,Control States,9189,5721325,0.00160609648988652
+Double-Walled,Diesel-Only,12k-25k,1994,Texas,704,358115,0.00196584895913324
+Double-Walled,Diesel-Only,12k-25k,1994,Control States,10637,5721325,0.00185918471682696
+Double-Walled,Diesel-Only,12k-25k,1995,Texas,928,358115,0.00259134635522109
+Double-Walled,Diesel-Only,12k-25k,1995,Control States,12639,5721325,0.00220910366042831
+Double-Walled,Diesel-Only,12k-25k,1996,Texas,1200,358115,0.00335087890761348
+Double-Walled,Diesel-Only,12k-25k,1996,Control States,11903,5721325,0.00208046213071273
+Double-Walled,Diesel-Only,12k-25k,1997,Texas,1200,358115,0.00335087890761348
+Double-Walled,Diesel-Only,12k-25k,1997,Control States,10770,5721325,0.00188243108021306
+Double-Walled,Diesel-Only,1k-5k,1989,Texas,255,358115,0.000712061767867864
+Double-Walled,Diesel-Only,1k-5k,1989,Control States,10199,5721325,0.00178262902387122
+Double-Walled,Diesel-Only,1k-5k,1990,Texas,253,358115,0.000706476969688508
+Double-Walled,Diesel-Only,1k-5k,1990,Control States,14405,5721325,0.00251777341787086
+Double-Walled,Diesel-Only,1k-5k,1991,Texas,401,358115,0.00111975203496084
+Double-Walled,Diesel-Only,1k-5k,1991,Control States,13043,5721325,0.00227971667402219
+Double-Walled,Diesel-Only,1k-5k,1992,Texas,195,358115,0.00054451782248719
+Double-Walled,Diesel-Only,1k-5k,1992,Control States,12966,5721325,0.00226625825311444
+Double-Walled,Diesel-Only,1k-5k,1993,Texas,257,358115,0.00071764656604722
+Double-Walled,Diesel-Only,1k-5k,1993,Control States,11987,5721325,0.00209514404443027
+Double-Walled,Diesel-Only,1k-5k,1994,Texas,90,358115,0.000251315918071011
+Double-Walled,Diesel-Only,1k-5k,1994,Control States,9179,5721325,0.00160434864301539
+Double-Walled,Diesel-Only,1k-5k,1995,Texas,121,358115,0.000337880289851026
+Double-Walled,Diesel-Only,1k-5k,1995,Control States,8339,5721325,0.00145752950583999
+Double-Walled,Diesel-Only,1k-5k,1996,Texas,209,358115,0.00058361140974268
+Double-Walled,Diesel-Only,1k-5k,1996,Control States,9730,5721325,0.00170065500561496
+Double-Walled,Diesel-Only,1k-5k,1997,Texas,134,358115,0.000374181478016838
+Double-Walled,Diesel-Only,1k-5k,1997,Control States,10129,5721325,0.00177039409577327
+Double-Walled,Diesel-Only,25k-Plus,1989,Texas,0,,0
+Double-Walled,Diesel-Only,25k-Plus,1989,Control States,313,5721325,0.0000547076070665449
+Double-Walled,Diesel-Only,25k-Plus,1990,Texas,0,,0
+Double-Walled,Diesel-Only,25k-Plus,1990,Control States,515,5721325,0.0000900141138634844
+Double-Walled,Diesel-Only,25k-Plus,1991,Texas,0,,0
+Double-Walled,Diesel-Only,25k-Plus,1991,Control States,324,5721325,0.0000566302386247941
+Double-Walled,Diesel-Only,25k-Plus,1992,Texas,0,,0
+Double-Walled,Diesel-Only,25k-Plus,1992,Control States,791,5721325,0.000138254687506828
+Double-Walled,Diesel-Only,25k-Plus,1993,Texas,0,,0
+Double-Walled,Diesel-Only,25k-Plus,1993,Control States,596,5721325,0.000104171673519683
+Double-Walled,Diesel-Only,25k-Plus,1994,Texas,108,358115,0.000301579101685213
+Double-Walled,Diesel-Only,25k-Plus,1994,Control States,603,5721325,0.000105395166329478
+Double-Walled,Diesel-Only,25k-Plus,1995,Texas,26,358115,0.0000726023763316253
+Double-Walled,Diesel-Only,25k-Plus,1995,Control States,815,5721325,0.000142449519997553
+Double-Walled,Diesel-Only,25k-Plus,1996,Texas,0,,0
+Double-Walled,Diesel-Only,25k-Plus,1996,Control States,662,5721325,0.000115707462869178
+Double-Walled,Diesel-Only,25k-Plus,1997,Texas,0,,0
+Double-Walled,Diesel-Only,25k-Plus,1997,Control States,833,5721325,0.000145595644365597
+Double-Walled,Diesel-Only,5k-12k,1989,Texas,1194,358115,0.00333412451307541
+Double-Walled,Diesel-Only,5k-12k,1989,Control States,20554,5721325,0.00359252445893215
+Double-Walled,Diesel-Only,5k-12k,1990,Texas,1027,358115,0.0028677938650992
+Double-Walled,Diesel-Only,5k-12k,1990,Control States,23455,5721325,0.0040995748362486
+Double-Walled,Diesel-Only,5k-12k,1991,Texas,1461,358115,0.00407969507001941
+Double-Walled,Diesel-Only,5k-12k,1991,Control States,20104,5721325,0.00351387134973105
+Double-Walled,Diesel-Only,5k-12k,1992,Texas,605,358115,0.00168940144925513
+Double-Walled,Diesel-Only,5k-12k,1992,Control States,15315,5721325,0.0026768274831442
+Double-Walled,Diesel-Only,5k-12k,1993,Texas,454,358115,0.00126774918671377
+Double-Walled,Diesel-Only,5k-12k,1993,Control States,13390,5721325,0.0023403669604506
+Double-Walled,Diesel-Only,5k-12k,1994,Texas,656,358115,0.0018318138028287
+Double-Walled,Diesel-Only,5k-12k,1994,Control States,15741,5721325,0.00275128575985458
+Double-Walled,Diesel-Only,5k-12k,1995,Texas,659,358115,0.00184019100009773
+Double-Walled,Diesel-Only,5k-12k,1995,Control States,15156,5721325,0.00264903671789315
+Double-Walled,Diesel-Only,5k-12k,1996,Texas,735,358115,0.00205241333091325
+Double-Walled,Diesel-Only,5k-12k,1996,Control States,15413,5721325,0.00269395638248133
+Double-Walled,Diesel-Only,5k-12k,1997,Texas,384,358115,0.00107228125043631
+Double-Walled,Diesel-Only,5k-12k,1997,Control States,17568,5721325,0.00307061738321106
+Double-Walled,Diesel-Only,Under-1k,1989,Texas,77,358115,0.000215014729905198
+Double-Walled,Diesel-Only,Under-1k,1989,Control States,1675,5721325,0.000292764350915216
+Double-Walled,Diesel-Only,Under-1k,1990,Texas,39,358115,0.000108903564497438
+Double-Walled,Diesel-Only,Under-1k,1990,Control States,2482,5721325,0.000433815593415861
+Double-Walled,Diesel-Only,Under-1k,1991,Texas,45,358115,0.000125657959035505
+Double-Walled,Diesel-Only,Under-1k,1991,Control States,2012,5721325,0.000351666790472487
+Double-Walled,Diesel-Only,Under-1k,1992,Texas,31,358115,0.0000865643717800148
+Double-Walled,Diesel-Only,Under-1k,1992,Control States,1738,5721325,0.000303775786203371
+Double-Walled,Diesel-Only,Under-1k,1993,Texas,9,358115,0.0000251315918071011
+Double-Walled,Diesel-Only,Under-1k,1993,Control States,1566,5721325,0.000273712820019838
+Double-Walled,Diesel-Only,Under-1k,1994,Texas,17,358115,0.0000474707845245243
+Double-Walled,Diesel-Only,Under-1k,1994,Control States,1416,5721325,0.000247495116952804
+Double-Walled,Diesel-Only,Under-1k,1995,Texas,9,358115,0.0000251315918071011
+Double-Walled,Diesel-Only,Under-1k,1995,Control States,1211,5721325,0.000211664256094524
+Double-Walled,Diesel-Only,Under-1k,1996,Texas,0,,0
+Double-Walled,Diesel-Only,Under-1k,1996,Control States,1057,5721325,0.000184747414279035
+Double-Walled,Diesel-Only,Under-1k,1997,Texas,0,,0
+Double-Walled,Diesel-Only,Under-1k,1997,Control States,1097,5721325,0.000191738801763578
+Double-Walled,Gasoline-Only,12k-25k,1989,Texas,1377,358115,0.00384513354648646
+Double-Walled,Gasoline-Only,12k-25k,1989,Control States,34491,5721325,0.00602849864323387
+Double-Walled,Gasoline-Only,12k-25k,1990,Texas,2410,358115,0.00672968180612373
+Double-Walled,Gasoline-Only,12k-25k,1990,Control States,34019,5721325,0.00594600027091627
+Double-Walled,Gasoline-Only,12k-25k,1991,Texas,2148,358115,0.00599807324462812
+Double-Walled,Gasoline-Only,12k-25k,1991,Control States,29993,5721325,0.00524231712059707
+Double-Walled,Gasoline-Only,12k-25k,1992,Texas,1781,358115,0.00497326277871633
+Double-Walled,Gasoline-Only,12k-25k,1992,Control States,26736,5721325,0.00467304339466819
+Double-Walled,Gasoline-Only,12k-25k,1993,Texas,1512,358115,0.00422210742359298
+Double-Walled,Gasoline-Only,12k-25k,1993,Control States,25405,5721325,0.00444040497612004
+Double-Walled,Gasoline-Only,12k-25k,1994,Texas,2822,358115,0.00788015023107102
+Double-Walled,Gasoline-Only,12k-25k,1994,Control States,34535,5721325,0.00603618916946686
+Double-Walled,Gasoline-Only,12k-25k,1995,Texas,3750,358115,0.0104714965862921
+Double-Walled,Gasoline-Only,12k-25k,1995,Control States,39540,5721325,0.00691098652847024
+Double-Walled,Gasoline-Only,12k-25k,1996,Texas,4846,358115,0.0135319659885791
+Double-Walled,Gasoline-Only,12k-25k,1996,Control States,42825,5721325,0.00748515422563829
+Double-Walled,Gasoline-Only,12k-25k,1997,Texas,6117,358115,0.0170811052315597
+Double-Walled,Gasoline-Only,12k-25k,1997,Control States,43363,5721325,0.00757918838730539
+Double-Walled,Gasoline-Only,1k-5k,1989,Texas,322,358115,0.000899152506876283
+Double-Walled,Gasoline-Only,1k-5k,1989,Control States,11134,5721325,0.0019460527063224
+Double-Walled,Gasoline-Only,1k-5k,1990,Texas,447,358115,0.00124820239308602
+Double-Walled,Gasoline-Only,1k-5k,1990,Control States,16115,5721325,0.00281665523283505
+Double-Walled,Gasoline-Only,1k-5k,1991,Texas,353,358115,0.000985716878656298
+Double-Walled,Gasoline-Only,1k-5k,1991,Control States,12470,5721325,0.00217956504830612
+Double-Walled,Gasoline-Only,1k-5k,1992,Texas,151,358115,0.000421652262541362
+Double-Walled,Gasoline-Only,1k-5k,1992,Control States,10824,5721325,0.00189186945331719
+Double-Walled,Gasoline-Only,1k-5k,1993,Texas,233,358115,0.00065062898789495
+Double-Walled,Gasoline-Only,1k-5k,1993,Control States,9961,5721325,0.00174103026833819
+Double-Walled,Gasoline-Only,1k-5k,1994,Texas,73,358115,0.000203845133546486
+Double-Walled,Gasoline-Only,1k-5k,1994,Control States,7263,5721325,0.0012694611825058
+Double-Walled,Gasoline-Only,1k-5k,1995,Texas,202,358115,0.000564064616114935
+Double-Walled,Gasoline-Only,1k-5k,1995,Control States,5829,5721325,0.00101881994118495
+Double-Walled,Gasoline-Only,1k-5k,1996,Texas,25,358115,0.0000698099772419474
+Double-Walled,Gasoline-Only,1k-5k,1996,Control States,6556,5721325,0.00114588840871651
+Double-Walled,Gasoline-Only,1k-5k,1997,Texas,66,358115,0.000184298339918741
+Double-Walled,Gasoline-Only,1k-5k,1997,Control States,8295,5721325,0.001449838979607
+Double-Walled,Gasoline-Only,25k-Plus,1989,Texas,0,,0
+Double-Walled,Gasoline-Only,25k-Plus,1989,Control States,229,5721325,0.0000400256933490057
+Double-Walled,Gasoline-Only,25k-Plus,1990,Texas,0,,0
+Double-Walled,Gasoline-Only,25k-Plus,1990,Control States,292,5721325,0.0000510371286371601
+Double-Walled,Gasoline-Only,25k-Plus,1991,Texas,0,,0
+Double-Walled,Gasoline-Only,25k-Plus,1991,Control States,93,5721325,0.0000162549759015613
+Double-Walled,Gasoline-Only,25k-Plus,1992,Texas,0,,0
+Double-Walled,Gasoline-Only,25k-Plus,1992,Control States,128,5721325,0.0000223724399505359
+Double-Walled,Gasoline-Only,25k-Plus,1993,Texas,0,,0
+Double-Walled,Gasoline-Only,25k-Plus,1993,Control States,140,5721325,0.0000244698561958987
+Double-Walled,Gasoline-Only,25k-Plus,1994,Texas,135,358115,0.000376973877106516
+Double-Walled,Gasoline-Only,25k-Plus,1994,Control States,324,5721325,0.0000566302386247941
+Double-Walled,Gasoline-Only,25k-Plus,1995,Texas,0,,0
+Double-Walled,Gasoline-Only,25k-Plus,1995,Control States,92,5721325,0.0000160801912144477
+Double-Walled,Gasoline-Only,25k-Plus,1996,Texas,50,358115,0.000139619954483895
+Double-Walled,Gasoline-Only,25k-Plus,1996,Control States,162,5721325,0.000028315119312397
+Double-Walled,Gasoline-Only,25k-Plus,1997,Texas,24,358115,0.0000670175781522695
+Double-Walled,Gasoline-Only,25k-Plus,1997,Control States,670,5721325,0.000117105740366087
+Double-Walled,Gasoline-Only,5k-12k,1989,Texas,4475,358115,0.0124959859263086
+Double-Walled,Gasoline-Only,5k-12k,1989,Control States,64583,5721325,0.0112881194478552
+Double-Walled,Gasoline-Only,5k-12k,1990,Texas,3665,358115,0.0102341426636695
+Double-Walled,Gasoline-Only,5k-12k,1990,Control States,80139,5721325,0.0140070700405937
+Double-Walled,Gasoline-Only,5k-12k,1991,Texas,3189,358115,0.00890496069698281
+Double-Walled,Gasoline-Only,5k-12k,1991,Control States,66753,5721325,0.0116674022188916
+Double-Walled,Gasoline-Only,5k-12k,1992,Texas,1728,358115,0.00482526562696341
+Double-Walled,Gasoline-Only,5k-12k,1992,Control States,47229,5721325,0.00825490598768642
+Double-Walled,Gasoline-Only,5k-12k,1993,Texas,1287,358115,0.00359381762841545
+Double-Walled,Gasoline-Only,5k-12k,1993,Control States,41153,5721325,0.00719291422878442
+Double-Walled,Gasoline-Only,5k-12k,1994,Texas,2216,358115,0.00618795638272622
+Double-Walled,Gasoline-Only,5k-12k,1994,Control States,40714,5721325,0.00711618375114156
+Double-Walled,Gasoline-Only,5k-12k,1995,Texas,2590,358115,0.00723231364226575
+Double-Walled,Gasoline-Only,5k-12k,1995,Control States,39375,5721325,0.0068821470550965
+Double-Walled,Gasoline-Only,5k-12k,1996,Texas,2035,358115,0.00568253214749452
+Double-Walled,Gasoline-Only,5k-12k,1996,Control States,40444,5721325,0.0070689918856209
+Double-Walled,Gasoline-Only,5k-12k,1997,Texas,1069,358115,0.00298507462686567
+Double-Walled,Gasoline-Only,5k-12k,1997,Control States,39680,5721325,0.00693545638466614
+Double-Walled,Gasoline-Only,Under-1k,1989,Texas,112,358115,0.000312748698043924
+Double-Walled,Gasoline-Only,Under-1k,1989,Control States,1506,5721325,0.000263225738793024
+Double-Walled,Gasoline-Only,Under-1k,1990,Texas,1,358115,0.0000027923990896779
+Double-Walled,Gasoline-Only,Under-1k,1990,Control States,1426,5721325,0.000249242963823939
+Double-Walled,Gasoline-Only,Under-1k,1991,Texas,60,358115,0.000167543945380674
+Double-Walled,Gasoline-Only,Under-1k,1991,Control States,1257,5721325,0.000219704351701747
+Double-Walled,Gasoline-Only,Under-1k,1992,Texas,14,358115,0.0000390935872554906
+Double-Walled,Gasoline-Only,Under-1k,1992,Control States,792,5721325,0.000138429472193941
+Double-Walled,Gasoline-Only,Under-1k,1993,Texas,0,,0
+Double-Walled,Gasoline-Only,Under-1k,1993,Control States,795,5721325,0.000138953826255282
+Double-Walled,Gasoline-Only,Under-1k,1994,Texas,6,358115,0.0000167543945380674
+Double-Walled,Gasoline-Only,Under-1k,1994,Control States,554,5721325,0.0000968307166609133
+Double-Walled,Gasoline-Only,Under-1k,1995,Texas,0,,0
+Double-Walled,Gasoline-Only,Under-1k,1995,Control States,314,5721325,0.0000548823917536585
+Double-Walled,Gasoline-Only,Under-1k,1996,Texas,0,,0
+Double-Walled,Gasoline-Only,Under-1k,1996,Control States,682,5721325,0.000119203156611449
+Double-Walled,Gasoline-Only,Under-1k,1997,Texas,0,,0
+Double-Walled,Gasoline-Only,Under-1k,1997,Control States,532,5721325,0.000092985453544415
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1989,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1989,Control States,194,5721325,0.000033908229300031
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1990,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1990,Control States,344,5721325,0.0000601259323670653
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1991,Texas,90,358115,0.000251315918071011
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1991,Control States,682,5721325,0.000119203156611449
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1992,Texas,455,358115,0.00127054158580344
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1992,Control States,1320,5721325,0.000230715786989902
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1993,Texas,269,358115,0.000751155355123354
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1993,Control States,941,5721325,0.000164472390573862
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1994,Texas,375,358115,0.00104714965862921
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1994,Control States,1186,5721325,0.000207294638916685
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1995,Texas,364,358115,0.00101643326864275
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1995,Control States,961,5721325,0.000167968084316133
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1996,Texas,777,358115,0.00216969409267973
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1996,Control States,1680,5721325,0.000293638274350784
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1997,Texas,964,358115,0.00269187272244949
+Double-Walled,Motor-Fuel-Mixed,12k-25k,1997,Control States,2066,5721325,0.000361105163576619
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1989,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1989,Control States,60,5721325,0.0000104870812268137
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1990,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1990,Control States,105,5721325,0.000018352392146924
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1991,Texas,8,358115,0.0000223391927174232
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1991,Control States,287,5721325,0.0000501632052015923
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1992,Texas,29,358115,0.000080979573600659
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1992,Control States,308,5721325,0.0000538336836309771
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1993,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1993,Control States,225,5721325,0.0000393265546005514
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1994,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1994,Control States,146,5721325,0.0000255185643185801
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1995,Texas,26,358115,0.0000726023763316253
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1995,Control States,149,5721325,0.0000260429183799207
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1996,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1996,Control States,369,5721325,0.0000644955495449044
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1997,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,1k-5k,1997,Control States,380,5721325,0.0000664181811031536
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1989,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1989,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1990,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1990,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1991,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1991,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1992,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1992,Control States,29,5721325,0.0000050687559262933
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1993,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1993,Control States,56,5721325,0.00000978794247835947
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1994,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1994,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1995,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1995,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1996,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1996,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1997,Texas,24,358115,0.0000670175781522695
+Double-Walled,Motor-Fuel-Mixed,25k-Plus,1997,Control States,264,5721325,0.0000461431573979804
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1989,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1989,Control States,180,5721325,0.0000314612436804412
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1990,Texas,31,358115,0.0000865643717800148
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1990,Control States,654,5721325,0.00011430918537227
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1991,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1991,Control States,827,5721325,0.000144546936242916
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1992,Texas,58,358115,0.000161959147201318
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1992,Control States,574,5721325,0.000100326410403185
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1993,Texas,168,358115,0.000469123047065887
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1993,Control States,562,5721325,0.0000982289941578218
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1994,Texas,81,358115,0.00022618432626391
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1994,Control States,784,5721325,0.000137031194697033
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1995,Texas,141,358115,0.000393728271644583
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1995,Control States,510,5721325,0.0000891401904279166
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1996,Texas,100,358115,0.00027923990896779
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1996,Control States,849,5721325,0.000148392199359414
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1997,Texas,84,358115,0.000234561523532943
+Double-Walled,Motor-Fuel-Mixed,5k-12k,1997,Control States,722,5721325,0.000126194544095992
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1989,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1989,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1990,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1990,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1991,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1991,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1992,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1992,Control States,19,5721325,0.00000332090905515768
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1993,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1993,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1994,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1994,Control States,4,5721325,0.000000699138748454248
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1995,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1995,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1996,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1996,Control States,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1997,Texas,0,,0
+Double-Walled,Motor-Fuel-Mixed,Under-1k,1997,Control States,24,5721325,0.00000419483249072549
+Double-Walled,Other-Fuel,12k-25k,1989,Texas,669,358115,0.00186811499099451
+Double-Walled,Other-Fuel,12k-25k,1989,Control States,3808,5721325,0.000665580088528444
+Double-Walled,Other-Fuel,12k-25k,1990,Texas,985,358115,0.00275051310333273
+Double-Walled,Other-Fuel,12k-25k,1990,Control States,7898,5721325,0.00138044945882291
+Double-Walled,Other-Fuel,12k-25k,1991,Texas,1026,358115,0.00286500146600952
+Double-Walled,Other-Fuel,12k-25k,1991,Control States,9764,5721325,0.00170659768497682
+Double-Walled,Other-Fuel,12k-25k,1992,Texas,1086,358115,0.0030325454113902
+Double-Walled,Other-Fuel,12k-25k,1992,Control States,5447,5721325,0.000952052190707572
+Double-Walled,Other-Fuel,12k-25k,1993,Texas,833,358115,0.00232606844170169
+Double-Walled,Other-Fuel,12k-25k,1993,Control States,5440,5721325,0.000950828697897777
+Double-Walled,Other-Fuel,12k-25k,1994,Texas,1415,358115,0.00395124471189422
+Double-Walled,Other-Fuel,12k-25k,1994,Control States,5995,5721325,0.0010478341992458
+Double-Walled,Other-Fuel,12k-25k,1995,Texas,1181,358115,0.0032978233249096
+Double-Walled,Other-Fuel,12k-25k,1995,Control States,5093,5721325,0.000890178411469371
+Double-Walled,Other-Fuel,12k-25k,1996,Texas,1453,358115,0.00405735587730198
+Double-Walled,Other-Fuel,12k-25k,1996,Control States,4338,5721325,0.000758215972698632
+Double-Walled,Other-Fuel,12k-25k,1997,Texas,1148,358115,0.00320567415495023
+Double-Walled,Other-Fuel,12k-25k,1997,Control States,4329,5721325,0.00075664291051461
+Double-Walled,Other-Fuel,1k-5k,1989,Texas,842,358115,0.00235120003350879
+Double-Walled,Other-Fuel,1k-5k,1989,Control States,12462,5721325,0.00217816677080921
+Double-Walled,Other-Fuel,1k-5k,1990,Texas,915,358115,0.00255504516705528
+Double-Walled,Other-Fuel,1k-5k,1990,Control States,19317,5721325,0.00337631580097268
+Double-Walled,Other-Fuel,1k-5k,1991,Texas,574,358115,0.00160283707747511
+Double-Walled,Other-Fuel,1k-5k,1991,Control States,16371,5721325,0.00286140011273612
+Double-Walled,Other-Fuel,1k-5k,1992,Texas,417,358115,0.00116443042039568
+Double-Walled,Other-Fuel,1k-5k,1992,Control States,11458,5721325,0.00200268294494719
+Double-Walled,Other-Fuel,1k-5k,1993,Texas,564,358115,0.00157491308657833
+Double-Walled,Other-Fuel,1k-5k,1993,Control States,9401,5721325,0.0016431508435546
+Double-Walled,Other-Fuel,1k-5k,1994,Texas,340,358115,0.000949415690490485
+Double-Walled,Other-Fuel,1k-5k,1994,Control States,8560,5721325,0.00149615692169209
+Double-Walled,Other-Fuel,1k-5k,1995,Texas,261,358115,0.000728816162405931
+Double-Walled,Other-Fuel,1k-5k,1995,Control States,8363,5721325,0.00146172433833072
+Double-Walled,Other-Fuel,1k-5k,1996,Texas,417,358115,0.00116443042039568
+Double-Walled,Other-Fuel,1k-5k,1996,Control States,6432,5721325,0.00112421510751443
+Double-Walled,Other-Fuel,1k-5k,1997,Texas,160,358115,0.000446783854348463
+Double-Walled,Other-Fuel,1k-5k,1997,Control States,6515,5721325,0.00113872223654486
+Double-Walled,Other-Fuel,25k-Plus,1989,Texas,0,,0
+Double-Walled,Other-Fuel,25k-Plus,1989,Control States,423,5721325,0.0000739339226490367
+Double-Walled,Other-Fuel,25k-Plus,1990,Texas,0,,0
+Double-Walled,Other-Fuel,25k-Plus,1990,Control States,775,5721325,0.000135458132513011
+Double-Walled,Other-Fuel,25k-Plus,1991,Texas,30,358115,0.0000837719726903369
+Double-Walled,Other-Fuel,25k-Plus,1991,Control States,334,5721325,0.0000583780854959297
+Double-Walled,Other-Fuel,25k-Plus,1992,Texas,79,358115,0.000220599528084554
+Double-Walled,Other-Fuel,25k-Plus,1992,Control States,739,5721325,0.000129165883776922
+Double-Walled,Other-Fuel,25k-Plus,1993,Texas,61,358115,0.000170336344470352
+Double-Walled,Other-Fuel,25k-Plus,1993,Control States,314,5721325,0.0000548823917536585
+Double-Walled,Other-Fuel,25k-Plus,1994,Texas,0,,0
+Double-Walled,Other-Fuel,25k-Plus,1994,Control States,750,5721325,0.000131088515335172
+Double-Walled,Other-Fuel,25k-Plus,1995,Texas,19,358115,0.00005305558270388
+Double-Walled,Other-Fuel,25k-Plus,1995,Control States,322,5721325,0.000056280669250567
+Double-Walled,Other-Fuel,25k-Plus,1996,Texas,25,358115,0.0000698099772419474
+Double-Walled,Other-Fuel,25k-Plus,1996,Control States,631,5721325,0.000110289137568658
+Double-Walled,Other-Fuel,25k-Plus,1997,Texas,0,,0
+Double-Walled,Other-Fuel,25k-Plus,1997,Control States,546,5721325,0.0000954324391640048
+Double-Walled,Other-Fuel,5k-12k,1989,Texas,2079,358115,0.00580539770744035
+Double-Walled,Other-Fuel,5k-12k,1989,Control States,16189,5721325,0.00282958929968146
+Double-Walled,Other-Fuel,5k-12k,1990,Texas,2444,358115,0.00682462337517278
+Double-Walled,Other-Fuel,5k-12k,1990,Control States,29474,5721325,0.00515160386798513
+Double-Walled,Other-Fuel,5k-12k,1991,Texas,1870,358115,0.00522178629769767
+Double-Walled,Other-Fuel,5k-12k,1991,Control States,24232,5721325,0.00423538253813583
+Double-Walled,Other-Fuel,5k-12k,1992,Texas,1320,358115,0.00368596679837482
+Double-Walled,Other-Fuel,5k-12k,1992,Control States,14178,5721325,0.00247809729389608
+Double-Walled,Other-Fuel,5k-12k,1993,Texas,1202,358115,0.00335646370579283
+Double-Walled,Other-Fuel,5k-12k,1993,Control States,14116,5721325,0.00246726064329504
+Double-Walled,Other-Fuel,5k-12k,1994,Texas,852,358115,0.00237912402440557
+Double-Walled,Other-Fuel,5k-12k,1994,Control States,11628,5721325,0.0020323963417565
+Double-Walled,Other-Fuel,5k-12k,1995,Texas,1066,358115,0.00297669742959664
+Double-Walled,Other-Fuel,5k-12k,1995,Control States,12152,5721325,0.00212398351780401
+Double-Walled,Other-Fuel,5k-12k,1996,Texas,884,358115,0.00246848079527526
+Double-Walled,Other-Fuel,5k-12k,1996,Control States,10586,5721325,0.00185027069778417
+Double-Walled,Other-Fuel,5k-12k,1997,Texas,381,358115,0.00106390405316728
+Double-Walled,Other-Fuel,5k-12k,1997,Control States,9328,5721325,0.00163039156139531
+Double-Walled,Other-Fuel,Under-1k,1989,Texas,285,358115,0.000795833740558201
+Double-Walled,Other-Fuel,Under-1k,1989,Control States,6158,5721325,0.00107632410324531
+Double-Walled,Other-Fuel,Under-1k,1990,Texas,444,358115,0.00123982519581699
+Double-Walled,Other-Fuel,Under-1k,1990,Control States,8187,5721325,0.00143096223339873
+Double-Walled,Other-Fuel,Under-1k,1991,Texas,243,358115,0.000678552978791729
+Double-Walled,Other-Fuel,Under-1k,1991,Control States,5153,5721325,0.000900665492696185
+Double-Walled,Other-Fuel,Under-1k,1992,Texas,89,358115,0.000248523518981333
+Double-Walled,Other-Fuel,Under-1k,1992,Control States,4756,5721325,0.000831275971912101
+Double-Walled,Other-Fuel,Under-1k,1993,Texas,145,358115,0.000404897868003295
+Double-Walled,Other-Fuel,Under-1k,1993,Control States,3586,5721325,0.000626777887989233
+Double-Walled,Other-Fuel,Under-1k,1994,Texas,95,358115,0.0002652779135194
+Double-Walled,Other-Fuel,Under-1k,1994,Control States,3195,5721325,0.000558437075327831
+Double-Walled,Other-Fuel,Under-1k,1995,Texas,104,358115,0.000290409505326501
+Double-Walled,Other-Fuel,Under-1k,1995,Control States,2233,5721325,0.000390294206324584
+Double-Walled,Other-Fuel,Under-1k,1996,Texas,90,358115,0.000251315918071011
+Double-Walled,Other-Fuel,Under-1k,1996,Control States,1879,5721325,0.000328420427086383
+Double-Walled,Other-Fuel,Under-1k,1997,Texas,24,358115,0.0000670175781522695
+Double-Walled,Other-Fuel,Under-1k,1997,Control States,1879,5721325,0.000328420427086383
+Single-Walled,Diesel-Only,12k-25k,1989,Texas,1024,358115,0.00285941666783017
+Single-Walled,Diesel-Only,12k-25k,1989,Control States,14930,5721325,0.00260953537860548
+Single-Walled,Diesel-Only,12k-25k,1990,Texas,1885,358115,0.00526367228404284
+Single-Walled,Diesel-Only,12k-25k,1990,Control States,15809,5721325,0.0027631711185783
+Single-Walled,Diesel-Only,12k-25k,1991,Texas,1099,358115,0.00306884659955601
+Single-Walled,Diesel-Only,12k-25k,1991,Control States,12125,5721325,0.00211926433125194
+Single-Walled,Diesel-Only,12k-25k,1992,Texas,984,358115,0.00274772070424305
+Single-Walled,Diesel-Only,12k-25k,1992,Control States,9003,5721325,0.0015735865380834
+Single-Walled,Diesel-Only,12k-25k,1993,Texas,1050,358115,0.00293201904416179
+Single-Walled,Diesel-Only,12k-25k,1993,Control States,7716,5721325,0.00134863864576824
+Single-Walled,Diesel-Only,12k-25k,1994,Texas,851,358115,0.00237633162531589
+Single-Walled,Diesel-Only,12k-25k,1994,Control States,8526,5721325,0.00149021424233023
+Single-Walled,Diesel-Only,12k-25k,1995,Texas,1181,358115,0.0032978233249096
+Single-Walled,Diesel-Only,12k-25k,1995,Control States,8148,5721325,0.0014241456306013
+Single-Walled,Diesel-Only,12k-25k,1996,Texas,1314,358115,0.00366921240383676
+Single-Walled,Diesel-Only,12k-25k,1996,Control States,7968,5721325,0.00139268438692086
+Single-Walled,Diesel-Only,12k-25k,1997,Texas,976,358115,0.00272538151152563
+Single-Walled,Diesel-Only,12k-25k,1997,Control States,10216,5721325,0.00178560036355215
+Single-Walled,Diesel-Only,1k-5k,1989,Texas,1375,358115,0.00383954874830711
+Single-Walled,Diesel-Only,1k-5k,1989,Control States,35843,5721325,0.0062648075402114
+Single-Walled,Diesel-Only,1k-5k,1990,Texas,1052,358115,0.00293760384234115
+Single-Walled,Diesel-Only,1k-5k,1990,Control States,36042,5721325,0.006299589692947
+Single-Walled,Diesel-Only,1k-5k,1991,Texas,1494,358115,0.00417184423997878
+Single-Walled,Diesel-Only,1k-5k,1991,Control States,23539,5721325,0.00411425674996614
+Single-Walled,Diesel-Only,1k-5k,1992,Texas,625,358115,0.00174524943104869
+Single-Walled,Diesel-Only,1k-5k,1992,Control States,18222,5721325,0.00318492656858333
+Single-Walled,Diesel-Only,1k-5k,1993,Texas,451,358115,0.00125937198944473
+Single-Walled,Diesel-Only,1k-5k,1993,Control States,15892,5721325,0.00277767824760873
+Single-Walled,Diesel-Only,1k-5k,1994,Texas,544,358115,0.00151906510478478
+Single-Walled,Diesel-Only,1k-5k,1994,Control States,15246,5721325,0.00266476733973337
+Single-Walled,Diesel-Only,1k-5k,1995,Texas,529,358115,0.00147717911843961
+Single-Walled,Diesel-Only,1k-5k,1995,Control States,13818,5721325,0.0024151748065352
+Single-Walled,Diesel-Only,1k-5k,1996,Texas,347,358115,0.00096896248411823
+Single-Walled,Diesel-Only,1k-5k,1996,Control States,12684,5721325,0.00221696897134842
+Single-Walled,Diesel-Only,1k-5k,1997,Texas,241,358115,0.000672968180612373
+Single-Walled,Diesel-Only,1k-5k,1997,Control States,13003,5721325,0.00227272528653765
+Single-Walled,Diesel-Only,25k-Plus,1989,Texas,29,358115,0.000080979573600659
+Single-Walled,Diesel-Only,25k-Plus,1989,Control States,271,5721325,0.0000473666502077753
+Single-Walled,Diesel-Only,25k-Plus,1990,Texas,8,358115,0.0000223391927174232
+Single-Walled,Diesel-Only,25k-Plus,1990,Control States,546,5721325,0.0000954324391640048
+Single-Walled,Diesel-Only,25k-Plus,1991,Texas,60,358115,0.000167543945380674
+Single-Walled,Diesel-Only,25k-Plus,1991,Control States,253,5721325,0.0000442205258397312
+Single-Walled,Diesel-Only,25k-Plus,1992,Texas,0,,0
+Single-Walled,Diesel-Only,25k-Plus,1992,Control States,145,5721325,0.0000253437796314665
+Single-Walled,Diesel-Only,25k-Plus,1993,Texas,0,,0
+Single-Walled,Diesel-Only,25k-Plus,1993,Control States,116,5721325,0.0000202750237051732
+Single-Walled,Diesel-Only,25k-Plus,1994,Texas,0,,0
+Single-Walled,Diesel-Only,25k-Plus,1994,Control States,135,5721325,0.0000235959327603309
+Single-Walled,Diesel-Only,25k-Plus,1995,Texas,52,358115,0.000145204752663251
+Single-Walled,Diesel-Only,25k-Plus,1995,Control States,364,5721325,0.0000636216261093366
+Single-Walled,Diesel-Only,25k-Plus,1996,Texas,100,358115,0.00027923990896779
+Single-Walled,Diesel-Only,25k-Plus,1996,Control States,410,5721325,0.0000716617217165604
+Single-Walled,Diesel-Only,25k-Plus,1997,Texas,0,,0
+Single-Walled,Diesel-Only,25k-Plus,1997,Control States,380,5721325,0.0000664181811031536
+Single-Walled,Diesel-Only,5k-12k,1989,Texas,4855,358115,0.0135570975803862
+Single-Walled,Diesel-Only,5k-12k,1989,Control States,50314,5721325,0.00879411674743176
+Single-Walled,Diesel-Only,5k-12k,1990,Texas,3821,358115,0.0106697569216592
+Single-Walled,Diesel-Only,5k-12k,1990,Control States,49678,5721325,0.00868295368642753
+Single-Walled,Diesel-Only,5k-12k,1991,Texas,2115,358115,0.00590592407466875
+Single-Walled,Diesel-Only,5k-12k,1991,Control States,33130,5721325,0.00579061668407231
+Single-Walled,Diesel-Only,5k-12k,1992,Texas,1770,358115,0.00494254638872988
+Single-Walled,Diesel-Only,5k-12k,1992,Control States,24031,5721325,0.00420025081602601
+Single-Walled,Diesel-Only,5k-12k,1993,Texas,1664,358115,0.00464655208522402
+Single-Walled,Diesel-Only,5k-12k,1993,Control States,19476,5721325,0.00340410656622373
+Single-Walled,Diesel-Only,5k-12k,1994,Texas,2006,358115,0.00560155257389386
+Single-Walled,Diesel-Only,5k-12k,1994,Control States,18483,5721325,0.00323054537191997
+Single-Walled,Diesel-Only,5k-12k,1995,Texas,2215,358115,0.00618516398363654
+Single-Walled,Diesel-Only,5k-12k,1995,Control States,18466,5721325,0.00322757403223904
+Single-Walled,Diesel-Only,5k-12k,1996,Texas,1633,358115,0.00455998771344401
+Single-Walled,Diesel-Only,5k-12k,1996,Control States,16285,5721325,0.00284636862964436
+Single-Walled,Diesel-Only,5k-12k,1997,Texas,1128,358115,0.00314982617315667
+Single-Walled,Diesel-Only,5k-12k,1997,Control States,20149,5721325,0.00352173666065116
+Single-Walled,Diesel-Only,Under-1k,1989,Texas,115,358115,0.000321125895312958
+Single-Walled,Diesel-Only,Under-1k,1989,Control States,4761,5721325,0.000832149895347669
+Single-Walled,Diesel-Only,Under-1k,1990,Texas,50,358115,0.000139619954483895
+Single-Walled,Diesel-Only,Under-1k,1990,Control States,3193,5721325,0.000558087505953604
+Single-Walled,Diesel-Only,Under-1k,1991,Texas,87,358115,0.000242938720801977
+Single-Walled,Diesel-Only,Under-1k,1991,Control States,2781,5721325,0.000486076214862816
+Single-Walled,Diesel-Only,Under-1k,1992,Texas,8,358115,0.0000223391927174232
+Single-Walled,Diesel-Only,Under-1k,1992,Control States,2194,5721325,0.000383477603527155
+Single-Walled,Diesel-Only,Under-1k,1993,Texas,48,358115,0.000134035156304539
+Single-Walled,Diesel-Only,Under-1k,1993,Control States,2222,5721325,0.000388371574766335
+Single-Walled,Diesel-Only,Under-1k,1994,Texas,30,358115,0.0000837719726903369
+Single-Walled,Diesel-Only,Under-1k,1994,Control States,1719,5721325,0.000300454877148213
+Single-Walled,Diesel-Only,Under-1k,1995,Texas,0,,0
+Single-Walled,Diesel-Only,Under-1k,1995,Control States,1324,5721325,0.000231414925738356
+Single-Walled,Diesel-Only,Under-1k,1996,Texas,0,,0
+Single-Walled,Diesel-Only,Under-1k,1996,Control States,1296,5721325,0.000226520954499176
+Single-Walled,Diesel-Only,Under-1k,1997,Texas,10,358115,0.000027923990896779
+Single-Walled,Diesel-Only,Under-1k,1997,Control States,1248,5721325,0.000218131289517725
+Single-Walled,Gasoline-Only,12k-25k,1989,Texas,3601,358115,0.0100554291219301
+Single-Walled,Gasoline-Only,12k-25k,1989,Control States,37462,5721325,0.00654778394864826
+Single-Walled,Gasoline-Only,12k-25k,1990,Texas,5079,358115,0.014182594976474
+Single-Walled,Gasoline-Only,12k-25k,1990,Control States,37064,5721325,0.00647821964317706
+Single-Walled,Gasoline-Only,12k-25k,1991,Texas,3842,358115,0.0107283973025425
+Single-Walled,Gasoline-Only,12k-25k,1991,Control States,32976,5721325,0.00576369984225682
+Single-Walled,Gasoline-Only,12k-25k,1992,Texas,2978,358115,0.00831576448906078
+Single-Walled,Gasoline-Only,12k-25k,1992,Control States,23923,5721325,0.00418137406981774
+Single-Walled,Gasoline-Only,12k-25k,1993,Texas,3090,358115,0.0086285131871047
+Single-Walled,Gasoline-Only,12k-25k,1993,Control States,21551,5721325,0.00376678479198437
+Single-Walled,Gasoline-Only,12k-25k,1994,Texas,4131,358115,0.0115354006394594
+Single-Walled,Gasoline-Only,12k-25k,1994,Control States,27761,5721325,0.0048521976989596
+Single-Walled,Gasoline-Only,12k-25k,1995,Texas,5284,358115,0.014755036789858
+Single-Walled,Gasoline-Only,12k-25k,1995,Control States,31543,5721325,0.00551323338562309
+Single-Walled,Gasoline-Only,12k-25k,1996,Texas,5897,358115,0.0164667774318306
+Single-Walled,Gasoline-Only,12k-25k,1996,Control States,29812,5721325,0.00521068109222951
+Single-Walled,Gasoline-Only,12k-25k,1997,Texas,5991,358115,0.0167292629462603
+Single-Walled,Gasoline-Only,12k-25k,1997,Control States,33529,5721325,0.00586035577423062
+Single-Walled,Gasoline-Only,1k-5k,1989,Texas,2804,358115,0.00782988704745682
+Single-Walled,Gasoline-Only,1k-5k,1989,Control States,67373,5721325,0.011775768724902
+Single-Walled,Gasoline-Only,1k-5k,1990,Texas,2261,358115,0.00631361434176172
+Single-Walled,Gasoline-Only,1k-5k,1990,Control States,65767,5721325,0.0114950645173976
+Single-Walled,Gasoline-Only,1k-5k,1991,Texas,1803,358115,0.00503469555868925
+Single-Walled,Gasoline-Only,1k-5k,1991,Control States,42654,5721325,0.00745526604414187
+Single-Walled,Gasoline-Only,1k-5k,1992,Texas,1113,358115,0.0031079401868115
+Single-Walled,Gasoline-Only,1k-5k,1992,Control States,30153,5721325,0.00527028267053523
+Single-Walled,Gasoline-Only,1k-5k,1993,Texas,668,358115,0.00186532259190483
+Single-Walled,Gasoline-Only,1k-5k,1993,Control States,28052,5721325,0.00490306004290964
+Single-Walled,Gasoline-Only,1k-5k,1994,Texas,649,358115,0.00181226700920096
+Single-Walled,Gasoline-Only,1k-5k,1994,Control States,21070,5721325,0.00368271335748275
+Single-Walled,Gasoline-Only,1k-5k,1995,Texas,491,358115,0.00137106795303185
+Single-Walled,Gasoline-Only,1k-5k,1995,Control States,17939,5721325,0.00313546250213019
+Single-Walled,Gasoline-Only,1k-5k,1996,Texas,261,358115,0.000728816162405931
+Single-Walled,Gasoline-Only,1k-5k,1996,Control States,16202,5721325,0.00283186150061393
+Single-Walled,Gasoline-Only,1k-5k,1997,Texas,317,358115,0.000885190511427893
+Single-Walled,Gasoline-Only,1k-5k,1997,Control States,17178,5721325,0.00300245135523677
+Single-Walled,Gasoline-Only,25k-Plus,1989,Texas,0,,0
+Single-Walled,Gasoline-Only,25k-Plus,1989,Control States,142,5721325,0.0000248194255701258
+Single-Walled,Gasoline-Only,25k-Plus,1990,Texas,0,,0
+Single-Walled,Gasoline-Only,25k-Plus,1990,Control States,286,5721325,0.0000499884205144787
+Single-Walled,Gasoline-Only,25k-Plus,1991,Texas,47,358115,0.000131242757214861
+Single-Walled,Gasoline-Only,25k-Plus,1991,Control States,101,5721325,0.0000176532533984698
+Single-Walled,Gasoline-Only,25k-Plus,1992,Texas,29,358115,0.000080979573600659
+Single-Walled,Gasoline-Only,25k-Plus,1992,Control States,87,5721325,0.0000152062677788799
+Single-Walled,Gasoline-Only,25k-Plus,1993,Texas,0,,0
+Single-Walled,Gasoline-Only,25k-Plus,1993,Control States,252,5721325,0.0000440457411526176
+Single-Walled,Gasoline-Only,25k-Plus,1994,Texas,54,358115,0.000150789550842606
+Single-Walled,Gasoline-Only,25k-Plus,1994,Control States,81,5721325,0.0000141575596561985
+Single-Walled,Gasoline-Only,25k-Plus,1995,Texas,62,358115,0.00017312874356003
+Single-Walled,Gasoline-Only,25k-Plus,1995,Control States,185,5721325,0.000032335167116009
+Single-Walled,Gasoline-Only,25k-Plus,1996,Texas,25,358115,0.0000698099772419474
+Single-Walled,Gasoline-Only,25k-Plus,1996,Control States,373,5721325,0.0000651946882933586
+Single-Walled,Gasoline-Only,25k-Plus,1997,Texas,72,358115,0.000201052734456809
+Single-Walled,Gasoline-Only,25k-Plus,1997,Control States,146,5721325,0.0000255185643185801
+Single-Walled,Gasoline-Only,5k-12k,1989,Texas,17744,358115,0.0495483294472446
+Single-Walled,Gasoline-Only,5k-12k,1989,Control States,216192,5721325,0.0377870510764552
+Single-Walled,Gasoline-Only,5k-12k,1990,Texas,14766,358115,0.0412325649581838
+Single-Walled,Gasoline-Only,5k-12k,1990,Control States,195048,5721325,0.034091403652126
+Single-Walled,Gasoline-Only,5k-12k,1991,Texas,8535,358115,0.0238331262304008
+Single-Walled,Gasoline-Only,5k-12k,1991,Control States,114203,5721325,0.0199609356224301
+Single-Walled,Gasoline-Only,5k-12k,1992,Texas,8028,358115,0.0224173798919342
+Single-Walled,Gasoline-Only,5k-12k,1992,Control States,79383,5721325,0.0138749328171359
+Single-Walled,Gasoline-Only,5k-12k,1993,Texas,6468,358115,0.0180612373120366
+Single-Walled,Gasoline-Only,5k-12k,1993,Control States,65624,5721325,0.0114700703071404
+Single-Walled,Gasoline-Only,5k-12k,1994,Texas,8057,358115,0.0224983594655348
+Single-Walled,Gasoline-Only,5k-12k,1994,Control States,66352,5721325,0.0115973135593591
+Single-Walled,Gasoline-Only,5k-12k,1995,Texas,6771,358115,0.018907334236209
+Single-Walled,Gasoline-Only,5k-12k,1995,Control States,62586,5721325,0.0109390744276894
+Single-Walled,Gasoline-Only,5k-12k,1996,Texas,5643,358115,0.0157575080630524
+Single-Walled,Gasoline-Only,5k-12k,1996,Control States,54790,5721325,0.00957645300695206
+Single-Walled,Gasoline-Only,5k-12k,1997,Texas,3437,358115,0.00959747567122293
+Single-Walled,Gasoline-Only,5k-12k,1997,Control States,51505,5721325,0.00900228530978401
+Single-Walled,Gasoline-Only,Under-1k,1989,Texas,211,358115,0.000589196207922036
+Single-Walled,Gasoline-Only,Under-1k,1989,Control States,4261,5721325,0.000744757551790888
+Single-Walled,Gasoline-Only,Under-1k,1990,Texas,61,358115,0.000170336344470352
+Single-Walled,Gasoline-Only,Under-1k,1990,Control States,3357,5721325,0.000586752194640228
+Single-Walled,Gasoline-Only,Under-1k,1991,Texas,17,358115,0.0000474707845245243
+Single-Walled,Gasoline-Only,Under-1k,1991,Control States,2480,5721325,0.000433466024041634
+Single-Walled,Gasoline-Only,Under-1k,1992,Texas,0,,0
+Single-Walled,Gasoline-Only,Under-1k,1992,Control States,2007,5721325,0.000350792867036919
+Single-Walled,Gasoline-Only,Under-1k,1993,Texas,2,358115,0.00000558479817935579
+Single-Walled,Gasoline-Only,Under-1k,1993,Control States,2497,5721325,0.000436437363722564
+Single-Walled,Gasoline-Only,Under-1k,1994,Texas,0,,0
+Single-Walled,Gasoline-Only,Under-1k,1994,Control States,2073,5721325,0.000362328656386414
+Single-Walled,Gasoline-Only,Under-1k,1995,Texas,32,358115,0.0000893567708696927
+Single-Walled,Gasoline-Only,Under-1k,1995,Control States,2214,5721325,0.000386973297269426
+Single-Walled,Gasoline-Only,Under-1k,1996,Texas,1,358115,0.0000027923990896779
+Single-Walled,Gasoline-Only,Under-1k,1996,Control States,1925,5721325,0.000336460522693607
+Single-Walled,Gasoline-Only,Under-1k,1997,Texas,4,358115,0.0000111695963587116
+Single-Walled,Gasoline-Only,Under-1k,1997,Control States,2225,5721325,0.000388895928827675
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1989,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1989,Control States,406,5721325,0.0000709625829681062
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1990,Texas,124,358115,0.000346257487120059
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1990,Control States,672,5721325,0.000117455309740314
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1991,Texas,276,358115,0.0007707021487511
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1991,Control States,692,5721325,0.000120951003482585
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1992,Texas,754,358115,0.00210546891361713
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1992,Control States,603,5721325,0.000105395166329478
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1993,Texas,558,358115,0.00155815869204027
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1993,Control States,883,5721325,0.000154334878721275
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1994,Texas,922,358115,0.00257459196068302
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1994,Control States,783,5721325,0.000136856410009919
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1995,Texas,1089,358115,0.00304092260865923
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1995,Control States,1063,5721325,0.000185796122401716
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1996,Texas,1773,358115,0.00495092358599891
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1996,Control States,1026,5721325,0.000179329088978515
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1997,Texas,1751,358115,0.004889490806026
+Single-Walled,Motor-Fuel-Mixed,12k-25k,1997,Control States,973,5721325,0.000170065500561496
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1989,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1989,Control States,102,5721325,0.0000178280380855833
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1990,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1990,Control States,141,5721325,0.0000246446408830122
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1991,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1991,Control States,271,5721325,0.0000473666502077753
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1992,Texas,19,358115,0.00005305558270388
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1992,Control States,49,5721325,0.00000856444966856454
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1993,Texas,56,358115,0.000156374349021962
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1993,Control States,84,5721325,0.0000146819137175392
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1994,Texas,54,358115,0.000150789550842606
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1994,Control States,263,5721325,0.0000459683727108668
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1995,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1995,Control States,251,5721325,0.0000438709564655041
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1996,Texas,7,358115,0.0000195467936277453
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1996,Control States,100,5721325,0.0000174784687113562
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1997,Texas,24,358115,0.0000670175781522695
+Single-Walled,Motor-Fuel-Mixed,1k-5k,1997,Control States,135,5721325,0.0000235959327603309
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1989,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1989,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1990,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1990,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1991,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1991,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1992,Texas,76,358115,0.00021222233081552
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1992,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1993,Texas,28,358115,0.0000781871745109811
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1993,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1994,Texas,27,358115,0.0000753947754213032
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1994,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1995,Texas,26,358115,0.0000726023763316253
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1995,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1996,Texas,50,358115,0.000139619954483895
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1996,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1997,Texas,72,358115,0.000201052734456809
+Single-Walled,Motor-Fuel-Mixed,25k-Plus,1997,Control States,24,5721325,0.00000419483249072549
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1989,Texas,32,358115,0.0000893567708696927
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1989,Control States,679,5721325,0.000118678802550109
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1990,Texas,141,358115,0.000393728271644583
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1990,Control States,481,5721325,0.0000840714345016233
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1991,Texas,300,358115,0.000837719726903369
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1991,Control States,617,5721325,0.000107842151949068
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1992,Texas,569,358115,0.00158887508202672
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1992,Control States,384,5721325,0.0000671173198516078
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1993,Texas,546,358115,0.00152464990296413
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1993,Control States,371,5721325,0.0000648451189191315
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1994,Texas,459,358115,0.00128171118216215
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1994,Control States,584,5721325,0.00010207425727432
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1995,Texas,462,358115,0.00129008837943119
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1995,Control States,574,5721325,0.000100326410403185
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1996,Texas,525,358115,0.0014660095220809
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1996,Control States,649,5721325,0.000113435261936702
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1997,Texas,503,358115,0.00140457674210798
+Single-Walled,Motor-Fuel-Mixed,5k-12k,1997,Control States,837,5721325,0.000146294783114051
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1989,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1989,Control States,4,5721325,0.000000699138748454248
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1990,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1990,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1991,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1991,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1992,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1992,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1993,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1993,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1994,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1994,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1995,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1995,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1996,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1996,Control States,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1997,Texas,0,,0
+Single-Walled,Motor-Fuel-Mixed,Under-1k,1997,Control States,0,,0
+Single-Walled,Other-Fuel,12k-25k,1989,Texas,1612,358115,0.00450134733256077
+Single-Walled,Other-Fuel,12k-25k,1989,Control States,7757,5721325,0.0013558048179399
+Single-Walled,Other-Fuel,12k-25k,1990,Texas,2501,358115,0.00698379012328442
+Single-Walled,Other-Fuel,12k-25k,1990,Control States,7351,5721325,0.00128484223497179
+Single-Walled,Other-Fuel,12k-25k,1991,Texas,2006,358115,0.00560155257389386
+Single-Walled,Other-Fuel,12k-25k,1991,Control States,5911,5721325,0.00103315228552826
+Single-Walled,Other-Fuel,12k-25k,1992,Texas,1206,358115,0.00336763330215154
+Single-Walled,Other-Fuel,12k-25k,1992,Control States,2754,5721325,0.00048135702831075
+Single-Walled,Other-Fuel,12k-25k,1993,Texas,1375,358115,0.00383954874830711
+Single-Walled,Other-Fuel,12k-25k,1993,Control States,2662,5721325,0.000465276837096302
+Single-Walled,Other-Fuel,12k-25k,1994,Texas,2035,358115,0.00568253214749452
+Single-Walled,Other-Fuel,12k-25k,1994,Control States,3223,5721325,0.00056333104656701
+Single-Walled,Other-Fuel,12k-25k,1995,Texas,1687,358115,0.00471077726428661
+Single-Walled,Other-Fuel,12k-25k,1995,Control States,2849,5721325,0.000497961573586538
+Single-Walled,Other-Fuel,12k-25k,1996,Texas,1961,358115,0.00547589461485836
+Single-Walled,Other-Fuel,12k-25k,1996,Control States,3149,5721325,0.000550396979720607
+Single-Walled,Other-Fuel,12k-25k,1997,Texas,1132,358115,0.00316099576951538
+Single-Walled,Other-Fuel,12k-25k,1997,Control States,3145,5721325,0.000549697840972152
+Single-Walled,Other-Fuel,1k-5k,1989,Texas,3413,358115,0.00953045809307066
+Single-Walled,Other-Fuel,1k-5k,1989,Control States,37278,5721325,0.00651562356621936
+Single-Walled,Other-Fuel,1k-5k,1990,Texas,3384,358115,0.00944947851947
+Single-Walled,Other-Fuel,1k-5k,1990,Control States,30590,5721325,0.00534666357880386
+Single-Walled,Other-Fuel,1k-5k,1991,Texas,2080,358115,0.00580819010653003
+Single-Walled,Other-Fuel,1k-5k,1991,Control States,16899,5721325,0.00295368642753208
+Single-Walled,Other-Fuel,1k-5k,1992,Texas,1218,358115,0.00340114209122768
+Single-Walled,Other-Fuel,1k-5k,1992,Control States,14768,5721325,0.00258122025929308
+Single-Walled,Other-Fuel,1k-5k,1993,Texas,963,358115,0.00268908032335981
+Single-Walled,Other-Fuel,1k-5k,1993,Control States,11597,5721325,0.00202697801645598
+Single-Walled,Other-Fuel,1k-5k,1994,Texas,1068,358115,0.00298228222777599
+Single-Walled,Other-Fuel,1k-5k,1994,Control States,11482,5721325,0.00200687777743792
+Single-Walled,Other-Fuel,1k-5k,1995,Texas,757,358115,0.00211384611088617
+Single-Walled,Other-Fuel,1k-5k,1995,Control States,10548,5721325,0.00184362887967385
+Single-Walled,Other-Fuel,1k-5k,1996,Texas,476,358115,0.00132918196668668
+Single-Walled,Other-Fuel,1k-5k,1996,Control States,9589,5721325,0.00167601036473195
+Single-Walled,Other-Fuel,1k-5k,1997,Texas,469,358115,0.00130963517305893
+Single-Walled,Other-Fuel,1k-5k,1997,Control States,9876,5721325,0.00172617356993354
+Single-Walled,Other-Fuel,25k-Plus,1989,Texas,0,,0
+Single-Walled,Other-Fuel,25k-Plus,1989,Control States,323,5721325,0.0000564554539376805
+Single-Walled,Other-Fuel,25k-Plus,1990,Texas,0,,0
+Single-Walled,Other-Fuel,25k-Plus,1990,Control States,210,5721325,0.000036704784293848
+Single-Walled,Other-Fuel,25k-Plus,1991,Texas,120,358115,0.000335087890761348
+Single-Walled,Other-Fuel,25k-Plus,1991,Control States,185,5721325,0.000032335167116009
+Single-Walled,Other-Fuel,25k-Plus,1992,Texas,29,358115,0.000080979573600659
+Single-Walled,Other-Fuel,25k-Plus,1992,Control States,11,5721325,0.00000192263155824918
+Single-Walled,Other-Fuel,25k-Plus,1993,Texas,0,,0
+Single-Walled,Other-Fuel,25k-Plus,1993,Control States,1149,5721325,0.000200827605493483
+Single-Walled,Other-Fuel,25k-Plus,1994,Texas,27,358115,0.0000753947754213032
+Single-Walled,Other-Fuel,25k-Plus,1994,Control States,0,,0
+Single-Walled,Other-Fuel,25k-Plus,1995,Texas,104,358115,0.000290409505326501
+Single-Walled,Other-Fuel,25k-Plus,1995,Control States,182,5721325,0.0000318108130546683
+Single-Walled,Other-Fuel,25k-Plus,1996,Texas,0,,0
+Single-Walled,Other-Fuel,25k-Plus,1996,Control States,75,5721325,0.0000131088515335171
+Single-Walled,Other-Fuel,25k-Plus,1997,Texas,24,358115,0.0000670175781522695
+Single-Walled,Other-Fuel,25k-Plus,1997,Control States,72,5721325,0.0000125844974721765
+Single-Walled,Other-Fuel,5k-12k,1989,Texas,10844,358115,0.0302807757284671
+Single-Walled,Other-Fuel,5k-12k,1989,Control States,36725,5721325,0.00641896763424556
+Single-Walled,Other-Fuel,5k-12k,1990,Texas,9605,358115,0.0268209932563562
+Single-Walled,Other-Fuel,5k-12k,1990,Control States,31289,5721325,0.00546883807509624
+Single-Walled,Other-Fuel,5k-12k,1991,Texas,5356,358115,0.0149560895243148
+Single-Walled,Other-Fuel,5k-12k,1991,Control States,14491,5721325,0.00253280490096263
+Single-Walled,Other-Fuel,5k-12k,1992,Texas,4199,358115,0.0117252837775575
+Single-Walled,Other-Fuel,5k-12k,1992,Control States,11737,5721325,0.00205144787265188
+Single-Walled,Other-Fuel,5k-12k,1993,Texas,3718,358115,0.0103821398154224
+Single-Walled,Other-Fuel,5k-12k,1993,Control States,9421,5721325,0.00164664653729687
+Single-Walled,Other-Fuel,5k-12k,1994,Texas,4033,358115,0.011261745528671
+Single-Walled,Other-Fuel,5k-12k,1994,Control States,9729,5721325,0.00170048022092784
+Single-Walled,Other-Fuel,5k-12k,1995,Texas,3214,358115,0.00897477067422476
+Single-Walled,Other-Fuel,5k-12k,1995,Control States,8955,5721325,0.00156519687310195
+Single-Walled,Other-Fuel,5k-12k,1996,Texas,1752,358115,0.00489228320511568
+Single-Walled,Other-Fuel,5k-12k,1996,Control States,8309,5721325,0.00145228596522659
+Single-Walled,Other-Fuel,5k-12k,1997,Texas,1765,358115,0.00492858439328149
+Single-Walled,Other-Fuel,5k-12k,1997,Control States,8618,5721325,0.00150629443354468
+Single-Walled,Other-Fuel,Under-1k,1989,Texas,582,358115,0.00162517627019254
+Single-Walled,Other-Fuel,Under-1k,1989,Control States,14879,5721325,0.00260062135956269
+Single-Walled,Other-Fuel,Under-1k,1990,Texas,379,358115,0.00105831925498792
+Single-Walled,Other-Fuel,Under-1k,1990,Control States,11600,5721325,0.00202750237051732
+Single-Walled,Other-Fuel,Under-1k,1991,Texas,252,358115,0.00070368457059883
+Single-Walled,Other-Fuel,Under-1k,1991,Control States,6374,5721325,0.00111407759566184
+Single-Walled,Other-Fuel,Under-1k,1992,Texas,48,358115,0.000134035156304539
+Single-Walled,Other-Fuel,Under-1k,1992,Control States,6292,5721325,0.00109974525131853
+Single-Walled,Other-Fuel,Under-1k,1993,Texas,90,358115,0.000251315918071011
+Single-Walled,Other-Fuel,Under-1k,1993,Control States,5335,5721325,0.000932476305750853
+Single-Walled,Other-Fuel,Under-1k,1994,Texas,141,358115,0.000393728271644583
+Single-Walled,Other-Fuel,Under-1k,1994,Control States,3269,5721325,0.000571371142174234
+Single-Walled,Other-Fuel,Under-1k,1995,Texas,67,358115,0.000187090739008419
+Single-Walled,Other-Fuel,Under-1k,1995,Control States,3570,5721325,0.000623981332995416
+Single-Walled,Other-Fuel,Under-1k,1996,Texas,25,358115,0.0000698099772419474
+Single-Walled,Other-Fuel,Under-1k,1996,Control States,2569,5721325,0.000449021861194741
+Single-Walled,Other-Fuel,Under-1k,1997,Texas,47,358115,0.000131242757214861
+Single-Walled,Other-Fuel,Under-1k,1997,Control States,2915,5721325,0.000509497362936033
+Unknown-Wall,Diesel-Only,12k-25k,1989,Texas,0,,0
+Unknown-Wall,Diesel-Only,12k-25k,1989,Control States,9414,5721325,0.00164542304448707
+Unknown-Wall,Diesel-Only,12k-25k,1990,Texas,0,,0
+Unknown-Wall,Diesel-Only,12k-25k,1990,Control States,8595,5721325,0.00150227438574107
+Unknown-Wall,Diesel-Only,12k-25k,1991,Texas,0,,0
+Unknown-Wall,Diesel-Only,12k-25k,1991,Control States,8241,5721325,0.00144040060650286
+Unknown-Wall,Diesel-Only,12k-25k,1992,Texas,0,,0
+Unknown-Wall,Diesel-Only,12k-25k,1992,Control States,5436,5721325,0.000950129559149323
+Unknown-Wall,Diesel-Only,12k-25k,1993,Texas,0,,0
+Unknown-Wall,Diesel-Only,12k-25k,1993,Control States,4791,5721325,0.000837393435961076
+Unknown-Wall,Diesel-Only,12k-25k,1994,Texas,15,358115,0.0000418859863451685
+Unknown-Wall,Diesel-Only,12k-25k,1994,Control States,5060,5721325,0.000884410516794624
+Unknown-Wall,Diesel-Only,12k-25k,1995,Texas,0,,0
+Unknown-Wall,Diesel-Only,12k-25k,1995,Control States,4469,5721325,0.000781112766710509
+Unknown-Wall,Diesel-Only,12k-25k,1996,Texas,0,,0
+Unknown-Wall,Diesel-Only,12k-25k,1996,Control States,4655,5721325,0.000813622718513631
+Unknown-Wall,Diesel-Only,12k-25k,1997,Texas,0,,0
+Unknown-Wall,Diesel-Only,12k-25k,1997,Control States,4865,5721325,0.000850327502807479
+Unknown-Wall,Diesel-Only,1k-5k,1989,Texas,45,358115,0.000125657959035505
+Unknown-Wall,Diesel-Only,1k-5k,1989,Control States,19258,5721325,0.00336600350443298
+Unknown-Wall,Diesel-Only,1k-5k,1990,Texas,11,358115,0.0000307163899864569
+Unknown-Wall,Diesel-Only,1k-5k,1990,Control States,16127,5721325,0.00281875264908041
+Unknown-Wall,Diesel-Only,1k-5k,1991,Texas,0,,0
+Unknown-Wall,Diesel-Only,1k-5k,1991,Control States,10387,5721325,0.00181548854504857
+Unknown-Wall,Diesel-Only,1k-5k,1992,Texas,0,,0
+Unknown-Wall,Diesel-Only,1k-5k,1992,Control States,8002,5721325,0.00139862706628272
+Unknown-Wall,Diesel-Only,1k-5k,1993,Texas,0,,0
+Unknown-Wall,Diesel-Only,1k-5k,1993,Control States,5592,5721325,0.000977395970339039
+Unknown-Wall,Diesel-Only,1k-5k,1994,Texas,0,,0
+Unknown-Wall,Diesel-Only,1k-5k,1994,Control States,5117,5721325,0.000894373243960097
+Unknown-Wall,Diesel-Only,1k-5k,1995,Texas,0,,0
+Unknown-Wall,Diesel-Only,1k-5k,1995,Control States,4652,5721325,0.00081309836445229
+Unknown-Wall,Diesel-Only,1k-5k,1996,Texas,0,,0
+Unknown-Wall,Diesel-Only,1k-5k,1996,Control States,4338,5721325,0.000758215972698632
+Unknown-Wall,Diesel-Only,1k-5k,1997,Texas,0,,0
+Unknown-Wall,Diesel-Only,1k-5k,1997,Control States,4787,5721325,0.000836694297212621
+Unknown-Wall,Diesel-Only,25k-Plus,1989,Texas,0,,0
+Unknown-Wall,Diesel-Only,25k-Plus,1989,Control States,544,5721325,0.0000950828697897777
+Unknown-Wall,Diesel-Only,25k-Plus,1990,Texas,0,,0
+Unknown-Wall,Diesel-Only,25k-Plus,1990,Control States,620,5721325,0.000108366506010408
+Unknown-Wall,Diesel-Only,25k-Plus,1991,Texas,0,,0
+Unknown-Wall,Diesel-Only,25k-Plus,1991,Control States,390,5721325,0.0000681660279742892
+Unknown-Wall,Diesel-Only,25k-Plus,1992,Texas,0,,0
+Unknown-Wall,Diesel-Only,25k-Plus,1992,Control States,290,5721325,0.000050687559262933
+Unknown-Wall,Diesel-Only,25k-Plus,1993,Texas,0,,0
+Unknown-Wall,Diesel-Only,25k-Plus,1993,Control States,224,5721325,0.0000391517699134379
+Unknown-Wall,Diesel-Only,25k-Plus,1994,Texas,0,,0
+Unknown-Wall,Diesel-Only,25k-Plus,1994,Control States,459,5721325,0.0000802261713851249
+Unknown-Wall,Diesel-Only,25k-Plus,1995,Texas,0,,0
+Unknown-Wall,Diesel-Only,25k-Plus,1995,Control States,208,5721325,0.0000363552149196209
+Unknown-Wall,Diesel-Only,25k-Plus,1996,Texas,0,,0
+Unknown-Wall,Diesel-Only,25k-Plus,1996,Control States,250,5721325,0.0000436961717783905
+Unknown-Wall,Diesel-Only,25k-Plus,1997,Texas,0,,0
+Unknown-Wall,Diesel-Only,25k-Plus,1997,Control States,240,5721325,0.0000419483249072549
+Unknown-Wall,Diesel-Only,5k-12k,1989,Texas,14,358115,0.0000390935872554906
+Unknown-Wall,Diesel-Only,5k-12k,1989,Control States,27518,5721325,0.004809725019991
+Unknown-Wall,Diesel-Only,5k-12k,1990,Texas,0,,0
+Unknown-Wall,Diesel-Only,5k-12k,1990,Control States,23715,5721325,0.00414501885489812
+Unknown-Wall,Diesel-Only,5k-12k,1991,Texas,12,358115,0.0000335087890761348
+Unknown-Wall,Diesel-Only,5k-12k,1991,Control States,12822,5721325,0.00224108925817009
+Unknown-Wall,Diesel-Only,5k-12k,1992,Texas,0,,0
+Unknown-Wall,Diesel-Only,5k-12k,1992,Control States,10542,5721325,0.00184258017155117
+Unknown-Wall,Diesel-Only,5k-12k,1993,Texas,0,,0
+Unknown-Wall,Diesel-Only,5k-12k,1993,Control States,9138,5721325,0.00159718247084373
+Unknown-Wall,Diesel-Only,5k-12k,1994,Texas,0,,0
+Unknown-Wall,Diesel-Only,5k-12k,1994,Control States,8966,5721325,0.0015671195046602
+Unknown-Wall,Diesel-Only,5k-12k,1995,Texas,0,,0
+Unknown-Wall,Diesel-Only,5k-12k,1995,Control States,8367,5721325,0.00146242347707917
+Unknown-Wall,Diesel-Only,5k-12k,1996,Texas,0,,0
+Unknown-Wall,Diesel-Only,5k-12k,1996,Control States,7466,5721325,0.00130494247398985
+Unknown-Wall,Diesel-Only,5k-12k,1997,Texas,24,358115,0.0000670175781522695
+Unknown-Wall,Diesel-Only,5k-12k,1997,Control States,8838,5721325,0.00154474706470966
+Unknown-Wall,Diesel-Only,Under-1k,1989,Texas,3,358115,0.00000837719726903369
+Unknown-Wall,Diesel-Only,Under-1k,1989,Control States,4550,5721325,0.000795270326366707
+Unknown-Wall,Diesel-Only,Under-1k,1990,Texas,0,,0
+Unknown-Wall,Diesel-Only,Under-1k,1990,Control States,3254,5721325,0.000568749371867531
+Unknown-Wall,Diesel-Only,Under-1k,1991,Texas,0,,0
+Unknown-Wall,Diesel-Only,Under-1k,1991,Control States,2920,5721325,0.000510371286371601
+Unknown-Wall,Diesel-Only,Under-1k,1992,Texas,0,,0
+Unknown-Wall,Diesel-Only,Under-1k,1992,Control States,2381,5721325,0.000416162340017391
+Unknown-Wall,Diesel-Only,Under-1k,1993,Texas,0,,0
+Unknown-Wall,Diesel-Only,Under-1k,1993,Control States,2256,5721325,0.000394314254128196
+Unknown-Wall,Diesel-Only,Under-1k,1994,Texas,0,,0
+Unknown-Wall,Diesel-Only,Under-1k,1994,Control States,1685,5721325,0.000294512197786352
+Unknown-Wall,Diesel-Only,Under-1k,1995,Texas,0,,0
+Unknown-Wall,Diesel-Only,Under-1k,1995,Control States,1412,5721325,0.00024679597820435
+Unknown-Wall,Diesel-Only,Under-1k,1996,Texas,0,,0
+Unknown-Wall,Diesel-Only,Under-1k,1996,Control States,900,5721325,0.000157306218402206
+Unknown-Wall,Diesel-Only,Under-1k,1997,Texas,0,,0
+Unknown-Wall,Diesel-Only,Under-1k,1997,Control States,945,5721325,0.000165171529322316
+Unknown-Wall,Gasoline-Only,12k-25k,1989,Texas,9,358115,0.0000251315918071011
+Unknown-Wall,Gasoline-Only,12k-25k,1989,Control States,27796,5721325,0.00485831516300857
+Unknown-Wall,Gasoline-Only,12k-25k,1990,Texas,0,,0
+Unknown-Wall,Gasoline-Only,12k-25k,1990,Control States,31666,5721325,0.00553473190213805
+Unknown-Wall,Gasoline-Only,12k-25k,1991,Texas,0,,0
+Unknown-Wall,Gasoline-Only,12k-25k,1991,Control States,25991,5721325,0.00454282880276859
+Unknown-Wall,Gasoline-Only,12k-25k,1992,Texas,0,,0
+Unknown-Wall,Gasoline-Only,12k-25k,1992,Control States,16995,5721325,0.00297046575749499
+Unknown-Wall,Gasoline-Only,12k-25k,1993,Texas,0,,0
+Unknown-Wall,Gasoline-Only,12k-25k,1993,Control States,16358,5721325,0.00285912791180365
+Unknown-Wall,Gasoline-Only,12k-25k,1994,Texas,0,,0
+Unknown-Wall,Gasoline-Only,12k-25k,1994,Control States,19648,5721325,0.00343416953240727
+Unknown-Wall,Gasoline-Only,12k-25k,1995,Texas,0,,0
+Unknown-Wall,Gasoline-Only,12k-25k,1995,Control States,20442,5721325,0.00357294857397543
+Unknown-Wall,Gasoline-Only,12k-25k,1996,Texas,0,,0
+Unknown-Wall,Gasoline-Only,12k-25k,1996,Control States,21099,5721325,0.00368778211340904
+Unknown-Wall,Gasoline-Only,12k-25k,1997,Texas,0,,0
+Unknown-Wall,Gasoline-Only,12k-25k,1997,Control States,21494,5721325,0.0037568220648189
+Unknown-Wall,Gasoline-Only,1k-5k,1989,Texas,94,358115,0.000262485514429722
+Unknown-Wall,Gasoline-Only,1k-5k,1989,Control States,31367,5721325,0.0054824712806911
+Unknown-Wall,Gasoline-Only,1k-5k,1990,Texas,60,358115,0.000167543945380674
+Unknown-Wall,Gasoline-Only,1k-5k,1990,Control States,24934,5721325,0.00435808138848955
+Unknown-Wall,Gasoline-Only,1k-5k,1991,Texas,12,358115,0.0000335087890761348
+Unknown-Wall,Gasoline-Only,1k-5k,1991,Control States,14006,5721325,0.00244803432771255
+Unknown-Wall,Gasoline-Only,1k-5k,1992,Texas,0,,0
+Unknown-Wall,Gasoline-Only,1k-5k,1992,Control States,9821,5721325,0.00171656041214229
+Unknown-Wall,Gasoline-Only,1k-5k,1993,Texas,0,,0
+Unknown-Wall,Gasoline-Only,1k-5k,1993,Control States,8224,5721325,0.00143742926682193
+Unknown-Wall,Gasoline-Only,1k-5k,1994,Texas,0,,0
+Unknown-Wall,Gasoline-Only,1k-5k,1994,Control States,5612,5721325,0.00098089166408131
+Unknown-Wall,Gasoline-Only,1k-5k,1995,Texas,0,,0
+Unknown-Wall,Gasoline-Only,1k-5k,1995,Control States,4830,5721325,0.000844210038758505
+Unknown-Wall,Gasoline-Only,1k-5k,1996,Texas,0,,0
+Unknown-Wall,Gasoline-Only,1k-5k,1996,Control States,3697,5721325,0.000646178988258839
+Unknown-Wall,Gasoline-Only,1k-5k,1997,Texas,0,,0
+Unknown-Wall,Gasoline-Only,1k-5k,1997,Control States,4109,5721325,0.000718190279349626
+Unknown-Wall,Gasoline-Only,25k-Plus,1989,Texas,3,358115,0.00000837719726903369
+Unknown-Wall,Gasoline-Only,25k-Plus,1989,Control States,1179,5721325,0.00020607114610689
+Unknown-Wall,Gasoline-Only,25k-Plus,1990,Texas,0,,0
+Unknown-Wall,Gasoline-Only,25k-Plus,1990,Control States,1953,5721325,0.000341354493932787
+Unknown-Wall,Gasoline-Only,25k-Plus,1991,Texas,0,,0
+Unknown-Wall,Gasoline-Only,25k-Plus,1991,Control States,1655,5721325,0.000289268657172945
+Unknown-Wall,Gasoline-Only,25k-Plus,1992,Texas,0,,0
+Unknown-Wall,Gasoline-Only,25k-Plus,1992,Control States,957,5721325,0.000167268945567679
+Unknown-Wall,Gasoline-Only,25k-Plus,1993,Texas,0,,0
+Unknown-Wall,Gasoline-Only,25k-Plus,1993,Control States,504,5721325,0.0000880914823052352
+Unknown-Wall,Gasoline-Only,25k-Plus,1994,Texas,0,,0
+Unknown-Wall,Gasoline-Only,25k-Plus,1994,Control States,648,5721325,0.000113260477249588
+Unknown-Wall,Gasoline-Only,25k-Plus,1995,Texas,0,,0
+Unknown-Wall,Gasoline-Only,25k-Plus,1995,Control States,598,5721325,0.00010452124289391
+Unknown-Wall,Gasoline-Only,25k-Plus,1996,Texas,0,,0
+Unknown-Wall,Gasoline-Only,25k-Plus,1996,Control States,250,5721325,0.0000436961717783905
+Unknown-Wall,Gasoline-Only,25k-Plus,1997,Texas,0,,0
+Unknown-Wall,Gasoline-Only,25k-Plus,1997,Control States,456,5721325,0.0000797018173237843
+Unknown-Wall,Gasoline-Only,5k-12k,1989,Texas,200,358115,0.000558479817935579
+Unknown-Wall,Gasoline-Only,5k-12k,1989,Control States,134565,5721325,0.0235199014214365
+Unknown-Wall,Gasoline-Only,5k-12k,1990,Texas,28,358115,0.0000781871745109811
+Unknown-Wall,Gasoline-Only,5k-12k,1990,Control States,102799,5721325,0.0179676910505871
+Unknown-Wall,Gasoline-Only,5k-12k,1991,Texas,12,358115,0.0000335087890761348
+Unknown-Wall,Gasoline-Only,5k-12k,1991,Control States,55514,5721325,0.00970299712042228
+Unknown-Wall,Gasoline-Only,5k-12k,1992,Texas,29,358115,0.000080979573600659
+Unknown-Wall,Gasoline-Only,5k-12k,1992,Control States,38032,5721325,0.00664741122030299
+Unknown-Wall,Gasoline-Only,5k-12k,1993,Texas,0,,0
+Unknown-Wall,Gasoline-Only,5k-12k,1993,Control States,33687,5721325,0.00588797175479456
+Unknown-Wall,Gasoline-Only,5k-12k,1994,Texas,0,,0
+Unknown-Wall,Gasoline-Only,5k-12k,1994,Control States,34952,5721325,0.00610907438399322
+Unknown-Wall,Gasoline-Only,5k-12k,1995,Texas,0,,0
+Unknown-Wall,Gasoline-Only,5k-12k,1995,Control States,36444,5721325,0.00636985313716665
+Unknown-Wall,Gasoline-Only,5k-12k,1996,Texas,0,,0
+Unknown-Wall,Gasoline-Only,5k-12k,1996,Control States,35642,5721325,0.00622967581810158
+Unknown-Wall,Gasoline-Only,5k-12k,1997,Texas,72,358115,0.000201052734456809
+Unknown-Wall,Gasoline-Only,5k-12k,1997,Control States,29251,5721325,0.0051126268827588
+Unknown-Wall,Gasoline-Only,Under-1k,1989,Texas,25,358115,0.0000698099772419474
+Unknown-Wall,Gasoline-Only,Under-1k,1989,Control States,2434,5721325,0.00042542592843441
+Unknown-Wall,Gasoline-Only,Under-1k,1990,Texas,0,,0
+Unknown-Wall,Gasoline-Only,Under-1k,1990,Control States,2197,5721325,0.000384001957588496
+Unknown-Wall,Gasoline-Only,Under-1k,1991,Texas,0,,0
+Unknown-Wall,Gasoline-Only,Under-1k,1991,Control States,1413,5721325,0.000246970762891463
+Unknown-Wall,Gasoline-Only,Under-1k,1992,Texas,0,,0
+Unknown-Wall,Gasoline-Only,Under-1k,1992,Control States,983,5721325,0.000171813347432631
+Unknown-Wall,Gasoline-Only,Under-1k,1993,Texas,0,,0
+Unknown-Wall,Gasoline-Only,Under-1k,1993,Control States,741,5721325,0.000129515453151149
+Unknown-Wall,Gasoline-Only,Under-1k,1994,Texas,0,,0
+Unknown-Wall,Gasoline-Only,Under-1k,1994,Control States,453,5721325,0.0000791774632624436
+Unknown-Wall,Gasoline-Only,Under-1k,1995,Texas,0,,0
+Unknown-Wall,Gasoline-Only,Under-1k,1995,Control States,383,5721325,0.0000669425351644942
+Unknown-Wall,Gasoline-Only,Under-1k,1996,Texas,0,,0
+Unknown-Wall,Gasoline-Only,Under-1k,1996,Control States,232,5721325,0.0000405500474103464
+Unknown-Wall,Gasoline-Only,Under-1k,1997,Texas,0,,0
+Unknown-Wall,Gasoline-Only,Under-1k,1997,Control States,342,5721325,0.0000597763629928382
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1989,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1989,Control States,1629,5721325,0.000284724255307992
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1990,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1990,Control States,1697,5721325,0.000296609614031715
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1991,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1991,Control States,1719,5721325,0.000300454877148213
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1992,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1992,Control States,1448,5721325,0.000253088226940438
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1993,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1993,Control States,2220,5721325,0.000388022005392108
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1994,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1994,Control States,1558,5721325,0.00027231454252293
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1995,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1995,Control States,1846,5721325,0.000322652532411635
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1996,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1996,Control States,1226,5721325,0.000214286026401227
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1997,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,12k-25k,1997,Control States,1949,5721325,0.000340655355184332
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1989,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1989,Control States,3426,5721325,0.000598812338051063
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1990,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1990,Control States,2432,5721325,0.000425076359060183
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1991,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1991,Control States,2699,5721325,0.000471743870519504
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1992,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1992,Control States,1968,5721325,0.00034397626423949
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1993,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1993,Control States,1808,5721325,0.00031601071430132
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1994,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1994,Control States,1721,5721325,0.00030080444652244
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1995,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1995,Control States,1284,5721325,0.000224423538253814
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1996,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1996,Control States,1134,5721325,0.000198205835186779
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1997,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,1k-5k,1997,Control States,1093,5721325,0.000191039663015123
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1989,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1989,Control States,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1990,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1990,Control States,124,5721325,0.0000216733012020817
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1991,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1991,Control States,13,5721325,0.00000227220093247631
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1992,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1992,Control States,50,5721325,0.0000087392343556781
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1993,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1993,Control States,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1994,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1994,Control States,27,5721325,0.00000471918655206617
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1995,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1995,Control States,98,5721325,0.0000171288993371291
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1996,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1996,Control States,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1997,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,25k-Plus,1997,Control States,24,5721325,0.00000419483249072549
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1989,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1989,Control States,5813,5721325,0.00101602338619114
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1990,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1990,Control States,4811,5721325,0.000840889129703347
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1991,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1991,Control States,4153,5721325,0.000725880805582623
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1992,Texas,29,358115,0.000080979573600659
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1992,Control States,3975,5721325,0.000694769131276409
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1993,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1993,Control States,3032,5721325,0.00052994717132832
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1994,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1994,Control States,3083,5721325,0.000538861190371112
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1995,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1995,Control States,3113,5721325,0.000544104730984518
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1996,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1996,Control States,3516,5721325,0.000614542959891284
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1997,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,5k-12k,1997,Control States,2786,5721325,0.000486950138298384
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1989,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1989,Control States,572,5721325,0.0000999768410289574
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1990,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1990,Control States,485,5721325,0.0000847705732500776
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1991,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1991,Control States,1054,5721325,0.000184223060217694
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1992,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1992,Control States,504,5721325,0.0000880914823052352
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1993,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1993,Control States,322,5721325,0.000056280669250567
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1994,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1994,Control States,204,5721325,0.0000356560761711666
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1995,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1995,Control States,259,5721325,0.0000452692339624126
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1996,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1996,Control States,70,5721325,0.0000122349280979493
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1997,Texas,0,,0
+Unknown-Wall,Motor-Fuel-Mixed,Under-1k,1997,Control States,50,5721325,0.0000087392343556781
+Unknown-Wall,Other-Fuel,12k-25k,1989,Texas,9,358115,0.0000251315918071011
+Unknown-Wall,Other-Fuel,12k-25k,1989,Control States,3715,5721325,0.000649325112626883
+Unknown-Wall,Other-Fuel,12k-25k,1990,Texas,71,358115,0.000198260335367131
+Unknown-Wall,Other-Fuel,12k-25k,1990,Control States,3417,5721325,0.000597239275867041
+Unknown-Wall,Other-Fuel,12k-25k,1991,Texas,0,,0
+Unknown-Wall,Other-Fuel,12k-25k,1991,Control States,4186,5721325,0.00073164870025737
+Unknown-Wall,Other-Fuel,12k-25k,1992,Texas,0,,0
+Unknown-Wall,Other-Fuel,12k-25k,1992,Control States,3306,5721325,0.000577838175597436
+Unknown-Wall,Other-Fuel,12k-25k,1993,Texas,0,,0
+Unknown-Wall,Other-Fuel,12k-25k,1993,Control States,2902,5721325,0.000507225162003557
+Unknown-Wall,Other-Fuel,12k-25k,1994,Texas,0,,0
+Unknown-Wall,Other-Fuel,12k-25k,1994,Control States,4600,5721325,0.000804009560722385
+Unknown-Wall,Other-Fuel,12k-25k,1995,Texas,0,,0
+Unknown-Wall,Other-Fuel,12k-25k,1995,Control States,3696,5721325,0.000646004203571725
+Unknown-Wall,Other-Fuel,12k-25k,1996,Texas,0,,0
+Unknown-Wall,Other-Fuel,12k-25k,1996,Control States,3600,5721325,0.000629224873608823
+Unknown-Wall,Other-Fuel,12k-25k,1997,Texas,24,358115,0.0000670175781522695
+Unknown-Wall,Other-Fuel,12k-25k,1997,Control States,3539,5721325,0.000618563007694896
+Unknown-Wall,Other-Fuel,1k-5k,1989,Texas,201,358115,0.000561272217025257
+Unknown-Wall,Other-Fuel,1k-5k,1989,Control States,50269,5721325,0.00878625143651165
+Unknown-Wall,Other-Fuel,1k-5k,1990,Texas,66,358115,0.000184298339918741
+Unknown-Wall,Other-Fuel,1k-5k,1990,Control States,38113,5721325,0.00666156877995919
+Unknown-Wall,Other-Fuel,1k-5k,1991,Texas,4,358115,0.0000111695963587116
+Unknown-Wall,Other-Fuel,1k-5k,1991,Control States,26469,5721325,0.00462637588320887
+Unknown-Wall,Other-Fuel,1k-5k,1992,Texas,7,358115,0.0000195467936277453
+Unknown-Wall,Other-Fuel,1k-5k,1992,Control States,21807,5721325,0.00381152967188545
+Unknown-Wall,Other-Fuel,1k-5k,1993,Texas,28,358115,0.0000781871745109811
+Unknown-Wall,Other-Fuel,1k-5k,1993,Control States,20062,5721325,0.00350653039287228
+Unknown-Wall,Other-Fuel,1k-5k,1994,Texas,8,358115,0.0000223391927174232
+Unknown-Wall,Other-Fuel,1k-5k,1994,Control States,18865,5721325,0.00329731312239735
+Unknown-Wall,Other-Fuel,1k-5k,1995,Texas,0,,0
+Unknown-Wall,Other-Fuel,1k-5k,1995,Control States,15096,5721325,0.00263854963666633
+Unknown-Wall,Other-Fuel,1k-5k,1996,Texas,0,,0
+Unknown-Wall,Other-Fuel,1k-5k,1996,Control States,15152,5721325,0.00264833757914469
+Unknown-Wall,Other-Fuel,1k-5k,1997,Texas,0,,0
+Unknown-Wall,Other-Fuel,1k-5k,1997,Control States,15391,5721325,0.00269011111936483
+Unknown-Wall,Other-Fuel,25k-Plus,1989,Texas,0,,0
+Unknown-Wall,Other-Fuel,25k-Plus,1989,Control States,400,5721325,0.0000699138748454248
+Unknown-Wall,Other-Fuel,25k-Plus,1990,Texas,0,,0
+Unknown-Wall,Other-Fuel,25k-Plus,1990,Control States,465,5721325,0.0000812748795078063
+Unknown-Wall,Other-Fuel,25k-Plus,1991,Texas,0,,0
+Unknown-Wall,Other-Fuel,25k-Plus,1991,Control States,846,5721325,0.000147867845298073
+Unknown-Wall,Other-Fuel,25k-Plus,1992,Texas,0,,0
+Unknown-Wall,Other-Fuel,25k-Plus,1992,Control States,407,5721325,0.0000711373676552197
+Unknown-Wall,Other-Fuel,25k-Plus,1993,Texas,0,,0
+Unknown-Wall,Other-Fuel,25k-Plus,1993,Control States,420,5721325,0.000073409568587696
+Unknown-Wall,Other-Fuel,25k-Plus,1994,Texas,0,,0
+Unknown-Wall,Other-Fuel,25k-Plus,1994,Control States,270,5721325,0.0000471918655206617
+Unknown-Wall,Other-Fuel,25k-Plus,1995,Texas,0,,0
+Unknown-Wall,Other-Fuel,25k-Plus,1995,Control States,432,5721325,0.0000755069848330588
+Unknown-Wall,Other-Fuel,25k-Plus,1996,Texas,0,,0
+Unknown-Wall,Other-Fuel,25k-Plus,1996,Control States,200,5721325,0.0000349569374227124
+Unknown-Wall,Other-Fuel,25k-Plus,1997,Texas,0,,0
+Unknown-Wall,Other-Fuel,25k-Plus,1997,Control States,408,5721325,0.0000713121523423333
+Unknown-Wall,Other-Fuel,5k-12k,1989,Texas,122,358115,0.000340672688940703
+Unknown-Wall,Other-Fuel,5k-12k,1989,Control States,27786,5721325,0.00485656731613743
+Unknown-Wall,Other-Fuel,5k-12k,1990,Texas,33,358115,0.0000921491699593706
+Unknown-Wall,Other-Fuel,5k-12k,1990,Control States,27546,5721325,0.00481461899123018
+Unknown-Wall,Other-Fuel,5k-12k,1991,Texas,117,358115,0.000326710693492314
+Unknown-Wall,Other-Fuel,5k-12k,1991,Control States,22505,5721325,0.00393352938349071
+Unknown-Wall,Other-Fuel,5k-12k,1992,Texas,18,358115,0.0000502631836142021
+Unknown-Wall,Other-Fuel,5k-12k,1992,Control States,14537,5721325,0.00254084499656985
+Unknown-Wall,Other-Fuel,5k-12k,1993,Texas,0,,0
+Unknown-Wall,Other-Fuel,5k-12k,1993,Control States,11345,5721325,0.00198293227530336
+Unknown-Wall,Other-Fuel,5k-12k,1994,Texas,46,358115,0.000128450358125183
+Unknown-Wall,Other-Fuel,5k-12k,1994,Control States,14861,5721325,0.00259747523519465
+Unknown-Wall,Other-Fuel,5k-12k,1995,Texas,0,,0
+Unknown-Wall,Other-Fuel,5k-12k,1995,Control States,11590,5721325,0.00202575452364618
+Unknown-Wall,Other-Fuel,5k-12k,1996,Texas,50,358115,0.000139619954483895
+Unknown-Wall,Other-Fuel,5k-12k,1996,Control States,10565,5721325,0.00184660021935478
+Unknown-Wall,Other-Fuel,5k-12k,1997,Texas,0,,0
+Unknown-Wall,Other-Fuel,5k-12k,1997,Control States,12561,5721325,0.00219547045483345
+Unknown-Wall,Other-Fuel,Under-1k,1989,Texas,120,358115,0.000335087890761348
+Unknown-Wall,Other-Fuel,Under-1k,1989,Control States,13935,5721325,0.00243562461492749
+Unknown-Wall,Other-Fuel,Under-1k,1990,Texas,1,358115,0.0000027923990896779
+Unknown-Wall,Other-Fuel,Under-1k,1990,Control States,11172,5721325,0.00195269452443271
+Unknown-Wall,Other-Fuel,Under-1k,1991,Texas,2,358115,0.00000558479817935579
+Unknown-Wall,Other-Fuel,Under-1k,1991,Control States,9243,5721325,0.00161553486299065
+Unknown-Wall,Other-Fuel,Under-1k,1992,Texas,0,,0
+Unknown-Wall,Other-Fuel,Under-1k,1992,Control States,9503,5721325,0.00166097888164018
+Unknown-Wall,Other-Fuel,Under-1k,1993,Texas,14,358115,0.0000390935872554906
+Unknown-Wall,Other-Fuel,Under-1k,1993,Control States,4300,5721325,0.000751574154588317
+Unknown-Wall,Other-Fuel,Under-1k,1994,Texas,8,358115,0.0000223391927174232
+Unknown-Wall,Other-Fuel,Under-1k,1994,Control States,4963,5721325,0.000867456402144608
+Unknown-Wall,Other-Fuel,Under-1k,1995,Texas,0,,0
+Unknown-Wall,Other-Fuel,Under-1k,1995,Control States,3735,5721325,0.000652820806369154
+Unknown-Wall,Other-Fuel,Under-1k,1996,Texas,0,,0
+Unknown-Wall,Other-Fuel,Under-1k,1996,Control States,3834,5721325,0.000670124490393397
+Unknown-Wall,Other-Fuel,Under-1k,1997,Texas,0,,0
+Unknown-Wall,Other-Fuel,Under-1k,1997,Control States,7868,5721325,0.00137520591820951

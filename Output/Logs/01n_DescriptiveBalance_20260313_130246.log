@@ -1,0 +1,39 @@
+=== 01n_DescriptiveBalance | started 2026-03-13 13:02:46 ===
+=== 01n: DESCRIPTIVE + BALANCE TABLES ===
+
+
+--- S1: MM sample + overlap restriction ---
+
+  Total MM cells: 85 | Overlap cells: 77
+
+  Dropped (no overlap): 0 TX-only, 8 CTL-only
+
+  MM overlap facilities: 232,703
+
+  Panel A: Full=113,708 fac (1998) | MM=113,177 fac (1998)
+
+  Panel A tanks: Full=276,730 | MM=275,764
+
+  Panel B: Full=1,232,101 fac-yr | MM=1,229,324 fac-yr
+
+
+--- Table 0: Sample Description ---
+
+  [tbl] Table0_Descriptive.csv
+
+  [tex] Table0_Descriptive.tex
+
+
+--- Table 1: Progressive Balance ---
+
+
+--- Table A: Cell-Level Balance Detail ---
+
+
+=== 01n COMPLETE ===
+
+  Table0_Descriptive.tex  (Panels A+B, 11 rows)
+
+  Table1_Balance.tex      (3-row progressive)
+
+=== 01n_DescriptiveBalance complete 2026-03-13 13:03:44 ===
