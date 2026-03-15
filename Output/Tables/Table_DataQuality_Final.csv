@@ -1,0 +1,38 @@
+state,current_status,n_sample,pct_miss_wall,pct_closed_no_date,verdict,n_lust_total,pct_lust_miss_date,lust_min_date,lust_max_date,verdict_combined,pct_stale_open,n_stale_open,n_total,pct_closed_with_date,closure_recording_gap,verdict_final
+AK,Candidate (not yet used),587,100,32.9,EXCLUDE — >50% unknown wall,2187,100,,,EXCLUDE — wall type,67.1,394,587,0,37.2,EXCLUDE — wall type
+CA,Candidate (not yet used),11344,0,0,OK,41661,100,,,EXCLUDE — stale open (no closure data),100,11344,11344,0,37.2,EXCLUDE — no closure recording
+DE,Candidate (not yet used),495,100,3,EXCLUDE — >50% unknown wall,4979,100,,,EXCLUDE — wall type,55.8,276,495,41.2,-4,EXCLUDE — wall type
+HI,Candidate (not yet used),660,100,21.1,EXCLUDE — >50% unknown wall,1395,100,,,EXCLUDE — wall type,78.9,521,660,0,37.2,EXCLUDE — wall type
+IL,Candidate (not yet used),6022,100,1.9,EXCLUDE — >50% unknown wall,23493,0.1,1990-01-02,2018-10-19,EXCLUDE — wall type,70.2,4229,6022,27.8,9.4,EXCLUDE — wall type
+IN,Candidate (not yet used),5048,100,26.3,EXCLUDE — >50% unknown wall,9987,100,,,EXCLUDE — wall type,73.7,3720,5048,0,37.2,EXCLUDE — wall type
+LA,Candidate (not yet used),3074,9.3,0,OK,3483,0,1990-01-03,2018-12-20,CAUTION — high stale open rate,62,1907,3074,38,-0.799999999999997,OK
+MA,Candidate (not yet used),4038,0.9,1.1,OK,4953,0,1990-01-01,2018-11-28,CAUTION — high stale open rate,69.6,2809,4038,29.3,7.9,OK
+ME,Candidate (not yet used),1852,0,0,OK,63292,0.1,1990-01-02,2018-12-31,OK,34.6,641,1852,65.4,-28.2,OK
+MT,Candidate (not yet used),1891,48.1,1,CAUTION — >20% unknown wall,4331,0,1990-01-03,2018-09-26,CAUTION — wall type,75.1,1420,1891,23.9,13.3,CAUTION — wall type
+ND,Candidate (not yet used),1133,0,1.4,OK,1015,100,,,EXCLUDE — no LUST dates,67.6,766,1133,31,6.2,EXCLUDE — no LUST dates
+NE,Candidate (not yet used),1590,100,2.1,EXCLUDE — >50% unknown wall,6865,1.1,1990-01-01,2018-08-28,EXCLUDE — wall type,97.9,1557,1590,0,37.2,EXCLUDE — wall type
+NH,Candidate (not yet used),1538,100,38.4,EXCLUDE — >50% unknown wall,2420,100,,,EXCLUDE — wall type,61.6,948,1538,0,37.2,EXCLUDE — wall type
+NM,Candidate (not yet used),1160,100,0,EXCLUDE — >50% unknown wall,1691,0,1990-01-02,2018-08-01,EXCLUDE — wall type,71.8,833,1160,28.2,9,EXCLUDE — wall type
+NV,Candidate (not yet used),1496,0,25.5,CAUTION — >20% closed missing date,2386,43.2,1990-01-03,2018-10-01,CAUTION — high stale open rate,74.5,1115,1496,0,37.2,CAUTION — LUST dates
+NY,Candidate (not yet used),11521,100,47.8,EXCLUDE — >50% unknown wall,19426,0,1990-01-01,2012-07-11,EXCLUDE — wall type,52.2,6018,11521,0,37.2,EXCLUDE — wall type
+PA,Candidate (not yet used),13684,0,40.4,CAUTION — >20% closed missing date,15653,100,,,EXCLUDE — no LUST dates,3.1,427,13684,56.5,-19.3,EXCLUDE — no LUST dates
+RI,Candidate (not yet used),652,4.3,37.6,CAUTION — >20% closed missing date,1957,0,1990-01-01,2018-10-24,CAUTION — high stale open rate,62.4,407,652,0,37.2,CAUTION — closed-no-date
+SD,Candidate (not yet used),1538,0,13.6,OK,3555,0,1990-01-04,2018-09-24,CAUTION — high stale open rate,78.7,1210,1538,7.7,29.5,CAUTION — low closure recording vs TX
+UT,Candidate (not yet used),1337,0,28,CAUTION — >20% closed missing date,4524,0,1990-01-02,2018-09-19,CAUTION — high stale open rate,72,963,1337,0,37.2,CAUTION — low closure recording vs TX
+WY,Candidate (not yet used),812,100,30.7,EXCLUDE — >50% unknown wall,1630,100,,,EXCLUDE — wall type,69.3,563,812,0,37.2,EXCLUDE — wall type
+AL,Current V1 Control,5210,80.4,0.7,EXCLUDE — >50% unknown wall,4851,0,1990-01-01,2018-12-01,EXCLUDE — wall type,82.1,4280,5210,17.2,20,EXCLUDE — wall type
+AR,Current V1 Control,4067,11.8,2.2,OK,4647,66.4,1990-01-11,2018-12-19,CAUTION — high stale open rate,56.3,2288,4067,41.5,-4.3,CAUTION — LUST dates
+CO,Current V1 Control,2588,1.7,2.4,OK,14406,24.2,1990-01-01,2018-12-29,CAUTION — high stale open rate,62.2,1611,2588,35.3,1.90000000000001,OK
+GA,Current V1 Control,13460,0,49.5,CAUTION — >20% closed missing date,17544,22.3,1990-01-03,2018-03-28,CAUTION — high stale open rate,50.5,6797,13460,0,37.2,CAUTION — closed-no-date
+ID,Current V1 Control,1473,0,0.1,OK,1474,0,1990-01-01,2018-09-11,CAUTION — high stale open rate,75.4,1110,1473,24.6,12.6,OK
+KS,Current V1 Control,1972,0.1,1.8,OK,10037,0,1990-01-01,2018-08-13,CAUTION — high stale open rate,69.2,1364,1972,29,8.2,OK
+KY,Current V1 Control,4490,0,0.7,OK,13115,100,,,EXCLUDE — no LUST dates,68.8,3090,4490,30.5,6.7,EXCLUDE — no LUST dates
+MN,Current V1 Control,6026,0,0.6,OK,10627,13.4,1990-01-01,2018-09-27,CAUTION — high stale open rate,67.7,4079,6026,31.7,5.5,OK
+MO,Current V1 Control,2557,0,35,CAUTION — >20% closed missing date,6322,17.2,1990-01-01,2018-06-25,CAUTION — high stale open rate,65,1663,2557,0,37.2,CAUTION — closed-no-date
+NC,Current V1 Control,7515,8.7,0,OK,22411,14.9,1990-01-01,2018-11-20,EXCLUDE — stale open (no closure data),80.3,6032,7515,19.7,17.5,OK
+OH,Current V1 Control,8580,0,2.2,OK,33320,39.9,1990-01-01,2018-12-27,CAUTION — high stale open rate,65,5575,8580,32.8,4.40000000000001,OK
+OK,Current V1 Control,2437,0,0.5,OK,5740,0,1990-01-01,2018-12-31,CAUTION — high stale open rate,59.5,1450,2437,40,-2.8,OK
+TN,Current V1 Control,5585,0.4,3.3,OK,15870,58.8,1990-01-01,2018-12-28,CAUTION — high stale open rate,66,3684,5585,30.7,6.5,CAUTION — LUST dates
+VA,Current V1 Control,7689,0,4.3,OK,11079,0,1990-01-01,2018-08-30,CAUTION — high stale open rate,75.8,5826,7689,19.9,17.3,OK
+WV,Current V1 Control,2190,0,41.1,CAUTION — >20% closed missing date,3466,0,1990-01-01,2018-06-07,CAUTION — high stale open rate,58.9,1291,2190,0,37.2,CAUTION — closed-no-date
+TX,Target,12473,0.6,0,OK,9016,4.9,1990-01-01,2018-12-28,CAUTION — high stale open rate,62.8,7839,12473,37.2,0,OK

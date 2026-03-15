@@ -1,0 +1,37 @@
+state,role
+TX,Target
+CO,Full analysis control
+ID,Full analysis control
+KS,Full analysis control
+MN,Full analysis control
+NC,Full analysis control
+OH,Full analysis control
+OK,Full analysis control
+VA,Full analysis control
+AR,Full analysis control
+TN,Full analysis control
+WV,Full analysis control
+LA,Full analysis control
+MA,Full analysis control
+ME,Full analysis control
+PA,Full analysis control
+CO,Closure-only (LUST caution)
+OH,Closure-only (LUST caution)
+AR,Closure-only (LUST caution)
+TN,Closure-only (LUST caution)
+WV,Closure-only (LUST caution)
+PA,Closure-only (LUST caution)
+KY,"Excluded — no LUST, not worth closure-only"
+AL,Excluded — wall quality
+GA,Excluded — no closure recording
+MO,Excluded — no closure recording
+AZ,Excluded — own reform
+CT,Excluded — own reform
+FL,Excluded — own reform
+IA,Excluded — own reform
+MI,Excluded — own reform
+WI,Excluded — own reform
+OR,Excluded — no Trust Fund
+WA,Excluded — no Trust Fund
+MD,Excluded — data decision
+NJ,Excluded — data decision

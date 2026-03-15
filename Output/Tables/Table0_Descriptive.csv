@@ -1,12 +1,35 @@
 Variable,TX,CTL,Diff.,TX ,CTL ,Diff. 
-Active tanks (Dec.),2.7,2.7,+0.0,2.7,2.7,+0.0
-Total capacity (gal.),"20,358","20,428",-70,"20,358","20,449",-90
-Mean tank age (years),15.8,15.3,+0.5$^{***}$,15.8,15.4,+0.4$^{***}$
-Single-walled (\% of tanks),86.7,69.3,+17.4$^{***}$,86.7,69.6,+17.1$^{***}$
-Gasoline-only (\% of tanks),50.5,67.9,-17.4$^{***}$,50.5,67.9,-17.4$^{***}$
-Pre-1989 installed (\% of tanks),76.3,64.6,+11.7$^{***}$,76.3,64.9,+11.4$^{***}$
-\quad $N$ facilities,"25,816","87,892",---,"25,816","87,361",---
-\quad $N$ tanks,"61,782","214,948",---,"61,782","213,982",---
-Annual closure rate (\%),9.60,9.88,-0.28$^{***}$,9.60,9.89,-0.29$^{***}$
-Annual leak rate (\%),1.26,2.16,-0.90$^{***}$,1.26,2.16,-0.90$^{***}$
-\quad $N$ facility-years,"273,535","958,566",---,"273,535","955,789",---
+\quad $N$ States (1 TX $+$ CTL),1,16,---,1,16,---
+\quad $N$ Facilities,"25,816","59,064",---,"25,816","58,759",---
+\quad $N$ Total Tanks,"61,782","148,321",---,"61,782","147,795",---
+Avg tanks per facility,2.7,2.8,-0.0$^{***}$,2.7,2.8,-0.1$^{***}$
+"",(0.0),(0.0),"",(0.0),(0.0),""
+Avg capacity per facility (gal),"20,358","21,069",-711$^{**}$,"20,358","21,104",-746$^{**}$
+"",(142),(306),"",(142),(308),""
+Avg tank age (facility level),15.8,15.0,+0.8$^{***}$,15.8,15.1,+0.7$^{***}$
+"",(0.1),(0.0),"",(0.1),(0.0),""
+Avg age of oldest tank (fac level),15.6,15.0,+0.7$^{***}$,15.6,15.0,+0.6$^{***}$
+"",(0.1),(0.1),"",(0.1),(0.1),""
+Avg age of state tank fleet,15.6,14.5,+1.1$^{***}$,15.6,14.6,+1.0$^{***}$
+Share of state fleet: Single-Wall \%,86.7,79.2,+7.5$^{***}$,86.7,79.4,+7.3$^{***}$
+Avg share of SW tanks per fac (\%),84.9,78.9,+6.0$^{***}$,84.9,79.3,+5.6$^{***}$
+"",(0.2),(0.2),"",(0.2),(0.2),""
+Avg Closure Rate (\%),10.16,10.09,+0.07,10.16,10.09,+0.07
+"",(0.06),(0.04),"",(0.06),(0.04),""
+Avg LUST Rate (\%),1.21,2.75,-1.54$^{***}$,1.21,2.76,-1.54$^{***}$
+"",(0.02),(0.02),"",(0.02),(0.02),""
+Avg Replacement Rate (\%),0.79,1.09,-0.31$^{***}$,0.79,1.08,-0.29$^{***}$
+"",(0.02),(0.01),"",(0.02),(0.01),""
+\quad $N$ Facility-Years,"299,351","680,268",---,"299,351","678,348",---
+\textit{Facility cells} (wall $\times$ fuel $\times$ age bin at reform),"","","","","",""
+\quad Total cells,85,"","",77,"",""
+\quad Identified cells (TX \& CTL present),77,"","",77,"",""
+\quad Unidentified: TX-only (no CTL),0,"","",0,"",""
+\quad Unidentified: CTL-only (no TX),8,"","",0,"",""
+\quad \% facility-years in identified cells (full panel),99.7\%,"","",100.0\%,"",""
+\textit{Tank cells} (wall $\times$ fuel $\times$ capacity $\times$ cohort; MM: 1989--1997 only),"","","","","",""
+\quad Total cells,"1,923","","",455,"",""
+\quad Identified cells (TX \& CTL present),"1,095","","",282,"",""
+\quad Unidentified: TX-only (no CTL),141,"","",19,"",""
+\quad Unidentified: CTL-only (no TX),687,"","",154,"",""
+\quad \% tanks in identified cells,96.6\%,"","",95.1\%,"",""

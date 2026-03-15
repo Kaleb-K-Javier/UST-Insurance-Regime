@@ -10,7 +10,7 @@
 #                     no parametric restriction on how hazard evolves within cell
 #   - Treatment   : did_term = texas_treated × I(date >= 1998-12-22)
 #                   implemented via survSplit at the statutory reform date
-#   - Clustering  : state level (20 clusters: 1 TX + 19 controls)
+#   - Clustering  : state level (24 clusters: 1 TX + 23 controls)
 #
 # REFERENCE SPECS: OLS LPM and cloglog FE on annual tank-year panel
 #   - Unit FE     : tank_panel_id
@@ -30,7 +30,7 @@
 #   Treatment is assigned at the state level. All tanks within a state share
 #   the same treatment value, so within-facility variation does not identify
 #   the treatment effect. Standard errors are clustered at the state level
-#   throughout (20 clusters: 1 treated + 19 controls). With <30 clusters,
+#   throughout (24 clusters: 1 treated + 23 controls). With <30 clusters,
 #   conventional CR1 SEs over-reject; wild cluster bootstrap (fwildclusterboot,
 #   Webb 6-point weights) is used for inference in primary panel specs.
 #
@@ -44,7 +44,7 @@
 #   S6b  Cell Coverage Bar Charts (single-year and 3-year cohort grids)
 #   S7   Survivorship Diagnostic
 #   S8   Binned Scatter: Closure Rate by Cohort × Period × Group
-#   S9   PRIMARY Cox Model (calendar time, make_model_tank strata)
+#   S9   PRIMARY Cox Model + Slide Replication + Three-Sample Structure
 #   S10  Cox Event Study (parallel trends test)
 #   S11  Reference OLS LPM and Cloglog FE
 #   S12  Duration Model Comparison Table
@@ -68,7 +68,6 @@ suppressPackageStartupMessages({
   library(broom)
   library(scales)
   library(car)
-
 })
 
 options(scipen = 999)
@@ -95,16 +94,28 @@ STUDY_START     <- as.IDate("1985-01-01")
 STUDY_END       <- as.IDate("2020-12-31")
 STUDY_END_DAYS  <- as.numeric(as.Date("2020-12-31"))
 
-# Non-mandate install cohorts: tanks built after the TX upgrade mandate was
-# fully enacted (1989-1993) and before the reform date.
-# These cohorts have no compliance-driven closure in the pre-period.
-#
-# PRIMARY_YEARS   : individual year strings as written by the harmonization
-#                   script (mm_install_cohort = "1989", "1990", ..., "1997")
-# PRIMARY_COHORTS : 3-year bin labels per the design-memo; used only for
-#                   the cohort_3yr variable and S6b 3-year coverage chart
-PRIMARY_YEARS   <- as.character(1989:1997)
-PRIMARY_COHORTS <- c("1989-1991", "1992-1994", "1995-1997")
+# ---- Cohort definitions ----
+# ALL_YEARS       : full sample from 1985 forward (used for Cox base + panel)
+# POST_MANDATE    : tanks installed after federal upgrade mandate fully enacted;
+#                   these cohorts have no compliance-driven closure confound
+# PRE_MANDATE     : tanks installed before the mandate; require mandate_active
+#                   control in regressions to absorb 1989-1993 differential closure
+# PRIMARY_COHORTS : bin labels for coverage charts
+
+ALL_YEARS       <- as.character(1985:1997)
+POST_MANDATE    <- as.character(1990:1997)
+PRE_MANDATE     <- as.character(1985:1989)
+
+PRIMARY_COHORTS <- c("1985-1988", "1989-1991", "1992-1994", "1995-1997")
+MANDATE_CUTOFF  <- as.IDate("1985-01-01")
+
+# 3-year cohort mapping (used in S6b, S14, panel variables)
+COHORT_3YR_MAP <- list(
+  "1985-1988" = as.character(1985:1988),
+  "1989-1991" = as.character(1989:1991),
+  "1992-1994" = as.character(1992:1994),
+  "1995-1997" = as.character(1995:1997)
+)
 
 # 3-year age bins (per research design document Section 6.4)
 # Used as TIME-VARYING CONTROLS in reference specs — NOT for cell assignment
@@ -113,36 +124,29 @@ AGE_BIN_LABELS  <- c("0-2",   "3-5",   "6-8",   "9-11",
                      "12-14", "15-17", "18-20", "21-23", "24+")
 
 
-# ---- Study states (1 treated + 19 controls) ----
-# Control states: those that maintained public UST insurance/indemnification
-# funds throughout the study period, providing the counterfactual of continued
-# flat-fee public coverage against which the Texas transition to private
-# actuarial pricing is identified.
+# ---- Study states (1 treated + 23 controls) ----
+# Control states: union of 02b original list and Document 2 list, minus PA.
 #
 # EXCLUDED from controls (with rationale):
-#   PA — Pennsylvania maintains its own USTIF (Underground Storage Tank
-#        Indemnification Fund) under Act 32 of 1989, making it institutionally
-#        similar to Texas and a valid candidate control.  However, PA's
-#        Act 16 amendments (signed June 26, 1995) coincide with a 29%
-#        single-walled tank closure rate spike in 1995 — roughly double
-#        the adjacent years.  Until the regulatory mechanism driving this
-#        spike is understood and can be controlled for econometrically,
-#        PA is excluded to avoid contaminating the pre-period.
+#   PA — PA's Act 16 amendments (signed June 26, 1995) coincide with a 29%
+#        single-walled tank closure rate spike in 1995.  Until the regulatory
+#        mechanism driving this spike is understood, PA is excluded.
 #        A leave-one-out diagnostic confirms that PA single-handedly drives
 #        the year -4 event-study outlier when included in the control group.
-#        PA should be revisited once Act 16's operational requirements are
-#        documented.  
 #
 CONTROL_STATES <- c(
-  "AL", "AR", "CO", "GA", "ID", "KS", "KY",
-  "MD", "MI", "MN", "MO", "NC", "NJ", "OH",
-  "OK", "TN", "VA", "WI", "WV"
+  "AR", "CO",  "ID",  "KS", "KY",
+  "LA", "MA", "MD", "ME", "MN", "MO",  "NC",
+   "OH", "OK", "SD", "TN", "VA"
 )
+
+#"IL","NM", "AL","MT", --- missin all wall type data here
+# "GA", , "WV"--> no closure dates
+
 STUDY_STATES   <- c("TX", CONTROL_STATES)
- 
+
 # States explicitly excluded from analysis (see rationale above)
 EXCLUDED_STATES <- c("PA")
- 
 
 
 # ---- Colors ----
@@ -193,10 +197,12 @@ extract_cox_row <- function(m, term_name = "did_term") {
   idx <- grep(term_name, rownames(s), fixed = TRUE)[1]
   if (is.na(idx))
     stop(sprintf("Term '%s' not found in Cox model coefficients.", term_name))
+  # Determine SE column name (varies by coxph version / cluster option)
+  se_col <- intersect(c("robust se", "se(coef)"), colnames(s))[1]
   list(
     hr   = s[idx, "exp(coef)"],
     coef = s[idx, "coef"],
-    se   = s[idx, "se(coef)"],
+    se   = s[idx, se_col],
     p    = s[idx, "Pr(>|z|)"],
     n    = m$n,
     ev   = m$nevent
@@ -227,19 +233,6 @@ log_step <- function(msg, indent = 0L) {
 }
 
 # ---- Coverage chart helpers (used in S6b) ----
-#
-# build_coverage_dt:
-#   Collapses the primary sample to (wall x fuel x capacity x cohort x group)
-#   counts and computes each bar's height as share of that group's total across
-#   ALL cells -- so TX bars sum to 100% and CTL bars sum to 100% over the grid.
-#   All combos are present (zeros included) so ggplot does not silently drop
-#   empty x-axis positions.
-#
-# Arguments:
-#   dt            : data.table with primary sample rows
-#   cohort_col    : column name to place on the x-axis
-#   cohort_levels : ordered character vector of cohort labels
-#   cap_levels    : ordered capacity bin labels (sets facet ordering)
 
 build_coverage_dt <- function(dt, cohort_col, cohort_levels,
                                cap_levels = c("Under-1k", "1k-5k", "5k-12k",
@@ -255,13 +248,9 @@ build_coverage_dt <- function(dt, cohort_col, cohort_levels,
       group  = fifelse(texas_treated == 1L, "Texas", "Control States")
     )
   ]
-
-  # Group totals across ALL cells (TX sums to 1, CTL sums to 1 over full grid)
   group_tots <- counts[, .(group_total = sum(n)), by = group]
   counts     <- merge(counts, group_tots, by = "group")
   counts[, share := n / group_total]
-
-  # Complete grid: every (wall x fuel x capacity x cohort x group) combo
   all_combos <- CJ(
     mm_wall     = sort(unique(dt$mm_wall)),
     mm_fuel     = sort(unique(dt$mm_fuel)),
@@ -281,63 +270,27 @@ build_coverage_dt <- function(dt, cohort_col, cohort_levels,
   counts
 }
 
-# make_coverage_figure:
-#   Renders the coverage grid and saves PNG + PDF.
-#   Facets = mm_wall x mm_fuel x mm_capacity with FIXED scales.
-#   Bars are dodged by group (TX orange / CTL blue).
-#
-# Arguments:
-#   cov_dt    : output of build_coverage_dt
-#   x_label   : x-axis title string
-#   file_stem : output filename without extension
-
 make_coverage_figure <- function(cov_dt, x_label, file_stem) {
-
   cov_dt <- copy(cov_dt)
   cov_dt[, facet_label := paste0(mm_wall, "\n", mm_fuel, "\n", mm_capacity)]
-
   n_cohorts    <- length(levels(cov_dt$cohort))
   n_facets     <- uniqueN(cov_dt$facet_label)
   n_cols_facet <- ceiling(sqrt(n_facets))
   n_rows_facet <- ceiling(n_facets / n_cols_facet)
-
   panel_w <- max(0.75 * n_cohorts, 2.5)
   fig_w   <- min(n_cols_facet * panel_w + 1.5, 60)
   fig_h   <- min(n_rows_facet * 3.0    + 1.5, 50)
-
-  p <- ggplot(cov_dt,
-              aes(x = cohort, y = share, fill = group)) +
-    geom_col(
-      position = position_dodge(width = 0.72),
-      width    = 0.65,
-      alpha    = 0.88
-    ) +
-    facet_wrap(
-      ~facet_label,
-      ncol   = n_cols_facet,
-      scales = "fixed"        # identical axes across ALL panels
-    ) +
-    scale_fill_manual(
-      values = c("Texas" = COL_TX, "Control States" = COL_CTRL)
-    ) +
-    scale_y_continuous(
-      labels = percent_format(accuracy = 0.1),
-      expand = expansion(mult = c(0, 0.06))
-    ) +
-    scale_x_discrete(drop = FALSE) +   # keep empty cohort positions
-    labs(
-      x       = x_label,
-      y       = "Share of Group Total Sample",
-      fill    = NULL,
-      caption = paste0(
-        "Bar height = n(cell-cohort) / group total across all cells.  ",
-        "TX bars and CTL bars each independently sum to 100% over the full grid."
-      )
-    ) +
+  p <- ggplot(cov_dt, aes(x = cohort, y = share, fill = group)) +
+    geom_col(position = position_dodge(width = 0.72), width = 0.65, alpha = 0.88) +
+    facet_wrap(~facet_label, ncol = n_cols_facet, scales = "fixed") +
+    scale_fill_manual(values = c("Texas" = COL_TX, "Control States" = COL_CTRL)) +
+    scale_y_continuous(labels = percent_format(accuracy = 0.1),
+                       expand = expansion(mult = c(0, 0.06))) +
+    scale_x_discrete(drop = FALSE) +
+    labs(x = x_label, y = "Share of Group Total Sample", fill = NULL) +
     theme_minimal(base_size = 9) +
     theme(
-      strip.text         = element_text(face = "bold", size = 7.5,
-                                        lineheight = 1.1),
+      strip.text         = element_text(face = "bold", size = 7.5, lineheight = 1.1),
       strip.background   = element_rect(fill = "grey94", color = NA),
       axis.text.x        = element_text(angle = 45, hjust = 1, size = 7),
       axis.text.y        = element_text(size = 7.5),
@@ -345,18 +298,128 @@ make_coverage_figure <- function(cov_dt, x_label, file_stem) {
       panel.grid.minor   = element_blank(),
       panel.grid.major.x = element_blank(),
       legend.position    = "top",
-      legend.text        = element_text(size = 9),
-      plot.caption       = element_text(size = 7, color = "grey50", hjust = 0)
+      legend.text        = element_text(size = 9)
     )
-
   png_path <- file.path(OUTPUT_FIGURES, paste0(file_stem, ".png"))
   pdf_path <- file.path(OUTPUT_FIGURES, paste0(file_stem, ".pdf"))
-  ggsave(png_path, p, width = fig_w, height = fig_h,
-         dpi = 200, bg = "white", limitsize = FALSE)
-  ggsave(pdf_path, p, width = fig_w, height = fig_h,
-         device = cairo_pdf, limitsize = FALSE)
+  ggsave(png_path, p, width = fig_w, height = fig_h, dpi = 200, bg = "white", limitsize = FALSE)
+  ggsave(pdf_path, p, width = fig_w, height = fig_h, device = cairo_pdf, limitsize = FALSE)
   log_step(sprintf("Saved: %s  (%.0f x %.0f in)", basename(png_path), fig_w, fig_h), 1)
   invisible(p)
+}
+
+# ---- OLS event-study helpers (used in S11) ----
+
+run_ols_es <- function(dt, prefix = "es") {
+  dt <- copy(dt)
+  ry_all <- sort(unique(dt$rel_year))
+  ry_indiv <- sort(ry_all[
+    ry_all >  OLS_POOL_PRE  &
+    ry_all <  OLS_POOL_POST &
+    ry_all != OLS_REF_YEAR
+  ])
+  dt[, `:=`(
+    ry_pool_pre  = as.integer(rel_year <= OLS_POOL_PRE)  * texas_treated,
+    ry_pool_post = as.integer(rel_year >= OLS_POOL_POST) * texas_treated
+  )]
+  ry_vars <- c("ry_pool_pre", "ry_pool_post")
+  for (yr in ry_indiv) {
+    vname <- if (yr < 0L) paste0("ry_m", abs(yr)) else paste0("ry_", yr)
+    dt[, (vname) := as.integer(rel_year == yr) * texas_treated]
+    ry_vars <- c(ry_vars, vname)
+  }
+  ry_vars <- sort(ry_vars)
+  fml <- as.formula(paste(
+    "closure_event ~",
+    paste(ry_vars, collapse = " + "),
+    "| tank_panel_id + make_model_tank^panel_year"
+  ))
+  m <- feols(fml, data = dt, cluster = ~state)
+  ct <- as.data.table(coeftable(m), keep.rownames = "term")
+  setnames(ct, c("term", "coef", "se", "t_stat", "p"))
+  ct[, rel_year := fcase(
+    term == "ry_pool_pre",        OLS_POOL_PRE,
+    term == "ry_pool_post",       OLS_POOL_POST,
+    grepl("^ry_m[0-9]+$", term), -as.integer(gsub("ry_m", "", term)),
+    grepl("^ry_[0-9]+$",  term),  as.integer(gsub("ry_",  "", term)),
+    default = NA_integer_
+  )]
+  ct <- ct[!is.na(rel_year)]
+  ct[, `:=`(
+    coef_pp  = coef * 100,
+    ci_lo_pp = (coef - 1.96 * se) * 100,
+    ci_hi_pp = (coef + 1.96 * se) * 100,
+    period   = fcase(rel_year <  0L, "Pre", rel_year >= 0L, "Post"),
+    pooled   = as.integer(term %in% c("ry_pool_pre", "ry_pool_post"))
+  )]
+  ct <- rbind(ct,
+    data.table(term = "ref_year", coef = 0, se = 0, t_stat = 0, p = NA_real_,
+               rel_year = OLS_REF_YEAR, coef_pp = 0, ci_lo_pp = 0, ci_hi_pp = 0,
+               period = "Ref", pooled = 0L),
+    fill = TRUE)
+  setorder(ct, rel_year)
+  list(model = m, coefs = ct, ry_vars = ry_vars)
+}
+
+ols_pre_tests <- function(es_obj) {
+  m       <- es_obj$model
+  ry_vars <- es_obj$ry_vars
+  pre_vars_all <- ry_vars[ry_vars == "ry_pool_pre" | grepl("^ry_m[0-9]+$", ry_vars)]
+  test_all <- linearHypothesis(m, paste0(pre_vars_all, " = 0"), test = "Chisq")
+  chi_all  <- test_all[2, "Chisq"]
+  dof_all  <- length(pre_vars_all)
+  p_all    <- test_all[2, "Pr(>Chisq)"]
+  pre_vars_dense <- ry_vars[ry_vars %in% paste0("ry_m", 2:6)]
+  chi_dense <- NA_real_; dof_dense <- length(pre_vars_dense); p_dense <- NA_real_
+  if (dof_dense >= 2L) {
+    test_dense <- linearHypothesis(m, paste0(pre_vars_dense, " = 0"), test = "Chisq")
+    chi_dense <- test_dense[2, "Chisq"]
+    p_dense   <- test_dense[2, "Pr(>Chisq)"]
+  }
+  list(chi_all = chi_all, dof_all = dof_all, p_all = p_all,
+       chi_dense = chi_dense, dof_dense = dof_dense, p_dense = p_dense)
+}
+
+plot_ols_es <- function(es_obj, pre_obj, subtitle = "") {
+  coefs <- es_obj$coefs
+  all_x  <- sort(unique(coefs$rel_year))
+  x_labs <- as.character(all_x)
+  x_labs[all_x == OLS_POOL_PRE]  <- paste0("\u2264", OLS_POOL_PRE)
+  x_labs[all_x == OLS_POOL_POST] <- paste0("\u2265", OLS_POOL_POST)
+  pre_label <- sprintf(
+    "Pre-period parallel-trends test\nFull pre (%d dof): \u03c7\u00b2=%.2f, p=%.4f\nDense \u22126:\u22122 (%d dof): \u03c7\u00b2=%.2f, p=%.4f",
+    pre_obj$dof_all, pre_obj$chi_all, pre_obj$p_all,
+    pre_obj$dof_dense,
+    ifelse(is.na(pre_obj$chi_dense), 0, pre_obj$chi_dense),
+    ifelse(is.na(pre_obj$p_dense),   1, pre_obj$p_dense))
+  ggplot(coefs, aes(x = rel_year, y = coef_pp)) +
+    annotate("rect", xmin = -Inf, xmax = -0.5, ymin = -Inf, ymax = Inf,
+             fill = "grey90", alpha = 0.50) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey35", linewidth = 0.5) +
+    geom_vline(xintercept = -0.5, color = "grey20", linewidth = 0.65) +
+    geom_line(aes(group = 1), color = "grey40", linewidth = 0.45, alpha = 0.65) +
+    geom_errorbar(aes(ymin = ci_lo_pp, ymax = ci_hi_pp, color = period),
+                  width = 0.30, linewidth = 0.45) +
+    geom_point(data = coefs[pooled == 0], aes(color = period), size = 2.6, shape = 16) +
+    geom_point(data = coefs[pooled == 1], aes(color = period), size = 3.2, shape = 18) +
+    annotate("text", x = OLS_POOL_PRE + 0.3, y = OLS_Y_CAP * 0.97,
+             label = pre_label, hjust = 0, vjust = 1, size = 2.8,
+             color = "grey25", lineheight = 1.15) +
+    scale_color_manual(values = c(Pre = COL_CTRL, Post = COL_TX, Ref = "black"), guide = "none") +
+    scale_x_continuous(breaks = all_x, labels = x_labs) +
+    scale_y_continuous(limits = c(OLS_Y_FLOOR, OLS_Y_CAP), oob = scales::squish,
+                       labels = function(x) paste0(ifelse(x > 0, "+", ""), x, " pp")) +
+    labs(x = "Years Relative to Reform  (0 = 1999)",
+         y = "Change in Annual Closure Probability vs. Year \u22121  (pp)",
+         subtitle = subtitle) +
+    theme_pub() +
+    theme(panel.grid.major.x = element_blank(),
+          plot.margin   = margin(t = 8, r = 12, b = 8, l = 20, unit = "pt"),
+          axis.text.x   = element_text(angle = 45, hjust = 1, vjust = 1),
+          plot.subtitle = element_text(size = 9, color = "grey30"),
+          plot.caption  = element_text(size = 8, color = "grey40", hjust = 0,
+                                       margin = margin(t = 6))) +
+    coord_cartesian(clip = "off")
 }
 
 
@@ -371,17 +434,15 @@ master_tanks <- fread(
   na.strings = c("", "NA", "N/A")
 )
 
-
 log_step(sprintf("Loaded: %s rows, %s columns",
                  fmt_n(nrow(master_tanks)), ncol(master_tanks)))
 
-# ---- Validate mm_* columns (written by harmonization Step 3) ----
+# ---- Validate mm_* columns ----
 required_mm_cols <- c("mm_wall", "mm_fuel", "mm_capacity",
                       "mm_install_cohort", "make_model_tank")
 missing_cols <- setdiff(required_mm_cols, names(master_tanks))
 if (length(missing_cols) > 0) {
-  stop(paste0(
-    "Required columns not found: ", paste(missing_cols, collapse = ", "), "\n",
+  stop(paste0("Required columns not found: ", paste(missing_cols, collapse = ", "), "\n",
     "  Re-run 10_Master_Cleaning_and_Harmonization.r with Step 3 enabled."))
 }
 
@@ -391,24 +452,18 @@ for (col in c("tank_installed_date", "tank_closed_date")) {
     master_tanks[[col]] <- as.IDate(master_tanks[[col]])
 }
 
-
 # ---- Treatment assignment ----
-# Texas = 1; study-state controls = 0; all others = NA.
-# Assigning NA (not 0) to non-study states prevents them from silently
-# entering the control group if a downstream filter is missing.
-# Non-study-state tanks are excluded via !is.na(did_term) in S4/S5.
 master_tanks[, texas_treated := fcase(
   state == "TX",                1L,
   state %in% CONTROL_STATES,   0L,
   default = NA_integer_
 )]
- 
+
 log_step(sprintf("Treatment: TX=%s tanks, Control=%s tanks, Non-study (NA)=%s",
                  fmt_n(master_tanks[texas_treated == 1, .N]),
                  fmt_n(master_tanks[texas_treated == 0, .N]),
                  fmt_n(master_tanks[is.na(texas_treated), .N])))
- 
-# Report excluded states that have data (for transparency)
+
 if (any(master_tanks$state %in% EXCLUDED_STATES)) {
   for (es in EXCLUDED_STATES) {
     n_ex <- master_tanks[state == es, .N]
@@ -417,136 +472,124 @@ if (any(master_tanks$state %in% EXCLUDED_STATES)) {
                         es, fmt_n(n_ex)), 1)
   }
 }
- 
- 
 
 # ---- Unique identifiers ----
-# tank_panel_id: unique per physical tank, used as unit FE in panel regressions
-# panel_id:      facility-level ID, matches convention in 02a_DiD_OLS.R
 if ("tank_id" %in% names(master_tanks)) {
   master_tanks[, tank_panel_id := paste(facility_id, state, tank_id, sep = "_")]
 } else {
-  # Fallback: use row index; flag for verification
   master_tanks[, tank_panel_id := paste(facility_id, state, .I, sep = "_")]
-  warning("No tank_id column found in master_tanks — using row index as tank_panel_id. Verify uniqueness.")
+  warning("No tank_id column — using row index as tank_panel_id.")
 }
 master_tanks[, panel_id := paste(facility_id, state, sep = "_")]
 
-# ---- Restrict to tanks with valid install date and treatment status ----
-study_tanks <- master_tanks[
-  !is.na(texas_treated) & !is.na(tank_installed_date)
-]
-log_step(sprintf("Tanks with valid treatment + install date: %s",
-                 fmt_n(nrow(study_tanks))))
+# ---- Restrict to valid tanks ----
+study_tanks <- master_tanks[!is.na(texas_treated) & !is.na(tank_installed_date)]
+log_step(sprintf("Tanks with valid treatment + install date: %s", fmt_n(nrow(study_tanks))))
 
-# ---- Expand to annual tank-year panel ----
-# A tank is active in calendar year t if:
-#   year(install_date) <= t  AND  (is.na(close_date) OR year(close_date) >= t)
-# closure_event = 1 in the year the tank was closed.
-# Panel window: 1985-2020.
-
+# ---- Expand to annual tank-year panel (1985-2020) ----
 log_step("Building annual tank-year panel (1985-2020)...")
 
 study_tanks[, `:=`(
   install_yr   = year(tank_installed_date),
-  close_yr_raw = fifelse(!is.na(tank_closed_date),
-                         year(tank_closed_date), 2020L)
+  close_yr_raw = fifelse(!is.na(tank_closed_date), year(tank_closed_date), 2020L)
 )]
 study_tanks[, `:=`(
   expand_start = pmax(install_yr, 1985L),
   expand_end   = pmin(close_yr_raw, 2020L)
 )]
 
-# Keep columns needed for the panel to minimise memory during expansion
 panel_cols <- c("tank_panel_id", "panel_id", "facility_id", "state",
                 "texas_treated", "mm_wall", "mm_fuel", "mm_capacity",
                 "mm_install_cohort", "make_model_tank",
                 "tank_installed_date", "tank_closed_date",
                 "expand_start", "expand_end")
 
-
 tank_year_panel <- study_tanks[
-  expand_start <= expand_end,
-  .SD,
-  .SDcols = panel_cols
+  expand_start <= expand_end, .SD, .SDcols = panel_cols
 ][, {
   yrs <- seq(expand_start, expand_end)
   .(panel_year    = yrs,
-    closure_event = as.integer(
-      !is.na(tank_closed_date) & year(tank_closed_date) == yrs))
-}, by = panel_cols] # Include ALL columns in the 'by' group, including start/end
+    closure_event = as.integer(!is.na(tank_closed_date) & year(tank_closed_date) == yrs))
+}, by = panel_cols]
 
 log_step(sprintf("Tank-year panel: %s rows, %s unique tanks, %s unique facilities",
                  fmt_n(nrow(tank_year_panel)),
                  fmt_n(uniqueN(tank_year_panel$tank_panel_id)),
                  fmt_n(uniqueN(tank_year_panel$panel_id))))
 
-# ---- Add time variables to panel ----
-
-# Treatment indicator
+# ---- Add time variables ----
 tank_year_panel[, `:=`(
   post_1999 = as.integer(panel_year >= POST_YEAR),
   did_term  = texas_treated * as.integer(panel_year >= POST_YEAR)
 )]
-
-# Relative year to reform and event-study bin (capped at ±5)
 tank_year_panel[, rel_year := panel_year - POST_YEAR]
 tank_year_panel[, rel_year_bin := fcase(
-  rel_year <= -5L, -5L,
-  rel_year >=  5L,  5L,
-  default = as.integer(rel_year)
+  rel_year <= -5L, -5L, rel_year >= 5L, 5L, default = as.integer(rel_year)
 )]
 
-# Counting-process: calendar-year intervals for panel-based specs
 setorder(tank_year_panel, tank_panel_id, panel_year)
 tank_year_panel[, `:=`(tstart = panel_year - 1L, tstop = panel_year)]
 
-# Tank age at each interval endpoint from exact install date (years)
-# age_stop  : age at end of calendar year t   (Dec 31 of year t   - install_date)
-# age_start : age at start of calendar year t (Dec 31 of year t-1 - install_date)
-# pmax(..., 0) handles tanks installed partway through their first panel year
 tank_year_panel[, `:=`(
-  age_stop  = as.numeric(
-    as.IDate(paste0(panel_year,       "-12-31")) - tank_installed_date) / 365.25,
-  age_start = pmax(
-    as.numeric(
-      as.IDate(paste0(panel_year - 1L, "-12-31")) - tank_installed_date) / 365.25,
-    0)
+  age_stop  = as.numeric(as.IDate(paste0(panel_year, "-12-31")) - tank_installed_date) / 365.25,
+  age_start = pmax(as.numeric(as.IDate(paste0(panel_year - 1L, "-12-31")) - tank_installed_date) / 365.25, 0)
 )]
 
-# Time-varying age bin: used as CONTROL in reference specs only, not for
-# cell assignment (per design doc Section 6.4)
-tank_year_panel[, age_bin := cut(
-  age_stop,
-  breaks         = AGE_BIN_BREAKS,
-  labels         = AGE_BIN_LABELS,
-  right          = FALSE,
-  include.lowest = TRUE
+tank_year_panel[, age_bin := cut(age_stop, breaks = AGE_BIN_BREAKS, labels = AGE_BIN_LABELS,
+                                  right = FALSE, include.lowest = TRUE)]
+
+# ---- Mandate and cohort sample flags ----
+tank_year_panel[, `:=`(
+  is_post_mandate = as.integer(mm_install_cohort %in% POST_MANDATE),
+  is_pre_mandate  = as.integer(mm_install_cohort %in% PRE_MANDATE),
+  mandate_active  = as.integer(
+    panel_year %in% 1989:1993 &
+    !is.na(mm_install_cohort) &
+    mm_install_cohort %in% PRE_MANDATE
+  )
 )]
 
-# mandate_active: TX upgrade mandate period (1989-1993) for pre-1989 cohorts
-# Used only in S17 robustness expansion; always 0 in the primary sample
-tank_year_panel[, mandate_active := as.integer(
-  panel_year %in% 1989:1993 &
-  !is.na(mm_install_cohort) &
-  as.integer(mm_install_cohort) < 1989L
-)]
-
-# 3-year cohort bin: collapsed version of mm_install_cohort for S6b charts
-# and for the 3-year-bin robustness coverage check.
-# mm_install_cohort is a single year string ("1989", "1990", ...) as written
-# by the harmonization script; cohort_3yr aggregates to 3-year design-memo bins.
+# ---- 3-year cohort bins (now includes 1985-1988) ----
 tank_year_panel[, cohort_3yr := fcase(
+  mm_install_cohort %in% as.character(1985:1988), "1985-1988",
   mm_install_cohort %in% as.character(1989:1991), "1989-1991",
   mm_install_cohort %in% as.character(1992:1994), "1992-1994",
   mm_install_cohort %in% as.character(1995:1997), "1995-1997",
   default = NA_character_
 )]
 
+# ---- Log cohort composition ----
+cohort_counts <- tank_year_panel[
+  !is.na(mm_install_cohort),
+  .(n_tanks = uniqueN(tank_panel_id)),
+  by = .(sample = fcase(
+    is_post_mandate == 1L, "Post-mandate (1990-1997)",
+    is_pre_mandate  == 1L, "Pre-mandate (1985-1989)",
+    default = "Other"
+  ))
+]
+log_step("Cohort composition (unique tanks):")
+for (i in seq_len(nrow(cohort_counts)))
+  log_step(sprintf("  %-30s %s", cohort_counts$sample[i], fmt_n(cohort_counts$n_tanks[i])), 1)
+
+cohort_3yr_counts <- tank_year_panel[
+  !is.na(cohort_3yr),
+  .(n_tanks = uniqueN(tank_panel_id),
+    n_tx    = uniqueN(tank_panel_id[texas_treated == 1L]),
+    n_ctl   = uniqueN(tank_panel_id[texas_treated == 0L])),
+  by = cohort_3yr][order(cohort_3yr)]
+log_step("\n3-year cohort bins (unique tanks):")
+log_step(sprintf("  %-15s %8s %8s %8s", "Cohort", "Total", "TX", "CTL"), 1)
+for (i in seq_len(nrow(cohort_3yr_counts))) {
+  r <- cohort_3yr_counts[i]
+  log_step(sprintf("  %-15s %8s %8s %8s", r$cohort_3yr,
+                   fmt_n(r$n_tanks), fmt_n(r$n_tx), fmt_n(r$n_ctl)), 1)
+}
+
 year_levels <- sort(unique(tank_year_panel$panel_year))
 tank_year_panel[, year_fac := factor(panel_year, levels = year_levels)]
 
-log_step("Tank-year panel complete.\n")
+log_step("\nTank-year panel complete.\n")
 
 
 #### S4: Define Primary Sample (mm_tank_primary) ####
@@ -555,40 +598,25 @@ cat("========================================\n")
 cat("S4: DEFINE PRIMARY SAMPLE\n")
 cat("========================================\n\n")
 
-# Exclusion criteria (per research design Part 3.5):
-#   1. make_model_tank is NA           → install date or capacity missing
-#   2. mm_wall == "Unknown-Wall"       → insurer cannot price; reform mechanism unclear
-#   3. mm_fuel == "Unknown-Fuel"       → fuel type unclassifiable
-#   4. mm_capacity is NA               → capacity bin unassigned
-#   5. mm_install_cohort outside PRIMARY_YEARS  → pre-mandate or post-reform cohorts
-#   6. tstop <= tstart                 → invalid counting-process interval (zero-duration)
-#   7. is.na(did_term)                 → treatment status unknown
+# ---- CHANGED: ALL_YEARS instead of old PRIMARY_YEARS ----
+mm_tank_primary <- tank_year_panel[
+  !is.na(make_model_tank)                    &
+  mm_install_cohort %in% ALL_YEARS           &
+  tank_installed_date >= MANDATE_CUTOFF      &
+  tstop > tstart                             &
+  !is.na(did_term)                           &
+  state %in% STUDY_STATES
+]
 
-
-
-# The existing S4 filter is correct:
-  mm_tank_primary <- tank_year_panel[
-    !is.na(make_model_tank)              &
-    mm_install_cohort %in% PRIMARY_YEARS &
-    tstop > tstart                       &
-    !is.na(did_term)                     &
-    state %in% STUDY_STATES
-  ]
-#
-# ADD the following verification block AFTER the sample size report:
- 
-# ---- Verify no non-study states leaked through ----
+# ---- Verify no non-study states ----
 leaked_states <- setdiff(unique(mm_tank_primary$state), STUDY_STATES)
 if (length(leaked_states) > 0) {
-  stop(sprintf(
-    "FATAL: Non-study states found in mm_tank_primary: %s\n  Check S3 treatment assignment and S4 filters.",
-    paste(leaked_states, collapse = ", ")))
+  stop(sprintf("FATAL: Non-study states found: %s", paste(leaked_states, collapse = ", ")))
 } else {
-  log_step(sprintf("  ✓ State filter verified: %d states (%s)",
+  log_step(sprintf("  State filter verified: %d states (%s)",
                    uniqueN(mm_tank_primary$state),
                    paste(sort(unique(mm_tank_primary$state)), collapse = ", ")), 1)
 }
-
 
 # ---- Sample size report ----
 n_ty       <- nrow(mm_tank_primary)
@@ -599,57 +627,39 @@ n_tx_ty    <- mm_tank_primary[texas_treated == 1, .N]
 n_ct_ty    <- mm_tank_primary[texas_treated == 0, .N]
 n_cells    <- uniqueN(mm_tank_primary$make_model_tank)
 n_cells_id <- mm_tank_primary[,
-  .(identified = as.integer(
-    any(texas_treated == 1) & any(texas_treated == 0))),
-  by = .(make_model_tank, panel_year)
-][, sum(identified)]
+  .(identified = as.integer(any(texas_treated == 1) & any(texas_treated == 0))),
+  by = .(make_model_tank, panel_year)][, sum(identified)]
 
-log_step(sprintf("Primary sample (mm_tank_primary):"))
-log_step(sprintf("  Tank-years  : %s  (TX: %s | CTL: %s)",
-                 fmt_n(n_ty), fmt_n(n_tx_ty), fmt_n(n_ct_ty)), 1)
-log_step(sprintf("  Unique tanks: %s  (TX: %s | CTL: %s)",
-                 fmt_n(n_tanks), fmt_n(n_tx_tanks), fmt_n(n_ct_tanks)), 1)
-log_step(sprintf("  Make-model cells: %s unique | %s identified cell-years",
-                 fmt_n(n_cells), fmt_n(n_cells_id)), 1)
-log_step(sprintf("  Calendar years: %d – %d",
-                 min(mm_tank_primary$panel_year),
-                 max(mm_tank_primary$panel_year)), 1)
+log_step("Primary sample (mm_tank_primary):")
+log_step(sprintf("  Tank-years  : %s  (TX: %s | CTL: %s)", fmt_n(n_ty), fmt_n(n_tx_ty), fmt_n(n_ct_ty)), 1)
+log_step(sprintf("  Unique tanks: %s  (TX: %s | CTL: %s)", fmt_n(n_tanks), fmt_n(n_tx_tanks), fmt_n(n_ct_tanks)), 1)
+log_step(sprintf("  Make-model cells: %s unique | %s identified cell-years", fmt_n(n_cells), fmt_n(n_cells_id)), 1)
+log_step(sprintf("  Calendar years: %d - %d", min(mm_tank_primary$panel_year), max(mm_tank_primary$panel_year)), 1)
 
-# ---- Unknown-cell exclusion report ----
-prim_base <- tank_year_panel[mm_install_cohort %in% PRIMARY_YEARS &
-                               tstop > tstart & !is.na(did_term)]
-excl_uw <- prim_base[mm_wall == "Unknown-Wall",   .N]
-excl_uf <- prim_base[mm_fuel == "Unknown-Fuel",   .N]
-excl_na <- prim_base[is.na(make_model_tank),      .N]
+# ---- CHANGED: ALL_YEARS in exclusion report ----
+prim_base <- tank_year_panel[mm_install_cohort %in% ALL_YEARS & tstop > tstart & !is.na(did_term)]
+excl_uw <- prim_base[mm_wall == "Unknown-Wall", .N]
+excl_uf <- prim_base[mm_fuel == "Unknown-Fuel", .N]
+excl_na <- prim_base[is.na(make_model_tank), .N]
 tot_base <- nrow(prim_base)
-log_step(sprintf("\nExclusion from primary sample (cohort-eligible tank-years = %s):",
-                 fmt_n(tot_base)))
+log_step(sprintf("\nExclusion from primary sample (cohort-eligible tank-years = %s):", fmt_n(tot_base)))
 log_step(sprintf("  Unknown-Wall : %s (%s)", fmt_n(excl_uw), fmt_pct(excl_uw / tot_base)), 1)
 log_step(sprintf("  Unknown-Fuel : %s (%s)", fmt_n(excl_uf), fmt_pct(excl_uf / tot_base)), 1)
 log_step(sprintf("  NA cell      : %s (%s)", fmt_n(excl_na), fmt_pct(excl_na / tot_base)), 1)
 
 fwrite(
-  prim_base[, .(
-    N_total        = .N,
-    N_unknown_wall = sum(mm_wall == "Unknown-Wall"),
-    N_unknown_fuel = sum(mm_fuel == "Unknown-Fuel"),
-    N_na_cell      = sum(is.na(make_model_tank)),
+  prim_base[, .(N_total = .N, N_unknown_wall = sum(mm_wall == "Unknown-Wall"),
+    N_unknown_fuel = sum(mm_fuel == "Unknown-Fuel"), N_na_cell = sum(is.na(make_model_tank)),
     pre_closure_rate_uw = mean(closure_event[mm_wall == "Unknown-Wall"], na.rm = TRUE),
     pre_closure_rate_cls = mean(closure_event[mm_wall != "Unknown-Wall"], na.rm = TRUE)
   ), by = .(state_group = fifelse(texas_treated == 1, "Texas", "Control"))],
-  file.path(OUTPUT_TABLES, "Diag_Exclusion_UnknownCells.csv")
-)
+  file.path(OUTPUT_TABLES, "Diag_Exclusion_UnknownCells.csv"))
 
-# ---- Texas leverage diagnostic ----
 tx_share <- mm_tank_primary[, .(n = .N, share = .N / n_ty),
   by = .(group = fifelse(texas_treated == 1, "TX", "CTL"))]
-log_step(sprintf("\nTX share of tank-years: %s",
-                 fmt_pct(tx_share[group == "TX", share])))
-if (tx_share[group == "TX", share] > 0.40) {
-  warning(sprintf(
-    "Texas contributes %.1f%% of tank-years (>40%%).\n  Consider CR3 bias-reduced SEs and subcluster jackknife (MacKinnon-Nielsen-Webb 2023).",
-    100 * tx_share[group == "TX", share]))
-}
+log_step(sprintf("\nTX share of tank-years: %s", fmt_pct(tx_share[group == "TX", share])))
+if (tx_share[group == "TX", share] > 0.40)
+  warning(sprintf("Texas contributes %.1f%% of tank-years (>40%%).", 100 * tx_share[group == "TX", share]))
 cat("\n")
 
 
@@ -659,66 +669,45 @@ cat("========================================\n")
 cat("S5: BUILD EXACT-DATE COX DATASET\n")
 cat("========================================\n\n")
 
-# Build a counting-process dataset where time is measured in exact calendar days
-# (numeric: days since 1970-01-01, R's default Date origin).
-#
-# Each tank contributes at most TWO rows after splitting at the reform date:
-#   Row 1 (reform_ep = 1): [install_date, min(close_date, REFORM_DATE))
-#                          did_term = 0 for all tanks
-#   Row 2 (reform_ep = 2): [REFORM_DATE, close_date_or_study_end)
-#                          did_term = 1 for Texas tanks, 0 for controls
-#
-# Tanks that close before or are installed after the reform date contribute
-# only one row. survSplit handles all edge cases automatically.
-
 log_step("Filtering master tanks to primary sample attributes...")
 
+# ---- CHANGED: ALL_YEARS instead of old PRIMARY_YEARS ----
 exact_base <- master_tanks[
   !is.na(texas_treated)                &
   !is.na(make_model_tank)              &
-  mm_install_cohort %in% PRIMARY_YEARS &
+  mm_install_cohort %in% ALL_YEARS     &
   !is.na(tank_installed_date)          &
+  tank_installed_date >= MANDATE_CUTOFF &
   tank_installed_date < STUDY_END      &
-  state %in% STUDY_STATES,             # ← comma before column selection
+  state %in% STUDY_STATES,
   .(tank_panel_id, panel_id, facility_id, state, texas_treated,
     mm_wall, mm_fuel, mm_capacity, mm_install_cohort, make_model_tank,
     tank_installed_date,
     t_enter = as.numeric(tank_installed_date),
-    t_exit  = as.numeric(
-      pmin(
-        fifelse(!is.na(tank_closed_date),
-                tank_closed_date, STUDY_END),
-        STUDY_END)),
+    t_exit  = as.numeric(pmin(
+      fifelse(!is.na(tank_closed_date), tank_closed_date, STUDY_END), STUDY_END)),
     failure = as.integer(
-      !is.na(tank_closed_date)          &
-      tank_closed_date <= STUDY_END     &
-      tank_closed_date >= tank_installed_date)
+      !is.na(tank_closed_date) & tank_closed_date <= STUDY_END & tank_closed_date >= tank_installed_date)
   )
 ][t_exit > t_enter]
- 
-# ---- Verify Cox sample aligns with panel sample ----
+
+# ---- Verify samples align ----
 panel_tanks <- sort(unique(mm_tank_primary$tank_panel_id))
 cox_tanks   <- sort(unique(exact_base$tank_panel_id))
 only_panel  <- setdiff(panel_tanks, cox_tanks)
 only_cox    <- setdiff(cox_tanks, panel_tanks)
- 
 if (length(only_panel) > 0 || length(only_cox) > 0) {
-  warning(sprintf(
-    "Sample mismatch: %d tanks in panel only, %d in Cox only.\n  Panel filters and Cox filters may differ.",
-    length(only_panel), length(only_cox)))
+  warning(sprintf("Sample mismatch: %d tanks in panel only, %d in Cox only.",
+                  length(only_panel), length(only_cox)))
 } else {
-  log_step("  ✓ Tank sets match between panel and Cox datasets", 1)
+  log_step("  Tank sets match between panel and Cox datasets", 1)
 }
- 
-# Verify no excluded states
+
 leaked_cox <- setdiff(unique(exact_base$state), STUDY_STATES)
 if (length(leaked_cox) > 0)
   stop(sprintf("Non-study states in exact_base: %s", paste(leaked_cox, collapse = ", ")))
- 
- 
+
 # ---- survSplit at REFORM_DAYS ----
-# Produces a data.frame with reform_ep = 1 (pre) or 2 (post).
-# All non-Surv columns (including tank_installed_date) are preserved.
 exact_split_df <- survSplit(
   formula = Surv(t_enter, t_exit, failure) ~ .,
   data    = as.data.frame(exact_base),
@@ -727,34 +716,34 @@ exact_split_df <- survSplit(
 )
 setDT(exact_split_df)
 exact_split_df <- exact_split_df[t_exit > t_enter]
-
-# Treatment: Texas AND in the post-reform interval
 exact_split_df[, did_term := texas_treated * as.integer(reform_ep == 2L)]
 
 log_step(sprintf("After survSplit: %s rows, %s tanks",
-                 fmt_n(nrow(exact_split_df)),
-                 fmt_n(uniqueN(exact_split_df$tank_panel_id))))
+                 fmt_n(nrow(exact_split_df)), fmt_n(uniqueN(exact_split_df$tank_panel_id))))
 
 # ---- Exact age intervals ----
-# age_enter / age_exit: years since exact install date at each interval endpoint
-# These are used for the age-axis Cox robustness model (S17).
 exact_split_df[, `:=`(
-  age_enter = pmax(
-    (t_enter - as.numeric(tank_installed_date)) / 365.25, 0),
-  age_exit  =
-    (t_exit - as.numeric(tank_installed_date)) / 365.25
+  age_enter = pmax((t_enter - as.numeric(tank_installed_date)) / 365.25, 0),
+  age_exit  = (t_exit - as.numeric(tank_installed_date)) / 365.25
 )]
 exact_split_df <- exact_split_df[age_exit > age_enter]
 
-# Year factor: calendar year of interval end, for models using year dummies
 exact_split_df[, year_fac := factor(
   as.integer(format(as.Date(t_exit, origin = "1970-01-01"), "%Y")),
-  levels = year_levels
+  levels = year_levels)]
+
+# ---- Propagate mandate/sample flags to Cox dataset ----
+exact_split_df[, `:=`(
+  is_post_mandate = as.integer(mm_install_cohort %in% POST_MANDATE),
+  is_pre_mandate  = as.integer(mm_install_cohort %in% PRE_MANDATE),
+  mandate_active  = as.integer(
+    mm_install_cohort %in% PRE_MANDATE &
+    as.integer(format(as.Date((t_enter + t_exit) / 2, origin = "1970-01-01"), "%Y")) %in% 1989:1993
+  )
 )]
 
 log_step(sprintf("Exact-date split final: %s rows, %s events",
-                 fmt_n(nrow(exact_split_df)),
-                 fmt_n(sum(exact_split_df$failure))), 1)
+                 fmt_n(nrow(exact_split_df)), fmt_n(sum(exact_split_df$failure))), 1)
 cat("\n")
 
 
@@ -764,79 +753,50 @@ cat("========================================\n")
 cat("S6: CELL COVERAGE DIAGNOSTICS\n")
 cat("========================================\n\n")
 
-# Per research design Part 5.1: measure what share of tank-years fall in cells
-# with BOTH Texas and control-state observations (identified cells).
-# Target: pct_tank_years_identified >= 70%.
-# If below, consider coarsening capacity bins or widening cohort intervals.
-
-log_step("Computing cell coverage by (make_model_tank × panel_year)...")
+log_step("Computing cell coverage by (make_model_tank x panel_year)...")
 
 cell_diag <- mm_tank_primary[, .(
-  n_total  = .N,
-  n_tx     = sum(texas_treated == 1L),
-  n_ctl    = sum(texas_treated == 0L),
-  has_both = as.integer(
-    sum(texas_treated == 1L) > 0L & sum(texas_treated == 0L) > 0L)
+  n_total = .N, n_tx = sum(texas_treated == 1L), n_ctl = sum(texas_treated == 0L),
+  has_both = as.integer(sum(texas_treated == 1L) > 0L & sum(texas_treated == 0L) > 0L)
 ), by = .(make_model_tank, panel_year)]
 
 coverage_summary <- cell_diag[, .(
-  total_cell_years          = .N,
-  identified_cell_years     = sum(has_both),
-  pct_identified            = round(mean(has_both) * 100, 1),
-  tank_years_total          = sum(n_total),
-  tank_years_identified     = sum(n_total * has_both),
-  pct_tank_years_identified = round(
-    sum(n_total * has_both) / sum(n_total) * 100, 1)
+  total_cell_years = .N, identified_cell_years = sum(has_both),
+  pct_identified = round(mean(has_both) * 100, 1),
+  tank_years_total = sum(n_total), tank_years_identified = sum(n_total * has_both),
+  pct_tank_years_identified = round(sum(n_total * has_both) / sum(n_total) * 100, 1)
 )]
 
-log_step(sprintf("  Cell-years total        : %s",
-                 fmt_n(coverage_summary$total_cell_years)), 1)
+log_step(sprintf("  Cell-years total        : %s", fmt_n(coverage_summary$total_cell_years)), 1)
 log_step(sprintf("  Identified cell-years   : %s (%s%%)",
-                 fmt_n(coverage_summary$identified_cell_years),
-                 coverage_summary$pct_identified), 1)
+                 fmt_n(coverage_summary$identified_cell_years), coverage_summary$pct_identified), 1)
 log_step(sprintf("  Tank-years identified   : %s / %s (%s%%)",
                  fmt_n(coverage_summary$tank_years_identified),
                  fmt_n(coverage_summary$tank_years_total),
                  coverage_summary$pct_tank_years_identified), 1)
 
-if (coverage_summary$pct_tank_years_identified < 70) {
-  warning(sprintf(
-    "Only %s%% of tank-years are in identified cells (target: 70%%).\n  Consider: (a) collapsing Under-1k and 1k-5k capacity bins, or\n             (b) widening install-year cohorts from 3-year to 4-year bins.",
-    coverage_summary$pct_tank_years_identified))
-}
+if (coverage_summary$pct_tank_years_identified < 70)
+  warning(sprintf("Only %s%% of tank-years are in identified cells (target: 70%%).",
+                  coverage_summary$pct_tank_years_identified))
 
-# Cell size table
 cell_sizes_98 <- mm_tank_primary[panel_year == 1998L, .(
-  n_tx     = sum(texas_treated == 1L),
-  n_ctl    = sum(texas_treated == 0L),
-  n_total  = .N,
-  has_both = as.integer(
-    any(texas_treated == 1L) & any(texas_treated == 0L))
+  n_tx = sum(texas_treated == 1L), n_ctl = sum(texas_treated == 0L), n_total = .N,
+  has_both = as.integer(any(texas_treated == 1L) & any(texas_treated == 0L))
 ), by = make_model_tank][order(-n_total)]
 
-log_step(sprintf("\n  Cells at 1998: %s total | %s identified | %s well-populated (≥5 each side)",
-                 nrow(cell_sizes_98),
-                 cell_sizes_98[has_both == 1L, .N],
+log_step(sprintf("\n  Cells at 1998: %s total | %s identified | %s well-populated",
+                 nrow(cell_sizes_98), cell_sizes_98[has_both == 1L, .N],
                  cell_sizes_98[n_tx >= 5L & n_ctl >= 5L, .N]), 1)
-
 fwrite(cell_sizes_98, file.path(OUTPUT_TABLES, "Diag_TankCell_Sizes.csv"))
 
-# Pre-reform balance within cells
 pre_balance <- mm_tank_primary[panel_year < POST_YEAR, .(
-  closure_rate = mean(closure_event, na.rm = TRUE),
-  n            = .N
-), by = .(make_model_tank,
-          group = fifelse(texas_treated == 1L, "Texas", "Control"))
-]
-bal_wide <- dcast(pre_balance, make_model_tank ~ group,
-                  value.var = c("closure_rate", "n"))
+  closure_rate = mean(closure_event, na.rm = TRUE), n = .N
+), by = .(make_model_tank, group = fifelse(texas_treated == 1L, "Texas", "Control"))]
+bal_wide <- dcast(pre_balance, make_model_tank ~ group, value.var = c("closure_rate", "n"))
 bal_wide[, pre_gap := closure_rate_Texas - closure_rate_Control]
-
-n_flagged <- bal_wide[abs(pre_gap) > 0.02 |
-                        n_Texas < 10L | n_Control < 10L, .N]
+n_flagged <- bal_wide[abs(pre_gap) > 0.02 | n_Texas < 10L | n_Control < 10L, .N]
 log_step(sprintf("  Cells flagged (|pre-gap|>2pp or n<10): %s", n_flagged), 1)
-fwrite(bal_wide[order(-abs(pre_gap))],
-       file.path(OUTPUT_TABLES, "Diag_PreBalance_ByCell.csv"))
+fwrite(bal_wide[order(-abs(pre_gap))], file.path(OUTPUT_TABLES, "Diag_PreBalance_ByCell.csv"))
 cat("\n")
 
 
@@ -846,79 +806,43 @@ cat("========================================\n")
 cat("S6b: CELL COVERAGE BAR CHARTS\n")
 cat("========================================\n\n")
 
-# Two grid charts -- one per cohort granularity -- showing the share of the
-# primary sample that falls in each (wall x fuel x capacity x cohort) cell,
-# separately for Texas (orange) and Control States (blue).
-#
-# Reading the charts:
-#   - A cell where TX and CTL bars are roughly equal height is BALANCED.
-#   - A cell where TX bars are tall and CTL bars are short (or absent) indicates
-#     that Texas tanks are over-represented in that cell -- the identifying
-#     assumption bears extra scrutiny there.
-#   - A cell with no bars on either side is unidentified and excluded from
-#     the primary regressions.
-#   - Because scales are FIXED across all facets, you can directly compare
-#     the height of bars across different wall/fuel/capacity combinations.
-
-# ---- Forward cohort_3yr to mm_tank_primary ----
-# mm_tank_primary is defined in S4 as a filter of tank_year_panel, so
-# cohort_3yr is already present. Add it explicitly if somehow absent.
 if (!"cohort_3yr" %in% names(mm_tank_primary)) {
   mm_tank_primary[, cohort_3yr := fcase(
+    mm_install_cohort %in% as.character(1985:1988), "1985-1988",
     mm_install_cohort %in% as.character(1989:1991), "1989-1991",
     mm_install_cohort %in% as.character(1992:1994), "1992-1994",
     mm_install_cohort %in% as.character(1995:1997), "1995-1997",
-    default = NA_character_
-  )]
+    default = NA_character_)]
 }
 
-BIN_3YR_LEVELS <- c("1989-1991", "1992-1994", "1995-1997")
+# ---- CHANGED: includes 1985-1988 bin ----
+BIN_3YR_LEVELS <- c("1985-1988", "1989-1991", "1992-1994", "1995-1997")
 CAP_LEVELS     <- c("Under-1k", "1k-5k", "5k-12k", "12k-25k", "25k-Plus")
 
 # ---- Single-year cohort chart ----
 log_step("Building single-year cohort coverage chart...")
-
-cov_1yr <- build_coverage_dt(
-  dt            = mm_tank_primary,
-  cohort_col    = "mm_install_cohort",
-  cohort_levels = PRIMARY_YEARS,
-  cap_levels    = CAP_LEVELS
-)
-make_coverage_figure(
-  cov_dt    = cov_1yr,
-  x_label   = "Install Year",
-  file_stem = "Diag_CellCoverage_SingleYear"
-)
+# ---- CHANGED: ALL_YEARS instead of PRIMARY_YEARS ----
+cov_1yr <- build_coverage_dt(dt = mm_tank_primary, cohort_col = "mm_install_cohort",
+                              cohort_levels = ALL_YEARS, cap_levels = CAP_LEVELS)
+make_coverage_figure(cov_dt = cov_1yr, x_label = "Install Year", file_stem = "Diag_CellCoverage_SingleYear")
 fwrite(cov_1yr[order(mm_wall, mm_fuel, mm_capacity, cohort, group)],
        file.path(OUTPUT_TABLES, "Diag_CellCoverage_SingleYear.csv"))
 
 # ---- 3-year cohort chart ----
 log_step("Building 3-year cohort coverage chart...")
-
-cov_3yr <- build_coverage_dt(
-  dt            = mm_tank_primary[cohort_3yr %in% BIN_3YR_LEVELS],
-  cohort_col    = "cohort_3yr",
-  cohort_levels = BIN_3YR_LEVELS,
-  cap_levels    = CAP_LEVELS
-)
-make_coverage_figure(
-  cov_dt    = cov_3yr,
-  x_label   = "Install Year Cohort (3-year bins)",
-  file_stem = "Diag_CellCoverage_3yr"
-)
+cov_3yr <- build_coverage_dt(dt = mm_tank_primary[cohort_3yr %in% BIN_3YR_LEVELS],
+                              cohort_col = "cohort_3yr", cohort_levels = BIN_3YR_LEVELS,
+                              cap_levels = CAP_LEVELS)
+make_coverage_figure(cov_dt = cov_3yr, x_label = "Install Year Cohort (3-year bins)",
+                     file_stem = "Diag_CellCoverage_3yr")
 fwrite(cov_3yr[order(mm_wall, mm_fuel, mm_capacity, cohort, group)],
        file.path(OUTPUT_TABLES, "Diag_CellCoverage_3yr.csv"))
 
-# ---- Console comparison summary ----
 summarise_cov <- function(dt, label) {
-  s <- dt[, .(
-    n_combos_nonzero = sum(n > 0),
-    n_combos_zero    = sum(n == 0),
-    mean_share_pct   = round(mean(share[n > 0]) * 100, 2),
-    max_share_pct    = round(max(share)          * 100, 2)
-  ), by = group]
-  cat(sprintf("\n%s:\n", label))
-  print(s)
+  s <- dt[, .(n_combos_nonzero = sum(n > 0), n_combos_zero = sum(n == 0),
+    mean_share_pct = round(mean(share[n > 0]) * 100, 2),
+    max_share_pct  = round(max(share) * 100, 2)), by = group]
+  cat(sprintf("\n%s:\n", label)); print(s)
 }
 summarise_cov(cov_1yr, "Single-year cohorts")
 summarise_cov(cov_3yr, "3-year cohorts")
@@ -931,49 +855,26 @@ cat("========================================\n")
 cat("S7: SURVIVORSHIP DIAGNOSTIC\n")
 cat("========================================\n\n")
 
-# Track the share of tanks that exit (close) by cohort × treatment group.
-# If the reform causes rapid exit of high-risk TX tanks in early post-reform
-# years, surviving TX tanks become a selected lower-risk subsample.
-# The OLS ATT will attenuate toward zero in later years; Cox conditions on
-# survival so this is not a bias problem for the primary spec, but it IS
-# a finding (the selection effect IS the treatment effect for this margin).
-
 surv_diag <- mm_tank_primary[, .(
-  n_tanks         = uniqueN(tank_panel_id),
-  exit_pre_reform = uniqueN(tank_panel_id[
-    closure_event == 1L & panel_year < POST_YEAR]),
-  exit_post_reform = uniqueN(tank_panel_id[
-    closure_event == 1L & panel_year >= POST_YEAR])
-), by = .(
-  mm_install_cohort,
-  state_group = fifelse(texas_treated == 1L, "Texas", "Control States")
+  n_tanks = uniqueN(tank_panel_id),
+  exit_pre_reform  = uniqueN(tank_panel_id[closure_event == 1L & panel_year < POST_YEAR]),
+  exit_post_reform = uniqueN(tank_panel_id[closure_event == 1L & panel_year >= POST_YEAR])
+), by = .(mm_install_cohort,
+          state_group = fifelse(texas_treated == 1L, "Texas", "Control States")
 )][order(state_group, mm_install_cohort)]
+surv_diag[, `:=`(pct_exit_pre = exit_pre_reform / n_tanks, pct_exit_post = exit_post_reform / n_tanks)]
 
-surv_diag[, `:=`(
-  pct_exit_pre  = exit_pre_reform  / n_tanks,
-  pct_exit_post = exit_post_reform / n_tanks
-)]
-
-log_step("Survivorship by cohort × group:")
+log_step("Survivorship by cohort x group:")
 print(surv_diag)
-fwrite(surv_diag,
-       file.path(OUTPUT_TABLES, "Diag_Survivorship_ByCohort.csv"))
+fwrite(surv_diag, file.path(OUTPUT_TABLES, "Diag_Survivorship_ByCohort.csv"))
 
-# TX share within each cell over time (attrition diagnostic)
 tx_share_time <- mm_tank_primary[, .(
-  n_tx  = sum(texas_treated == 1L),
-  n_ctl = sum(texas_treated == 0L),
-  n     = .N,
-  tx_share = sum(texas_treated == 1L) / .N
+  n_tx = sum(texas_treated == 1L), n_ctl = sum(texas_treated == 0L),
+  n = .N, tx_share = sum(texas_treated == 1L) / .N
 ), by = .(make_model_tank, panel_year)]
-
-tx_share_wide <- dcast(
-  tx_share_time[, .(make_model_tank, panel_year, tx_share)],
-  make_model_tank ~ panel_year,
-  value.var = "tx_share"
-)
-fwrite(tx_share_wide,
-       file.path(OUTPUT_TABLES, "Diag_TXShare_CellTime.csv"))
+tx_share_wide <- dcast(tx_share_time[, .(make_model_tank, panel_year, tx_share)],
+                        make_model_tank ~ panel_year, value.var = "tx_share")
+fwrite(tx_share_wide, file.path(OUTPUT_TABLES, "Diag_TXShare_CellTime.csv"))
 cat("\n")
 
 
@@ -983,43 +884,28 @@ cat("========================================\n")
 cat("S8: BINNED SCATTER\n")
 cat("========================================\n\n")
 
+# ---- CHANGED: ALL_YEARS instead of PRIMARY_YEARS ----
 scatter_dt <- mm_tank_primary[, .(
-  closure_rate = mean(closure_event, na.rm = TRUE),
-  n            = .N
-), by = .(
-  mm_install_cohort,
-  state_group = fifelse(texas_treated == 1L, "Texas", "Control States"),
-  period      = fifelse(panel_year < POST_YEAR, "Pre-reform", "Post-reform")
-)]
-
-scatter_dt[, group_period := factor(
-  paste(state_group, period),
-  levels = c("Control States Pre-reform",  "Control States Post-reform",
-             "Texas Pre-reform",            "Texas Post-reform"))]
-
-scatter_dt[, cohort_order := match(mm_install_cohort, PRIMARY_YEARS)]
+  closure_rate = mean(closure_event, na.rm = TRUE), n = .N
+), by = .(mm_install_cohort,
+          state_group = fifelse(texas_treated == 1L, "Texas", "Control States"),
+          period = fifelse(panel_year < POST_YEAR, "Pre-reform", "Post-reform"))]
+scatter_dt[, group_period := factor(paste(state_group, period),
+  levels = c("Control States Pre-reform", "Control States Post-reform",
+             "Texas Pre-reform", "Texas Post-reform"))]
+scatter_dt[, cohort_order := match(mm_install_cohort, ALL_YEARS)]
 setorder(scatter_dt, cohort_order)
-scatter_dt[, mm_install_cohort := factor(mm_install_cohort,
-                                         levels = PRIMARY_YEARS)]
+scatter_dt[, mm_install_cohort := factor(mm_install_cohort, levels = ALL_YEARS)]
 
-p_scatter <- ggplot(
-  scatter_dt[!is.na(mm_install_cohort)],
-  aes(x     = mm_install_cohort,
-      y     = closure_rate,
-      color = group_period,
-      group = group_period)) +
-  geom_line(linewidth = 0.9) +
-  geom_point(size = 3) +
+p_scatter <- ggplot(scatter_dt[!is.na(mm_install_cohort)],
+  aes(x = mm_install_cohort, y = closure_rate, color = group_period, group = group_period)) +
+  geom_line(linewidth = 0.9) + geom_point(size = 3) +
   scale_color_manual(values = c(
-    "Control States Pre-reform"  = COL_CTRL,
-    "Control States Post-reform" = "#56B4E9",
-    "Texas Pre-reform"           = COL_PRE,
-    "Texas Post-reform"          = COL_TX)) +
+    "Control States Pre-reform" = COL_CTRL, "Control States Post-reform" = "#56B4E9",
+    "Texas Pre-reform" = COL_PRE, "Texas Post-reform" = COL_TX)) +
   scale_y_continuous(labels = percent_format(accuracy = 0.1)) +
-  labs(x = "Install Year Cohort",
-       y = "Mean Annual Closure Rate") +
-  theme_pub() +
-  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+  labs(x = "Install Year Cohort", y = "Mean Annual Closure Rate") +
+  theme_pub() + theme(axis.text.x = element_text(angle = 20, hjust = 1))
 
 ggsave(file.path(OUTPUT_FIGURES, "Figure_BinnedScatter_CohortClosure.png"),
        p_scatter, width = 9, height = 5.5, dpi = 300, bg = "white")
@@ -1028,399 +914,1861 @@ ggsave(file.path(OUTPUT_FIGURES, "Figure_BinnedScatter_CohortClosure.pdf"),
 cat("\n")
 
 
+#### S9: PRIMARY Cox Model + Slide Replication + Three-Sample Structure ####
+# Step 1: Identify facilities with at least one SW tank alive at reform
+## tank cells too narro  lets just focus on  mm_wall x mm_install_cohort for now
 
-#### S10: Cox Event Study (pooled tails, % change scale) ####
+
+
+
+################################################################################
+# S1: SAMPLE CONSTRUCTION
+################################################################################
+ 
+cat("\n========================================\n")
+cat("S1: SAMPLE CONSTRUCTION\n")
+cat("========================================\n\n")
+ 
+# ---- 1a. Identify SW-exposed facilities ----
+sw_exposed_facs <- mm_tank_primary[
+  mm_wall == "Single-Walled" &
+  mm_install_cohort >= 1992L & mm_install_cohort <= 1998L,
+  unique(panel_id)
+]
+ 
+# ---- 1b. All tanks at those facilities, 1990-1998 cohorts ----
+analysis_tanks <- mm_tank_primary[
+  panel_id %in% sw_exposed_facs &
+  mm_install_cohort >= 1992L & mm_install_cohort <= 1998L
+]
+ 
+# ---- 1c. Drop first-year churn ----
+# Tanks where panel_year == install_cohort are installation-year observations.
+# These show high closure rates on the diagonal (heatmap diagnostic) driven by
+# failed inspections, paperwork corrections, not economic closure decisions.
+analysis_tanks <- analysis_tanks[panel_year > as.integer(mm_install_cohort)]
+ 
+# ---- 1d. Treatment variables ----
+analysis_tanks[, `:=`(
+  did_term  = texas_treated * as.integer(panel_year >= 1999L),
+  rel_year  = panel_year - 1999L,
+  did_short = texas_treated * as.integer(panel_year >= 1999L & panel_year <= 2004L),
+  did_long  = texas_treated * as.integer(panel_year >= 2005L)
+)]
+ 
+analysis_tanks[, rel_year_es := fcase(
+  rel_year <= -5L, -5L,
+  rel_year >= 10L, 10L,
+  default = as.integer(rel_year)
+)]
+ 
+# ---- 1e. Age at treatment (frozen at 1999) ----
+analysis_tanks[, age_at_treatment := 1999L - as.integer(mm_install_cohort)]
+ 
+# Age bins
+analysis_tanks[, age_treat_bin := fcase(
+  age_at_treatment <= 4L,  "2-4yr",
+  age_at_treatment <= 6L,  "5-6yr",
+  age_at_treatment <= 9L,  "7-9yr",
+  default = NA_character_
+)]
+ 
+# Quartile-based splits
+age_q25 <- quantile(analysis_tanks[, unique(age_at_treatment)], 0.25)
+age_q75 <- quantile(analysis_tanks[, unique(age_at_treatment)], 0.75)
+analysis_tanks[, age_quartile := fcase(
+  age_at_treatment <= age_q25, "Bottom 25%",
+  age_at_treatment >= age_q75, "Top 25%",
+  default = "Middle 50%"
+)]
+ 
+# Cell without cohort (for FE analysis that doesn't absorb age channel)
+analysis_tanks[, make_model_noage := paste(mm_wall, mm_fuel, mm_capacity, sep = "_")]
+ 
+# ---- 1f. Sample report ----
+cat(sprintf("Analysis sample (post first-year-churn removal):\n"))
+cat(sprintf("  Facilities: TX=%s  CTL=%s\n",
+    fmt_n(analysis_tanks[texas_treated == 1, uniqueN(panel_id)]),
+    fmt_n(analysis_tanks[texas_treated == 0, uniqueN(panel_id)])))
+cat(sprintf("  Tanks: TX=%s  CTL=%s\n",
+    fmt_n(analysis_tanks[texas_treated == 1, uniqueN(tank_panel_id)]),
+    fmt_n(analysis_tanks[texas_treated == 0, uniqueN(tank_panel_id)])))
+cat(sprintf("  Tank-years: %s\n", fmt_n(nrow(analysis_tanks))))
+cat(sprintf("  Age at treatment: min=%d, Q25=%d, median=%d, Q75=%d, max=%d\n",
+    min(analysis_tanks$age_at_treatment),
+    as.integer(age_q25),
+    median(analysis_tanks$age_at_treatment),
+    as.integer(age_q75),
+    max(analysis_tanks$age_at_treatment)))
+ 
+cat("\n  Age quartile distribution:\n")
+print(analysis_tanks[, .(n_tanks = uniqueN(tank_panel_id), n_ty = .N),
+                     by = .(age_quartile, texas_treated)][order(age_quartile, texas_treated)])
+ 
+cat("\n  Age bin distribution:\n")
+print(analysis_tanks[, .(n_tanks = uniqueN(tank_panel_id), n_ty = .N),
+                     by = .(age_treat_bin, texas_treated)][order(age_treat_bin, texas_treated)])
+ 
+ 
+################################################################################
+# S2: CEM MATCHING
+################################################################################
+ 
+cat("\n========================================\n")
+cat("S2: CEM MATCHING\n")
+cat("========================================\n\n")
+ library(MatchIt)
+# One row per tank
+tank_chars <- unique(analysis_tanks[,
+  .(tank_panel_id, panel_id, state, texas_treated,
+    mm_wall, mm_fuel, mm_capacity, mm_install_cohort,
+    age_at_treatment, age_treat_bin, age_quartile)])
+ 
+# CEM on pricing dimensions
+m_cem <- matchit(
+  texas_treated ~ mm_wall + mm_fuel + mm_capacity + mm_install_cohort,
+  data = tank_chars,
+  method = "cem"
+)
+cat("CEM Summary:\n")
+summary(m_cem)
+ 
+# Extract weights and merge to panel
+tank_chars[, cem_weight := m_cem$weights]
+matched_ids <- tank_chars[cem_weight > 0, tank_panel_id]
+ 
+matched_tanks <- merge(
+  analysis_tanks[tank_panel_id %in% matched_ids],
+  tank_chars[, .(tank_panel_id, cem_weight)],
+  by = "tank_panel_id", all.x = TRUE
+)
+ 
+cat(sprintf("\nMatched sample:\n"))
+cat(sprintf("  TX tanks: %s / %s (%.1f%%)\n",
+    fmt_n(matched_tanks[texas_treated == 1, uniqueN(tank_panel_id)]),
+    fmt_n(tank_chars[texas_treated == 1, .N]),
+    100 * matched_tanks[texas_treated == 1, uniqueN(tank_panel_id)] /
+      tank_chars[texas_treated == 1, .N]))
+cat(sprintf("  CTL tanks: %s / %s (%.1f%%)\n",
+    fmt_n(matched_tanks[texas_treated == 0, uniqueN(tank_panel_id)]),
+    fmt_n(tank_chars[texas_treated == 0, .N]),
+    100 * matched_tanks[texas_treated == 0, uniqueN(tank_panel_id)] /
+      tank_chars[texas_treated == 0, .N]))
+ 
+
+ ################################################################################
+# S1: FACILITY-LEVEL SAMPLE CONSTRUCTION & AGGREGATION
+################################################################################
+
+cat("\n========================================\n")
+cat("S1: FACILITY-LEVEL AGGREGATION\n")
+cat("========================================\n\n")
+
+# ---- 1a-1d. Base Tank Sample (Assuming analysis_tanks is generated as before) ----
+# Ensure tank-level parameters are established prior to aggregation.
+
+# ---- 1e. Aggregate to Facility Level (panel_id) ----
+# To match at the facility level, tank-level characteristics must be collapsed 
+# into facility-level summary statistics. Continuous/count variables are binned 
+# to facilitate Coarsened Exact Matching (CEM).
+
+fac_chars <- unique(analysis_tanks[, .(
+  tank_panel_id, panel_id, texas_treated, 
+  mm_wall, mm_fuel, mm_capacity, mm_install_cohort
+)])
+
+fac_chars <- fac_chars[, .(
+  # Treatment status remains constant per facility
+  texas_treated = max(texas_treated),
+  
+  # Total active tanks in the 1992-1998 cohort
+  n_tanks = .N,
+  
+  # Proportion of Single-Walled tanks
+  prop_sw = sum(mm_wall == "Single-Walled") / .N,
+  
+  # Age parameters (oldest tank dictates facility age risk)
+  oldest_cohort = min(mm_install_cohort),
+  
+  # Modal fuel and capacity
+  mode_fuel = mm_fuel[which.max(table(mm_fuel))],
+  mode_capacity = mm_capacity[which.max(table(mm_capacity))]
+), by = .(panel_id)]
+
+# Coarsen variables for CEM compatibility
+fac_chars[, `:=`(
+  tank_count_bin = fcase(n_tanks == 1L, "1", n_tanks == 2L, "2", n_tanks >= 3L, "3+"),
+  sw_dominance = fcase(prop_sw == 1, "All SW", prop_sw > 0.5, "Majority SW", default = "Minority/No SW"),
+  cohort_bin = fcase(oldest_cohort <= 1994L, "1992-1994", default = "1995-1998")
+)]
+
+cat(sprintf("Facility-level pre-match sample:\n"))
+cat(sprintf("  TX Facilities: %s\n", fmt_n(fac_chars[texas_treated == 1, .N])))
+cat(sprintf("  CTL Facilities: %s\n", fmt_n(fac_chars[texas_treated == 0, .N])))
+
+################################################################################
+# S2: FACILITY-LEVEL CEM MATCHING
+################################################################################
+
+cat("\n========================================\n")
+cat("S2: CEM MATCHING (FACILITY)\n")
+cat("========================================\n\n")
+# The MatchIt package requires engineered categorical variables to be explicitly typed as factors.
+# Passing character vectors causes parsing failures in the underlying CEM evaluation environment.
+
+# 1. Convert all categorical matching dimensions to factors
+match_cols <- c("tank_count_bin", "sw_dominance", "cohort_bin", "mode_fuel", "mode_capacity")
+fac_chars[, (match_cols) := lapply(.SD, as.factor), .SDcols = match_cols]
+
+# 2. Execute CEM matching
+m_cem_fac <- matchit(
+  texas_treated ~ tank_count_bin + sw_dominance + cohort_bin + mode_fuel + mode_capacity,
+  data = fac_chars,
+  method = "cem"
+)
+
+# 3. Extract weights and merge
+fac_chars[, cem_weight := m_cem_fac$weights]
+matched_fac_ids <- fac_chars[cem_weight > 0, panel_id]
+
+matched_facility_panel <- merge(
+  analysis_tanks[panel_id %in% matched_fac_ids],
+  fac_chars[, .(panel_id, cem_weight, tank_count_bin, sw_dominance, cohort_bin)],
+  by = "panel_id", all.x = TRUE
+)
+
+cat(sprintf("\nMatched facility sample:\n"))
+cat(sprintf("  TX Facilities: %s / %s (%.1f%%)\n", 
+    fmt_n(fac_chars[panel_id %in% matched_fac_ids & texas_treated == 1, .N]),
+    fmt_n(fac_chars[texas_treated == 1, .N]),
+    100 * fac_chars[panel_id %in% matched_fac_ids & texas_treated == 1, .N] / 
+      fac_chars[texas_treated == 1, .N]))
+cat(sprintf("  CTL Facilities: %s / %s (%.1f%%)\n", 
+    fmt_n(fac_chars[panel_id %in% matched_fac_ids & texas_treated == 0, .N]),
+    fmt_n(fac_chars[texas_treated == 0, .N]),
+    100 * fac_chars[panel_id %in% matched_fac_ids & texas_treated == 0, .N] / 
+      fac_chars[texas_treated == 0, .N]))
+
+ 
+################################################################################
+# S3: CONTROL GROUP MEANS
+################################################################################
+ 
+cat("\n========================================\n")
+cat("S3: CONTROL GROUP MEANS\n")
+cat("========================================\n\n")
+ 
+ctrl_means <- matched_tanks[texas_treated == 0, .(
+  pre      = mean(closure_event[panel_year %between% c(1992L, 1997L)], na.rm = TRUE),
+  post_all = mean(closure_event[panel_year >= 1999L], na.rm = TRUE),
+  post_short = mean(closure_event[panel_year %between% c(1999L, 2004L)], na.rm = TRUE),
+  post_long  = mean(closure_event[panel_year >= 2005L], na.rm = TRUE)
+)]
+ 
+cat(sprintf("Control means (per 1,000 tank-years):\n"))
+cat(sprintf("  Pre-reform (1992-1997):  %.1f\n", ctrl_means$pre * 1000))
+cat(sprintf("  Post-reform (all):       %.1f\n", ctrl_means$post_all * 1000))
+cat(sprintf("  Post short (1999-2004):  %.1f\n", ctrl_means$post_short * 1000))
+cat(sprintf("  Post long (2005-2020):   %.1f\n", ctrl_means$post_long * 1000))
+ 
+ctrl_means_age <- matched_tanks[
+  texas_treated == 0 & panel_year %between% c(1999L, 2004L),
+  .(ctrl_post_short = mean(closure_event, na.rm = TRUE), N = .N),
+  by = age_treat_bin
+][order(age_treat_bin)]
+ 
+cat("\nControl means by age bin (post-short, per 1,000):\n")
+ctrl_means_age[, rate_per_1k := ctrl_post_short * 1000]
+print(ctrl_means_age)
+ 
+ctrl_means_quartile <- matched_tanks[
+  texas_treated == 0 & panel_year %between% c(1999L, 2004L),
+  .(ctrl_post_short = mean(closure_event, na.rm = TRUE), N = .N),
+  by = age_quartile
+][order(age_quartile)]
+ 
+cat("\nControl means by age quartile (post-short, per 1,000):\n")
+ctrl_means_quartile[, rate_per_1k := ctrl_post_short * 1000]
+print(ctrl_means_quartile)
+
+
+
+ ################################################################################
+# OUTPUT SETUP
+################################################################################
+
+library(fixest)
+library(survival)
+library(modelsummary)
+
+# Save base-R plots (iplot) as both PDF and PNG
+save_fig <- function(plot_fn, filename, width = 7, height = 5.5) {
+  pdf(file.path(OUTPUT_FIGURES, paste0(filename, ".pdf")),
+      width = width, height = height, family = "Times")
+  plot_fn()
+  dev.off()
+  png(file.path(OUTPUT_FIGURES, paste0(filename, ".png")),
+      width = width, height = height, units = "in", res = 300)
+  plot_fn()
+  dev.off()
+  invisible(NULL)
+}
+
+setFixest_etable(style.tex = style.tex("aer"), digits = 4, se.below = TRUE, depvar = FALSE)
+setFixest_etable(fixef.print = FALSE)
+
+################################################################################
+# VARIABLE CONSTRUCTION
+################################################################################
+
+med_age <- median(matched_tanks$age_at_treatment, na.rm = TRUE)
+cat(sprintf("Median age at treatment: %.0f years\n", med_age))
+
+matched_tanks[, below_median_age := as.integer(age_at_treatment <  med_age)]
+matched_tanks[, above_median_age := as.integer(age_at_treatment >= med_age)]
+matched_tanks[, single_wall      := as.integer(mm_wall == "Single-walled")]
+matched_tanks[, did_x_sw         := did_term * single_wall]
+matched_tanks[, did_x_old        := did_term * above_median_age]
+matched_tanks[, sw_x_old         := single_wall * above_median_age]
+matched_tanks[, did_x_sw_old     := did_term * single_wall * above_median_age]
+
+# Above-median label (used in both OLS and Cox tables)
+age_label <- sprintf("Above Median Age ($\\geq$%.0f yr)", med_age)
+
+################################################################################
+# COX SAMPLE CONSTRUCTION
+# exact_split_df is built in S5 — already survSplit at REFORM_DAYS with
+# did_term, age_enter/exit, reform_ep. Filter to matched tank IDs, add
+# make_model_noage and age_at_treatment to match matched_tanks conventions,
+# then remove first-year churn (exit year == install year with failure).
+################################################################################
+
+matched_ids <- unique(matched_tanks$tank_panel_id)
+
+cox_sample <- exact_split_df[tank_panel_id %in% matched_ids]
+
+# age_at_treatment: years between install cohort and 1999 reform
+cox_sample[, age_at_treatment := 1999L - as.integer(mm_install_cohort)]
+cox_sample[, above_median_age := as.integer(age_at_treatment >= med_age)]
+
+# make_model_noage: wall x fuel x capacity without cohort
+cox_sample[, make_model_noage := paste(mm_wall, mm_fuel, mm_capacity, sep = "_")]
+
+# Remove first-year churn: exit year == install year & failure == 1
+cox_sample[, install_yr := as.integer(mm_install_cohort)]
+cox_sample[, exit_yr    := as.integer(
+  format(as.Date(t_exit, origin = "1970-01-01"), "%Y"))]
+cox_sample <- cox_sample[!(exit_yr == install_yr & failure == 1L)]
+
+cat(sprintf("Cox sample: %s rows, %s tanks, %s events\n",
+    format(nrow(cox_sample),                  big.mark = ","),
+    format(uniqueN(cox_sample$tank_panel_id), big.mark = ","),
+    format(sum(cox_sample$failure),           big.mark = ",")))
+
+
+################################################################################
+# TABLE 1: OLS STEP-IN TABLE
+# M1  Pooled matched + year FE
+# M2  Pooled matched + cell x year FE
+# M3  DiD x above_median_age interaction, year FE
+# M4  DiD x above_median_age interaction, cell x year FE
+# M5  Below-median age subsample, year FE
+# M6  Above-median age subsample, year FE
+# NOTE: above_median_age level effect is time-invariant and absorbed by tank
+#       FE, so it cannot appear as a main effect. HTE is identified via the
+#       interaction term (M3/M4) and confirmed by subsample split (M5/M6).
+################################################################################
+
+m1 <- feols(
+  closure_event ~ did_term | tank_panel_id + panel_year,
+  data = matched_tanks, weights = ~cem_weight, cluster = ~state)
+
+m2 <- feols(
+  closure_event ~ did_term | tank_panel_id + panel_year^make_model_noage,
+  data = matched_tanks, weights = ~cem_weight, cluster = ~state)
+
+m3 <- feols(
+  closure_event ~ did_term + did_x_old | tank_panel_id + panel_year,
+  data = matched_tanks, weights = ~cem_weight, cluster = ~state)
+
+m4 <- feols(
+  closure_event ~ did_term + did_x_old |
+    tank_panel_id + panel_year^make_model_noage,
+  data = matched_tanks, weights = ~cem_weight, cluster = ~state)
+
+m5 <- feols(
+  closure_event ~ did_term | tank_panel_id + panel_year,
+  data = matched_tanks[above_median_age == 0L],
+  weights = ~cem_weight, cluster = ~state)
+
+m6 <- feols(
+  closure_event ~ did_term | tank_panel_id + panel_year,
+  data = matched_tanks[above_median_age == 1L],
+  weights = ~cem_weight, cluster = ~state)
+
+ols_dict <- c(
+  "did_term"  = "DiD",
+  "did_x_old" = paste0("DiD $\\times$ Old ($\\geq$", med_age, " yr)")
+)
+
+ctrl_mean_post <- sprintf("%.4f", ctrl_means$post_all)
+
+etable(
+  m1, m2, m3, m4, m5, m6,
+  headers     = c("(1)", "(2)", "(3)", "(4)", "(5)", "(6)"),
+  dict        = ols_dict,
+  fitstat     = ~ n + r2 + wr2,
+  keep        = c("^DiD$", "DiD.*Old"),
+  extralines  = list(
+    "Tank FE"                    = rep("\\checkmark", 6),
+    "Year FE"                    = rep("\\checkmark", 6),
+    "Cell $\\times$ Year FE"     = c("","\\checkmark","","\\checkmark","",""),
+    "Age subsample"              = c("All","All","All","All",
+                                     paste0("$<$", med_age, " yr"),
+                                     paste0("$\\geq$", med_age, " yr")),
+    "Control Mean (post-reform)" = rep(ctrl_mean_post, 6)
+  ),
+  file    = file.path(OUTPUT_TABLES, "T1_ols_stepwise.tex"),
+  replace = TRUE,
+  notes   = paste0(
+    "Cluster-robust SEs by state in parentheses. ",
+    "Cell is make-model (excluding age). ",
+    "Old $=$ above median age at treatment ($\\geq$", med_age, " yr). ",
+    "Level effect of age absorbed by tank FE; HTE identified via interaction ",
+    "(cols.\\ 3--4) and subsample split (cols.\\ 5--6). ",
+    "Control mean is unweighted post-reform (1999+) closure rate ",
+    "for matched control tanks. CEM weights applied throughout."
+  )
+)
+cat("Saved: Output/Tables/T1_ols_stepwise.tex\n")
+
+
+################################################################################
+# TABLE 2: COX STEP-IN TABLE
+# C1  Pooled, strata(make_model_noage)
+# C2  + DiD x above_median_age interaction
+# C3  Below-median subsample
+# C4  Above-median subsample
+#
+# SURVPLIT at reform year (1999-01-01):
+#   cox_sample spells span installation through exit/censor and cross the
+#   reform boundary. survSplit at 1999 splits each crossing spell into a
+#   pre- and post-reform row so did_term is a proper time-varying covariate
+#   in the counting process formulation Surv(t_enter, t_exit, failure).
+#
+# STRATA: make_model_noage (not make_model_tank) so age variation is not
+#   absorbed into the baseline hazard. make_model_tank includes age at
+#   install which would partial out the HTE we are trying to identify.
+#
+# NOTE: above_median_age level effect is tank-invariant and collinear with
+#   strata(make_model_noage) — not identified. Dropped; HTE via interaction
+#   (C2) and subsample (C3/C4) only.
+################################################################################
+
+cox_reform_cut <- as.numeric(as.Date("1999-01-01"))
+
+cox_split <- survSplit(
+  formula  = Surv(t_enter, t_exit, failure) ~ .,
+  data     = as.data.frame(cox_sample),
+  cut      = cox_reform_cut,
+  episode  = "reform_ep_split"
+)
+setDT(cox_split)
+cox_split <- cox_split[t_exit > t_enter]
+
+# Re-derive did_term on split data (texas_treated * post-reform row)
+cox_split[, did_term := texas_treated * as.integer(reform_ep_split == 2L)]
+# above_median_age and make_model_noage carry through from cox_sample via survSplit
+
+cox1 <- coxph(
+  Surv(t_enter, t_exit, failure) ~ did_term +
+    strata(make_model_noage),
+  data = cox_split, cluster = state)
+
+cox2 <- coxph(
+  Surv(t_enter, t_exit, failure) ~ did_term + did_term:above_median_age +
+    strata(make_model_noage),
+  data = cox_split, cluster = state)
+
+cox3 <- coxph(
+  Surv(t_enter, t_exit, failure) ~ did_term +
+    strata(make_model_noage),
+  data = cox_split[above_median_age == 0L], cluster = state)
+
+cox4 <- coxph(
+  Surv(t_enter, t_exit, failure) ~ did_term +
+    strata(make_model_noage),
+  data = cox_split[above_median_age == 1L], cluster = state)
+
+cox_coef_map <- c(
+  "did_term"                  = "DiD",
+  "did_term:above_median_age" = paste0("DiD $\\times$ Old ($\\geq$", med_age, " yr)")
+)
+
+cox_add_rows <- tibble::tribble(
+  ~term,                      ~`(1)`,        ~`(2)`,        ~`(3)`,                         ~`(4)`,
+  "Strata (make-model, no age)", "\\checkmark", "\\checkmark", "\\checkmark",                "\\checkmark",
+  "Age subsample",            "All",         "All",         paste0("$<$", med_age, " yr"),  paste0("$\\geq$", med_age, " yr")
+)
+
+modelsummary::msummary(
+  list("(1)" = cox1, "(2)" = cox2, "(3)" = cox3, "(4)" = cox4),
+  coef_map     = cox_coef_map,
+  exponentiate = TRUE,
+  statistic    = "({std.error})",
+  stars        = c("*" = .1, "**" = .05, "***" = .01),
+  escape       = FALSE,
+  gof_map      = list(
+    list(raw = "nobs",   clean = "Observations", fmt = scales::comma),
+    list(raw = "nevent", clean = "Events",        fmt = scales::comma)
+  ),
+  add_rows = cox_add_rows,
+  output   = file.path(OUTPUT_TABLES, "T2_cox_stepwise.tex"),
+  notes    = paste0(
+    "Cluster-robust SEs by state in parentheses. ",
+    "Hazard ratios reported (exp[$\\hat{\\beta}$]). ",
+    "Spells split at January 1, 1999 so DiD is a proper time-varying covariate. ",
+    "Strata defined on make-model excluding age (\\texttt{make\\_model\\_noage}) ",
+    "so that age variation is not absorbed into the baseline hazard. ",
+    "Old $=$ above median age at treatment ($\\geq$", med_age, " yr). ",
+    "Level effect of age not identified (tank-invariant, collinear with strata); ",
+    "HTE identified via interaction (col.\\ 2) and subsample split (cols.\\ 3--4)."
+  )
+)
+cat("Saved: Output/Tables/T2_cox_stepwise.tex\n")
+
+
+################################################################################
+# TABLE 3: TRIPLE DIFF — DiD x Single-Walled x Old
+#
+# Identified terms (time-varying via did_term):
+#   did_x_sw    = DiD x Single-Walled
+#   did_x_old   = DiD x Old
+#   did_x_sw_old = DiD x Single-Walled x Old
+#
+# Absorbed by tank FE (time-invariant):
+#   single_wall, sw_x_old, above_median_age
+#   These are dropped silently — correct behaviour, not a bug.
+#
+# Step-in structure:
+#   TD1  DiD only (baseline)
+#   TD2  + DiD x Single-Walled
+#   TD3  + DiD x Old
+#   TD4  Full triple (DiD + DiD×SW + DiD×Old + DiD×SW×Old)
+#   TD5  TD4 + cell x year FE
+################################################################################
+
+matched_tanks[, single_wall := as.integer(mm_wall == "Single-Walled")]
+
+
+td0 <- feols(
+  closure_event ~ did_term |
+    tank_panel_id + panel_year,
+  data = matched_tanks, weights = ~cem_weight, cluster = ~state)
+
+td1 <- feols(
+  closure_event ~ did_term*single_wall*above_median_age |
+    tank_panel_id + panel_year,
+  data = matched_tanks, weights = ~cem_weight, cluster = ~state)
+
+
+
+etable(
+  td0, td1,
+  headers     = c("(1)", "(2)"),
+  fitstat     = ~ n + r2,
+  file    = file.path(OUTPUT_TABLES, "T3_triple_diff.tex"),
+  replace = TRUE,
+  notes   = paste0(
+    "Cluster-robust SEs by state in parentheses. ",
+    "Old $=$ above median age at treatment ($\\geq$", med_age, " yr). ",
+    "Single-Walled $=$ \\texttt{mm\\_wall == ``Single-walled''}. ",
+    "Level effects of Single-Walled and Old are time-invariant and ",
+    "absorbed by tank FE. CEM weights applied throughout."
+  )
+)
+
+cat("Saved: Output/Tables/T3_triple_diff.tex\n")
+
+
+################################################################################
+# EVENT STUDY MODELS
+################################################################################
+summary(matched_tanks$mm_install_cohort)
+matched_tanks[,deadline_sw := as.integer(panel_year == 1998) * single_wall]
+mean(matched_tanks$deadline_sw)
+# --- Pooled event studies (matched sample) ---
+# Alternative: reform date = 1998 (anticipation-inclusive)
+matched_tanks[, did_term_early := texas_treated * as.integer(panel_year >= 1998L)]
+
+m_es_matched <- feols(
+  closure_event ~ i(rel_year_es, texas_treated, ref = -2) +deadline_sw|
+    tank_panel_id + panel_year,
+  data    = matched_tanks,
+  weights = ~cem_weight,
+  cluster = ~state
+)
+
+etable(m_es_matched)
+m_es_cell <- feols(
+  closure_event ~ i(rel_year_es, texas_treated, ref = -2) |
+    tank_panel_id + panel_year^make_model_noage,
+  data    = matched_tanks,
+  weights = ~cem_weight,
+  cluster = ~state
+)
+
+# --- Age-split event studies ---
+m_es_below_med <- feols(
+  closure_event ~ i(rel_year_es, texas_treated, ref = -2) |
+    tank_panel_id + panel_year,
+  data    = matched_tanks[above_median_age == 0L],
+  weights = ~cem_weight,
+  cluster = ~state
+)
+
+m_es_above_med <- feols(
+  closure_event ~ i(rel_year_es, texas_treated, ref = -1) |
+    panel_id + panel_year,
+  data    = matched_tanks[above_median_age == 1L],
+  weights = ~cem_weight,
+  cluster = ~state
+)
+
+
+################################################################################
+# FIGURES 1-4: EVENT STUDIES (ggplot2)
+#
+# Strategy: extract coefficient data from each fixest model using
+# broom::tidy(), then plot with ggplot2 for full layout control.
+# The reference year (-2) is not in the coef vector — we add a manual
+# zero row so the gap is explicit on the x-axis.
+################################################################################
+
+library(ggplot2)
+library(broom)
+
+ES_YLIM <- c(-0.025, 0.025)
+ES_REF  <- -2L
+
+# Extract event-study coefficients from a fixest i() model into a tidy tibble.
+# Adds the omitted reference year as an explicit zero row.
+es_tidy <- function(model, ref = ES_REF) {
+  df <- tidy(model, conf.int = TRUE)
+  # fixest names i() terms as "rel_year_es::X:texas_treated"
+  df <- df[grepl("rel_year_es::", df$term), ]
+  df$year <- as.integer(gsub("rel_year_es::([-0-9]+):texas_treated",
+                              "\\1", df$term))
+  # Add the omitted reference row
+  ref_row <- data.frame(
+    term     = paste0("ref_", ref),
+    estimate = 0, std.error = 0,
+    conf.low = 0, conf.high = 0,
+    year     = ref,
+    stringsAsFactors = FALSE
+  )
+  df <- rbind(df[, c("term","estimate","std.error","conf.low","conf.high","year")],
+              ref_row)
+  df[order(df$year), ]
+}
+
+# Base ggplot theme for event studies — journal-clean
+es_theme <- function() {
+  theme_classic(base_size = 11, base_family = "Times") +
+  theme(
+    axis.line        = element_line(colour = "black", linewidth = 0.4),
+    axis.ticks       = element_line(colour = "black", linewidth = 0.3),
+    axis.text        = element_text(colour = "black"),
+    panel.grid       = element_blank(),
+    legend.position  = "none",
+    plot.title       = element_blank(),
+    plot.margin      = margin(8, 10, 8, 8)
+  )
+}
+
+# Build one event-study ggplot.
+# ref_label: text to annotate the omitted year bracket on the x-axis.
+es_ggplot <- function(model, point_col, fill_col = NULL,
+                      label = NULL, ylim = ES_YLIM, ref = ES_REF) {
+
+  if (is.null(fill_col)) fill_col <- adjustcolor(point_col, alpha.f = 0.15)
+
+  df      <- es_tidy(model, ref = ref)
+  ref_row <- df[df$year == ref, ]
+  est_row <- df[df$year != ref, ]
+
+  p <- ggplot(df, aes(x = year, y = estimate)) +
+    # CI ribbon (exclude the zero reference row from ribbon)
+geom_errorbar(data = est_row,
+              aes(ymin = conf.low, ymax = conf.high),
+              colour = point_col, width = 0.25, linewidth = 0.45) +
+                  # Zero reference line
+    geom_hline(yintercept = 0, colour = "grey60", linewidth = 0.5) +
+    # Reform onset dashed line
+    geom_vline(xintercept = 0, linetype = "dashed",
+               colour = "grey40", linewidth = 0.5) +
+    # Connected point estimates
+    # geom_line(data = est_row, colour = point_col, linewidth = 0.55) +
+    geom_point(data = est_row, colour = point_col, size = 1.8) +
+    # Omitted reference point (open circle at zero)
+    geom_point(data = ref_row, shape = 1, size = 2.2,
+               colour = "grey40") +
+    # Bracket annotation for omitted year
+    annotate("text", x = ref, y = ylim[1] * 0.82,
+             label = sprintf("(%d)\nomitted", ref),
+             size = 2.8, colour = "grey35", fontface = "italic",
+             lineheight = 0.85) +
+    # Optional sample label
+    { if (!is.null(label))
+        annotate("text", x = -Inf, y = Inf, label = label,
+                 hjust = -0.08, vjust = 1.4, size = 3,
+                 colour = "grey25", fontface = "plain")
+      else list() } +
+    scale_x_continuous(breaks = sort(unique(df$year[df$year != ref]))) +
+    scale_y_continuous(limits = ylim) +
+    labs(x = "Years Relative to 1999 (2 Years Before as Reference)",
+         y = "Effect on Annual Closure Probability") +
+    es_theme()
+
+  p
+}
+
+# Save as both PDF and PNG
+save_gg <- function(p, filename, width = 7, height = 5) {
+  ggsave(file.path(OUTPUT_FIGURES, paste0(filename, ".pdf")),
+         plot = p, width = width, height = height, device = cairo_pdf)
+  ggsave(file.path(OUTPUT_FIGURES, paste0(filename, ".png")),
+         plot = p, width = width, height = height, dpi = 300)
+  invisible(p)
+}
+
+# --- Figure 1: Pooled matched ---
+p1 <- es_ggplot(m_es_matched,   point_col = "grey25",
+                label = "Pooled (matched sample)")
+save_gg(p1, "F1_es_pooled_matched")
+
+# --- Figure 2: Pooled cell x year FE ---
+p2 <- es_ggplot(m_es_cell,      point_col = "grey25",
+                label = "Pooled (matched + type \u00d7 year FE)")
+save_gg(p2, "F2_es_pooled_cell_fe")
+
+# --- Figure 3: Below median age ---
+p3 <- es_ggplot(m_es_below_med, point_col = "#2166ac",
+                label = sprintf("Below Median Age (< %.0f yr)", med_age))
+save_gg(p3, "F3_es_below_median")
+
+# --- Figure 4: Above median age ---
+p4 <- es_ggplot(m_es_above_med, point_col = "#d6604d",
+                label = sprintf("Above Median Age (\u2265 %.0f yr)", med_age))
+save_gg(p4, "F4_es_above_median")
+
+cat("Saved: Output/Figures/F1-F4 (PDF + PNG)\n")
+
+#### end or pretty &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+library(HonestDiD)
+
+# ---- Extract only the event-study coefficients (drop deadline_sw) ----
+b_full <- coef(m_es_matched)
+V_full <- vcov(m_es_matched, type = "clustered")
+
+es_idx <- grepl("rel_year_es", names(b_full))
+b <- b_full[es_idx]
+V <- V_full[es_idx, es_idx]
+
+cat("ES coefficients:\n")
+print(names(b))
+
+# Pre: -5, -4, -3, -1  (ref = -2 is omitted; -1 is pre-reform)
+# Post: 0 through 10
+n_pre  <- 4L
+n_post <- 11L
+stopifnot(n_pre + n_post == length(b))
+
+# ---- Max observed pre-trend slope ----
+rel_years <- as.integer(regmatches(names(b), regexpr("-?[0-9]+", names(b))))
+pre_coefs <- sort_by(b[rel_years < 0], rel_years[rel_years < 0])
+max_pre_slope <- max(abs(diff(pre_coefs)))
+cat("Max pre-trend slope:", round(max_pre_slope, 5), "\n")
+
+# ---- Sensitivity ----
+sensitivity <- createSensitivityResults(
+  betahat        = b,
+  sigma          = V,
+  numPrePeriods  = n_pre,
+  numPostPeriods = n_post,
+  alpha          = 0.05
+)
+breakdown_M <- sensitivity$M[which(sign(sensitivity$lb) != sign(sensitivity$ub))[1]]
+cat("Breakdown M:", round(breakdown_M, 5), "\n")
+
+p_rr <- ggplot(sensitivity, aes(x = M)) +
+  geom_ribbon(aes(ymin = lb, ymax = ub), fill = COL_TX, alpha = 0.20) +
+  geom_line(aes(y = lb), color = COL_TX, linewidth = 0.7) +
+  geom_line(aes(y = ub), color = COL_TX, linewidth = 0.7) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40", linewidth = 0.4) +
+  # Shade the breakdown region
+  geom_vline(xintercept = breakdown_M, linetype = "dotted", color = "grey30", linewidth = 0.5) +
+  geom_vline(xintercept = max_pre_slope, linetype = "dashed", color = "steelblue", linewidth = 0.5) +
+  annotate("text", x = breakdown_M * 1.03, y = 0.002,
+           label = sprintf("Breakdown\nM = %.4f", breakdown_M),
+           hjust = 0, size = 2.8, color = "grey30") +
+  annotate("text", x = max_pre_slope * 1.03, y = max(sensitivity$ub) * 0.92,
+           label = sprintf("Max observed\npre-trend slope\n= %.4f", max_pre_slope),
+           hjust = 0, size = 2.8, color = "steelblue") +
+  scale_x_continuous(name = "M: Max Slope of Parallel Trends Violation (pp/year)",
+                     labels = scales::number_format(accuracy = 0.001)) +
+  scale_y_continuous(name = "Robust 95% CI for ATT",
+                     labels = scales::number_format(accuracy = 0.001)) +
+  theme_pub()
+
+  
+save_gg(p_rr, "Figure_RR_Sensitivity")
+
+#### end or pretty &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+
+### whos respoinding to teh mandate 
+
+# ============================================================
+# DIAGNOSTIC: What drives the 1997-1998 closure spike?
+# Is it vintage-specific? State-specific? State×vintage?
+# ============================================================
+
+# Use the full matched sample, pre-reform years only
+pre_data <- matched_tanks[panel_year %between% c(1990L, 1999L)]
+
+# ---- 1. Closure rate by vintage × year × treatment ----
+vintage_yr <- pre_data[, .(
+  closure_rate = mean(closure_event, na.rm = TRUE),
+  n_closures = sum(closure_event),
+  N = .N
+), by = .(mm_install_cohort, panel_year, texas_treated)]
+
+# Wide format for TX vs control comparison
+vintage_wide <- dcast(vintage_yr, 
+                      mm_install_cohort + panel_year ~ texas_treated,
+                      value.var = c("closure_rate", "n_closures", "N"))
+setnames(vintage_wide, 
+         c("cohort", "year", "rate_CTL", "rate_TX", 
+           "closures_CTL", "closures_TX", "N_CTL", "N_TX"))
+vintage_wide[, gap := rate_TX - rate_CTL]
+
+cat("Closure rates by vintage × year (sorted by largest gaps):\n")
+print(vintage_wide[order(-abs(gap))][1:30])
+
+# ---- 2. Heatmap: closure rate by vintage × year (control only) ----
+ctrl_vintage <- pre_data[texas_treated == 0, .(
+  closure_rate = mean(closure_event, na.rm = TRUE),
+  n_closures = sum(closure_event),
+  N = .N
+), by = .(mm_install_cohort, panel_year)]
+
+p_heat_ctrl <- ggplot(ctrl_vintage, 
+       aes(x = panel_year, y = factor(mm_install_cohort), 
+           fill = closure_rate)) +
+  geom_tile(color = "white", linewidth = 0.3) +
+  geom_text(aes(label = ifelse(n_closures > 0, n_closures, "")), 
+            size = 2.5, color = "grey20") +
+  scale_fill_gradient(low = "white", high = COL_TX, 
+                      labels = scales::percent_format()) +
+  labs(x = "Calendar Year", y = "Install Cohort",
+       fill = "Closure\nRate",
+       title = "Control states: closure rate by vintage × year") +
+  theme_pub() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p_heat_ctrl)
+ggsave(file.path(OUTPUT_FIGURES, "Diag_Vintage_Year_Heatmap_Control.png"),
+       p_heat_ctrl, width = 10, height = 6, dpi = 300, bg = "white")
+
+# ---- 3. Same for TX ----
+tx_vintage <- pre_data[texas_treated == 1, .(
+  closure_rate = mean(closure_event, na.rm = TRUE),
+  n_closures = sum(closure_event),
+  N = .N
+), by = .(mm_install_cohort, panel_year)]
+
+p_heat_tx <- ggplot(tx_vintage, 
+       aes(x = panel_year, y = factor(mm_install_cohort), 
+           fill = closure_rate)) +
+  geom_tile(color = "white", linewidth = 0.3) +
+  geom_text(aes(label = ifelse(n_closures > 0, n_closures, "")), 
+            size = 2.5, color = "grey20") +
+  scale_fill_gradient(low = "white", high = COL_CTRL,
+                      labels = scales::percent_format()) +
+  labs(x = "Calendar Year", y = "Install Cohort",
+       fill = "Closure\nRate",
+       title = "Texas: closure rate by vintage × year") +
+  theme_pub() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p_heat_tx)
+ggsave(file.path(OUTPUT_FIGURES, "Diag_Vintage_Year_Heatmap_TX.png"),
+       p_heat_tx, width = 10, height = 6, dpi = 300, bg = "white")
+
+# ---- 4. State-level: which control states spike in 1997-1998? ----
+state_spike <- pre_data[texas_treated == 0 & panel_year %between% c(1995L, 1999L), .(
+  closure_rate = mean(closure_event, na.rm = TRUE),
+  n_closures = sum(closure_event),
+  N = .N
+), by = .(state, panel_year)]
+
+state_spike_wide <- dcast(state_spike, state ~ panel_year, 
+                          value.var = "closure_rate")
+state_spike_wide[, spike_97 := `1997` - `1996`]
+state_spike_wide[, spike_98 := `1998` - `1996`]
+
+cat("\nControl state closure rates 1995-1999:\n")
+print(state_spike_wide[order(-spike_98)])
+
+# ---- 5. State × vintage: is the spike concentrated? ----
+state_vintage_spike <- pre_data[
+  texas_treated == 0 & panel_year %between% c(1996L, 1999L), .(
+  closure_rate = mean(closure_event, na.rm = TRUE),
+  n_closures = sum(closure_event),
+  N = .N
+), by = .(state, mm_install_cohort, panel_year)]
+
+# Biggest spikes
+state_vintage_98 <- state_vintage_spike[panel_year == 1998]
+state_vintage_97 <- state_vintage_spike[panel_year == 1997]
+state_vintage_96 <- state_vintage_spike[panel_year == 1996]
+
+spike_compare <- merge(
+  state_vintage_96[, .(state, mm_install_cohort, rate_96 = closure_rate)],
+  state_vintage_98[, .(state, mm_install_cohort, rate_98 = closure_rate, 
+                        N_98 = N, closures_98 = n_closures)],
+  by = c("state", "mm_install_cohort"), all = TRUE
+)
+spike_compare[, spike := rate_98 - rate_96]
+
+cat("\nLargest state × vintage spikes (1998 vs 1996):\n")
+print(spike_compare[order(-spike)][1:20])
+
+# ---- 6. Summary: which vintages drive the 1997-1998 spike? ----
+cat("\nClosure rate by vintage, 1996 vs 1997 vs 1998 (control only):\n")
+print(dcast(ctrl_vintage[panel_year %between% c(1996L, 1999L)],
+            mm_install_cohort ~ panel_year, value.var = "closure_rate"))
+
+
+#######################################################!!!!
+
+
+
+
+
+
+
+
+
+
+# ---- Event study figures ----
+# p_es_tank <- plot_es(m_es_tank,  # uses your plot_es helper if available
+#                      ylab = "Effect on Annual Tank Closure Probability",
+#                      filename = file.path(OUTPUT_FIGURES,
+#                                           "Figure_ES_TankLevel_CellxYear.png"))
+ 
+iplot(m_es_tank,
+      main = "Tank-level: tank_id + cell×year FE, ref=-2",
+      xlab = "Years Relative to Reform",
+      ylab = "Treatment Effect on Closure Probability",
+      col = COL_TX, pt.join = TRUE, ci.lwd = 1.5,
+      ylim = c(-0.02, 0.02))
+ 
+iplot(m_es_fac,
+      main = "Facility-level (from tank data): fac_id + year FE, ref=-2",
+      xlab = "Years Relative to Reform",
+      ylab = "Treatment Effect on Closure Probability",
+      col = COL_TX, pt.join = TRUE, ci.lwd = 1.5,
+      ylim = c(-0.02, 0.06))
+ 
+ 
+#### S6: Cox Proportional Hazard (Calendar Time) ####
+ 
+cat("\n========================================\n")
+cat("S6: COX MODEL (CALENDAR TIME)\n")
+cat("========================================\n\n")
+ 
+# ---- Build Cox dataset for analysis sample ----
+cox_facs <- exact_split_df[
+  panel_id %in% sw_exposed_facs &
+  mm_install_cohort >= 1990L & mm_install_cohort <= 1998L
+]
+ 
+cat(sprintf("Cox sample: %s rows, %s tanks, %s events\n",
+    fmt_n(nrow(cox_facs)),
+    fmt_n(uniqueN(cox_facs$tank_panel_id)),
+    fmt_n(sum(cox_facs$failure))))
+ 
+# ---- Primary Cox: pooled post-reform effect ----
+m_cox_pooled <- coxph(
+  Surv(t_enter, t_exit, failure) ~ did_term + strata(make_model_tank),
+  data = cox_facs,
+  cluster = state
+)
+cat("\nPooled Cox (calendar time):\n")
+summary(m_cox_pooled)
+ 
+# ---- Cox: short-run / long-run split ----
+# Second survSplit at 2005-01-01 to properly split person-time
+cox_facs2 <- survSplit(
+  formula = Surv(t_enter, t_exit, failure) ~ .,
+  data = as.data.frame(cox_facs),
+  cut = as.numeric(as.Date("2005-01-01")),
+  episode = "period_ep"
+)
+setDT(cox_facs2)
+cox_facs2 <- cox_facs2[t_exit > t_enter]
+ 
+cox_facs2[, `:=`(
+  did_short = texas_treated * as.integer(reform_ep == 2L & period_ep == 1L),
+  did_long  = texas_treated * as.integer(reform_ep == 2L & period_ep == 2L)
+)]
+ 
+m_cox_split <- coxph(
+  Surv(t_enter, t_exit, failure) ~ did_short + did_long + strata(make_model_tank),
+  data = cox_facs2,
+  cluster = state
+)
+cat("\nSplit Cox (calendar time):\n")
+summary(m_cox_split)
+ 
+ 
+#### S7: Cox Proportional Hazard (Age/Duration Scale) ####
+ 
+cat("\n========================================\n")
+cat("S7: COX MODEL (AGE SCALE)\n")
+cat("========================================\n\n")
+ 
+# Age scale: time axis = years since tank installation
+# The reform indicator still comes from survSplit at the reform date
+# but the baseline hazard is now a function of tank age, not calendar time
+ 
+m_cox_age_pooled <- coxph(
+  Surv(age_enter, age_exit, failure) ~ did_term + strata(make_model_tank),
+  data = cox_facs,
+  cluster = state
+)
+cat("Pooled Cox (age scale):\n")
+summary(m_cox_age_pooled)
+ 
+# Split on age scale (using calendar-time split data)
+m_cox_age_split <- coxph(
+  Surv(age_enter, age_exit, failure) ~ did_short + did_long + strata(make_model_tank),
+  data = cox_facs2,
+  cluster = state
+)
+cat("\nSplit Cox (age scale):\n")
+summary(m_cox_age_split)
+ 
+ 
+#### S8: HTE by Install Cohort ####
+ 
+cat("\n========================================\n")
+cat("S8: HTE BY INSTALL COHORT\n")
+cat("========================================\n\n")
+ 
+# ---- OLS: Short/long × old/young ----
+analysis_tanks[, `:=`(
+  did_short_old   = did_short * old_cohort,
+  did_short_young = did_short * (1L - old_cohort),
+  did_long_old    = did_long  * old_cohort,
+  did_long_young  = did_long  * (1L - old_cohort)
+)]
+ 
+m_hte_ols <- feols(
+  closure_event ~ did_short_old + did_short_young +
+                  did_long_old + did_long_young |
+    tank_panel_id + panel_year^make_model_tank,
+  data = analysis_tanks, cluster = ~state
+)
+ 
+cat("OLS HTE by cohort:\n")
+etable(m_hte_ols, digits = 4, se.below = TRUE)
+ 
+# ---- Cox: Short/long × old/young ----
+cox_facs2[, old_cohort := as.integer(mm_install_cohort <= 1993L)]
+cox_facs2[, `:=`(
+  did_short_old   = did_short * old_cohort,
+  did_short_young = did_short * (1L - old_cohort),
+  did_long_old    = did_long  * old_cohort,
+  did_long_young  = did_long  * (1L - old_cohort)
+)]
+ 
+m_hte_cox <- coxph(
+  Surv(t_enter, t_exit, failure) ~ did_short_old + did_short_young +
+    did_long_old + did_long_young + strata(make_model_tank),
+  data = cox_facs2,
+  cluster = state
+)
+cat("\nCox HTE by cohort:\n")
+summary(m_hte_cox)
+ 
+ 
+#### S9: Placebo Tests ####
+ 
+cat("\n========================================\n")
+cat("S9: PLACEBO TESTS\n")
+cat("========================================\n\n")
+ 
+# Run event studies on control states as pseudo-treated
+# to verify that the FE structure doesn't produce spurious effects
+placebo_states <- c("OH", "CO", "NC", "MO")
+ 
+for (st in placebo_states) {
+  analysis_tanks[texas_treated == 0,
+                 placebo_treat := as.integer(state == st)]
+ 
+  m_plac <- feols(
+    closure_event ~ i(rel_year_es, placebo_treat, ref = -2) |
+      tank_panel_id + panel_year^make_model_tank,
+    data = analysis_tanks[texas_treated == 0],
+    cluster = ~state
+  )
+ 
+  iplot(m_plac,
+        main = paste("Placebo:", st, "— tank_id + cell×year FE, ref=-2"),
+        xlab = "Years Relative to Reform",
+        ylab = "Placebo Treatment Effect",
+        col = "black", pt.join = TRUE, ci.lwd = 1.5,
+        ylim = c(-0.02, 0.02))
+ 
+  cat(sprintf("\nPlacebo %s: pooled coef = %.4f (p = %.3f)\n",
+      st,
+      coef(feols(closure_event ~ placebo_treat * as.integer(panel_year >= 1999L) |
+                   tank_panel_id + panel_year^make_model_tank,
+                 data = analysis_tanks[texas_treated == 0], cluster = ~state))[1],
+      NA))  # p-value extraction left for manual inspection
+ 
+  analysis_tanks[, placebo_treat := NULL]
+}
+ 
+ 
+#### S10: Presentation Summary ####
+ 
+cat("\n========================================\n")
+cat("S10: PRESENTATION SUMMARY\n")
+cat("========================================\n\n")
+ 
+cat("============================================================\n")
+cat("HEADLINE RESULTS: Tank-Level Closure\n")
+cat("============================================================\n\n")
+ 
+cat(sprintf("Sample: %s tank-years at %s SW-exposed facilities\n",
+    fmt_n(nrow(analysis_tanks)),
+    fmt_n(uniqueN(analysis_tanks$panel_id))))
+cat(sprintf("        TX: %s tanks | CTL: %s tanks\n",
+    fmt_n(analysis_tanks[texas_treated == 1, uniqueN(tank_panel_id)]),
+    fmt_n(analysis_tanks[texas_treated == 0, uniqueN(tank_panel_id)])))
+ 
+cat(sprintf("\nControl means:\n"))
+cat(sprintf("  Pre-reform:    %.1f per 1,000 tank-years\n", pre_ctrl_mean * 1000))
+cat(sprintf("  Post (short):  %.1f per 1,000 tank-years\n", post_ctrl_short * 1000))
+cat(sprintf("  Post (long):   %.1f per 1,000 tank-years\n", post_ctrl_long * 1000))
+ 
+cat(sprintf("\nOLS LPM (tank_id + cell×year FE, clustered by state):\n"))
+cat(sprintf("  Pooled:    %.4f (SE=%.4f)\n", coef(m_t2), se(m_t2)))
+cat(sprintf("  Short-run: %.4f (SE=%.4f) *\n", coef(m_t3)["did_short"], se(m_t3)["did_short"]))
+cat(sprintf("  Long-run:  %.4f (SE=%.4f)\n", coef(m_t3)["did_long"], se(m_t3)["did_long"]))
+ 
+cox_s <- summary(m_cox_split)$coefficients
+cat(sprintf("\nCox PH (strata(make_model_tank), calendar time, clustered):\n"))
+cat(sprintf("  Pooled:    HR=%.3f (robust SE=%.3f, p=%.3f)\n",
+    summary(m_cox_pooled)$coefficients[1, "exp(coef)"],
+    summary(m_cox_pooled)$coefficients[1, "robust se"],
+    summary(m_cox_pooled)$coefficients[1, "Pr(>|z|)"]))
+cat(sprintf("  Short-run: HR=%.3f (robust SE=%.3f, p=%.3f) *\n",
+    cox_s["did_short", "exp(coef)"],
+    cox_s["did_short", "robust se"],
+    cox_s["did_short", "Pr(>|z|)"]))
+cat(sprintf("  Long-run:  HR=%.3f (robust SE=%.3f, p=%.3f)\n",
+    cox_s["did_long", "exp(coef)"],
+    cox_s["did_long", "robust se"],
+    cox_s["did_long", "Pr(>|z|)"]))
+ 
+cat(sprintf("\nShort-run proportional effect: %.4f / %.4f = %.0f%% of control mean\n",
+    coef(m_t3)["did_short"], post_ctrl_short,
+    coef(m_t3)["did_short"] / post_ctrl_short * 100))
+
+
+cat("========================================\n")
+cat("S9: PRIMARY COX MODELS\n")
+cat("========================================\n\n")
+ 
+# ── panel_dt: full analysis panel ─────────────────────────────────────────────
+panel_dt <- mm_tank_primary[!is.na(age_bin) & tstop > tstart & !is.na(did_term)]
+ 
+log_step(sprintf("panel_dt (full): %s tank-years, %s unique tanks",
+                 fmt_n(nrow(panel_dt)), fmt_n(uniqueN(panel_dt$tank_panel_id))))
+log_step(sprintf("  Post-mandate (1990-1997): %s tank-years, %s tanks",
+  fmt_n(panel_dt[is_post_mandate == 1L, .N]),
+  fmt_n(panel_dt[is_post_mandate == 1L, uniqueN(tank_panel_id)])), 1)
+log_step(sprintf("  Pre-mandate  (1985-1989): %s tank-years, %s tanks",
+  fmt_n(panel_dt[is_pre_mandate == 1L, .N]),
+  fmt_n(panel_dt[is_pre_mandate == 1L, uniqueN(tank_panel_id)])), 1)
+ 
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════════
+# S9-COARSEN: Progressive Cell Coarsening Diagnostic
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# PURPOSE: Test whether the SW pre-trend in the Cox event study is driven by
+# overly granular cell stratification.  If the pre-trend shrinks as cells get
+# coarser, the 4-dim cells are too fine for the data to support clean within-
+# cell identification for single-walled tanks.
+#
+# The binned scatter (S8) shows clean parallel pre-trends at the aggregate
+# level.  If the pre-trend only appears when conditioning on fine cells, it
+# is likely noise amplified by thin TX-vs-control overlap in small cells,
+# not a real differential trend in tank closure behavior.
+#
+# Strata tested (from finest to coarsest):
+#   5-dim : wall × fuel × capacity × cohort   (= make_model_tank, the primary)
+#   3-dim : wall × fuel × cohort              (drop capacity)
+#   2-dim : wall × cohort                     (drop capacity + fuel)
+#   1-dim : wall only                         (all SW tanks in one stratum)
+#   none  : no stratification, year dummies only (≈ facility-level)
+#
+# ══════════════════════════════════════════════════════════════════════════════
+ cat("\n── S9-COARSEN: Progressive Cell Coarsening & Fleet Diagnostic ──\n\n")
+
+# ---- Build coarsened cell variables on exact_split_df ----
+if (!"make_model_3dim" %in% names(exact_split_df))
+  exact_split_df[, make_model_3dim := paste(mm_wall, mm_fuel, mm_install_cohort, sep = "_")]
+
+exact_split_df[, make_model_2dim := paste(mm_wall, mm_install_cohort, sep = "_")]
+exact_split_df[, make_model_1dim := mm_wall]
+exact_split_df[, strata_none := "all"]
+
+log_step("Cell variables created on exact_split_df:")
+log_step(sprintf("  make_model_tank  (4-dim): %d unique",
+  exact_split_df[mm_wall == "Single-Walled", uniqueN(make_model_tank)]), 1)
+log_step(sprintf("  make_model_3dim  (3-dim): %d unique",
+  exact_split_df[mm_wall == "Single-Walled", uniqueN(make_model_3dim)]), 1)
+log_step(sprintf("  make_model_2dim  (2-dim): %d unique",
+  exact_split_df[mm_wall == "Single-Walled", uniqueN(make_model_2dim)]), 1)
+log_step(sprintf("  make_model_1dim  (1-dim): %d unique",
+  exact_split_df[mm_wall == "Single-Walled", uniqueN(make_model_1dim)]), 1)
+log_step(sprintf("  strata_none      (none) : 1"), 1)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PART 1: Cell overlap diagnostic (SW post-mandate)
+# ══════════════════════════════════════════════════════════════════════════════
+
+sw_cox_dt <- exact_split_df[mm_wall == "Single-Walled" & is_post_mandate == 1L]
+log_step(sprintf("\nSW post-mandate Cox sample: %s rows, %s tanks, %s events",
+  fmt_n(nrow(sw_cox_dt)),
+  fmt_n(uniqueN(sw_cox_dt$tank_panel_id)),
+  fmt_n(sum(sw_cox_dt$failure))))
+
+log_step("\nCell overlap (SW post-mandate, pre-reform years only):")
+sw_pre <- sw_cox_dt[reform_ep == 1L]
+
+for (cell_info in list(
+  list(var = "make_model_tank",  label = "4-dim (wall×fuel×cap×cohort)"),
+  list(var = "make_model_3dim",  label = "3-dim (wall×fuel×cohort)"),
+  list(var = "make_model_2dim",  label = "2-dim (wall×cohort)"),
+  list(var = "make_model_1dim",  label = "1-dim (wall only)")
+)) {
+  cell_ov <- sw_pre[, .(
+    n_tx  = sum(texas_treated == 1L),
+    n_ctl = sum(texas_treated == 0L)
+  ), by = eval(cell_info$var)]
+  n_cells    <- nrow(cell_ov)
+  n_both     <- cell_ov[n_tx > 0 & n_ctl > 0, .N]
+  n_tx_only  <- cell_ov[n_tx > 0 & n_ctl == 0, .N]
+  n_ctl_only <- cell_ov[n_tx == 0 & n_ctl > 0, .N]
+  pct_id     <- round(100 * n_both / n_cells, 1)
+  med_n      <- cell_ov[n_tx > 0 & n_ctl > 0, median(n_tx + n_ctl)]
+
+  log_step(sprintf("  %-35s %4d cells | %4d identified (%5.1f%%) | %4d TX-only | %4d CTL-only | median n = %s",
+    cell_info$label, n_cells, n_both, pct_id, n_tx_only, n_ctl_only,
+    ifelse(is.na(med_n), "—", fmt_n(med_n))), 1)
+}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PART 2: Facility fleet construction & closure correlation diagnostic
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Instead of isolating SW tanks from their facilities, we identify facilities
+# that have at least one SW tank (the "exposed" population) and take their
+# ENTIRE fleet — SW + DW tanks together.  This preserves the facility as the
+# decision unit and enables within-facility HTE (SW vs DW at the same facility).
+#
+# The closure correlation diagnostic checks whether owners close tanks
+# selectively (SW only, DW only, or both) vs. closing everything at once.
+# If closures are perfectly correlated, within-facility HTE has no power.
+
+cat("\n── Facility Fleet Construction ──\n\n")
+
+# Identify facilities with at least one post-mandate SW tank
+sw_facility_ids <- exact_split_df[
+  mm_wall == "Single-Walled" & is_post_mandate == 1L,
+  unique(panel_id)
+]
+log_step(sprintf("Facilities with post-mandate SW tanks: %s", fmt_n(length(sw_facility_ids))))
+
+# Take ALL post-mandate tanks at those facilities (SW + DW)
+sw_facility_fleet <- exact_split_df[
+  panel_id %in% sw_facility_ids &
+  is_post_mandate == 1L
+]
+
+n_fleet_sw <- sw_facility_fleet[mm_wall == "Single-Walled", uniqueN(tank_panel_id)]
+n_fleet_dw <- sw_facility_fleet[mm_wall == "Double-Walled", uniqueN(tank_panel_id)]
+n_fleet_ot <- sw_facility_fleet[!mm_wall %in% c("Single-Walled", "Double-Walled"), uniqueN(tank_panel_id)]
+
+log_step(sprintf("Fleet sample: %s rows, %s tanks (%s SW + %s DW + %s other), %s facilities",
+  fmt_n(nrow(sw_facility_fleet)),
+  fmt_n(uniqueN(sw_facility_fleet$tank_panel_id)),
+  fmt_n(n_fleet_sw), fmt_n(n_fleet_dw), fmt_n(n_fleet_ot),
+  fmt_n(uniqueN(sw_facility_fleet$panel_id))))
+log_step(sprintf("  Events: %s total (%s SW, %s DW)",
+  fmt_n(sum(sw_facility_fleet$failure)),
+  fmt_n(sw_facility_fleet[mm_wall == "Single-Walled", sum(failure)]),
+  fmt_n(sw_facility_fleet[mm_wall == "Double-Walled", sum(failure)])), 1)
+
+# ---- Closure correlation diagnostic ----
+cat("\n── Closure Correlation Diagnostic ──\n\n")
+log_step("Among facilities with any post-reform closure, how are closures distributed?")
+
+fac_closure_pattern <- sw_facility_fleet[, .(
+  n_tanks      = uniqueN(tank_panel_id),
+  n_sw         = uniqueN(tank_panel_id[mm_wall == "Single-Walled"]),
+  n_dw         = uniqueN(tank_panel_id[mm_wall == "Double-Walled"]),
+  n_closed     = uniqueN(tank_panel_id[failure == 1L]),
+  n_closed_sw  = uniqueN(tank_panel_id[failure == 1L & mm_wall == "Single-Walled"]),
+  n_closed_dw  = uniqueN(tank_panel_id[failure == 1L & mm_wall == "Double-Walled"]),
+  any_closed   = as.integer(any(failure == 1L)),
+  has_both_types = as.integer(
+    any(mm_wall == "Single-Walled") & any(mm_wall == "Double-Walled"))
+), by = panel_id]
+
+# Overall closure patterns (all facilities with closures)
+all_closers <- fac_closure_pattern[any_closed == 1L]
+log_step(sprintf("\n  Facilities with any closure: %s / %s (%.1f%%)",
+  fmt_n(nrow(all_closers)),
+  fmt_n(nrow(fac_closure_pattern)),
+  100 * nrow(all_closers) / nrow(fac_closure_pattern)))
+
+if (nrow(all_closers) > 0) {
+  log_step(sprintf("  Close ALL tanks:  %s (%.1f%%)",
+    fmt_n(all_closers[n_closed == n_tanks, .N]),
+    100 * all_closers[n_closed == n_tanks, .N] / nrow(all_closers)), 1)
+  log_step(sprintf("  Close SOME tanks: %s (%.1f%%)",
+    fmt_n(all_closers[n_closed < n_tanks, .N]),
+    100 * all_closers[n_closed < n_tanks, .N] / nrow(all_closers)), 1)
+}
+
+# Among mixed-type facilities (have both SW + DW): the key HTE population
+mixed_closers <- fac_closure_pattern[has_both_types == 1L & any_closed == 1L]
+log_step(sprintf("\n  Mixed-type facilities (SW + DW) with closures: %s",
+  fmt_n(nrow(mixed_closers))))
+
+if (nrow(mixed_closers) > 0) {
+  log_step(sprintf("  Close ALL tanks:     %s (%.1f%%)",
+    fmt_n(mixed_closers[n_closed == n_tanks, .N]),
+    100 * mixed_closers[n_closed == n_tanks, .N] / nrow(mixed_closers)), 1)
+  log_step(sprintf("  Close SOME tanks:    %s (%.1f%%)",
+    fmt_n(mixed_closers[n_closed < n_tanks, .N]),
+    100 * mixed_closers[n_closed < n_tanks, .N] / nrow(mixed_closers)), 1)
+  log_step(sprintf("  Close SW only:       %s (%.1f%%)",
+    fmt_n(mixed_closers[n_closed_sw > 0 & n_closed_dw == 0, .N]),
+    100 * mixed_closers[n_closed_sw > 0 & n_closed_dw == 0, .N] / nrow(mixed_closers)), 1)
+  log_step(sprintf("  Close DW only:       %s (%.1f%%)",
+    fmt_n(mixed_closers[n_closed_sw == 0 & n_closed_dw > 0, .N]),
+    100 * mixed_closers[n_closed_sw == 0 & n_closed_dw > 0, .N] / nrow(mixed_closers)), 1)
+  log_step(sprintf("  Close both types:    %s (%.1f%%)",
+    fmt_n(mixed_closers[n_closed_sw > 0 & n_closed_dw > 0, .N]),
+    100 * mixed_closers[n_closed_sw > 0 & n_closed_dw > 0, .N] / nrow(mixed_closers)), 1)
+}
+
+# Interpretation
+cat("\n")
+pct_all <- all_closers[n_closed == n_tanks, .N] / nrow(all_closers)
+if (pct_all > 0.70) {
+  log_step("DIAGNOSIS: >70% of closers shut down all tanks simultaneously.")
+  log_step("  → Within-facility HTE (SW vs DW) has limited identifying variation.")
+  log_step("  → Facility-level spec is the appropriate primary model.", 1)
+} else if (nrow(mixed_closers) > 0 &&
+           mixed_closers[n_closed_sw > 0 & n_closed_dw == 0, .N] / nrow(mixed_closers) > 0.30) {
+  log_step("DIAGNOSIS: >30% of mixed facilities close SW only (not DW).")
+  log_step("  → Selective within-facility closure decisions exist.")
+  log_step("  → Within-facility HTE is well-identified.", 1)
+} else {
+  log_step("DIAGNOSIS: Mixed closure patterns. Within-facility HTE has some power.")
+  log_step("  → Report both facility-level and fleet-level HTE results.", 1)
+}
+
+# Save diagnostic
+fwrite(fac_closure_pattern,
+       file.path(OUTPUT_TABLES, "Diag_FleetClosurePattern.csv"))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PART 3: Cox DiD at each granularity × sample
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Three samples:
+#   (a) SW post-mandate only (isolated SW tanks, clean but less power)
+#   (b) SW all cohorts (includes mandate-contaminated, more power)
+#   (c) Fleet: all tanks at SW-facilities, post-mandate (preserves facility unit)
+#
+# Five stratification levels each.
+
+cat("\n── Cox DiD: Granularity × Sample ──\n\n")
+
+sw_samples <- list(
+  list(dt = exact_split_df[mm_wall == "Single-Walled" & is_post_mandate == 1L],
+       label_prefix = "SW PostMandate",
+       tag = "sw_postmandate"),
+  list(dt = exact_split_df[mm_wall == "Single-Walled"],
+       label_prefix = "SW All Cohorts",
+       tag = "sw_allcohort"),
+  list(dt = sw_facility_fleet,
+       label_prefix = "Fleet (SW-facilities)",
+       tag = "fleet")
+)
+
+coarsen_specs <- list(
+  list(strata_var = "make_model_tank",  label = "4-dim"),
+  list(strata_var = "make_model_3dim",  label = "3-dim"),
+  list(strata_var = "make_model_2dim",  label = "2-dim"),
+  list(strata_var = "make_model_1dim",  label = "1-dim"),
+  list(strata_var = "strata_none",      label = "None")
+)
+
+coarsen_results <- list()
+
+for (samp in sw_samples) {
+
+  cat(sprintf("\n── %s: %s rows, %s tanks, %s events ──\n",
+    samp$label_prefix,
+    fmt_n(nrow(samp$dt)),
+    fmt_n(uniqueN(samp$dt$tank_panel_id)),
+    fmt_n(sum(samp$dt$failure))))
+
+  for (spec in coarsen_specs) {
+
+    result_key <- paste0(samp$tag, "_", spec$label)
+
+    m <- tryCatch({
+      if (spec$strata_var == "strata_none") {
+        coxph(
+          Surv(t_enter, t_exit, failure) ~ did_term + year_fac + strata(strata_none),
+          data = samp$dt, cluster = samp$dt$state, ties = "efron")
+      } else {
+        coxph(
+          as.formula(paste("Surv(t_enter, t_exit, failure) ~ did_term + strata(",
+                            spec$strata_var, ")")),
+          data = samp$dt, cluster = samp$dt$state, ties = "efron")
+      }
+    }, error = function(e) { log_step(sprintf("  %-25s FAILED: %s", spec$label, e$message), 1); NULL })
+
+    if (!is.null(m)) {
+      r <- extract_cox_row(m)
+      coarsen_results[[result_key]] <- list(
+        label = result_key, strata_var = spec$strata_var,
+        sample = samp$label_prefix, model = m, row = r)
+      log_step(sprintf("  %-12s HR = %.3f  log-HR = %+.4f  SE = %.4f  p = %.4f",
+        spec$label, r$hr, r$coef, r$se, r$p), 1)
+    }
+  }
+}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PART 4: Fleet HTE — SW vs DW within SW-facilities
+# ══════════════════════════════════════════════════════════════════════════════
+
+cat("\n── Fleet HTE: SW vs DW at SW-Facilities (2-dim strata) ──\n\n")
+
+sw_facility_fleet[, `:=`(
+  is_sw       = as.integer(mm_wall == "Single-Walled"),
+  did_term_sw = did_term * as.integer(mm_wall == "Single-Walled"),
+  did_term_dw = did_term * as.integer(mm_wall == "Double-Walled")
+)]
+
+# Pooled: overall reform effect on tank closure at SW-facilities
+m_fleet_pooled <- coxph(
+  Surv(t_enter, t_exit, failure) ~ did_term + strata(make_model_2dim),
+  data    = sw_facility_fleet,
+  cluster = sw_facility_fleet$state,
+  ties    = "efron"
+)
+r_fleet_pooled <- extract_cox_row(m_fleet_pooled)
+log_step(sprintf("Fleet pooled (2-dim):  HR = %.3f  log-HR = %+.4f  SE = %.4f  p = %.4f  N = %s",
+  r_fleet_pooled$hr, r_fleet_pooled$coef, r_fleet_pooled$se, r_fleet_pooled$p,
+  fmt_n(r_fleet_pooled$n)), 1)
+
+# HTE: separate SW vs DW treatment effects within the same facilities
+m_fleet_hte <- coxph(
+  Surv(t_enter, t_exit, failure) ~ did_term_sw + did_term_dw + strata(make_model_2dim),
+  data    = sw_facility_fleet,
+  cluster = sw_facility_fleet$state,
+  ties    = "efron"
+)
+
+fleet_hte_s <- summary(m_fleet_hte)$coefficients
+se_col <- intersect(c("robust se", "se(coef)"), colnames(fleet_hte_s))[1]
+
+log_step(sprintf("Fleet HTE SW:  HR = %.3f  log-HR = %+.4f  SE = %.4f  p = %.4f",
+  exp(fleet_hte_s["did_term_sw", "coef"]),
+  fleet_hte_s["did_term_sw", "coef"],
+  fleet_hte_s["did_term_sw", se_col],
+  fleet_hte_s["did_term_sw", "Pr(>|z|)"]), 1)
+log_step(sprintf("Fleet HTE DW:  HR = %.3f  log-HR = %+.4f  SE = %.4f  p = %.4f",
+  exp(fleet_hte_s["did_term_dw", "coef"]),
+  fleet_hte_s["did_term_dw", "coef"],
+  fleet_hte_s["did_term_dw", se_col],
+  fleet_hte_s["did_term_dw", "Pr(>|z|)"]), 1)
+
+# Test: SW effect > DW effect?
+sw_coef <- fleet_hte_s["did_term_sw", "coef"]
+dw_coef <- fleet_hte_s["did_term_dw", "coef"]
+cat("\n")
+if (sw_coef > dw_coef) {
+  log_step(sprintf("SW log-HR (%+.4f) > DW log-HR (%+.4f): pricing gradient confirmed",
+    sw_coef, dw_coef))
+  log_step("  → SW tanks close faster than DW tanks at the SAME facilities post-reform", 1)
+} else {
+  log_step(sprintf("SW log-HR (%+.4f) <= DW log-HR (%+.4f): no pricing gradient",
+    sw_coef, dw_coef))
+  log_step("  → Reform effect is facility-level exit, not selective SW closure", 1)
+}
+
+# Wald test: H0: beta_SW = beta_DW
+hte_wald <- tryCatch({
+  linearHypothesis(m_fleet_hte, "did_term_sw = did_term_dw", test = "Chisq")
+}, error = function(e) NULL)
+
+if (!is.null(hte_wald)) {
+  wald_p <- hte_wald[2, "Pr(>Chisq)"]
+  log_step(sprintf("Wald test (SW = DW): chi2 = %.2f, p = %.4f  %s",
+    hte_wald[2, "Chisq"], wald_p,
+    ifelse(wald_p < 0.10, "→ reject equality (differential effect)",
+           "→ fail to reject (similar effect across wall types)")), 1)
+}
+
+# Clean up fleet HTE indicators
+sw_facility_fleet[, c("is_sw", "did_term_sw", "did_term_dw") := NULL]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PART 5: Summary table
+# ══════════════════════════════════════════════════════════════════════════════
+
+coarsen_summary <- rbindlist(lapply(coarsen_results, function(x) {
+  data.table(
+    Sample         = x$sample,
+    Stratification = gsub(".*_", "", x$label),
+    HR      = round(x$row$hr, 4),
+    log_HR  = round(x$row$coef, 5),
+    SE      = round(x$row$se, 5),
+    p       = round(x$row$p, 4),
+    N       = x$row$n,
+    Events  = x$row$ev
+  )
+}))
+
+cat("\n── Cell Coarsening × Sample Summary ──\n\n")
+print(coarsen_summary)
+
+fwrite(coarsen_summary, file.path(OUTPUT_TABLES, "Table_CellCoarsening_Full.csv"))
+
+# Fleet HTE summary
+fleet_hte_summary <- data.table(
+  Model = c("Fleet pooled (2-dim)", "Fleet HTE: SW", "Fleet HTE: DW"),
+  HR = round(c(r_fleet_pooled$hr,
+               exp(fleet_hte_s["did_term_sw", "coef"]),
+               exp(fleet_hte_s["did_term_dw", "coef"])), 4),
+  log_HR = round(c(r_fleet_pooled$coef,
+                    fleet_hte_s["did_term_sw", "coef"],
+                    fleet_hte_s["did_term_dw", "coef"]), 5),
+  SE = round(c(r_fleet_pooled$se,
+               fleet_hte_s["did_term_sw", se_col],
+               fleet_hte_s["did_term_dw", se_col]), 5),
+  p = round(c(r_fleet_pooled$p,
+              fleet_hte_s["did_term_sw", "Pr(>|z|)"],
+              fleet_hte_s["did_term_dw", "Pr(>|z|)"]), 4)
+)
+
+cat("\n── Fleet HTE Summary ──\n\n")
+print(fleet_hte_summary)
+
+fwrite(fleet_hte_summary, file.path(OUTPUT_TABLES, "Table_FleetHTE_Summary.csv"))
+log_step("\n  Coarsening & fleet diagnostics saved.", 1)
+
+
+# ---- Run Cox EVENT STUDIES at each granularity ----
+log_step("\nCox event studies by cell granularity (SW post-mandate):")
+log_step("  (Check whether pre-trend shrinks as cells coarsen)\n")
+ 
+coarsen_es_results <- list()
+ 
+for (spec in coarsen_specs) {
+ 
+  label_clean <- gsub("[^A-Za-z0-9]", "", gsub(" ", "_", spec$label))
+ 
+  if (spec$strata_var == "strata_none") {
+    # For no-strata: can't use run_cox_event_study directly because it
+    # builds strata(strata_none) which is fine, but we also want year_fac.
+    # Workaround: temporarily set strata to strata_none and accept that
+    # the baseline hazard is flat (year_fac would need to be added to the
+    # modular function). For now, just run 1-dim as the coarsest usable spec.
+    log_step(sprintf("  %-25s (skipping ES — use 1-dim as coarsest)", spec$label), 1)
+    next
+  }
+ 
+  res_es <- tryCatch(
+    run_cox_event_study(
+      sw_cox_dt,
+      strata_var = spec$strata_var,
+      pool_pre   = -4L,
+      pool_post  = 15L,
+      label      = paste0("SW-Coarsen-", label_clean),
+      save       = TRUE
+    ),
+    error = function(e) {
+      log_step(sprintf("  %-25s FAILED: %s", spec$label, e$message), 1)
+      NULL
+    }
+  )
+ 
+  if (!is.null(res_es)) {
+    coarsen_es_results[[spec$label]] <- res_es
+ 
+    # Report pre-test
+    pt <- res_es$pre_tests
+    log_step(sprintf("  %-25s pre-test p = %.4f (full), %.4f (dense)  %s",
+      spec$label,
+      pt$p_all,
+      ifelse(is.na(pt$p_dense), 1, pt$p_dense),
+      ifelse(pt$p_all > 0.10, "trends OK", "PRE-TREND")), 1)
+  }
+}
+ 
+# ---- Summary table ----
+coarsen_summary <- rbindlist(lapply(coarsen_results, function(x) {
+  data.table(
+    Stratification = x$label,
+    HR      = round(x$row$hr, 4),
+    log_HR  = round(x$row$coef, 5),
+    SE      = round(x$row$se, 5),
+    p       = round(x$row$p, 4),
+    N       = x$row$n,
+    Events  = x$row$ev
+  )
+}))
+ 
+# Add pre-test p-values from event studies where available
+coarsen_summary[, pre_test_p := NA_real_]
+for (i in seq_len(nrow(coarsen_summary))) {
+  nm <- coarsen_summary$Stratification[i]
+  if (nm %in% names(coarsen_es_results))
+    coarsen_summary[i, pre_test_p := coarsen_es_results[[nm]]$pre_tests$p_all]
+}
+ 
+cat("\n── Cell Coarsening Summary (SW post-mandate) ──\n\n")
+print(coarsen_summary)
+ 
+# ---- Interpretation ----
+finest_pretest  <- coarsen_summary[1, pre_test_p]
+coarsest_pretest <- coarsen_summary[!is.na(pre_test_p), last(pre_test_p)]
+ 
+cat("\n")
+if (!is.na(finest_pretest) && !is.na(coarsest_pretest)) {
+  if (finest_pretest < 0.10 && coarsest_pretest > 0.10) {
+    log_step("DIAGNOSIS: Pre-trend present at fine stratification, absent at coarse.")
+    log_step("  → The 4-dim cells are too granular for SW tanks.")
+    log_step("  → Within-cell noise (thin overlap) generates a spurious pre-trend.")
+    log_step("  → Use coarser stratification for SW-specific results.", 1)
+  } else if (finest_pretest < 0.10 && coarsest_pretest < 0.10) {
+    log_step("DIAGNOSIS: Pre-trend persists even at coarse stratification.")
+    log_step("  → The pre-trend is real, not an artifact of cell granularity.")
+    log_step("  → TX SW tanks were genuinely closing faster pre-reform.", 1)
+  } else {
+    log_step("DIAGNOSIS: No pre-trend at any granularity.")
+    log_step("  → SW identification is clean across specifications.", 1)
+  }
+}
+ 
+# ---- Save ----
+fwrite(coarsen_summary, file.path(OUTPUT_TABLES, "Table_CellCoarsening_SW.csv"))
+log_step("\n  Cell coarsening diagnostic saved.", 1)
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════════
+# S9-ABC: Three-Sample Cox + OLS Structure
+# ══════════════════════════════════════════════════════════════════════════════
+ 
+run_cox_ols_pair <- function(cox_dt, panel_dt, label,
+                              cox_extra_vars = NULL, ols_extra_vars = NULL,
+                              strata_var = "make_model_tank") {
+  cat(sprintf("\n-- %s --\n", label))
+  cox_rhs <- "did_term"
+  if (!is.null(cox_extra_vars)) cox_rhs <- paste(c(cox_rhs, cox_extra_vars), collapse = " + ")
+  cox_fml <- as.formula(paste("Surv(t_enter, t_exit, failure) ~", cox_rhs,
+                               "+ strata(", strata_var, ")"))
+  m_cox <- coxph(cox_fml, data = cox_dt, cluster = cox_dt$state, ties = "efron")
+  r_cox <- extract_cox_row(m_cox)
+  log_step(sprintf("  Cox:  HR = %.3f  log-HR = %+.4f  SE = %.4f  p = %.4f  N = %s  Events = %s",
+    r_cox$hr, r_cox$coef, r_cox$se, r_cox$p, fmt_n(r_cox$n), fmt_n(r_cox$ev)), 1)
+ 
+  cox_age_fml <- as.formula(paste("Surv(age_enter, age_exit, failure) ~", cox_rhs,
+                                   "+ strata(", strata_var, ")"))
+  m_cox_age <- coxph(cox_age_fml, data = cox_dt, cluster = cox_dt$state, ties = "efron")
+  r_cox_age <- extract_cox_row(m_cox_age)
+  log_step(sprintf("  Cox (age-axis):  HR = %.3f  log-HR = %+.4f  SE = %.4f  p = %.4f",
+    r_cox_age$hr, r_cox_age$coef, r_cox_age$se, r_cox_age$p), 1)
+ 
+  ols_rhs <- "did_term + age_bin"
+  if (!is.null(ols_extra_vars)) ols_rhs <- paste(c("did_term", ols_extra_vars, "age_bin"), collapse = " + ")
+  ols_fml <- as.formula(paste("closure_event ~", ols_rhs, "| tank_panel_id +", strata_var, "^panel_year"))
+  m_ols <- feols(ols_fml, data = panel_dt, cluster = ~state)
+  r_ols <- extract_panel_row(m_ols)
+  log_step(sprintf("  OLS:  coef = %+.4f pp  SE = %.4f  p = %.4f  N = %s",
+    r_ols$coef * 100, r_ols$se * 100, r_ols$p, fmt_n(r_ols$n)), 1)
+ 
+  if (!is.null(ols_extra_vars) && "mandate_active" %in% ols_extra_vars) {
+    ols_ct <- coeftable(m_ols)
+    if ("mandate_active" %in% rownames(ols_ct)) {
+      ma <- ols_ct["mandate_active", ]
+      log_step(sprintf("  OLS mandate_active:  coef = %+.4f pp  SE = %.4f  p = %.4f",
+        ma["Estimate"] * 100, ma["Std. Error"] * 100, ma["Pr(>|t|)"]), 1)
+    }
+    cox_s <- summary(m_cox)$coefficients
+    if ("mandate_active" %in% rownames(cox_s))
+      log_step(sprintf("  Cox mandate_active:  HR = %.3f  p = %.4f",
+        exp(cox_s["mandate_active", "coef"]), cox_s["mandate_active", "Pr(>|z|)"]), 1)
+  }
+ 
+  list(label = label, m_cox = m_cox, m_cox_age = m_cox_age, m_ols = m_ols,
+       r_cox = r_cox, r_cox_age = r_cox_age, r_ols = r_ols)
+}
+ 
+# (A) POST-MANDATE PRIMARY
+log_step("(A) POST-MANDATE PRIMARY (1990-1997)")
+res_A <- run_cox_ols_pair(
+  cox_dt = exact_split_df[is_post_mandate == 1L],
+  panel_dt = panel_dt[is_post_mandate == 1L],
+  label = "Post-Mandate Primary (1990-1997)")
+ 
+m_cox_primary <- res_A$m_cox; m_cox_age <- res_A$m_cox_age
+m_ols <- res_A$m_ols; cox_prim <- res_A$r_cox; ols_row <- res_A$r_ols
+ 
+# (B) EXPANDED FULL SAMPLE
+log_step("\n(B) EXPANDED FULL SAMPLE (1985-1997) + mandate control")
+res_B <- run_cox_ols_pair(
+  cox_dt = exact_split_df, panel_dt = panel_dt,
+  label = "Expanded Full Sample (1985-1997)",
+  cox_extra_vars = "mandate_active", ols_extra_vars = "mandate_active")
+ 
+# (C) PRE-MANDATE DIAGNOSTIC
+log_step("\n(C) PRE-MANDATE DIAGNOSTIC (1985-1989)")
+n_pre_cox <- exact_split_df[is_pre_mandate == 1L, .N]
+n_pre_panel <- panel_dt[is_pre_mandate == 1L, .N]
+res_C <- NULL
+if (n_pre_cox > 100 && n_pre_panel > 100) {
+  res_C <- run_cox_ols_pair(
+    cox_dt = exact_split_df[is_pre_mandate == 1L],
+    panel_dt = panel_dt[is_pre_mandate == 1L],
+    label = "Pre-Mandate Diagnostic (1985-1989)",
+    cox_extra_vars = "mandate_active", ols_extra_vars = "mandate_active")
+} else {
+  log_step(sprintf("  Pre-mandate sample too small. Skipping."), 1)
+}
+ 
+# ── Comparison table ──
+build_comparison_row <- function(res, sample_label) {
+  data.table(Sample = sample_label,
+    Cox_logHR = round(res$r_cox$coef, 5), Cox_HR = round(res$r_cox$hr, 4),
+    Cox_SE = round(res$r_cox$se, 5), Cox_p = round(res$r_cox$p, 4),
+    Cox_N = res$r_cox$n, Cox_Events = res$r_cox$ev,
+    OLS_coef_pp = round(res$r_ols$coef * 100, 4),
+    OLS_SE_pp = round(res$r_ols$se * 100, 4), OLS_p = round(res$r_ols$p, 4),
+    OLS_N = res$r_ols$n)
+}
+ 
+comparison_rows <- list(
+  build_comparison_row(res_A, "A: Post-mandate (1990-1997)"),
+  build_comparison_row(res_B, "B: Full sample (1985-1997) + mandate ctrl"))
+if (!is.null(res_C))
+  comparison_rows <- c(comparison_rows, list(build_comparison_row(res_C, "C: Pre-mandate (1985-1989)")))
+ 
+s9_comparison <- rbindlist(comparison_rows)
+log_step("\nThree-sample comparison:")
+print(s9_comparison)
+ 
+cox_drift <- abs(res_B$r_cox$coef - res_A$r_cox$coef) / max(abs(res_A$r_cox$coef), 1e-6)
+ols_drift <- abs(res_B$r_ols$coef - res_A$r_ols$coef) / max(abs(res_A$r_ols$coef), 1e-6)
+if (cox_drift > 0.20 || ols_drift > 0.20) {
+  warning(sprintf("Sample expansion shifted estimates (Cox drift: %.1f%%, OLS drift: %.1f%%).",
+                  cox_drift * 100, ols_drift * 100))
+} else {
+  log_step(sprintf("\n  Estimates stable (Cox drift: %.1f%%, OLS drift: %.1f%%)",
+                   cox_drift * 100, ols_drift * 100), 1)
+}
+ 
+fwrite(s9_comparison, file.path(OUTPUT_TABLES, "Table_S9_ThreeSample_Comparison.csv"))
+saveRDS(res_A, file.path(ANALYSIS_DIR, "s9_res_A_postmandate.rds"))
+saveRDS(res_B, file.path(ANALYSIS_DIR, "s9_res_B_expanded.rds"))
+if (!is.null(res_C)) saveRDS(res_C, file.path(ANALYSIS_DIR, "s9_res_C_premandate.rds"))
+ 
+log_step("\nS9 Primary model summary (headline = Sample A):")
+log_step(sprintf("  Cox (calendar)  HR = %.3f%s  [%.3f, %.3f]",
+  cox_prim$hr, stars_p(cox_prim$p),
+  exp(cox_prim$coef - 1.96 * cox_prim$se), exp(cox_prim$coef + 1.96 * cox_prim$se)), 1)
+log_step(sprintf("  OLS LPM         coef = %+.4f pp%s  SE = %.4f pp",
+  ols_row$coef * 100, stars_p(ols_row$p), ols_row$se * 100), 1)
+cat("\n")
+#### S10: Cox Event Study (Exact-Date Intervals, Pooled Tails) ####
 
 cat("========================================\n")
 cat("S10: COX EVENT STUDY (EXACT-DATE INTERVALS)\n")
 cat("========================================\n\n")
 
-# ════════════════════════════════════════════════════════════
-# REFACTORED TO ELIMINATE INTERVAL-CENSORING BIAS
-# ════════════════════════════════════════════════════════════
-# 
-# Current flaw in old approach (mm_tank_primary):
-#   - Enforces artificial calendar-year intervals (Jan 1 — Dec 31)
-#   - Destroys the exact-date continuous-time ID mechanism from S5
-#   - Intervals are not aligned to reform date, causing event misclassification
-#
-# Fixed approach (exact_es_df):
-#   - Generates exact anniversary dates of REFORM_DATE (1998-12-22) 
-#     from -8 to +15 years as precise split points
-#   - Uses survival::survSplit() to create counting-process episodes
-#     at these exact dates, preserving continuous-time structure
-#   - Maps each episode to its relative year exactly
-#   - Estimates Cox model using counting-process data with exact intervals
-#
-# Result: Event study hazard ratios now reflect treatment timing WITHOUT
-# artificial calendar-year censoring.
+source(here("Code", "Helpers", "S10_Cox_EventStudy_Modular.R"))
 
-# ---- Pooling boundaries ----
-ES_POOL_PRE  <- -8L   # ≤ −8 pooled into one pre-period bin
-ES_POOL_POST <- 15L   # ≥ 15 pooled into one post-period bin
+# Primary spec (full sample, post-mandate)
+res_es_primary <- run_cox_event_study(
+  exact_split_df[is_post_mandate == 1L], label = "Primary-PostMandate")
 
-log_step("Generating exact anniversary dates from REFORM_DATE...")
+# Reference year sensitivity
+res_es_ref2 <- run_cox_event_study(
+  exact_split_df[is_post_mandate == 1L], ref_year = -2L, label = "RefYear-2")
 
-# ---- Generate exact calendar dates for event-study windows ----
-# Create dates for the 1998-12-22 +/- 8 to 15 years:
-#   Anniversary at -8 years: 1990-12-22
-#   Anniversary at -7 years: 1991-12-22
-#   ...
-#   Anniversary at 0 years (REFORM_DATE): 1998-12-22
-#   ...
-#   Anniversary at +15 years: 2013-12-22
+# Tighter pooling
+res_es_tight <- run_cox_event_study(
+  exact_split_df[is_post_mandate == 1L], pool_pre = -4L, pool_post = 10L,
+  label = "TightPool")
 
-# seq.Date() from base R: generate the sequence of exact anniversary dates
-es_anniversaries <- seq(
-  from = REFORM_DATE + -8L * 365.25,  # Rough start; date arithmetic is exact
-  to   = REFORM_DATE +  15L * 365.25,  # Rough end
-  by   = "year"
-)
+# Single-walled subsample
+res_es_sw <- run_cox_event_study(
+  exact_split_df[mm_wall == "Single-Walled" & is_post_mandate == 1L],
+  label = "SingleWalled-PostMandate")
 
-# Fine-tune to exact anniversaries by using IDate arithmetic
-# (REFORM_DATE is already an IDate, supporting - operator for integer years)
-es_anniversaries <- as.IDate(
-  seq(
-    from = as.numeric(REFORM_DATE) - 8 * 365.25,
-    to   = as.numeric(REFORM_DATE) + 15 * 365.25,
-    by   = 365.25
-  ),
-  origin = "1970-01-01"
-)
+# SW late cohorts (cleanest SW spec)
+res_es_sw_late <- run_cox_event_study(
+  exact_split_df[mm_wall == "Single-Walled" & mm_install_cohort %in% as.character(1993:1997)],
+  pool_pre = -4L, pool_post = 15L, label = "SW-Cohort-1993-1997")
 
-# More precise: explicitly create anniversary dates year by year
-# Extract year, month, day from REFORM_DATE using base R functions
-ref_date_str <- as.character(REFORM_DATE)  # Format: "YYYY-MM-DD"
-ref_yr <- as.integer(substr(ref_date_str, 1, 4))
-ref_mo <- substr(ref_date_str, 6, 7)
-ref_dy <- substr(ref_date_str, 9, 10)
+# 3-dim cell robustness
+exact_split_df[, make_model_3dim := paste(mm_wall, mm_fuel, mm_install_cohort, sep = "_")]
+res_es_3d <- run_cox_event_study(
+  exact_split_df[is_post_mandate == 1L],
+  strata_var = "make_model_3dim", label = "3dim-NoCapacity")
 
-es_anniversaries <- as.IDate(
-  sapply(-8:15, function(yr) {
-    new_yr <- ref_yr + yr
-    paste(new_yr, ref_mo, ref_dy, sep = "-")
-  })
-)
-
-# Convert to numeric days since 1970-01-01 for survSplit()
-es_cuts_numeric <- as.numeric(es_anniversaries)
-es_cuts_numeric <- sort(es_cuts_numeric[es_cuts_numeric > min(exact_split_df$t_enter) & 
-                                         es_cuts_numeric < max(exact_split_df$t_exit)])
-
-log_step(sprintf("  Generated %d exact anniversary dates from %s to %s",
-                 length(es_cuts_numeric),
-                 as.Date(es_cuts_numeric[1], origin = "1970-01-01"),
-                 as.Date(es_cuts_numeric[length(es_cuts_numeric)], origin = "1970-01-01")), 1)
-
-log_step("Applying survSplit at exact anniversary dates...")
-
-# ---- Apply survSplit to create exact counting-process intervals ----
-# Splitting exact_split_df at precise anniversary dates
-exact_es_df <- survSplit(
-  formula = Surv(t_enter, t_exit, failure) ~ .,
-  data    = as.data.frame(exact_split_df),
-  cut     = es_cuts_numeric,
-  episode = "es_episode"
-)
-setDT(exact_es_df)
-
-# Filter out zero-length intervals (parsimonious)
-exact_es_df <- exact_es_df[t_exit > t_enter]
-
-log_step(sprintf("  After exact survSplit: %s rows, %s tanks, %s events",
-                 fmt_n(nrow(exact_es_df)),
-                 fmt_n(uniqueN(exact_es_df$tank_panel_id)),
-                 fmt_n(sum(exact_es_df$failure))), 1)
-
-# ---- Map episodes to relative years ----
-# Each episode's midpoint or endpoint date determines its relative year
-# Relative year = floor((interval_midpoint - REFORM_DATE) / 365.25)
-
-log_step("Mapping episodes to relative years...")
-
-exact_es_df[, `:=`(
-  interval_midpoint = (t_enter + t_exit) / 2,
-  interval_end_date = as.Date(t_exit, origin = "1970-01-01"),
-  interval_start_date = as.Date(t_enter, origin = "1970-01-01")
-)]
-
-# Relative year: computed from interval endpoint
-# (tanks close during the year; event timing is at interval end)
-exact_es_df[, `:=`(
-  days_from_reform = interval_end_date - REFORM_DATE,
-  rel_year = as.integer(floor(as.numeric(interval_end_date - REFORM_DATE) / 365.25))
-)]
-
-# ---- Determine available relative years (for individual dummies) ----
-es_years_actual <- sort(unique(exact_es_df$rel_year))
-
-log_step(sprintf("  Relative years in exact_es_df: %s to %s (%d unique)",
-                 min(es_years_actual), max(es_years_actual),
-                 length(es_years_actual)), 1)
-
-# ---- Individual years between tails (excluding reference −1) ----
-es_years_individual <- sort(
-  es_years_actual[
-    es_years_actual >  ES_POOL_PRE  &
-    es_years_actual <  ES_POOL_POST &
-    es_years_actual != -1L
-  ]
-)
-
-if (length(es_years_individual) > 0) {
-  log_step(sprintf(
-    "Event-study bins: pooled ≤%d | individual %d to %d | pooled ≥%d | ref = −1",
-    ES_POOL_PRE,
-    min(es_years_individual[es_years_individual < 0]),
-    max(es_years_individual[es_years_individual > 0]),
-    ES_POOL_POST
-  ))
-} else {
-  log_step(sprintf(
-    "Event-study bins: pooled ≤%d | (no individual years) | pooled ≥%d | ref = −1",
-    ES_POOL_PRE, ES_POOL_POST
-  ))
-}
-
-# ---- Build interaction variables (exact-date intervals) ----
-log_step("Building relative-year × texas_treated interactions...")
-
-exact_es_df[, `:=`(
-  ry_pool_pre  = as.integer(rel_year <= ES_POOL_PRE)  * texas_treated,
-  ry_pool_post = as.integer(rel_year >= ES_POOL_POST) * texas_treated
-)]
-
-ry_vars_es <- c("ry_pool_pre", "ry_pool_post")
-
-for (yr in es_years_individual) {
-  vname <- ifelse(yr < 0,
-                  paste0("ry_m", abs(yr)),
-                  paste0("ry_",  yr))
-  exact_es_df[, (vname) := as.integer(rel_year == yr) * texas_treated]
-  ry_vars_es <- c(ry_vars_es, vname)
-}
-ry_vars_es <- sort(ry_vars_es)
-
-log_step(sprintf("  Created %d interaction variables: %s",
-                 length(ry_vars_es), 
-                 paste(head(ry_vars_es, 3), collapse = ", ")), 1)
-
-# ---- Estimate Cox model (exact counting-process with stratification) ----
-cox_es_fml <- as.formula(paste(
-  "Surv(t_enter, t_exit, failure) ~",
-  paste(ry_vars_es, collapse = " + "),
-  "+ strata(make_model_tank)"
-))
-
-log_step("Estimating Cox event study on exact-date intervals...")
-m_cox_es <- coxph(
-  cox_es_fml,
-  data    = exact_es_df,
-  cluster = exact_es_df$state,
-  ties    = "efron"
-)
-
-log_step(sprintf("  Model fit: %s terms, cluster-adjusted SE, Efron ties",
-                 length(coef(m_cox_es))), 1)
-cat("\n")
-
-# ---- Extract and parse coefficients ----
-cox_es_coefs <- as.data.table(
-  summary(m_cox_es)$coefficients,
-  keep.rownames = "term"
-)
-setnames(cox_es_coefs,
-         c("term", "coef", "exp_coef", "se_model", "robust_se", "z", "p"))
-
-# Parse rel_year from term names (pooled and individual years)
-cox_es_coefs[, rel_year := fcase(
-  term == "ry_pool_pre",         ES_POOL_PRE,
-  term == "ry_pool_post",        ES_POOL_POST,
-  grepl("^ry_m[0-9]+$", term),  -as.integer(gsub("ry_m", "", term)),
-  grepl("^ry_[0-9]+$",  term),   as.integer(gsub("ry_",  "", term)),
-  default = NA_integer_
-)]
-cox_es_coefs <- cox_es_coefs[!is.na(rel_year)]
-
-# Compute derived quantities (hazard ratios, %-change, CIs)
-cox_es_coefs[, `:=`(
-  hr         = exp_coef,
-  ci_lo      = exp(coef - 1.96 * robust_se),
-  ci_hi      = exp(coef + 1.96 * robust_se),
-  pct_change = (exp_coef - 1) * 100,
-  pct_ci_lo  = (exp(coef - 1.96 * robust_se) - 1) * 100,
-  pct_ci_hi  = (exp(coef + 1.96 * robust_se) - 1) * 100,
-  period     = fcase(
-    rel_year <  0, "Pre",
-    rel_year == 0, "Post",
-    default        = "Post"
-  ),
-  pooled     = as.integer(term %in% c("ry_pool_pre", "ry_pool_post"))
-)]
-
-log_step("Event-study coefficients:")
-log_step(sprintf("  %-30s %+8.4f  [%+7.4f, %+7.4f]  %s",
-                 "term", "coef", "CI_lo", "CI_hi", "pct_change"), 1)
-for (i in seq_len(nrow(cox_es_coefs))) {
-  r <- cox_es_coefs[i]
-  log_step(sprintf("  %-30s %+8.4f  [%+7.4f, %+7.4f]  %+6.1f%%",
-                   r$term, r$coef, 
-                   log(r$ci_lo), log(r$ci_hi),
-                   r$pct_change), 1)
-}
-
-# Add reference row (year −1, normalized to HR=1, 0% change)
-cox_es_coefs <- rbind(
-  cox_es_coefs,
-  data.table(
-    term       = "ref",
-    coef       = 0,   exp_coef  = 1,  se_model  = 0,
-    robust_se  = 0,   z         = 0,  p         = 1,
-    rel_year   = -1L,
-    hr         = 1,   ci_lo     = 1,  ci_hi     = 1,
-    pct_change = 0,   pct_ci_lo = 0,  pct_ci_hi = 0,
-    period     = "Ref",
-    pooled     = 0L
-  ),
-  fill = TRUE
-)
-setorder(cox_es_coefs, rel_year)
-
-# ---- Pre-period joint tests (parallel trends) ----
-log_step("Testing parallel trends (pre-period joint tests)...")
-
-# Full pre: pooled tail + all individual pre years
-pre_vars_all <- ry_vars_es[ry_vars_es == "ry_pool_pre" |
-                             grepl("^ry_m[0-9]+$", ry_vars_es)]
-pre_test_all <- linearHypothesis(
-  m_cox_es, paste0(pre_vars_all, " = 0"), test = "Chisq"
-)
-pre_p_all <- pre_test_all[2, "Pr(>Chisq)"]
-
-# Dense pre (all cohorts present): years −6 to −2 only
-pre_vars_dense <- ry_vars_es[ry_vars_es %in% paste0("ry_m", 2:6)]
-pre_p_dense <- NA_real_
-if (length(pre_vars_dense) >= 2) {
-  pre_test_dense <- linearHypothesis(
-    m_cox_es, paste0(pre_vars_dense, " = 0"), test = "Chisq"
-  )
-  pre_p_dense <- pre_test_dense[2, "Pr(>Chisq)"]
-}
-
-log_step(sprintf("  All pre-period (%d dof): χ² = %.2f, p = %.4f",
-                 length(pre_vars_all),
-                 pre_test_all[2, "Chisq"],
-                 pre_p_all), 1)
-log_step(sprintf("  Dense pre (−6 to −2, %d dof): χ² = %.2f, p = %.4f",
-                 length(pre_vars_dense),
-                 pre_test_dense[2, "Chisq"],
-                 pre_p_dense), 1)
-
-pre_test_label <- sprintf(
-  "Pre-period parallel-trends test\nAll pre (%d dof): χ²=%.2f, p=%.4f\nDense −6 to −2 (%d dof): χ²=%.2f, p=%.4f",
-  length(pre_vars_all),   pre_test_all[2, "Chisq"],   pre_p_all,
-  length(pre_vars_dense), 
-  ifelse(length(pre_vars_dense) >= 2, pre_test_dense[2, "Chisq"], NA), 
-  pre_p_dense
-)
-
-# ---- Prepare plotting data ----
-y_cap   <- ceiling(
-  max(cox_es_coefs[pooled == 0, pct_ci_hi], na.rm = TRUE) / 25
-) * 25
-y_floor <- floor(
-  min(cox_es_coefs[pooled == 0, pct_ci_lo], na.rm = TRUE) / 25
-) * 25
-y_cap   <- min(y_cap,   300L)
-y_floor <- max(y_floor, -150L)
-
-all_x  <- sort(unique(cox_es_coefs$rel_year))
-x_labs <- as.character(all_x)
-x_labs[all_x == ES_POOL_PRE]  <- paste0("\u2264", ES_POOL_PRE)   # ≤−8
-x_labs[all_x == ES_POOL_POST] <- paste0("\u2265", ES_POOL_POST)  # ≥15
-
-# ---- Plot event study ----
-p_cox_es <- ggplot(cox_es_coefs, aes(x = rel_year, y = pct_change)) +
-
-  # Pre-reform shading
-  annotate("rect",
-           xmin = -Inf, xmax = -0.5,
-           ymin = -Inf, ymax = Inf,
-           fill = "grey90", alpha = 0.50) +
-
-  # Reference lines
-  geom_hline(yintercept = 0, linetype = "dashed",
-             color = "grey35", linewidth = 0.5) +
-  geom_vline(xintercept = -0.5, color = "grey20", linewidth = 0.65) +
-
-  # Connecting line (no ribbon for exact intervals)
-  geom_line(aes(group = 1),
-            color = "grey40", linewidth = 0.45, alpha = 0.65) +
-
-  # Error bars
-  geom_errorbar(aes(ymin = pct_ci_lo, ymax = pct_ci_hi, color = period),
-                width = 0.30, linewidth = 0.45) +
-
-  # Individual-year points (circles)
-  geom_point(data = cox_es_coefs[pooled == 0],
-             aes(color = period), size = 2.6, shape = 16) +
-
-  # Pooled-bin points (diamonds)
-  geom_point(data = cox_es_coefs[pooled == 1],
-             aes(color = period), size = 3.2, shape = 18) +
-
-  # Pre-period test annotation
-  annotate("text",
-           x = ES_POOL_PRE + 0.3, y = y_cap * 0.97,
-           label = pre_test_label,
-           hjust = 0, vjust = 1,
-           size = 2.8, color = "grey25", lineheight = 1.15) +
-
-  scale_color_manual(
-    values = c(Pre = COL_CTRL, Post = COL_TX, Ref = "black"),
-    guide  = "none"
-  ) +
-  scale_x_continuous(breaks = all_x, labels = x_labs) +
-  scale_y_continuous(
-    limits = c(y_floor, y_cap),
-    oob    = scales::squish,
-    labels = function(x) paste0(ifelse(x > 0, "+", ""), x, "%")
-  ) +
-  labs(
-    x       = "Years Relative to Reform (1999 = 0)",
-    y       = "Change in Closure Hazard vs. Year \u22121",
-    title   = "Cox Event Study: Texas UST Insurance Reform\n(Exact-Date Counting-Process Intervals)",
-    caption = "Data: Exact calendar dates from S5 split at reform-date anniversaries. \u25C6 = pooled tail; \u25CF = individual year"
-  ) +
-  theme_pub() +
-  theme(
-    panel.grid.major.x = element_blank(),
-    plot.margin  = margin(t = 8, r = 12, b = 8, l = 20, unit = "pt"),
-    axis.text.x  = element_text(angle = 45, hjust = 1, vjust = 1),
-    plot.title   = element_text(size = 9, face = "plain", color = "grey20"),
-    plot.caption = element_text(size = 8, color = "grey40",
-                                hjust = 0, margin = margin(t = 6))
-  ) +
-  coord_cartesian(clip = "off")
-
-ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_EventStudy.png"),
-       p_cox_es, width = 13, height = 6.5, dpi = 300, bg = "white")
-ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_EventStudy.pdf"),
-       p_cox_es, width = 13, height = 6.5, device = cairo_pdf)
-
-log_step("Event study plot saved.")
-log_step(sprintf("  Figure: %s", file.path(OUTPUT_FIGURES, "Figure_Cox_EventStudy.png")))
-log_step(sprintf("  Coefficients: %s\n", file.path(OUTPUT_TABLES, "Table_CoxES_Coefficients.csv")))
-
-fwrite(cox_es_coefs,
-       file.path(OUTPUT_TABLES, "Table_CoxES_Coefficients.csv"))
-
-# ---- Clean up (do NOT delete from mm_tank_primary) ----
-# Note: exact_es_df is a separate dataset built from exact_split_df
-# Variables ry_vars_es exist only in exact_es_df, not mm_tank_primary
-# No cleanup needed; exact_es_df will be available for diagnostics
+# Log-HR scale
+res_es_loghr <- run_cox_event_study(
+  exact_split_df[is_post_mandate == 1L], y_metric = "log_hr", label = "Primary-LogHR")
 
 cat("\n")
+
 
 #### S11: OLS LPM ####
 
@@ -1428,82 +2776,32 @@ cat("========================================\n")
 cat("S11: OLS LPM\n")
 cat("========================================\n\n")
 
-# ════════════════════════════════════════════════════════════
-# TUNING PARAMETERS
-# ════════════════════════════════════════════════════════════
-OLS_REF_YEAR   <- -1L
-OLS_POOL_PRE   <- -8L
-OLS_POOL_POST  <- 15L
-OLS_Y_CAP      <-  5
-OLS_Y_FLOOR    <- -5
-OLS_PLOT_W     <- 13
-OLS_PLOT_H     <-  6
-
+OLS_REF_YEAR  <- -1L
+OLS_POOL_PRE  <- -8L
+OLS_POOL_POST <- 15L
+OLS_Y_CAP     <-  5
+OLS_Y_FLOOR   <- -5
+OLS_PLOT_W    <- 13
+OLS_PLOT_H    <-  6
 WALL_COHORT_MIN <- 1990L
 
-CONTROL_STATES <- c(
-  "AL", "AR", "CO", "GA", "ID", "KS", "KY",
-  "MD", "MI", "MN", "MO", "NC", "NJ", "OH",
-  "OK", "TN", "VA", "WI", "WV"
-)
-STUDY_STATES <- c("TX", CONTROL_STATES)
-# ════════════════════════════════════════════════════════════
+panel_full <- mm_tank_primary[tstop > tstart & !is.na(did_term)]
+panel_sw <- mm_tank_primary[tstop > tstart & !is.na(did_term) &
+  mm_wall == "Single-Walled" & as.integer(mm_install_cohort) >= WALL_COHORT_MIN]
+panel_dw <- mm_tank_primary[tstop > tstart & !is.na(did_term) &
+  mm_wall == "Double-Walled" & as.integer(mm_install_cohort) >= WALL_COHORT_MIN]
 
+log_step("Sample sizes:")
+log_step(sprintf("  Full      : %s tank-years, %s tanks", fmt_n(nrow(panel_full)), fmt_n(uniqueN(panel_full$tank_panel_id))), 1)
+log_step(sprintf("  SW (>=%d) : %s tank-years, %s tanks", WALL_COHORT_MIN, fmt_n(nrow(panel_sw)), fmt_n(uniqueN(panel_sw$tank_panel_id))), 1)
+log_step(sprintf("  DW (>=%d) : %s tank-years, %s tanks", WALL_COHORT_MIN, fmt_n(nrow(panel_dw)), fmt_n(uniqueN(panel_dw$tank_panel_id))), 1)
 
-# ── Helpers (unchanged) ─────────────────────────────────────
-# run_ols_es(), ols_pre_tests(), plot_ols_es() as defined above
-
-
-# ════════════════════════════════════════════════════════════
-# Base filtered datasets  (PA dropped throughout)
-# ════════════════════════════════════════════════════════════
-panel_full <- mm_tank_primary[
-  tstop > tstart       &
-  !is.na(did_term)
-]
-
-panel_sw <- mm_tank_primary[
-  tstop > tstart       &
-  !is.na(did_term)     &
-  mm_wall == "Single-Walled" &
-  as.integer(mm_install_cohort) >= WALL_COHORT_MIN
-]
-
-panel_dw <- mm_tank_primary[
-  tstop > tstart       &
-  !is.na(did_term)     &
-  mm_wall == "Double-Walled" &
-  as.integer(mm_install_cohort) >= WALL_COHORT_MIN
-]
-
-log_step(sprintf("Sample sizes (PA excluded):"))
-log_step(sprintf("  Full      : %s tank-years, %s tanks",
-                 fmt_n(nrow(panel_full)),
-                 fmt_n(uniqueN(panel_full$tank_panel_id))), 1)
-log_step(sprintf("  SW (≥%d) : %s tank-years, %s tanks",
-                 WALL_COHORT_MIN,
-                 fmt_n(nrow(panel_sw)),
-                 fmt_n(uniqueN(panel_sw$tank_panel_id))), 1)
-log_step(sprintf("  DW (≥%d) : %s tank-years, %s tanks",
-                 WALL_COHORT_MIN,
-                 fmt_n(nrow(panel_dw)),
-                 fmt_n(uniqueN(panel_dw$tank_panel_id))), 1)
-
-
-# ════════════════════════════════════════════════════════════
-# DiD estimates
-# ════════════════════════════════════════════════════════════
 run_did <- function(dt, label) {
-  m <- feols(
-    closure_event ~ did_term | tank_panel_id + make_model_tank^panel_year,
-    data    = dt,
-    cluster = ~state
-  )
+  m <- feols(closure_event ~ did_term | tank_panel_id + make_model_tank^panel_year,
+             data = dt, cluster = ~state)
   r <- extract_panel_row(m)
   log_step(sprintf("  %-20s coef = %+.4f pp  SE = %.4f  p = %.4f  N = %s",
-                   label,
-                   r$coef * 100, r$se * 100, r$p,
-                   fmt_n(r$n)), 1)
+                   label, r$coef * 100, r$se * 100, r$p, fmt_n(r$n)), 1)
   list(model = m, row = r)
 }
 
@@ -1512,174 +2810,90 @@ did_full <- run_did(panel_full, "Full sample")
 did_sw   <- run_did(panel_sw,   "Single-Walled")
 did_dw   <- run_did(panel_dw,   "Double-Walled")
 
-
-# ════════════════════════════════════════════════════════════
-# Event studies
-# ════════════════════════════════════════════════════════════
 log_step("\nEvent studies:")
-
-# ---- Full ----
 log_step("  Full sample...")
-es_full  <- run_ols_es(panel_full, prefix = "full")
-pre_full <- ols_pre_tests(es_full)
-p_full   <- plot_ols_es(es_full, pre_full,
-                         subtitle = "Full primary sample (PA excluded)")
+es_full  <- run_ols_es(panel_full); pre_full <- ols_pre_tests(es_full)
+p_full   <- plot_ols_es(es_full, pre_full, subtitle = "Full primary sample")
 
-# ---- Single-wall ----
 log_step("  Single-walled...")
-es_sw  <- run_ols_es(panel_sw, prefix = "sw")
-pre_sw <- ols_pre_tests(es_sw)
-p_sw   <- plot_ols_es(es_sw, pre_sw,
-                       subtitle = sprintf(
-                         "Single-walled tanks, cohort \u2265 %d (PA excluded)",
-                         WALL_COHORT_MIN))
+es_sw  <- run_ols_es(panel_sw); pre_sw <- ols_pre_tests(es_sw)
+p_sw   <- plot_ols_es(es_sw, pre_sw, subtitle = sprintf("Single-walled, cohort >= %d", WALL_COHORT_MIN))
 
-# ---- Double-wall ----
 log_step("  Double-walled...")
-es_dw  <- run_ols_es(panel_dw, prefix = "dw")
-pre_dw <- ols_pre_tests(es_dw)
-p_dw   <- plot_ols_es(es_dw, pre_dw,
-                       subtitle = sprintf(
-                         "Double-walled tanks, cohort \u2265 %d (PA excluded)",
-                         WALL_COHORT_MIN))
+es_dw  <- run_ols_es(panel_dw); pre_dw <- ols_pre_tests(es_dw)
+p_dw   <- plot_ols_es(es_dw, pre_dw, subtitle = sprintf("Double-walled, cohort >= %d", WALL_COHORT_MIN))
 
-
-# ════════════════════════════════════════════════════════════
-# Save figures and coefficient tables
-# ════════════════════════════════════════════════════════════
 es_specs <- list(
   list(plot = p_full, coefs = es_full$coefs, stem = "Full"),
   list(plot = p_sw,   coefs = es_sw$coefs,   stem = "SingleWall"),
-  list(plot = p_dw,   coefs = es_dw$coefs,   stem = "DoubleWall")
-)
-
+  list(plot = p_dw,   coefs = es_dw$coefs,   stem = "DoubleWall"))
 for (s in es_specs) {
   ggsave(file.path(OUTPUT_FIGURES, sprintf("Figure_OLS_ES_%s.png", s$stem)),
-         s$plot, width = OLS_PLOT_W, height = OLS_PLOT_H,
-         dpi = 300, bg = "white")
+         s$plot, width = OLS_PLOT_W, height = OLS_PLOT_H, dpi = 300, bg = "white")
   ggsave(file.path(OUTPUT_FIGURES, sprintf("Figure_OLS_ES_%s.pdf", s$stem)),
-         s$plot, width = OLS_PLOT_W, height = OLS_PLOT_H,
-         device = cairo_pdf)
-  fwrite(s$coefs,
-         file.path(OUTPUT_TABLES, sprintf("Table_OLS_ES_%s.csv", s$stem)))
+         s$plot, width = OLS_PLOT_W, height = OLS_PLOT_H, device = cairo_pdf)
+  fwrite(s$coefs, file.path(OUTPUT_TABLES, sprintf("Table_OLS_ES_%s.csv", s$stem)))
   log_step(sprintf("  Saved: %s", s$stem), 1)
 }
 
-
-# ════════════════════════════════════════════════════════════
-# DiD comparison table
-# ════════════════════════════════════════════════════════════
 did_comparison <- rbindlist(list(
-  data.table(spec = "Cox — primary (calendar)",   metric = "HR",
-             estimate = cox_prim$coef, se = cox_prim$se,
-             p = cox_prim$p,          hr_or_pp = cox_prim$hr,
-             n_obs = cox_prim$n,      n_events = cox_prim$ev),
-  data.table(spec = "OLS — full sample",           metric = "pp",
-             estimate = did_full$row$coef * 100,   se = did_full$row$se * 100,
-             p = did_full$row$p,      hr_or_pp = did_full$row$coef * 100,
-             n_obs = did_full$row$n,  n_events = NA_integer_),
-  data.table(spec = sprintf("OLS — single-wall (cohort \u2265 %d)", WALL_COHORT_MIN),
-             metric = "pp",
-             estimate = did_sw$row$coef * 100,     se = did_sw$row$se * 100,
-             p = did_sw$row$p,        hr_or_pp = did_sw$row$coef * 100,
-             n_obs = did_sw$row$n,    n_events = NA_integer_),
-  data.table(spec = sprintf("OLS — double-wall (cohort \u2265 %d)", WALL_COHORT_MIN),
-             metric = "pp",
-             estimate = did_dw$row$coef * 100,     se = did_dw$row$se * 100,
-             p = did_dw$row$p,        hr_or_pp = did_dw$row$coef * 100,
-             n_obs = did_dw$row$n,    n_events = NA_integer_)
+  data.table(spec = "Cox - primary (calendar)", metric = "HR",
+    estimate = cox_prim$coef, se = cox_prim$se, p = cox_prim$p,
+    hr_or_pp = cox_prim$hr, n_obs = cox_prim$n, n_events = cox_prim$ev),
+  data.table(spec = "OLS - full sample", metric = "pp",
+    estimate = did_full$row$coef * 100, se = did_full$row$se * 100,
+    p = did_full$row$p, hr_or_pp = did_full$row$coef * 100,
+    n_obs = did_full$row$n, n_events = NA_integer_),
+  data.table(spec = sprintf("OLS - single-wall (>=%d)", WALL_COHORT_MIN), metric = "pp",
+    estimate = did_sw$row$coef * 100, se = did_sw$row$se * 100,
+    p = did_sw$row$p, hr_or_pp = did_sw$row$coef * 100,
+    n_obs = did_sw$row$n, n_events = NA_integer_),
+  data.table(spec = sprintf("OLS - double-wall (>=%d)", WALL_COHORT_MIN), metric = "pp",
+    estimate = did_dw$row$coef * 100, se = did_dw$row$se * 100,
+    p = did_dw$row$p, hr_or_pp = did_dw$row$coef * 100,
+    n_obs = did_dw$row$n, n_events = NA_integer_)
 ), fill = TRUE)
-
-did_comparison[, `:=`(
-  ci_lo = estimate - 1.96 * se,
-  ci_hi = estimate + 1.96 * se,
-  stars = fcase(p < 0.01, "***", p < 0.05, "**", p < 0.10, "*", default = "")
-)]
-
+did_comparison[, `:=`(ci_lo = estimate - 1.96 * se, ci_hi = estimate + 1.96 * se,
+  stars = fcase(p < 0.01, "***", p < 0.05, "**", p < 0.10, "*", default = ""))]
 log_step("\nDiD comparison:")
-print(did_comparison[, .(spec, metric, estimate = round(estimate, 4),
-                          se = round(se, 4), p = round(p, 3), stars, n_obs)])
-
+print(did_comparison[, .(spec, metric, estimate = round(estimate, 4), se = round(se, 4), p = round(p, 3), stars, n_obs)])
 fwrite(did_comparison, file.path(OUTPUT_TABLES, "Table_DiD_Comparison.csv"))
 cat("\n")
+
+
+#### S12: Duration Model Comparison Table ####
 
 cat("========================================\n")
 cat("S12: DURATION MODEL COMPARISON TABLE\n")
 cat("========================================\n\n")
 
-# Side-by-side comparison of all primary and reference duration specifications:
-#   (1) Cox primary      — exact calendar dates, strata(make_model_tank)
-#   (2) Cox age-axis     — exact age intervals,  strata(make_model_tank)
-#   (3) Cloglog FE       — annual panel, tank FE + make_model_tank^panel_year
-#   (4) OLS LPM          — annual panel, tank FE + make_model_tank^panel_year
-
-# Cox primary
-r1 <- extract_cox_row(m_cox_primary)
-# Cox age-axis
-r2 <- extract_cox_row(m_cox_age)
-# Cloglog
-r3 <- extract_panel_row(m_cloglog)
-# OLS
-r4 <- extract_panel_row(m_ols)
-
+# ---- CHANGED: use cox_prim and ols_row directly (not stale r1/r4) ----
+r1 <- cox_prim
+r4 <- ols_row
 n_events_panel <- fmt_n(sum(panel_dt$closure_event, na.rm = TRUE))
 
 write_tex(c(
-  "\\begin{table}[htbp]",
-  "\\centering",
-  "\\caption{Effect of Experience Rating on Tank Closure: Duration Model Estimates}",
-  "\\label{tbl:duration_models}",
-  "\\begin{tabular}{lcccc}",
-  "\\toprule",
-  " & (1) & (2) & (3) & (4) \\\\",
-  " & \\multicolumn{2}{c}{\\textit{Primary: Cox}} & \\multicolumn{2}{c}{\\textit{Reference}} \\\\",
-  "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
-  " & Calendar time & Age time & Cloglog FE & OLS LPM \\\\",
+  "\\begin{table}[htbp]", "\\centering",
+  "\\caption{Effect of Experience Rating on Tank Closure}",
+  "\\label{tbl:duration_models}", "\\begin{tabular}{lcc}", "\\toprule",
+  " & (1) & (2) \\\\",
+  " & \\textit{Primary: Cox} & \\textit{Reference: OLS LPM} \\\\",
   "\\midrule",
-  sprintf("Hazard ratio (Texas $\\times$ Post) & %s & %s & --- & --- \\\\",
-          fmt_hr(r1$hr, r1$p), fmt_hr(r2$hr, r2$p)),
-  sprintf("95\\%% CI & %s & %s & & \\\\",
-          fmt_ci(exp(r1$coef - 1.96*r1$se), exp(r1$coef + 1.96*r1$se)),
-          fmt_ci(exp(r2$coef - 1.96*r2$se), exp(r2$coef + 1.96*r2$se))),
+  sprintf("Hazard ratio (Texas $\\times$ Post) & %s & --- \\\\", fmt_hr(r1$hr, r1$p)),
+  sprintf("95\\%% CI & %s & \\\\",
+    fmt_ci(exp(r1$coef - 1.96 * r1$se), exp(r1$coef + 1.96 * r1$se))),
   "\\addlinespace",
-  sprintf("Log-hazard / OLS coefficient & %s & %s & %s & %s \\\\",
-          fmt_est(r1$coef, r1$p), fmt_est(r2$coef, r2$p),
-          fmt_est(r3$coef, r3$p), fmt_est(r4$coef, r4$p)),
-  sprintf("(SE) & %s & %s & %s & %s \\\\",
-          fmt_se(r1$se), fmt_se(r2$se), fmt_se(r3$se), fmt_se(r4$se)),
+  sprintf("Log-hazard / OLS coefficient & %s & %s \\\\", fmt_est(r1$coef, r1$p), fmt_est(r4$coef, r4$p)),
+  sprintf("(SE) & %s & %s \\\\", fmt_se(r1$se), fmt_se(r4$se)),
   "\\midrule",
-  "Estimand & Log-hazard & Log-hazard & Log-hazard & Pr(closure) \\\\",
-  "Conditioning & Survival to $t$ & Survival to age & Survival to $t$ & Unconditional \\\\",
-  "Time axis & Calendar days & Tank age (yrs) & Calendar year & Calendar year \\\\",
-  "Baseline hazard & By cell & By cell & Absorbed by FE & Absorbed by FE \\\\",
-  "Unit FE & Strata & Strata & Tank FE & Tank FE \\\\",
-  "Cell $\\times$ year FE & Strata only & Strata only & Yes & Yes \\\\",
-  "Age control & --- & --- & $\\checkmark$ & $\\checkmark$ \\\\",
+  "Estimand         & Log-hazard ratio    & Pr(closure) \\\\",
+  "Time axis        & Calendar days       & Calendar year \\\\",
+  "Unit FE          & Strata              & Tank FE \\\\",
   "\\midrule",
-  sprintf("Observations & %s & %s & %s & %s \\\\",
-          fmt_n(r1$n), fmt_n(r2$n), fmt_n(r3$n), fmt_n(r4$n)),
-  sprintf("Events (closures) & %s & %s & %s & %s \\\\",
-          fmt_n(r1$ev), fmt_n(r2$ev),
-          n_events_panel, n_events_panel),
+  sprintf("Observations      & %s & %s \\\\", fmt_n(r1$n), fmt_n(r4$n)),
+  sprintf("Events (closures) & %s & %s \\\\", fmt_n(r1$ev), n_events_panel),
   "\\bottomrule",
-  "\\multicolumn{5}{p{0.98\\linewidth}}{\\footnotesize",
-  "\\textit{Notes:} Tank-level analysis.",
-  "Primary sample: non-mandate install cohorts (1989--1997), classified wall and fuel type,",
-  "non-missing capacity. Columns~(1)--(2): counting-process Cox models with exact",
-  "installation and closure dates; strata absorb the cell-specific baseline hazard",
-  "with no parametric restriction.",
-  "Column~(1) uses calendar time as the time axis.",
-  "Column~(2) uses exact tank age (years since installation) as the time axis.",
-  "Columns~(3)--(4): annual tank-year panel with tank fixed effects and",
-  "make-model-cell $\\times$ year fixed effects.",
-  "Column~(3): Prentice--Gl\\\"ockler complementary log-log; estimates",
-  "log-hazard ratio conditional on survival to $t$.",
-  "Column~(4): OLS linear probability model; estimates the ATT on the",
-  "unconditional annual closure probability (transparent prior-literature benchmark).",
-  "All specifications cluster standard errors at the state level.",
-  "$^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.}",
-  "\\end{tabular}",
-  "\\end{table}"
+  "\\end{tabular}", "\\end{table}"
 ), "Table_Duration_Models.tex")
 cat("\n")
 
@@ -1690,116 +2904,29 @@ cat("========================================\n")
 cat("S13: HTE BY WALL TYPE\n")
 cat("========================================\n\n")
 
-# Test whether the reform effect is larger for single-walled tanks,
-# consistent with the premium-gradient mechanism (SW tanks carry higher
-# actuarial risk → larger per-tank premium under experience rating).
-#
-# PANEL SPEC (OLS/cloglog):
-#   closure_event ~ did_term:mm_wall | tank_panel_id + make_model_tank^panel_year
-#   Per research design memo Section 4.3: did_term:mm_wall interaction.
-#   Since mm_wall is part of make_model_tank, this effectively compares the
-#   treatment effect between SW and DW cells.
-#
-# COX SPEC:
-#   Two separate cell-specific treatment indicators:
-#   did_term_sw = did_term × I(mm_wall == "Single-Walled")
-#   did_term_dw = did_term × I(mm_wall == "Double-Walled")
-#   Within each stratum all tanks share the same mm_wall, so these are
-#   perfectly identified by the contrast across cell types.
-
-log_step("HTE by wall type — OLS spec...")
+log_step("HTE by wall type - OLS spec...")
 m_hte_wall_ols <- feols(
-  closure_event ~ did_term:mm_wall + age_bin |
-    tank_panel_id + make_model_tank^panel_year,
-  data    = panel_dt,
-  cluster = ~state
-)
+  closure_event ~ did_term:mm_wall + age_bin | tank_panel_id + make_model_tank^panel_year,
+  data = panel_dt, cluster = ~state)
 
-log_step("HTE by wall type — Cloglog spec...")
-m_hte_wall_cll <- feglm(
-  closure_event ~ did_term:mm_wall + age_bin |
-    tank_panel_id + make_model_tank^panel_year,
-  family  = binomial(link = "cloglog"),
-  data    = panel_dt,
-  cluster = ~state
-)
-
-# Cox HTE by wall type (separate treatment indicators)
 exact_split_df[, `:=`(
   did_term_sw = did_term * as.integer(mm_wall == "Single-Walled"),
-  did_term_dw = did_term * as.integer(mm_wall == "Double-Walled")
-)]
+  did_term_dw = did_term * as.integer(mm_wall == "Double-Walled"))]
 
-log_step("HTE by wall type — Cox spec...")
+log_step("HTE by wall type - Cox spec...")
 m_hte_wall_cox <- coxph(
-  Surv(t_enter, t_exit, failure) ~
-    did_term_sw + did_term_dw + strata(make_model_tank),
-  data    = exact_split_df,
-  cluster = exact_split_df$state,
-  ties    = "efron"
-)
+  Surv(t_enter, t_exit, failure) ~ did_term_sw + did_term_dw + strata(make_model_tank),
+  data = exact_split_df, cluster = exact_split_df$state, ties = "efron")
 
-# Tidy Cox wall HTE results
 wall_cox_s <- summary(m_hte_wall_cox)$coefficients
-sw_hr  <- fmt_hr(exp(wall_cox_s["did_term_sw", "coef"]),
-                      wall_cox_s["did_term_sw", "Pr(>|z|)"])
-dw_hr  <- fmt_hr(exp(wall_cox_s["did_term_dw", "coef"]),
-                      wall_cox_s["did_term_dw", "Pr(>|z|)"])
-sw_se  <- fmt_se(wall_cox_s["did_term_sw", "se(coef)"])
-dw_se  <- fmt_se(wall_cox_s["did_term_dw", "se(coef)"])
-
-# OLS wall HTE
-ols_wall_ct <- coeftable(m_hte_wall_ols)
-sw_ols <- ols_wall_ct[grep("did_term:mm_wallSingle-Walled", rownames(ols_wall_ct)), ]
-dw_ols <- ols_wall_ct[grep("did_term:mm_wallDouble-Walled", rownames(ols_wall_ct)), ]
-
-sw_ols_est <- fmt_est(sw_ols[, "Estimate"], sw_ols[, "Pr(>|t|)"])
-dw_ols_est <- fmt_est(dw_ols[, "Estimate"], dw_ols[, "Pr(>|t|)"])
-sw_ols_se  <- fmt_se(sw_ols[, "Std. Error"])
-dw_ols_se  <- fmt_se(dw_ols[, "Std. Error"])
-
-write_tex(c(
-  "\\begin{table}[htbp]",
-  "\\centering",
-  "\\caption{Reform Effect on Closure Hazard: Heterogeneity by Tank Wall Construction}",
-  "\\label{tbl:hte_wall}",
-  "\\begin{tabular}{lcc}",
-  "\\toprule",
-  " & (1) & (2) \\\\",
-  " & Cox (primary) & OLS LPM (reference) \\\\",
-  "\\midrule",
-  "\\textit{Texas $\\times$ Post $\\times$:} & & \\\\",
-  sprintf("\\quad Single-walled & %s & %s \\\\", sw_hr,      sw_ols_est),
-  sprintf("                    & %s & %s \\\\", sw_se,      sw_ols_se),
-  sprintf("\\quad Double-walled & %s & %s \\\\", dw_hr,      dw_ols_est),
-  sprintf("                    & %s & %s \\\\", dw_se,      dw_ols_se),
-  "\\midrule",
-  "Metric & Hazard ratio & OLS coefficient \\\\",
-  "Cell $\\times$ year & Strata & FE \\\\",
-  "Unit FE & Strata & Tank FE \\\\",
-  sprintf("Observations & %s & %s \\\\",
-          fmt_n(m_hte_wall_cox$n), fmt_n(nobs(m_hte_wall_ols))),
-  sprintf("Events / closures & %s & %s \\\\",
-          fmt_n(m_hte_wall_cox$nevent), fmt_n(sum(panel_dt$closure_event))),
-  "\\bottomrule",
-  "\\multicolumn{3}{p{0.80\\linewidth}}{\\footnotesize",
-  "\\textit{Notes:} Tank-level primary sample.",
-  "Column~(1): Cox model with separate treatment indicators for single- and",
-  "double-walled tanks; strata(make\\_model\\_tank) absorbs cell baselines.",
-  "Column~(2): OLS with \\texttt{did\\_term:mm\\_wall} interaction,",
-  "tank FE, and cell$\\times$year FE.",
-  "Standard errors clustered at the state level.",
-  "$^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.}",
-  "\\end{tabular}",
-  "\\end{table}"
-), "Table_HTE_WallType.tex")
+log_step(sprintf("  SW HR = %.3f (p=%.4f)  DW HR = %.3f (p=%.4f)",
+  exp(wall_cox_s["did_term_sw", "coef"]), wall_cox_s["did_term_sw", "Pr(>|z|)"],
+  exp(wall_cox_s["did_term_dw", "coef"]), wall_cox_s["did_term_dw", "Pr(>|z|)"]), 1)
 
 fwrite(as.data.table(coeftable(m_hte_wall_ols), keep.rownames = "term"),
        file.path(OUTPUT_TABLES, "Table_HTE_WallType_OLS.csv"))
 fwrite(as.data.table(wall_cox_s, keep.rownames = "term"),
        file.path(OUTPUT_TABLES, "Table_HTE_WallType_Cox.csv"))
-
-# Clean up wall HTE indicators
 exact_split_df[, c("did_term_sw", "did_term_dw") := NULL]
 cat("\n")
 
@@ -1810,87 +2937,48 @@ cat("========================================\n")
 cat("S14: HTE BY INSTALL COHORT\n")
 cat("========================================\n\n")
 
-# Test whether the reform effect is larger for older cohorts.
-# Older tanks at reform date → higher per-tank premium under experience rating
-# → stronger closure incentive.
-# Three cohorts in primary sample: 1989-1991 (7-9yr at reform),
-# 1992-1994 (4-6yr), 1995-1997 (1-3yr).
-
-log_step("HTE by install cohort — OLS spec...")
+log_step("HTE by install cohort - OLS spec...")
 m_hte_cohort_ols <- feols(
-  closure_event ~ did_term:mm_install_cohort + age_bin |
-    tank_panel_id + make_model_tank^panel_year,
-  data    = panel_dt,
-  cluster = ~state
-)
+  closure_event ~ did_term:mm_install_cohort + age_bin | tank_panel_id + make_model_tank^panel_year,
+  data = panel_dt, cluster = ~state)
 
-log_step("HTE by install cohort — Cloglog spec...")
-m_hte_cohort_cll <- feglm(
-  closure_event ~ did_term:mm_install_cohort + age_bin |
-    tank_panel_id + make_model_tank^panel_year,
-  family  = binomial(link = "cloglog"),
-  data    = panel_dt,
-  cluster = ~state
-)
-
-# Cox: separate treatment indicators by cohort
-for (coh in PRIMARY_YEARS) {
+# ---- CHANGED: ALL_YEARS instead of PRIMARY_YEARS ----
+for (coh in ALL_YEARS) {
   safe_coh <- gsub("-", "_", coh)
-  exact_split_df[, paste0("did_term_c", safe_coh) :=
-    did_term * as.integer(mm_install_cohort == coh)]
+  exact_split_df[, paste0("did_term_c", safe_coh) := did_term * as.integer(mm_install_cohort == coh)]
 }
 coh_did_vars <- grep("^did_term_c", names(exact_split_df), value = TRUE)
 
-log_step("HTE by install cohort — Cox spec...")
-cox_cohort_fml <- as.formula(paste(
-  "Surv(t_enter, t_exit, failure) ~",
-  paste(coh_did_vars, collapse = " + "),
-  "+ strata(make_model_tank)"
-))
-m_hte_cohort_cox <- coxph(
-  cox_cohort_fml,
-  data    = exact_split_df,
-  cluster = exact_split_df$state,
-  ties    = "efron"
-)
+log_step("HTE by install cohort - Cox spec...")
+cox_cohort_fml <- as.formula(paste("Surv(t_enter, t_exit, failure) ~",
+  paste(coh_did_vars, collapse = " + "), "+ strata(make_model_tank)"))
+m_hte_cohort_cox <- coxph(cox_cohort_fml, data = exact_split_df,
+                            cluster = exact_split_df$state, ties = "efron")
 
-# Extract and plot
 coh_cox_s <- summary(m_hte_cohort_cox)$coefficients
-
 cohort_forest <- data.table(
-  cohort = PRIMARY_YEARS,
-  var    = coh_did_vars,
-  hr     = exp(coh_cox_s[coh_did_vars, "coef"]),
-  coef   = coh_cox_s[coh_did_vars, "coef"],
-  se     = coh_cox_s[coh_did_vars, "se(coef)"],
-  p      = coh_cox_s[coh_did_vars, "Pr(>|z|)"]
-)
-cohort_forest[, `:=`(
-  ci_lo = exp(coef - 1.96 * se),
-  ci_hi = exp(coef + 1.96 * se)
-)]
-cohort_forest[, cohort := factor(cohort,
-                                  levels = rev(PRIMARY_YEARS))]
+  cohort = ALL_YEARS, var = coh_did_vars,
+  hr = exp(coh_cox_s[coh_did_vars, "coef"]),
+  coef = coh_cox_s[coh_did_vars, "coef"],
+  se = coh_cox_s[coh_did_vars, "se(coef)"],
+  p = coh_cox_s[coh_did_vars, "Pr(>|z|)"])
+cohort_forest[, `:=`(ci_lo = exp(coef - 1.96 * se), ci_hi = exp(coef + 1.96 * se))]
+cohort_forest[, cohort := factor(cohort, levels = rev(ALL_YEARS))]
 
 p_cohort_forest <- ggplot(cohort_forest,
   aes(x = hr, y = cohort, xmin = ci_lo, xmax = ci_hi)) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "grey50") +
   geom_pointrange(size = 0.6, linewidth = 0.7, color = COL_TX) +
-  labs(x = "Hazard Ratio (Texas × Post)", y = "Install Cohort") +
-  theme_pub() +
-  theme(panel.grid.major.y = element_line(color = "grey92", linewidth = 0.3))
+  labs(x = "Hazard Ratio (Texas x Post)", y = "Install Cohort") +
+  theme_pub() + theme(panel.grid.major.y = element_line(color = "grey92", linewidth = 0.3))
 
 ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_CohortForest.png"),
-       p_cohort_forest, width = 7, height = 4, dpi = 300, bg = "white")
+       p_cohort_forest, width = 7, height = 5, dpi = 300, bg = "white")
 ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_CohortForest.pdf"),
-       p_cohort_forest, width = 7, height = 4, device = cairo_pdf)
-
-fwrite(cohort_forest,
-       file.path(OUTPUT_TABLES, "Table_HTE_Cohort_Cox.csv"))
+       p_cohort_forest, width = 7, height = 5, device = cairo_pdf)
+fwrite(cohort_forest, file.path(OUTPUT_TABLES, "Table_HTE_Cohort_Cox.csv"))
 fwrite(as.data.table(coeftable(m_hte_cohort_ols), keep.rownames = "term"),
        file.path(OUTPUT_TABLES, "Table_HTE_Cohort_OLS.csv"))
-
-# Clean up cohort HTE indicators
 exact_split_df[, (coh_did_vars) := NULL]
 cat("\n")
 
@@ -1901,54 +2989,30 @@ cat("========================================\n")
 cat("S15: AGE-AT-CLOSURE ANALYSIS\n")
 cat("========================================\n\n")
 
-# Age at closure is measured from exact install date to exact closure date
-# (years). This is a direct output of the tank-level analysis; the facility-
-# level equivalent (avg_tank_age) was a lossy average across multiple tanks.
-
 closed_exact <- exact_base[failure == 1L, .(
-  tank_panel_id,
-  state,
-  texas_treated,
-  mm_install_cohort,
-  mm_wall,
+  tank_panel_id, state, texas_treated, mm_install_cohort, mm_wall,
   age_at_closure = as.numeric(t_exit - t_enter) / 365.25,
-  period = fifelse(t_exit >= REFORM_DAYS, "Post-reform", "Pre-reform")
-)]
+  period = fifelse(t_exit >= REFORM_DAYS, "Post-reform", "Pre-reform"))]
 closed_exact[, group := factor(
   paste(fifelse(texas_treated == 1L, "Texas", "Control States"), period),
-  levels = c("Control States Pre-reform",  "Control States Post-reform",
-             "Texas Pre-reform",            "Texas Post-reform"))]
+  levels = c("Control States Pre-reform", "Control States Post-reform",
+             "Texas Pre-reform", "Texas Post-reform"))]
 
-summary_acl <- closed_exact[, .(
-  n      = .N,
-  mean   = round(mean(age_at_closure),   2),
-  median = round(median(age_at_closure), 2),
-  sd     = round(sd(age_at_closure),     2)
+summary_acl <- closed_exact[, .(n = .N, mean = round(mean(age_at_closure), 2),
+  median = round(median(age_at_closure), 2), sd = round(sd(age_at_closure), 2)
 ), by = group][order(group)]
-
 log_step("Age at closure summary:")
 print(summary_acl)
-fwrite(summary_acl,
-       file.path(OUTPUT_TABLES, "Table_AgeAtClosure_Summary.csv"))
+fwrite(summary_acl, file.path(OUTPUT_TABLES, "Table_AgeAtClosure_Summary.csv"))
 
-p_hist_acl <- ggplot(closed_exact,
-  aes(x = age_at_closure, fill = group)) +
+p_hist_acl <- ggplot(closed_exact, aes(x = age_at_closure, fill = group)) +
   geom_histogram(binwidth = 1, alpha = 0.85, color = "white", linewidth = 0.2) +
-  geom_vline(data = summary_acl,
-             aes(xintercept = median),
-             linetype = "dashed", linewidth = 0.6) +
   facet_wrap(~group, ncol = 2, scales = "free_y") +
   scale_fill_manual(values = c(
-    "Control States Pre-reform"  = COL_CTRL,
-    "Control States Post-reform" = "#56B4E9",
-    "Texas Pre-reform"           = COL_PRE,
-    "Texas Post-reform"          = COL_TX),
-    guide = "none") +
-  scale_x_continuous(breaks = seq(0, 30, 3)) +
-  labs(x = "Age at Closure — Exact Install to Close Date (years)",
-       y = "Number of Closures") +
-  theme_pub()
-
+    "Control States Pre-reform" = COL_CTRL, "Control States Post-reform" = "#56B4E9",
+    "Texas Pre-reform" = COL_PRE, "Texas Post-reform" = COL_TX), guide = "none") +
+  scale_x_continuous(breaks = seq(0, 35, 5)) +
+  labs(x = "Age at Closure (years)", y = "Number of Closures") + theme_pub()
 ggsave(file.path(OUTPUT_FIGURES, "Figure_AgeAtClosure_Histogram.png"),
        p_hist_acl, width = 10, height = 6, dpi = 300, bg = "white")
 ggsave(file.path(OUTPUT_FIGURES, "Figure_AgeAtClosure_Histogram.pdf"),
@@ -1962,25 +3026,14 @@ cat("========================================\n")
 cat("S16: KAPLAN-MEIER SURVIVAL CURVES\n")
 cat("========================================\n\n")
 
-# KM curves use tank age (exact years from install date) as the time axis.
-# Groups: Texas vs Control × cohort.
-# Note: KM is purely descriptive; it does not condition on cell membership
-# and does not identify the causal effect. It illustrates the raw survival
-# patterns before and after the reform for each group.
-
+# ---- CHANGED: ALL_YEARS instead of PRIMARY_YEARS ----
 km_base <- exact_base[, .(
-  tank_panel_id,
-  texas_treated,
-  mm_install_cohort,
-  time_to_event = as.numeric(t_exit - t_enter) / 365.25,
-  event         = failure
-)]
+  tank_panel_id, texas_treated, mm_install_cohort,
+  time_to_event = as.numeric(t_exit - t_enter) / 365.25, event = failure)]
 km_base[, state_group := fifelse(texas_treated == 1L, "Texas", "Control States")]
 km_base[, km_group := factor(
   paste(state_group, mm_install_cohort),
-  levels = c(paste("Control States", PRIMARY_YEARS),
-             paste("Texas",          PRIMARY_YEARS))
-)]
+  levels = c(paste("Control States", ALL_YEARS), paste("Texas", ALL_YEARS)))]
 
 km_fit  <- survfit(Surv(time_to_event, event) ~ km_group, data = km_base)
 km_tidy <- as.data.table(broom::tidy(km_fit))
@@ -1990,16 +3043,12 @@ km_tidy[, state_part := fifelse(grepl("^Texas", group), "Texas", "Control States
 
 p_km <- ggplot(km_tidy, aes(x = time, y = estimate, color = group)) +
   geom_step(linewidth = 0.7) +
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group),
-              alpha = 0.07, color = NA) +
-  scale_y_continuous(labels = percent_format(accuracy = 1),
-                     limits = c(0, 1)) +
-  scale_x_continuous(breaks = seq(0, 30, 5)) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.07, color = NA) +
+  scale_y_continuous(labels = percent_format(accuracy = 1), limits = c(0, 1)) +
+  scale_x_continuous(breaks = seq(0, 35, 5)) +
   facet_wrap(~state_part, ncol = 2) +
-  labs(x = "Tank Age (years since installation)",
-       y = "Survival Probability (not yet closed)") +
-  theme_pub() +
-  theme(legend.position = "right")
+  labs(x = "Tank Age (years)", y = "Survival Probability") +
+  theme_pub() + theme(legend.position = "right")
 
 ggsave(file.path(OUTPUT_FIGURES, "Figure_KM_TankSurvival.png"),
        p_km, width = 10, height = 5.5, dpi = 300, bg = "white")
@@ -2014,148 +3063,73 @@ cat("========================================\n")
 cat("S17: ROBUSTNESS SPECIFICATIONS\n")
 cat("========================================\n\n")
 
-# ---- 17a: 3-dimension cell (drop capacity) ----
-# Per research design Threat 7 / Section 5.
-# If capacity measurement error drives the primary estimate, the 3-dim cell
-# (wall, fuel, cohort) and 4-dim cell (wall, fuel, capacity, cohort) estimates
-# should diverge. Report both; divergence flags measurement error.
-
-exact_split_df[, make_model_3dim := paste(mm_wall, mm_fuel, mm_install_cohort,
-                                           sep = "_")]
-panel_dt[, make_model_3dim := paste(mm_wall, mm_fuel, mm_install_cohort,
-                                     sep = "_")]
+# 17a: 3-dimension cell (drop capacity)
+if (!"make_model_3dim" %in% names(exact_split_df))
+  exact_split_df[, make_model_3dim := paste(mm_wall, mm_fuel, mm_install_cohort, sep = "_")]
+if (!"make_model_3dim" %in% names(panel_dt))
+  panel_dt[, make_model_3dim := paste(mm_wall, mm_fuel, mm_install_cohort, sep = "_")]
 
 log_step("Robustness 17a: 3-dimension cell...")
-m_cox_3dim <- coxph(
-  Surv(t_enter, t_exit, failure) ~
-    did_term + strata(make_model_3dim),
-  data    = exact_split_df,
-  cluster = exact_split_df$state,
-  ties    = "efron"
-)
-m_ols_3dim <- feols(
-  closure_event ~ did_term + age_bin |
-    tank_panel_id + make_model_3dim^panel_year,
-  data    = panel_dt,
-  cluster = ~state
-)
+m_cox_3dim <- coxph(Surv(t_enter, t_exit, failure) ~ did_term + strata(make_model_3dim),
+  data = exact_split_df, cluster = exact_split_df$state, ties = "efron")
+m_ols_3dim <- feols(closure_event ~ did_term + age_bin | tank_panel_id + make_model_3dim^panel_year,
+  data = panel_dt, cluster = ~state)
 r_3dim_cox <- extract_cox_row(m_cox_3dim)
 r_3dim_ols <- extract_panel_row(m_ols_3dim)
-log_step(sprintf("  Cox 3-dim HR = %.3f (p=%.3f) | Cox 4-dim HR = %.3f (p=%.3f)",
-                 r_3dim_cox$hr, r_3dim_cox$p,
-                 cox_prim$hr,   cox_prim$p), 1)
-log_step(sprintf("  OLS 3-dim coef = %.4f | OLS 4-dim coef = %.4f",
-                 r_3dim_ols$coef, ols_row$coef), 1)
+log_step(sprintf("  Cox 3-dim HR = %.3f | Cox 4-dim HR = %.3f", r_3dim_cox$hr, cox_prim$hr), 1)
 
-# ---- 17b: Drop border states ----
-# Per research design Threat 6.
-# Border states (TX neighbors: OK, AR, LA, NM) could be contaminated via
-# insurer entry, contractor capacity, or informal spillovers.
-
+# 17b: Drop border states
 BORDER_STATES <- c("OK", "AR", "LA", "NM")
 exact_no_border <- exact_split_df[!state %in% BORDER_STATES]
 panel_no_border <- panel_dt[!state %in% BORDER_STATES]
 
 log_step("Robustness 17b: drop border states...")
-m_cox_noborder <- coxph(
-  Surv(t_enter, t_exit, failure) ~
-    did_term + strata(make_model_tank),
-  data    = exact_no_border,
-  cluster = exact_no_border$state,
-  ties    = "efron"
-)
-m_ols_noborder <- feols(
-  closure_event ~ did_term + age_bin |
-    tank_panel_id + make_model_tank^panel_year,
-  data    = panel_no_border,
-  cluster = ~state
-)
+m_cox_noborder <- coxph(Surv(t_enter, t_exit, failure) ~ did_term + strata(make_model_tank),
+  data = exact_no_border, cluster = exact_no_border$state, ties = "efron")
+m_ols_noborder <- feols(closure_event ~ did_term + age_bin | tank_panel_id + make_model_tank^panel_year,
+  data = panel_no_border, cluster = ~state)
 r_nb_cox <- extract_cox_row(m_cox_noborder)
 r_nb_ols <- extract_panel_row(m_ols_noborder)
 log_step(sprintf("  Cox no-border HR = %.3f (p=%.3f)", r_nb_cox$hr, r_nb_cox$p), 1)
-log_step(sprintf("  OLS no-border coef = %.4f", r_nb_ols$coef), 1)
 
-# ---- 17c: Pre-1989 cohort expansion with mandate control ----
-# Per research design Threat 2.
-# The primary sample restricts to post-mandate cohorts (1989+).
-# Including pre-1989 cohorts requires a mandate-period control.
-# The reform estimate should be stable; a large shift would indicate
-# mandate contamination in the main sample is a concern.
-
-pre89_cohorts <- as.character(1970:1988)
-
-panel_expanded <- tank_year_panel[
-!is.na(make_model_tank)                                &
-  mm_install_cohort %in% c(PRIMARY_YEARS, pre89_cohorts) &
-  tstop > tstart                                   &
-  !is.na(did_term)                                 &
-  !is.na(age_bin)
-]
-
-log_step("Robustness 17c: pre-1989 cohort expansion + mandate control...")
-m_ols_expanded <- feols(
-  closure_event ~ did_term + mandate_active + age_bin |
-    tank_panel_id + make_model_tank^panel_year,
-  data    = panel_expanded,
-  cluster = ~state
-)
-r_exp_ols <- extract_panel_row(m_ols_expanded)
-log_step(sprintf("  OLS expanded coef = %.4f (vs primary %.4f)",
+# 17c: Expanded sample already covered by S9 Sample B.
+# Report that result here for the robustness table.
+r_exp_cox <- res_B$r_cox
+r_exp_ols <- res_B$r_ols
+log_step(sprintf("Robustness 17c: expanded sample (from S9-B) OLS coef = %.4f (vs primary %.4f)",
                  r_exp_ols$coef, ols_row$coef), 1)
 
-# ---- Robustness summary table ----
 rob_summary <- data.table(
   Specification = c(
-    "Primary (Cox calendar, 4-dim cell)",
-    "Primary (OLS, 4-dim cell)",
+    "Primary (Cox, 4-dim cell, post-mandate)",
+    "Primary (OLS, 4-dim cell, post-mandate)",
     "Cox 3-dim cell (no capacity)",
     "OLS 3-dim cell (no capacity)",
     "Cox 4-dim, drop border states",
     "OLS 4-dim, drop border states",
-    "OLS expanded to pre-1989 + mandate control"
-  ),
-  Estimand = c(
-    "Log-hazard ratio", "OLS coefficient",
-    "Log-hazard ratio", "OLS coefficient",
-    "Log-hazard ratio", "OLS coefficient",
-    "OLS coefficient"
-  ),
-  Estimate = round(c(
-    r1$coef,       ols_row$coef,
+    "Cox expanded 1985-1997 + mandate ctrl",
+    "OLS expanded 1985-1997 + mandate ctrl"),
+  Estimand = rep(c("Log-hazard ratio", "OLS coefficient"), 4),
+  Estimate = round(c(cox_prim$coef, ols_row$coef,
     r_3dim_cox$coef, r_3dim_ols$coef,
-    r_nb_cox$coef,   r_nb_ols$coef,
-    r_exp_ols$coef
-  ), 5),
-  HR_or_ExpCoef = round(c(
-    r1$hr,          NA,
-    r_3dim_cox$hr,  NA,
-    r_nb_cox$hr,    NA,
-    NA
-  ), 4),
-  SE = round(c(
-    r1$se,          ols_row$se,
-    r_3dim_cox$se,  r_3dim_ols$se,
-    r_nb_cox$se,    r_nb_ols$se,
-    r_exp_ols$se
-  ), 5),
-  p_value = round(c(
-    r1$p,           ols_row$p,
-    r_3dim_cox$p,   r_3dim_ols$p,
-    r_nb_cox$p,     r_nb_ols$p,
-    r_exp_ols$p
-  ), 4),
-  N_obs = c(
-    r1$n,            r4$n,
-    r_3dim_cox$n,    nobs(m_ols_3dim),
-    r_nb_cox$n,      nobs(m_ols_noborder),
-    nobs(m_ols_expanded)
-  )
-)
+    r_nb_cox$coef, r_nb_ols$coef,
+    r_exp_cox$coef, r_exp_ols$coef), 5),
+  HR = round(c(cox_prim$hr, NA, r_3dim_cox$hr, NA, r_nb_cox$hr, NA, r_exp_cox$hr, NA), 4),
+  SE = round(c(cox_prim$se, ols_row$se,
+    r_3dim_cox$se, r_3dim_ols$se,
+    r_nb_cox$se, r_nb_ols$se,
+    r_exp_cox$se, r_exp_ols$se), 5),
+  p_value = round(c(cox_prim$p, ols_row$p,
+    r_3dim_cox$p, r_3dim_ols$p,
+    r_nb_cox$p, r_nb_ols$p,
+    r_exp_cox$p, r_exp_ols$p), 4),
+  N_obs = c(cox_prim$n, ols_row$n,
+    r_3dim_cox$n, nobs(m_ols_3dim),
+    r_nb_cox$n, nobs(m_ols_noborder),
+    r_exp_cox$n, r_exp_ols$n))
 
-fwrite(rob_summary,
-       file.path(OUTPUT_TABLES, "Table_Robustness_Summary.csv"))
-log_step(sprintf("\nRobustness table written: %d specifications",
-                 nrow(rob_summary)))
+fwrite(rob_summary, file.path(OUTPUT_TABLES, "Table_Robustness_Summary.csv"))
+log_step(sprintf("\nRobustness table written: %d specifications", nrow(rob_summary)))
 cat("\n")
 
 
@@ -2166,87 +3140,53 @@ cat("S18: DIAGNOSTIC EXPORT\n")
 cat("========================================\n\n")
 
 # Save primary model objects
-saveRDS(m_cox_primary,      file.path(ANALYSIS_DIR, "tank_cox_primary.rds"))
-saveRDS(m_cox_age,          file.path(ANALYSIS_DIR, "tank_cox_age_axis.rds"))
-saveRDS(m_ols,              file.path(ANALYSIS_DIR, "tank_ols_reference.rds"))
-saveRDS(m_cloglog,          file.path(ANALYSIS_DIR, "tank_cloglog_reference.rds"))
-saveRDS(m_hte_wall_cox,     file.path(ANALYSIS_DIR, "tank_cox_hte_wall.rds"))
-saveRDS(m_hte_cohort_cox,   file.path(ANALYSIS_DIR, "tank_cox_hte_cohort.rds"))
+saveRDS(m_cox_primary,    file.path(ANALYSIS_DIR, "tank_cox_primary.rds"))
+saveRDS(m_cox_age,        file.path(ANALYSIS_DIR, "tank_cox_age_axis.rds"))
+saveRDS(m_ols,            file.path(ANALYSIS_DIR, "tank_ols_reference.rds"))
+saveRDS(m_hte_wall_cox,   file.path(ANALYSIS_DIR, "tank_cox_hte_wall.rds"))
+saveRDS(m_hte_cohort_cox, file.path(ANALYSIS_DIR, "tank_cox_hte_cohort.rds"))
 
-# Cross-spec coefficient summary (used in paper result text and tables)
+# ---- CHANGED: use correct variable names (no more r2/r3/m_cloglog) ----
 cross_spec_summary <- data.table(
-  Model     = c("Cox primary (calendar)",
-                "Cox primary (age axis)",
-                "Cloglog FE reference",
-                "OLS LPM reference",
-                "Cox 3-dim (robustness)",
-                "Cox no-border (robustness)"),
-  Estimand  = c(
-    "Log-hazard ratio (calendar time)",
-    "Log-hazard ratio (tank age)",
-    "Log-hazard ratio (conditional on survival to t)",
-    "ATT on annual closure probability",
-    "Log-hazard ratio (no capacity dim)",
-    "Log-hazard ratio (excl. border states)"),
-  Log_coef  = round(c(r1$coef, r2$coef, r3$coef, r4$coef,
-                       r_3dim_cox$coef, r_nb_cox$coef), 5),
-  HR        = round(c(r1$hr,   r2$hr,   NA, NA,
-                       r_3dim_cox$hr, r_nb_cox$hr), 4),
-  SE        = round(c(r1$se,   r2$se,   r3$se, r4$se,
-                       r_3dim_cox$se, r_nb_cox$se), 5),
-  p_value   = round(c(r1$p,    r2$p,    r3$p,  r4$p,
-                       r_3dim_cox$p, r_nb_cox$p),   4),
-  N_obs     = c(r1$n, r2$n, r3$n, r4$n,
-                r_3dim_cox$n, r_nb_cox$n),
-  N_events  = c(r1$ev, r2$ev,
+  Model = c("Cox primary (calendar)", "Cox primary (age axis)",
+            "OLS LPM reference", "Cox 3-dim (robustness)",
+            "Cox no-border (robustness)", "Cox expanded (robustness)"),
+  Estimand = c("Log-hazard ratio (calendar time)", "Log-hazard ratio (tank age)",
+    "ATT on annual closure probability", "Log-hazard ratio (no capacity dim)",
+    "Log-hazard ratio (excl. border states)", "Log-hazard ratio (1985-1997 + mandate)"),
+  Log_coef = round(c(cox_prim$coef, res_A$r_cox_age$coef, ols_row$coef,
+                      r_3dim_cox$coef, r_nb_cox$coef, r_exp_cox$coef), 5),
+  HR = round(c(cox_prim$hr, res_A$r_cox_age$hr, NA,
+                r_3dim_cox$hr, r_nb_cox$hr, r_exp_cox$hr), 4),
+  SE = round(c(cox_prim$se, res_A$r_cox_age$se, ols_row$se,
+                r_3dim_cox$se, r_nb_cox$se, r_exp_cox$se), 5),
+  p_value = round(c(cox_prim$p, res_A$r_cox_age$p, ols_row$p,
+                     r_3dim_cox$p, r_nb_cox$p, r_exp_cox$p), 4),
+  N_obs = c(cox_prim$n, res_A$r_cox_age$n, ols_row$n,
+             r_3dim_cox$n, r_nb_cox$n, r_exp_cox$n),
+  N_events = c(cox_prim$ev, res_A$r_cox_age$ev,
                 sum(panel_dt$closure_event),
-                sum(panel_dt$closure_event),
-                r_3dim_cox$ev, r_nb_cox$ev)
-)
+                r_3dim_cox$ev, r_nb_cox$ev, r_exp_cox$ev))
 
-fwrite(cross_spec_summary,
-       file.path(OUTPUT_TABLES, "Table_CrossSpec_Summary.csv"))
+fwrite(cross_spec_summary, file.path(OUTPUT_TABLES, "Table_CrossSpec_Summary.csv"))
 
-# Sample size summary for paper footnotes
 sample_summary <- data.table(
-  Level    = c("Master tanks loaded",
-               "Study states (non-NA treatment)",
-               "Tank-year panel (full)",
-               "Primary sample (mm_tank_primary) tank-years",
-               "Primary sample unique tanks",
-               "  of which: Texas",
-               "  of which: Control states",
-               "Exact-date Cox (post-survSplit)",
-               "  of which: events (closures)",
-               "Make-model cells (primary sample)",
-               "Identified cell-years (TX+CTL both present)"),
-  N = c(
-    nrow(master_tanks),
-    nrow(study_tanks),
-    nrow(tank_year_panel),
-    n_ty,
-    n_tanks,
-    n_tx_tanks,
-    n_ct_tanks,
-    nrow(exact_split_df),
-    sum(exact_split_df$failure),
-    n_cells,
-    n_cells_id
-  )
-)
-fwrite(sample_summary,
-       file.path(OUTPUT_TABLES, "Table_SampleSizes.csv"))
+  Level = c("Master tanks loaded", "Study states (non-NA treatment)",
+    "Tank-year panel (full)", "Primary sample tank-years", "Primary sample unique tanks",
+    "  of which: Texas", "  of which: Control states",
+    "Exact-date Cox (post-survSplit)", "  of which: events (closures)",
+    "Make-model cells", "Identified cell-years"),
+  N = c(nrow(master_tanks), nrow(study_tanks), nrow(tank_year_panel),
+    n_ty, n_tanks, n_tx_tanks, n_ct_tanks,
+    nrow(exact_split_df), sum(exact_split_df$failure), n_cells, n_cells_id))
+fwrite(sample_summary, file.path(OUTPUT_TABLES, "Table_SampleSizes.csv"))
 
 log_step("Saved model objects and summary tables.")
 log_step(sprintf("Output tables: %s", OUTPUT_TABLES))
 log_step(sprintf("Output figures: %s", OUTPUT_FIGURES))
-log_step(sprintf("Model RDS objects: %s", ANALYSIS_DIR))
 
-cat("\n")
-cat("========================================\n")
+cat("\n========================================\n")
 cat("02b_DiD_Survival.R COMPLETE\n")
 cat("========================================\n")
-
-# Print final cross-spec summary to console
 cat("\nCross-specification summary:\n")
 print(cross_spec_summary[, .(Model, Log_coef, HR, SE, p_value, N_obs)])

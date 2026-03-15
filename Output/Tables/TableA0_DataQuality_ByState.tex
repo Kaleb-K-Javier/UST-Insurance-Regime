@@ -1,15 +1,19 @@
 \begin{table}
-\centering
-\caption{\label{tab:tab:data-quality}State-level data completeness on four dimensions required for panel construction. Each cell = \% of records missing the indicated field. ``---'' = not applicable or zero denominator.}
-\centering
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\fontsize{9}{11}\selectfont
+\centering\begingroup\fontsize{9}{11}\selectfont
+
 \begin{tabular}[t]{lrrrrr}
 \toprule
 \multicolumn{2}{c}{ } & \multicolumn{3}{c}{% Missing (tanks)} & \multicolumn{1}{c}{% Missing (LUSTs)} \\
 \cmidrule(l{3pt}r{3pt}){3-5} \cmidrule(l{3pt}r{3pt}){6-6}
 State & Tanks & Close Date & Install Date & Wall Type & LUST Date\\
 \midrule
+LA & 46,520 & 0.0 & 0.1 & 33.7 & 0.0\\
+MA & 36,448 & 5.7 & 8.2 & 45.7 & 0.0\\
+ME & 16,902 & 0.6 & 0.0 & 0.2 & 0.0\\
+ND & 10,372 & 8.4 & 5.9 & 0.0 & 100.0\\
+NJ & 108,992 & 4.3 & 0.1 & 0.5 & 100.0\\
+NM & 16,322 & 2.5 & 15.9 & 100.0 & 0.0\\
+PA & 100,554 & 20.0 & 17.4 & 16.1 & 100.0\\
 \addlinespace[0.3em]
 \multicolumn{6}{l}{\textbf{Target}}\\
 \hspace{1em}TX & 178,611 & 0.0 & 0.0 & 9.9 & 4.2\\
@@ -18,25 +22,23 @@ State & Tanks & Close Date & Install Date & Wall Type & LUST Date\\
 \hspace{1em}AL & 48,635 & 9.4 & 24.1 & 85.0 & 0.0\\
 \hspace{1em}AR & 34,083 & 7.7 & 18.5 & 21.7 & 63.4\\
 \hspace{1em}CO & 32,910 & 6.9 & 21.6 & 24.7 & 20.6\\
-\hspace{1em}LA & 46,520 & 0.0 & 0.1 & 33.7 & 0.0\\
-\hspace{1em}ME & 16,902 & 0.6 & 0.0 & 0.2 & 0.0\\
-\hspace{1em}NJ & 108,992 & 4.3 & 0.1 & 0.5 & 100.0\\
-\hspace{1em}NM & 16,322 & 2.5 & 15.9 & 100.0 & 0.0\\
 \hspace{1em}OK & 40,004 & 11.1 & 13.2 & 0.0 & 0.0\\
-\hspace{1em}PA & 100,554 & 20.0 & 17.4 & 16.1 & 100.0\\
 \hspace{1em}TN & 60,277 & 10.8 & 0.6 & 9.6 & 55.0\\
 \addlinespace[0.3em]
 \multicolumn{6}{l}{\textbf{Control Tier 2}}\\
 \hspace{1em}ID & 14,880 & 0.8 & 2.2 & 0.0 & 0.0\\
 \hspace{1em}KS & 27,477 & 16.5 & 9.4 & 0.0 & 0.0\\
 \hspace{1em}KY & 51,771 & 5.2 & 18.0 & 0.0 & 100.0\\
-\hspace{1em}MA & 36,448 & 5.7 & 8.2 & 45.7 & 0.0\\
 \hspace{1em}MD & 54,296 & 15.5 & 18.1 & 0.0 & 0.0\\
 \hspace{1em}MN & 45,575 & 6.8 & 22.3 & 0.0 & 12.4\\
 \hspace{1em}NC & 91,664 & 0.3 & 1.4 & 8.2 & 14.2\\
-\hspace{1em}ND & 10,372 & 8.4 & 5.9 & 0.0 & 100.0\\
 \hspace{1em}OH & 73,200 & 3.0 & 28.4 & 0.0 & 38.8\\
 \hspace{1em}VA & 78,612 & 26.7 & 14.1 & 0.0 & 0.0\\
+\addlinespace[0.3em]
+\multicolumn{6}{l}{\textbf{Control (Analysis)}}\\
+\hspace{1em}GA & 79,273 & 100.0 & 3.3 & 0.0 & 21.8\\
+\hspace{1em}MO & 41,774 & 100.0 & 37.0 & 1.0 & 15.8\\
+\hspace{1em}WV & 25,796 & 100.0 & 16.4 & 0.0 & 0.0\\
 \addlinespace[0.3em]
 \multicolumn{6}{l}{\textbf{Excl. (Treated)}}\\
 \hspace{1em}AZ & 28,544 & 0.3 & 15.4 & 37.9 & 0.0\\
@@ -54,11 +56,9 @@ State & Tanks & Close Date & Install Date & Wall Type & LUST Date\\
 \hspace{1em}AK & 6,853 & 100.0 & 15.0 & 100.0 & 100.0\\
 \hspace{1em}CA & 37,400 & --- & 2.6 & 0.2 & 100.0\\
 \hspace{1em}DE & 9,388 & 8.6 & 18.1 & 100.0 & 100.0\\
-\hspace{1em}GA & 79,273 & 100.0 & 3.3 & 0.0 & 21.8\\
 \hspace{1em}HI & 6,763 & 100.0 & 19.4 & 100.0 & 100.0\\
 \hspace{1em}IL & 84,307 & 6.4 & 48.4 & 100.0 & 0.1\\
 \hspace{1em}IN & 57,525 & 100.0 & 53.3 & 100.0 & 100.0\\
-\hspace{1em}MO & 41,774 & 100.0 & 37.0 & 1.0 & 15.8\\
 \hspace{1em}MS & 32,132 & 100.0 & 100.0 & 100.0 & 0.0\\
 \hspace{1em}MT & 16,060 & 4.7 & 9.9 & 12.2 & 0.0\\
 \hspace{1em}NE & 6,188 & 100.0 & 3.8 & 99.7 & 0.9\\
@@ -70,8 +70,8 @@ State & Tanks & Close Date & Install Date & Wall Type & LUST Date\\
 \hspace{1em}SD & 10,178 & 80.0 & 9.1 & 0.0 & 0.0\\
 \hspace{1em}UT & 18,100 & 100.0 & 1.6 & 0.0 & 0.0\\
 \hspace{1em}VT & 11,001 & 0.5 & 100.0 & 100.0 & 29.3\\
-\hspace{1em}WV & 25,796 & 100.0 & 16.4 & 0.0 & 0.0\\
 \hspace{1em}WY & 10,172 & 100.0 & 13.0 & 100.0 & 100.0\\
 \bottomrule
-\end{tabular}}
+\end{tabular}
+\endgroup{}
 \end{table}

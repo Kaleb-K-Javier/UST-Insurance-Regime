@@ -1,0 +1,38 @@
+state,current_status,n_sample,pct_miss_wall,pct_closed_no_date,verdict,n_lust_total,pct_lust_miss_date,lust_min_date,lust_max_date,verdict_combined
+AK,Candidate (not yet used),587,100,32.9,EXCLUDE — >50% unknown wall,2187,100,,,EXCLUDE — wall type
+CA,Candidate (not yet used),11344,0,0,OK,41661,100,,,EXCLUDE — no LUST dates
+DE,Candidate (not yet used),495,100,3,EXCLUDE — >50% unknown wall,4979,100,,,EXCLUDE — wall type
+HI,Candidate (not yet used),660,100,21.1,EXCLUDE — >50% unknown wall,1395,100,,,EXCLUDE — wall type
+IL,Candidate (not yet used),6022,100,1.9,EXCLUDE — >50% unknown wall,23493,0.1,1990-01-02,2018-10-19,EXCLUDE — wall type
+IN,Candidate (not yet used),5048,100,26.3,EXCLUDE — >50% unknown wall,9987,100,,,EXCLUDE — wall type
+LA,Candidate (not yet used),3074,9.3,0,OK,3483,0,1990-01-03,2018-12-20,OK
+MA,Candidate (not yet used),4038,0.9,1.1,OK,4953,0,1990-01-01,2018-11-28,OK
+ME,Candidate (not yet used),1852,0,0,OK,63292,0.1,1990-01-02,2018-12-31,OK
+MT,Candidate (not yet used),1891,48.1,1,CAUTION — >20% unknown wall,4331,0,1990-01-03,2018-09-26,CAUTION — wall type
+ND,Candidate (not yet used),1133,0,1.4,OK,1015,100,,,EXCLUDE — no LUST dates
+NE,Candidate (not yet used),1590,100,2.1,EXCLUDE — >50% unknown wall,6865,1.1,1990-01-01,2018-08-28,EXCLUDE — wall type
+NH,Candidate (not yet used),1538,100,38.4,EXCLUDE — >50% unknown wall,2420,100,,,EXCLUDE — wall type
+NM,Candidate (not yet used),1160,100,0,EXCLUDE — >50% unknown wall,1691,0,1990-01-02,2018-08-01,EXCLUDE — wall type
+NV,Candidate (not yet used),1496,0,25.5,CAUTION — >20% closed missing date,2386,43.2,1990-01-03,2018-10-01,CAUTION — LUST dates
+NY,Candidate (not yet used),11521,100,47.8,EXCLUDE — >50% unknown wall,19426,0,1990-01-01,2012-07-11,EXCLUDE — wall type
+PA,Candidate (not yet used),13684,0,40.4,CAUTION — >20% closed missing date,15653,100,,,EXCLUDE — no LUST dates
+RI,Candidate (not yet used),652,4.3,37.6,CAUTION — >20% closed missing date,1957,0,1990-01-01,2018-10-24,CAUTION — close date
+SD,Candidate (not yet used),1538,0,13.6,OK,3555,0,1990-01-04,2018-09-24,OK
+UT,Candidate (not yet used),1337,0,28,CAUTION — >20% closed missing date,4524,0,1990-01-02,2018-09-19,OK
+WY,Candidate (not yet used),812,100,30.7,EXCLUDE — >50% unknown wall,1630,100,,,EXCLUDE — wall type
+AL,Current V1 Control,5210,80.4,0.7,EXCLUDE — >50% unknown wall,4851,0,1990-01-01,2018-12-01,EXCLUDE — wall type
+AR,Current V1 Control,4067,11.8,2.2,OK,4647,66.4,1990-01-11,2018-12-19,CAUTION — LUST dates
+CO,Current V1 Control,2588,1.7,2.4,OK,14406,24.2,1990-01-01,2018-12-29,CAUTION — LUST dates
+GA,Current V1 Control,13460,0,49.5,CAUTION — >20% closed missing date,17544,22.3,1990-01-03,2018-03-28,CAUTION — LUST dates
+ID,Current V1 Control,1473,0,0.1,OK,1474,0,1990-01-01,2018-09-11,OK
+KS,Current V1 Control,1972,0.1,1.8,OK,10037,0,1990-01-01,2018-08-13,OK
+KY,Current V1 Control,4490,0,0.7,OK,13115,100,,,EXCLUDE — no LUST dates
+MN,Current V1 Control,6026,0,0.6,OK,10627,13.4,1990-01-01,2018-09-27,OK
+MO,Current V1 Control,2557,0,35,CAUTION — >20% closed missing date,6322,17.2,1990-01-01,2018-06-25,CAUTION — close date
+NC,Current V1 Control,7515,8.7,0,OK,22411,14.9,1990-01-01,2018-11-20,OK
+OH,Current V1 Control,8580,0,2.2,OK,33320,39.9,1990-01-01,2018-12-27,CAUTION — LUST dates
+OK,Current V1 Control,2437,0,0.5,OK,5740,0,1990-01-01,2018-12-31,OK
+TN,Current V1 Control,5585,0.4,3.3,OK,15870,58.8,1990-01-01,2018-12-28,CAUTION — LUST dates
+VA,Current V1 Control,7689,0,4.3,OK,11079,0,1990-01-01,2018-08-30,OK
+WV,Current V1 Control,2190,0,41.1,CAUTION — >20% closed missing date,3466,0,1990-01-01,2018-06-07,CAUTION — close date
+TX,Target,12473,0.6,0,OK,9016,4.9,1990-01-01,2018-12-28,OK

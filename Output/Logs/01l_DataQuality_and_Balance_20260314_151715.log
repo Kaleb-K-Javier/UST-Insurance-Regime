@@ -1,0 +1,154 @@
+=== 01l_DataQuality_and_Balance | started 2026-03-14 15:17:15 ===
+=== 01l: DATA QUALITY + DESCRIPTIVE + BALANCE ===
+
+
+--- S0: Loading data ---
+
+  annual_data: 2,969,463 facility-years, 172,190 facilities, 12 states
+
+  tanks_1998:  210,103 tanks (61,782 TX, 148,321 CTL)
+
+
+--- S1: MM sample + overlap restriction ---
+
+  Cells total: 85 | Overlap: 77 | TX-only: 0 | CTL-only: 8
+
+  MM facilities: 171,885 (54,034 TX, 117,851 CTL)
+
+
+--- S2: Subsets ---
+
+  1998 fac cross-section : Full=84,880 | MM=84,575
+
+  1998 tanks             : Full=210,103 | MM=209,577
+
+  Pre-reform fac-years   : Full=979,619 | MM=977,699
+
+
+--- S2b: Cell coverage diagnostics ---
+
+  Facility cells — Full: 85 total | 77 identified | 0 TX-only | 8 CTL-only
+
+  Facility cells — MM  : 77 overlap cells | 100.0% of fac-years identified
+
+  Tank cells — Full (all cohorts)  : 1923 total | 1095 identified | 141 TX-only | 687 CTL-only
+
+  Tank cells — MM (cohorts 1989-97): 455 total | 282 identified | 19 TX-only | 154 CTL-only
+
+  % tanks in identified cells — Full: 96.6% | MM: 95.1%
+
+
+
+========== PART I: PARALLEL TRENDS FIGURE ==========
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel1A
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel1B
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel2A
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel2B
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Combined
+
+
+
+========== PART II: TABLE 0 (DESCRIPTIVE) ==========
+
+  Building Panel A (1998 cross-section)...
+
+  Building Panel B (pre-reform 1990-1998 flows)...
+
+  Building Panel C (make-model cell coverage)...
+
+
+=== Table 0 Preview ===
+
+  [tbl] Table0_Descriptive.csv
+
+  [tex] Table0_Descriptive.tex
+
+  Table0_Descriptive written.
+
+
+
+========== PART III: TABLE 1 (PROGRESSIVE BALANCE) ==========
+
+
+=== Table 1: Progressive Balance ===
+
+
+Closure shrinkage: Naive +0.07pp -> Pooled +0.07pp -> Cell-Wt +0.23pp
+
+Leak shrinkage:    Naive -1.54pp -> Pooled -1.54pp -> Cell-Wt -1.83pp
+
+  [tbl] Table1_Balance.csv
+
+  [tex] Table1_Balance.tex
+
+  Table1_Balance written.
+
+
+
+========== PART IV: CELL-LEVEL BALANCE DETAIL ==========
+
+
+  Cell detail: 76 overlap cells
+
+  [tbl] TableA_Balance_CellDetail.csv
+
+  [tex] TableA_Balance_CellDetail.tex
+
+  TableA_Balance_CellDetail written.
+
+
+
+========== PART V: APPENDIX TABLES ==========
+
+  Table B.1: Attrition Log
+
+  [tbl] TableB1_Attrition_Log.csv
+
+  [tex] TableB1_Attrition_Log.tex
+
+  Table B.3: Missing-Date Balance
+
+  [tbl] TableB3_Missing_Date_Balance.csv
+
+  [tex] TableB3_Missing_Date_Balance.tex
+
+  Table A.0: State Data Quality
+
+  Columns in Master_Data_Quality_Report.csv: state, study_group, total_tanks, pct_closed_missing_date, pct_missing_install_date, pct_miss_lat, pct_miss_county, pct_miss_capacity, pct_miss_tank_status, pct_miss_tank_substance, pct_miss_tank_type, pct_miss_fips, total_lusts, n_missing_report_date
+
+  WARNING: 3 control state(s) mis-assigned as Remainder in DQ report: GA, MO, WV
+
+  These states will be re-labeled 'Control (Analysis)' in Table A.0.
+
+  Verify whether their 100%% close-date missingness affects panel quality.
+
+  [tbl] TableA0_DataQuality_ByState.csv
+
+  [tex] TableA0_DataQuality_ByState.tex
+
+  TableA0_DataQuality_ByState written.
+
+
+
+=== 01l COMPLETE ===
+
+  Figure: RestrictionEarnsParallelTrends (2x2 + 4 panels)
+
+  Table0_Descriptive.tex      (34 rows, Panels A+B)
+
+  Table1_Balance.tex          (3-row progressive)
+
+  TableA_Balance_CellDetail   (76 cells)
+
+  TableB1_Attrition_Log.tex
+
+  TableB3_Missing_Date_Balance.tex
+
+  TableA0_DataQuality_ByState.tex
+
+=== 01l_DataQuality_and_Balance complete 2026-03-14 15:19:23 ===

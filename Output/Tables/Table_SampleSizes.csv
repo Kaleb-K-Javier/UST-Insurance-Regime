@@ -1,0 +1,12 @@
+Level,N
+Master tanks loaded,2322592
+Study states (non-NA treatment),1069484
+Tank-year panel (full),19018879
+Primary sample (mm_tank_primary) tank-years,3361552
+Primary sample unique tanks,135436
+  of which: Texas,14896
+  of which: Control states,120540
+Exact-date Cox (post-survSplit),261642
+  of which: events (closures),35412
+Make-model cells (primary sample),481
+Identified cell-years (TX+CTL both present),7822

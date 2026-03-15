@@ -1,0 +1,62 @@
+=== 01l_DataQuality_and_Balance | started 2026-03-14 16:40:50 ===
+=== 01l: DATA QUALITY + DESCRIPTIVE + BALANCE ===
+
+
+--- S0: Loading data ---
+
+  annual_data: 2,969,463 fy | 172,190 facilities | 12 states
+
+  tanks_1998: 210,103 tanks (61,782 TX | 148,321 CTL)
+
+
+--- S1: MM sample + overlap ---
+
+  Cells: 85 total | 77 overlap | 0 TX-only | 8 CTL-only
+
+  MM facilities: 171,885 (54,034 TX | 117,851 CTL)
+
+
+--- S2: Subsets ---
+
+  1998 fac: Full=84,880 | MM=84,575
+
+  Pre-reform fac-years: Full=979,619 | MM=977,699
+
+
+--- S2b: Cell coverage ---
+
+  Fac cells  — Full: 85 tot | 77 id | 0 TX-only | 8 CTL-only
+
+  Tank cells — Full: 1923 tot | 1095 id | MM: 455 tot | 282 id
+
+
+--- S3: Cell x year diff computation ---
+
+  Cell-years with both TX and CTL: 689 (of 693 total)
+
+  cell_year: 689 obs | 77 cells | 9 years
+
+  cell_stats: 77 cells | 299,351 TX fy | 677,938 CTL fy
+
+  Unweighted avg closure diff: -0.003pp | FY-weighted: -0.429pp
+
+  Unweighted avg LUST diff:    -1.076pp | FY-weighted: -2.004pp
+
+  Unweighted avg replace diff: -0.243pp | FY-weighted: -0.102pp
+
+  CYW Panel B summary:
+
+    Closure:     TX=12.58%  CTL=13.01%  Diff=-0.43pp
+
+    LUST:        TX=1.10%  CTL=3.10%  Diff=-2.00pp
+
+    Replacement: TX=1.03%  CTL=1.13%  Diff=-0.10pp
+
+
+
+========== PART I: PARALLEL TRENDS FIGURES ==========
+
+  Computing three diff series...
+
+  Pre-reform avg diff by series:
+

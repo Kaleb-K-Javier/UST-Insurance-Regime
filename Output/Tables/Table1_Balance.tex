@@ -1,18 +1,16 @@
 \begin{table}
-\centering
-\caption{\label{tab:tab:balance}Progressive balance: naive comparison, MM pooled, and MM cell-weighted. \textit{Full Sample (Naive)} is the unconditional pre-reform difference. \textit{MM Sample (Pooled)} restricts to overlap-cell facilities but still computes a raw pooled mean. \textit{MM Sample (Cell-Weighted)} is the cell-size-weighted mean of within-cell rates across 77 overlap cells. Shrinkage in Diff.\ measures compositional sorting removed by the design. $N$ = unique facilities, 1990--1997. 8 cell(s) lacking common support (0 TX-only, 8 CTL-only) excluded.}
-\centering
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\fontsize{10}{12}\selectfont
+\centering\begingroup\fontsize{10}{12}\selectfont
+
 \begin{tabular}[t]{lrrrrrrrr}
 \toprule
 \multicolumn{3}{c}{ } & \multicolumn{3}{c}{Closure Rate (%)} & \multicolumn{3}{c}{Leak Rate (%)} \\
 \cmidrule(l{3pt}r{3pt}){4-6} \cmidrule(l{3pt}r{3pt}){7-9}
 Comparison & $N_{TX}$ & $N_{CTL}$ & TX & CTL & Diff. & TX  & CTL  & Diff. \\
 \midrule
-\em{Full Sample (Naive)} & \em{46,768} & \em{157,912} & \em{9.60} & \em{9.88} & \em{-0.28} & \em{1.26} & \em{2.16} & \em{-0.90}\\
-MM Sample (Pooled) & 46,768 & 157,381 & 9.60 & 9.89 & -0.29 & 1.26 & 2.16 & -0.90\\
-\textbf{MM Sample (Cell-Weighted)} & \textbf{46,768} & \textbf{157,381} & \textbf{12.29} & \textbf{12.07} & \textbf{+0.23} & \textbf{1.25} & \textbf{2.33} & \textbf{-1.07}\\
+\em{Full Sample (Naive)} & \em{46,768} & \em{102,782} & \em{10.16} & \em{10.09} & \em{+0.07} & \em{1.21} & \em{2.75} & \em{-1.54}\\
+MM Sample (Pooled) & 46,768 & 102,477 & 10.16 & 10.09 & +0.07 & 1.21 & 2.76 & -1.54\\
+\textbf{MM Sample (Cell-Year Weighted)} & \textbf{45,691} & \textbf{95,187} & \textbf{13.47} & \textbf{13.88} & \textbf{-0.42} & \textbf{1.12} & \textbf{3.20} & \textbf{-2.08}\\
 \bottomrule
-\end{tabular}}
+\end{tabular}
+\endgroup{}
 \end{table}

@@ -92,11 +92,30 @@ PANEL_END   <- 2018L
 MANDATE_ANNOUNCE_YR <- 1987L
 
 # ---- Study states (MUST MATCH 02b_DiD_Survival.R) ----
+# Full analysis — clean on tank + LUST
+# CONTROL_STATES <- c(
+#   # V1 states: OK verdict
+#   "CO", "ID", "KS", "MN", "NC", "OH", "OK", "VA",
+#   # V1 states: CAUTION on LUST but keep with documentation
+#   "AR",   # 66% LUST missing — flag in LUST regressions
+#   "TN",   # 59% LUST missing — flag in LUST regressions
+#   # V1 states: CAUTION on closed-no-date — keep for binary closure
+#   # Clean additions
+#   "LA",   # OK on all
+#   "MA",   # OK on all
+#   "ME",   # OK on all — best closure recording in sample
+#   # PA: closure-only per user decision
+#   "PA"    # 100% LUST missing — closure regressions only
+# )
+
 CONTROL_STATES <- c(
-  "AL", "AR", "CO", "GA", "ID", "KS", "KY",
-  "MD", "MN", "MO", "NC", "OH",
-  "OK", "TN", "VA", "WV"
+  "AR", "CO",  "ID",  "KS", "KY",
+  "LA", "MA", "MD", "ME", "MN", "MO",  "NC",
+   "OH", "OK", "SD", "TN", "VA"
 )
+#"IL","NM", "AL","MT", --- missin all wall type data here
+# "GA", , "WV"--> no closure dates
+# master_tanks[state == 'GA']
 STUDY_STATES <- c("TX", CONTROL_STATES)
 
 # ---- Factor levels ----
@@ -251,7 +270,7 @@ required_cols <- c(
   "tank_closure_clean",
   # Cell and covariates
   "make_model_fac", "fac_wall", "fac_fuel", "fac_oldest_age_bin",
-  "facility_first_install_yr", "had_pre1989_tanks"
+  "facility_first_install_yr", "had_pre1989_tanks",'n_tanks_at_reform'
 )
 missing <- setdiff(required_cols, names(annual_data))
 if (length(missing) > 0)
@@ -262,6 +281,81 @@ cat("\n")
 
 
 #### S3: Sample Construction and Diagnostics ####
+### S3: Load Master Tanks, Build Match, and Filter Panel ####
+
+cat("\n========================================\n")
+cat("S3: LOAD MASTER TANKS AND BUILD TANK-YEAR PANEL\n")
+cat("========================================\n\n")
+
+library(MatchIt)
+
+# ---- 3a. Load Master Harmonized Tanks ----
+master_tanks <- fread(
+  here("Data", "Processed", "Master_Harmonized_UST_Tanks.csv"),
+  na.strings = c("", "NA", "N/A")
+)
+
+# ---- 3b. Construct Cross-Sectional Facility Match Data (Frozen Pre-Treatment at 1998) ----
+# Isolate the active portfolio of tanks operating immediately prior to the 1999 reform
+fac_match_data <- master_tanks[tank_installed_date <= as.IDate("1998-12-31") & 
+                                 (is.na(tank_closed_date) | tank_closed_date > as.IDate("1998-12-31")), .(
+  texas_treated = max(as.integer(state == "TX"), na.rm = TRUE),
+  n_tanks = .N,
+  prop_sw = sum(mm_wall == "Single-Walled", na.rm = TRUE) / .N,
+  oldest_cohort = min(mm_install_cohort, na.rm = TRUE),
+  mode_fuel = mm_fuel[which.max(table(mm_fuel))],
+  mode_capacity = mm_capacity[which.max(table(mm_capacity))]
+), by = .(panel_id)]
+
+# Coarsen variables into strictly typed factors for exact matching
+fac_match_data[, `:=`(
+  tank_count_bin = as.factor(fcase(n_tanks == 1L, "1", n_tanks == 2L, "2", n_tanks >= 3L, "3+")),
+  sw_dominance   = as.factor(fcase(prop_sw == 1, "All SW", prop_sw > 0.5, "Majority SW", default = "Minority/No SW")),
+  cohort_bin     = as.factor(fcase(oldest_cohort <= 1988L, "Pre-1988", oldest_cohort <= 1994L, "1989-1994", default = "1995-1998")),
+  mode_fuel      = as.factor(mode_fuel),
+  mode_capacity  = as.factor(mode_capacity)
+)]
+
+# Drop records with missing categorization arrays to preserve MatchIt matrix integrity
+fac_match_data <- na.omit(fac_match_data)
+
+# ---- 3c. Execute Exact Matching ----
+m_exact_fac <- matchit(
+  texas_treated ~ tank_count_bin + sw_dominance + cohort_bin + mode_fuel + mode_capacity,
+  data = fac_match_data,
+  method = "exact"
+)
+
+# Extract matching results
+fac_match_data[, cem_weight := m_exact_fac$weights]
+matched_fac_weights <- fac_match_data[cem_weight > 0, .(panel_id, cem_weight)]
+
+log_step("Facility Exact Matching Complete:")
+log_step(sprintf("  TX Matched  : %s / %s", 
+                 fmt_n(fac_match_data[cem_weight > 0 & texas_treated == 1, .N]), 
+                 fmt_n(fac_match_data[texas_treated == 1, .N])), 1)
+log_step(sprintf("  CTL Matched : %s / %s", 
+                 fmt_n(fac_match_data[cem_weight > 0 & texas_treated == 0, .N]), 
+                 fmt_n(fac_match_data[texas_treated == 0, .N])), 1)
+
+# ---- 3d. Sample Construction and Panel Merge ----
+mm_fac_primary <- annual_data[
+  !is.na(make_model_fac)     &
+  !is.na(fac_oldest_age_bin) &
+  !is.na(texas_treated)      &
+  !is.na(did_term)           &
+  panel_year %between% c(PANEL_START, PANEL_END)
+]
+
+# Inner join to restrict panel strictly to exact-matched facilities and ingest matching weights
+mm_fac_primary <- merge(mm_fac_primary, matched_fac_weights, by = "panel_id", all.y = TRUE)
+
+leaked <- setdiff(unique(mm_fac_primary$state), STUDY_STATES)
+if (length(leaked) > 0)
+  stop(sprintf("Non-study states in sample: %s", paste(leaked, collapse = ", ")))
+
+n_fy     <- nrow(mm_fac_primary)
+n_fac    <- uniqueN(mm_fac_primary$panel_id)
 
 cat("========================================\n")
 cat("S3: SAMPLE CONSTRUCTION\n")
@@ -341,31 +435,121 @@ cat("========================================\n\n")
 # Estimates the average treatment effect on the probability of each closure
 # type in any given year — the extensive margin question.  These coefficients
 # are the cleanest causal estimates and should be the headline results.
+mm_fac_primary[,.N,by = c(make_model_fac)][order(N)]
+mm_fac_primary[,.N,by = fac_wall][order(N)]
+mm_fac_primary[,.N,by = fac_oldest_age_bin][order(N)]
+mm_fac_primary[,.N,by = fac_fuel][order(N)]
 
-m_rq1_replacement <- feols(
-  replacement_closure_year ~ did_term | panel_id + make_model_fac^panel_year,
-  mm_fac_primary, cluster = ~state)
+print(mm_fac_primary[,.N,by = c('texas_treated','make_model_fac')][order(N)],200)
 
-m_rq1_permanent <- feols(
-  permanent_closure_year ~ did_term | panel_id + make_model_fac^panel_year,
-  mm_fac_primary, cluster = ~state)
+mm_fac_primary[,.N,by = c('texas_treated','fac_wall')][order(N)]
+mm_fac_primary[,.N,by = c('texas_treated','fac_oldest_age_bin')][order(N)]
+mm_fac_primary[,.N,by = c('texas_treated','fac_fuel')][order(N)]
+mm_fac_primary[,.N,by = c('texas_treated','n_tanks_at_reform')][order(N)]
+print(mm_fac_primary[,.N,by = c('texas_treated','n_tanks_at_reform','fac_wall','fac_fuel')][order(N)],250)
+mm_fac_primary[facility_first_install_yr >= 1990 , 
+               .N, by =c( 'texas_treated' , 'n_tanks_at_reform')][order(n_tanks_at_reform)]
 
-m_rq1_exit <- feols(
-  exit_flag ~ did_term | panel_id + make_model_fac^panel_year,
-  mm_fac_primary, cluster = ~state)
+mm_fac_primary[,fac_tank_count_bin := fcase(
+  n_tanks_at_reform == 1L,          "1-tank",
+  n_tanks_at_reform %in% 2L:3L,     "2-3-tanks",
+  n_tanks_at_reform >= 4L,           "4plus-tanks"
+)]
 
-# Exit decompositions (unconditional; no closure conditioning here)
-m_rq1_exit_noleak <- feols(
-  exit_no_leak ~ did_term | panel_id + make_model_fac^panel_year,
-  mm_fac_primary, cluster = ~state)
+mm_fac_primary[facility_first_install_yr >= 1990 , 
+               .N, by =c( 'texas_treated' , 'fac_tank_count_bin')][order(fac_tank_count_bin)]
 
-m_rq1_exit_withleak <- feols(
-  exit_with_leak ~ did_term | panel_id + make_model_fac^panel_year,
-  mm_fac_primary, cluster = ~state)
+mm_fac_primary[,mm_make_Wall_fuel_tank := paste(fac_wall, fac_fuel, fac_tank_count_bin, sep = "x")]
 
-m_rq1_retrofit_noexit <- feols(
-  retrofit_no_exit ~ did_term | panel_id + make_model_fac^panel_year,
-  mm_fac_primary, cluster = ~state)
+#========================================================
+# HONEST SENSITIVITY (Rambachan-Roth)
+# ============================================================
+library(HonestDiD)
+library(ggplot2)
+
+# Extract coefficients and VCOV
+b <- coef(m_es_1)
+V <- vcov(m_es_1, type = "clustered")
+
+# Verify coefficient count before passing to HonestDiD
+# rel_year_es_sub bins: -5, -4, -3, -2 | (ref = -1) | 0, 1, ..., 15
+# That's 4 pre + 16 post = 20 coefficients
+cat("Number of ES coefficients:", length(b), "\n")
+cat("Coefficient names:\n")
+print(names(b))
+
+# Set pre/post counts — VERIFY these match length(b)
+n_pre  <- 4L   # t = -5, -4, -3, -2
+n_post <- 16L  # t = 0, 1, 2, ..., 15
+stopifnot(n_pre + n_post == length(b))
+
+sensitivity <- createSensitivityResults(
+  betahat        = b,
+  sigma          = V,
+  numPrePeriods  = n_pre,
+  numPostPeriods = n_post,
+  alpha          = 0.05
+)
+
+# ── Extract pre-period coefficients programmatically ──────────
+# Parse the rel_year integer from coefficient names
+es_names  <- names(b)
+rel_years <- as.integer(stringr::str_extract(es_names, "-?\\d+"))
+
+# Pre-period = negative rel_years (excluding the reference)
+pre_idx   <- which(rel_years < -1L)
+pre_coefs <- b[pre_idx[order(rel_years[pre_idx])]]  # sorted by time
+
+cat("Pre-period coefficients:\n")
+print(pre_coefs)
+
+max_pre_slope <- max(abs(diff(pre_coefs)))
+cat("Max absolute pre-trend slope:", max_pre_slope, "\n")
+
+# ── Sensitivity plot ──────────────────────────────────────────
+sensitivity |>
+  ggplot(aes(x = M)) +
+  geom_ribbon(aes(ymin = lb, ymax = ub),
+              fill = COL_TX, alpha = 0.25) +
+  geom_line(aes(y = lb), color = COL_TX, linewidth = 0.8) +
+  geom_line(aes(y = ub), color = COL_TX, linewidth = 0.8) +
+  geom_hline(yintercept = 0,
+             linetype = "dashed", color = "grey40") +
+  # Breakdown point
+  geom_vline(xintercept = 0.00720,
+             linetype = "dotted", color = "grey40") +
+  annotate("text",
+           x     = 0.00740,
+           y     = 0.004,
+           label = "Breakdown\nM = 0.0072",
+           hjust = 0, vjust = 0,
+           size  = 3, color = "grey30") +
+  # Max observed pre-trend slope
+  geom_vline(xintercept = max_pre_slope,
+             linetype = "dashed", color = "steelblue",
+             linewidth = 0.6) +
+  annotate("text",
+           x     = max_pre_slope + 0.0005,
+           y     = 0.029,
+           label = paste0("Max observed\npre-trend slope\n= ",
+                          sprintf("%.4f", max_pre_slope)),
+           hjust = 0, vjust = 1,
+           size  = 3, color = "steelblue") +
+  scale_x_continuous(
+    labels = function(x) sprintf("%.4f", x),
+    name   = "M: Maximum Slope of Parallel Trends Violation (pp/year)"
+  ) +
+  scale_y_continuous(
+    labels = function(x) sprintf("%.3f", x),
+    name   = "Robust 95% Confidence Interval for ATT"
+  ) +
+  coord_cartesian(ylim = c(-0.005, 0.035)) +
+  theme_pub()
+
+ggsave(file.path(OUTPUT_FIGURES,
+                 "Figure_RR_Sensitivity.png"),
+       width = 8, height = 5, dpi = 300)
+
 
 # ---- 4b: Conditional-on-closure subsample DiD ----
 # Conditions on closure_year == 1.  Identifies: given a tank was closed, did

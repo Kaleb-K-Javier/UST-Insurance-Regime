@@ -1,0 +1,34 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{6}{c}{closure\_event}\\
+                                     & (1)                   & (2)                  & (3)                   & (4)                   & (5)                  & (6) \\   
+   Model:                            & (1)                   & (2)                  & (3)                   & (4)                   & (5)                  & (6)\\  
+   \midrule
+   \emph{Variables}\\
+   DiD                               & 0.0044$^{*}$          & 0.0047$^{*}$         & 0.0012                & 0.0024                & 0.0027               & 0.0052$^{*}$\\   
+                                     & (0.0024)              & (0.0025)             & (0.0022)              & (0.0022)              & (0.0023)             & (0.0025)\\   
+   DiD $\times$ Old ($\geq$5 yr)     &                       &                      & 0.0047$^{***}$        & 0.0034$^{***}$        &                      &   \\   
+                                     &                       &                      & (0.0004)              & (0.0007)              &                      &   \\   
+   Tank FE                           & \checkmark            & \checkmark           & \checkmark            & \checkmark            & \checkmark           & \checkmark\\   
+   Year FE                           & \checkmark            & \checkmark           & \checkmark            & \checkmark            & \checkmark           & \checkmark\\   
+   Cell $\times$ Year FE             &                       & \checkmark           &                       & \checkmark            &                      & \\  
+   Age subsample                     & All                   & All                  & All                   & All                   & $<$5 yr              & $\geq$5 yr\\   
+   Control Mean (post-reform)        & 0.0104                & 0.0104               & 0.0104                & 0.0104                & 0.0104               & 0.0104\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                      & 791,038               & 791,034              & 791,038               & 791,034               & 366,210              & 424,828\\  
+   R$^2$                             & 0.08914               & 0.09336              & 0.08915               & 0.09337               & 0.09420              & 0.08576\\  
+   Within R$^2$                      & $4.16\times 10^{-5}$  & $4.8\times 10^{-5}$  & $5.36\times 10^{-5}$  & $5.45\times 10^{-5}$  & $1.3\times 10^{-5}$  & $6.45\times 10^{-5}$\\   
+   \midrule \midrule
+   \multicolumn{7}{l}{\emph{Clustered (state) standard-errors in parentheses}}\\
+   \multicolumn{7}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+ 
+\par \raggedright 
+Cluster-robust SEs by state in parentheses. Cell is make-model (excluding age). Old $=$ above median age at treatment ($\geq$5 yr). Level effect of age absorbed by tank FE; HTE identified via interaction (cols.\ 3--4) and subsample split (cols.\ 5--6). Control mean is unweighted post-reform (1999+) closure rate for matched control tanks. CEM weights applied throughout.
+\par\endgroup
+
+

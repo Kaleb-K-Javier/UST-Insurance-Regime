@@ -1,0 +1,26 @@
+\begin{table}
+\centering
+\begin{talltblr}[         %% tabularray outer open
+entry=none,label=none,
+note{}={* p \num{< 0.1}, ** p \num{< 0.05}, *** p \num{< 0.01}},
+note{ }={Cluster-robust SEs by state in parentheses. Hazard ratios reported (exp[$\hat{\beta}$]). Spells split at January 1, 1999 so DiD is a proper time-varying covariate. Strata defined on make-model excluding age (\texttt{make\_model\_noage}) so that age variation is not absorbed into the baseline hazard. Old $=$ above median age at treatment ($\geq$5 yr). Level effect of age not identified (tank-invariant, collinear with strata); HTE identified via interaction (col.\ 2) and subsample split (cols.\ 3--4).},
+]                     %% tabularray outer close
+{                     %% tabularray inner open
+colspec={Q[]Q[]Q[]Q[]Q[]},
+hline{2}={1-5}{solid, black, 0.05em},
+hline{6}={1-5}{solid, black, 0.05em},
+hline{1}={1-5}{solid, black, 0.08em},
+hline{9}={1-5}{solid, black, 0.08em},
+column{2-5}={}{halign=c},
+column{1}={}{halign=l},
+}                     %% tabularray inner close
+& (1) & (2) & (3) & (4) \\
+DiD & \num{1.251}* & \num{1.019} & \num{1.257} & \num{1.240} \\
+& (\num{0.041}) & (\num{0.049}) & (\num{0.065}) & (\num{0.052}) \\
+DiD $\times$ Old ($\geq$5 yr) &  & \num{1.436}*** &  &  \\
+&  & (\num{0.084}) &  &  \\
+Observations & \num{101,898} & \num{101,898} & \num{49,246} & \num{52,652} \\
+Strata (make-model, no age) & \checkmark & \checkmark & \checkmark & \checkmark \\
+Age subsample & All & All & $<$5 yr & $\geq$5 yr \\
+\end{talltblr}
+\end{table}

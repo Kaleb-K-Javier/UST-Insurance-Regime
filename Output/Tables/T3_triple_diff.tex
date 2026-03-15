@@ -1,0 +1,36 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \toprule
+                                                                     & (1)           & (2) \\   
+                                                                     & (1)           & (2)\\  
+   \midrule 
+   did\_term                                                         & 0.0048$^{**}$ & 0.0047\\   
+                                                                     & (0.0023)      & (0.0038)\\   
+   single\_wall                                                      &               & 0.0064\\   
+                                                                     &               & (0.0045)\\   
+   above\_median\_age                                                &               & 0.0125$^{*}$\\   
+                                                                     &               & (0.0071)\\   
+   did\_term $\times$ single\_wall                                   &               & -0.0031\\   
+                                                                     &               & (0.0038)\\   
+   did\_term $\times$ above\_median\_age                             &               & 0.0070\\   
+                                                                     &               & (0.0052)\\   
+   single\_wall $\times$ above\_median\_age                          &               & -0.0030\\   
+                                                                     &               & (0.0070)\\   
+   did\_term $\times$ single\_wall $\times$ above\_median\_age       &               & -0.0022\\   
+                                                                     &               & (0.0054)\\   
+    \\
+   Observations                                                      & 791,095       & 791,095\\  
+   R$^2$                                                             & 0.08911       & 0.08917\\  
+    \\
+   panel\_id fixed effects                                           & $\checkmark$  & $\checkmark$\\   
+   panel\_year fixed effects                                         & $\checkmark$  & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+ 
+\par \raggedright 
+Cluster-robust SEs by state in parentheses. Old $=$ above median age at treatment ($\geq$5 yr). Single-Walled $=$ \texttt{mm\_wall == ``Single-walled''}. Level effects of Single-Walled and Old are time-invariant and absorbed by tank FE. CEM weights applied throughout.
+\par\endgroup
+
+

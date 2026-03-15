@@ -1,0 +1,32 @@
+state,role
+TX,Target
+AR,Full analysis control
+CO,Full analysis control
+GA,Full analysis control
+ID,Full analysis control
+KS,Full analysis control
+MN,Full analysis control
+MO,Full analysis control
+NC,Full analysis control
+OH,Full analysis control
+OK,Full analysis control
+TN,Full analysis control
+VA,Full analysis control
+WV,Full analysis control
+LA,Full analysis control
+MA,Full analysis control
+ME,Full analysis control
+PA,Full analysis control
+SD,Full analysis control
+KY,Closure-only control
+AL,Excluded — wall quality
+AZ,Excluded — own reform
+CT,Excluded — own reform
+FL,Excluded — own reform
+IA,Excluded — own reform
+MI,Excluded — own reform
+WI,Excluded — own reform
+OR,Excluded — no Trust Fund
+WA,Excluded — no Trust Fund
+MD,Excluded — data quality
+NJ,Excluded — data quality

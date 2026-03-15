@@ -1,0 +1,172 @@
+=== 01l_DataQuality_and_Balance | started 2026-03-14 16:43:50 ===
+=== 01l: DATA QUALITY + DESCRIPTIVE + BALANCE ===
+
+
+--- S0: Loading data ---
+
+  annual_data: 2,969,463 fy | 172,190 facilities | 12 states
+
+  tanks_1998: 210,103 tanks (61,782 TX | 148,321 CTL)
+
+
+--- S1: MM sample + overlap ---
+
+  Cells: 85 total | 77 overlap | 0 TX-only | 8 CTL-only
+
+  MM facilities: 171,885 (54,034 TX | 117,851 CTL)
+
+
+--- S2: Subsets ---
+
+  1998 fac: Full=84,880 | MM=84,575
+
+  Pre-reform fac-years: Full=979,619 | MM=977,699
+
+
+--- S2b: Cell coverage ---
+
+  Fac cells  — Full: 85 tot | 77 id | 0 TX-only | 8 CTL-only
+
+  Tank cells — Full: 1923 tot | 1095 id | MM: 455 tot | 282 id
+
+
+--- S3: Cell x year diff computation ---
+
+  Cell-years with both TX and CTL: 689 (of 693 total)
+
+  cell_year: 689 obs | 77 cells | 9 years
+
+  cell_stats: 77 cells | 299,351 TX fy | 677,938 CTL fy
+
+  Unweighted avg closure diff: -0.003pp | FY-weighted: -0.429pp
+
+  Unweighted avg LUST diff:    -1.076pp | FY-weighted: -2.004pp
+
+  Unweighted avg replace diff: -0.243pp | FY-weighted: -0.102pp
+
+  CYW Panel B summary:
+
+    Closure:     TX=12.58%  CTL=13.01%  Diff=-0.43pp
+
+    LUST:        TX=1.10%  CTL=3.10%  Diff=-2.00pp
+
+    Replacement: TX=1.03%  CTL=1.13%  Diff=-0.10pp
+
+
+
+========== PART I: PARALLEL TRENDS FIGURES ==========
+
+  Computing three diff series...
+
+  Pre-reform avg diff by series:
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel1A
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel1B
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel2A
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Panel2B
+
+  [fig] Figure_RestrictionEarnsParallelTrends_Combined
+
+  Figure_DiffComparison saved (standalone)
+
+  Individual panels saved (1A, 1B, 2A, 2B)
+
+
+
+========== PART II: TABLE 0 (DESCRIPTIVE) ==========
+
+  Building Panel A...
+
+  Building Panel B...
+
+  Building Panel C...
+
+
+=== Table 0 Preview ===
+
+  [tbl] Table0_Descriptive.csv
+
+  [tex] Table0_Descriptive.tex
+
+  Table0_Descriptive written.
+
+
+
+========== PART III: TABLE 1 (PROGRESSIVE BALANCE) ==========
+
+
+=== Table 1: Progressive Balance ===
+
+
+Closure — Naive: +0.070pp | Pooled: +0.070pp | Cell-Year Wt: -0.429pp
+
+LUST    — Naive: -1.540pp | Pooled: -1.541pp | Cell-Year Wt: -2.004pp
+
+  [tbl] Table1_Balance.csv
+
+  [tex] Table1_Balance.tex
+
+  Table1_Balance written.
+
+
+
+========== PART IV: CELL-LEVEL BALANCE DETAIL ==========
+
+  76 cells in detail table
+
+  [tbl] TableA_Balance_CellDetail.csv
+
+  [tex] TableA_Balance_CellDetail.tex
+
+  TableA_Balance_CellDetail written.
+
+
+
+========== PART V: APPENDIX TABLES ==========
+
+  Table B.1
+
+  [tbl] TableB1_Attrition_Log.csv
+
+  [tex] TableB1_Attrition_Log.tex
+
+  Table B.3
+
+  [tbl] TableB3_Missing_Date_Balance.csv
+
+  [tex] TableB3_Missing_Date_Balance.tex
+
+  Table A.0
+
+  DQ columns: state, study_group, total_tanks, pct_closed_missing_date, pct_missing_install_date, pct_miss_lat, pct_miss_county, pct_miss_capacity, pct_miss_tank_status, pct_miss_tank_substance, pct_miss_tank_type, pct_miss_fips, total_lusts, n_missing_report_date
+
+  WARNING — Remainder in DQ but in CONTROL_STATES: GA, MO, WV
+
+  [tbl] TableA0_DataQuality_ByState.csv
+
+  [tex] TableA0_DataQuality_ByState.tex
+
+  TableA0_DataQuality_ByState written.
+
+
+
+=== 01l COMPLETE ===
+
+  Figure_RestrictionEarnsParallelTrends (2x2)
+
+  Table0_Descriptive.tex      (34 rows)
+
+  Table1_Balance.tex          (3-row)
+
+  TableA_Balance_CellDetail   (76 cells)
+
+  TableB1_Attrition_Log.tex
+
+  TableB3_Missing_Date_Balance.tex
+
+  TableA0_DataQuality_ByState.tex
+
+=== 01l_DataQuality_and_Balance complete 2026-03-14 16:46:19 ===

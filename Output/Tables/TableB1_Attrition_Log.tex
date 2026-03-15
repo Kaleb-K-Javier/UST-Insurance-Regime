@@ -1,19 +1,17 @@
 \begin{table}
-\centering
-\caption{\label{tab:tab:attrition}Sequential attrition log. Each row applies one additional filter. $\Delta$ columns show marginal change in observations.}
-\centering
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\fontsize{9}{11}\selectfont
-\begin{tabular}[t]{rllrr}
+\centering\begingroup\fontsize{9}{11}\selectfont
+
+\begin{tabular}[t]{rllrrrr}
 \toprule
-Step & Stage & Filter & Facilities & Fac-Years\\
+Step & Stage & Filter & Facilities & Fac-Years & Δ Facilities & Δ Fac-Years\\
 \midrule
-0 & Raw harmonized panel & All states, all years & 478503 & 12702871\\
-1 & Study window & {}[1985, 2020] & 469681 & 7985050\\
-2 & Analysis states & TX + 19 controls (NJ excl.) & 306731 & 4978288\\
-3 & Incumbent sample & first\_observed < 1998 & 286882 & 4705725\\
-4 & Complete records & Facility-level date exclusion (53,648 excl.) & 233234 & 3967583\\
-5 & Final analysis sample &  & 233234 & 3967583\\
+0 & Raw harmonized panel & All states, all years & 478503 & 12702871 & NA & NA\\
+1 & Study window & {}[1985, 2020] & 469681 & 7985050 & -8822 & -4717821\\
+2 & Analysis states & TX + 19 controls (NJ excl.) & 306731 & 4978288 & -162950 & -3006762\\
+3 & Incumbent sample & first\_observed < 1998 & 286882 & 4705725 & -19849 & -272563\\
+4 & Complete records & Facility-level date exclusion (53,648 excl.) & 233234 & 3967583 & -53648 & -738142\\
+5 & Final analysis sample &  & 233234 & 3967583 & 0 & 0\\
 \bottomrule
-\end{tabular}}
+\end{tabular}
+\endgroup{}
 \end{table}

@@ -1,1042 +1,1302 @@
-################################################################################
-# 01n_CVValidation.R
-# Observable Risk Characteristics and the Actuarial Pricing Foundation
+#==============================================================================
+# 01l_DataQuality_and_Balance.R  (REFACTORED v3)
+# Combined: Data Quality / Parallel Trends Figure + Descriptive + Balance Tables
 #
-# PURPOSE:
-#   Establishes that observable facility characteristics — wall construction
-#   type and tank age — predict confirmed releases out-of-sample. Produces
-#   figures and tables for the "Observable Risk Characteristics" section.
+# TABLE 0 LAYOUT:
+#   Panel A: 1998 Cross-Section (Risk Covariates)
+#     Count rows:  N States / N Facilities / N Total Tanks
+#     Fac-level:   Avg tanks, Avg capacity, Avg tank age, Avg age of oldest tank
+#     Fleet agg:   Avg age of state fleet, Share SW (fleet %)
+#     Fac-level:   Avg share of SW tanks per facility
+#   Panel B: Pre-Reform Outcome Flows (1990-1998)
+#     Avg Closure Rate / Avg LUST Rate / Avg Replacement Rate
+#   Panel C: Make-Model Cell Coverage
+#     Facility cells (3-dim) / Tank cells (4-dim)
 #
-# ESTIMAND:
-#   h(t | x) = P(first confirmed release in year t |
-#               survived release-free to t, facility covariates x)
+# TABLE 1 — PROGRESSIVE BALANCE (3 rows):
+#   Row 1: Full Sample (Naive)           — pooled means, pooled diff
+#   Row 2: MM Sample (Pooled)            — pooled means within MM facilities
+#   Row 3: MM Sample (Cell-Year Wt)      — CORRECT:
 #
-#   This is the annual first-release hazard in the never-yet-leaked risk set.
-#   It directly mirrors the insurer's underwriting problem: given what I can
-#   observe about this facility at the start of the policy year, what is the
-#   probability of a claim this year?
+#     STEP 1: cell × year → TX mean rate | CTL mean rate | diff
+#     STEP 2: average diffs over years within each cell
+#     STEP 3: weighted average across cells (weight = total fac-years in cell)
 #
-# MODEL:
-#   GRF probability forest (grf package). Single specification including
-#   all facility-level observables and state. State is included because
-#   Mid-Continent and other insurers file rates by state — a no-state model
-#   would be artificially handicapped relative to actual underwriting practice.
+#   This exactly mirrors what the cell×year FE identifies.
 #
-#   State serves dual roles:
-#     - As a split feature: learns state-specific baseline hazard rates
-#     - As a cluster ID: ensures honest inference across state groups
-#   These are independent concerns — GRF handles both simultaneously.
+# CELL DETAIL (Appendix): TX/CTL/Diff are year-averaged within-cell rates,
+#   matching the S3 computation.
 #
-#   OOB predicted probabilities extracted via fit$predictions[, "1"] (by
-#   column name throughout — safer than positional indexing).
-#   No separate CV loop is needed: GRF's subsampling gives each observation
-#   an OOB prediction, and with 2,000 trees every observation has a stable
-#   OOB estimate.
-#
-# CLASS IMBALANCE:
-#   Release events are rare (~1-3% annual base rate). Without correction the
-#   forest learns to predict the majority class (no release) everywhere.
-#   Fix: case.weights = n_0/n_1 for all event == 1 rows, 1.0 for event == 0.
-#   Each tree's bootstrap sample then sees roughly equal 0s and 1s, forcing
-#   the forest to learn the discriminating signal in the minority class.
-#   Note: this does NOT collapse predicted probabilities to 50/50.
-#   GRF outputs P(Y=1|X) on the original scale. Calibration plot (S8)
-#   verifies this empirically.
-#
-# COVARIATES (insurer's observable portfolio at start of policy year):
-#   has_single_walled  — time-varying wall composition (binary)
-#   age_bin            — current active stock age (3-year bins, as integer)
-#   active_tanks       — portfolio size
-#   total_capacity     — total capacity (gallons)
-#   has_gasoline_year  — gasoline fuel indicator
-#   has_diesel_year    — diesel fuel indicator
-#   state_int          — state integer encoding for state-specific baselines
-#
-# ESTIMATION SAMPLE:
-#   All states (TX + controls), pre-treatment (panel_year < POST_YEAR).
-#   Never-yet-leaked risk set: has_previous_leak == 0.
-#   Make-model primary sample: is_make_model == 1.
-#
-# OUTPUTS
-# -------
-# Main figures (Output/Figures/):
-#   Figure_CV_ROC               ROC curve with OOB AUC
-#   Figure_CV_PartialDep        Marginal PD: predicted hazard by age x wall type
-#                               with GRF 95% variance bands
-#   Figure_CV_Calibration       Calibration decile plot
-#
-# Appendix figures (Output/Figures/):
-#   FigureA_CV_Lift_State       Lift curve
-#   FigureA_CV_ScoreSep_State   Score separation density
-#   FigureA_CV_VarImportance    Variable importance
-#
-# Tables (Output/Tables/):
-#   Table_CV_GoF_Summary        AUC + lift summary
-#   Table_CV_Calibration        Decile calibration table
-#   Table_CV_CellRates          Predicted + observed rates by (wall, age) cell
-#   Table_CV_VarImportance      Variable importance scores
-#
-# Risk score outputs (Data/Analysis/):
-#   analysis_cv_data_fac_year.rds   Facility-year predictions (panel_id x panel_year)
-#   analysis_cv_data_fac.rds        Facility-level score at reform year (panel_id only)
-################################################################################
-
-
-#### S1: Setup ################################################################
-#
-# STANDALONE SCRIPT — no dependency on 01a_Setup.R or any other 01x file.
-# All constants, paths, colours, and helpers are defined here.
-#
-# Input:  Data/Processed/facility_leak_behavior_annual.csv
-#         (produced by 10_Build_Annual_Panel_Optimized.R)
-# Output: figures → Output/Figures/
-#         tables  → Output/Tables/
-#         scores  → Data/Analysis/
+# CONTROL STATES: 16 matching 02a_DiD_FacBehavior.R exactly.
+#==============================================================================
 
 suppressPackageStartupMessages({
   library(data.table)
   library(ggplot2)
-  library(grf)
-  library(pROC)
-  library(patchwork)
   library(scales)
+  library(knitr)
+  library(kableExtra)
+  library(broom)
   library(here)
 })
 
-options(scipen = 999)
-set.seed(20260202L)
-setDTthreads(14L)
+source(here::here("Code", "Analysis", "Descrptive Facts", "01a_Setup.R"))
+open_log("01l_DataQuality_and_Balance")
+log_cat("=== 01l: DATA QUALITY + DESCRIPTIVE + BALANCE ===\n")
 
-# ---- Output paths -----------------------------------------------------------
-OUTPUT_FIGURES <- here("Output", "Figures")
-OUTPUT_TABLES  <- here("Output", "Tables")
-ANALYSIS_DIR   <- here("Data", "Analysis")
-for (d in c(OUTPUT_FIGURES, OUTPUT_TABLES, ANALYSIS_DIR))
-  dir.create(d, recursive = TRUE, showWarnings = FALSE)
+# ─────────────────────────────────────────────────────────────────────────────
+# CONSTANTS  — must match 02a_DiD_FacBehavior.R exactly
+# ─────────────────────────────────────────────────────────────────────────────
 
-# ---- Study parameters -------------------------------------------------------
-POST_YEAR  <- 1999L   # first post-treatment year
-SNAP_YEAR  <- 1998L   # reform snapshot year for facility-level risk scores
-
-# ---- State sample -----------------------------------------------------------
-# CONTROL_STATES: approved control states for this study.
-# NJ excluded: private insurance mandate 2003 contaminates the post period.
-# WA, OR, and all other treated/remainder states are excluded by not being
-# listed here. The state filter in S2 is the enforcement point.
 CONTROL_STATES <- c(
-  "ME", "NM", "AR", "OK", "LA", "KS", "MT", "ID", "SD", "AL",
-  "MN", "NC", "IL", "MA", "OH", "PA", "TN", "VA", "CO"
+  "AL", "AR", "CO", "GA", "ID", "KS", "KY",
+  "MD", "MN", "MO", "NC", "OH",
+  "OK", "TN", "VA", "WV"
 )
-# TX is added explicitly in the filter — CONTROL_STATES is controls only.
-ALL_STUDY_STATES <- c("TX", CONTROL_STATES)
-
-# ---- Make-model sample criteria ---------------------------------------------
-# Facilities where insurer CANNOT assign a rate cell are excluded.
-# These are the ONLY exclusion criteria for the primary sample.
-MM_WALL_EXCLUDE <- "Unknown-Wall"
-MM_FUEL_EXCLUDE <- "Unknown-Fuel"
-
-# ---- Canonical age bins -----------------------------------------------------
-# Must exactly match 10_Build_Annual_Panel_Optimized.R Section 9.2:
-#   cut(avg_tank_age_dec,
-#       breaks = c(0, 3, 6, 9, 12, 15, 18, 21, 24, Inf),
-#       labels = c("0-2","3-5","6-8","9-11","12-14","15-17","18-20","21-23","24+"))
-AGE_BIN_BREAKS <- c(0, 3, 6, 9, 12, 15, 18, 21, 24, Inf)
-AGE_BIN_LABELS <- c(
-  "0-2", "3-5", "6-8", "9-11", "12-14",
-  "15-17", "18-20", "21-23", "24+"
-)
-
-make_age_bin <- function(age_vec) {
-  factor(
-    cut(age_vec, breaks = AGE_BIN_BREAKS, labels = AGE_BIN_LABELS,
-        right = FALSE, include.lowest = TRUE),
-    levels = AGE_BIN_LABELS, ordered = FALSE
-  )
-}
-
-# ---- Colours ----------------------------------------------------------------
-COL_TX   <- "#D55E00"
-COL_CTRL <- "#0072B2"
-
-# ---- Publication theme ------------------------------------------------------
-theme_pub <- function(base_size = 12) {
-  theme_minimal(base_size = base_size) +
-    theme(
-      plot.title       = element_text(face = "bold", size = rel(1.1),
-                                      margin = margin(0, 0, 6, 0)),
-      plot.subtitle    = element_text(color = "grey40", size = rel(0.85),
-                                      margin = margin(0, 0, 8, 0)),
-      plot.caption     = element_text(color = "grey50", size = rel(0.75),
-                                      hjust = 0),
-      axis.title       = element_text(face = "bold", size = rel(0.9)),
-      legend.title     = element_text(face = "bold", size = rel(0.9)),
-      legend.position  = "bottom",
-      panel.grid.minor = element_blank(),
-      panel.border     = element_rect(fill = NA, color = "gray85"),
-      strip.text       = element_text(face = "bold")
-    )
-}
-theme_set(theme_pub())
-
-# ---- GRF constants ----------------------------------------------------------
-NUM_TREES <- 2000L   # final forest size; tuning uses 500-tree forests
-
-# ---- Safe GRF prediction extractor ------------------------------------------
-# GRF probability_forest returns a predictions matrix with columns named by
-# factor level ("0", "1"). Some GRF versions omit dimnames in certain
-# configurations, causing [, "1"] to error with "no dimnames attribute".
-# This helper tries named access first, falls back to positional column 2
-# (always P(Y=1) when levels = c(0L, 1L)), and errors clearly if neither works.
-get_p1 <- function(pred_mat) {
-  if (!is.null(colnames(pred_mat)) && "1" %in% colnames(pred_mat))
-    return(pred_mat[, "1"])
-  if (ncol(pred_mat) >= 2L)
-    return(pred_mat[, 2L])
-  stop("get_p1: cannot extract P(Y=1) — unexpected prediction matrix structure")
-}
-
-# ---- Load panel data --------------------------------------------------------
-PANEL_CSV <- here("Data", "Processed", "facility_leak_behavior_annual.csv")
-if (!file.exists(PANEL_CSV))
-  stop(
-    "Panel CSV not found: ", PANEL_CSV,
-    "\nRun 10_Build_Annual_Panel_Optimized.R first."
-  )
-
-cat("=== 01n: Observable Risk — Actuarial Validation ===\n\n")
-cat(sprintf("Loading: %s\n", PANEL_CSV))
-annual_data <- fread(PANEL_CSV)
-cat(sprintf("  Loaded: %s rows x %d cols | %d-%d\n",
-    format(nrow(annual_data), big.mark = ","),
-    ncol(annual_data),
-    min(annual_data$panel_year),
-    max(annual_data$panel_year)))
+STUDY_STATES  <- c("TX", CONTROL_STATES)
+POST_YEAR     <- 1999L
+PRE_START     <- 1990L
+PRE_END       <- 1998L          # 1998-12-22 is the reform date; 1998 is pre
+REFORM_DATE_D <- as.Date("1998-12-22")
+REFORM_YEAR   <- 1998L
+PRIMARY_YEARS <- as.character(1989:1997)   # matches 02b_DiD_Survival.R
 
 
+###############################################################################
+# S0: LOAD DATA
+###############################################################################
+log_cat("\n--- S0: Loading data ---\n")
 
-#### S2: Estimation Sample ####################################################
-#
-# FILTERS (in order):
-#   1. State: TX + CONTROL_STATES only (ALL_STUDY_STATES defined in S1)
-#             Any state not in this list — other treated states, WA, OR,
-#             remainder states — is dropped here. Hard stop.
-#   2. Pre-treatment years: panel_year < POST_YEAR (< 1999)
-#   3. Never-yet-leaked risk set: has_previous_leak == 0
-#   4. Make-model classified: fac_wall != MM_WALL_EXCLUDE
-#                              fac_fuel != MM_FUEL_EXCLUDE
-#      Drops facilities the insurer cannot assign to a rate cell.
-#   5. Binary wall only: has_single_walled %in% c(0L, 1L)
-#      Drops Mixed-wall portfolios (ambiguous pricing signal for GRF feature).
-#
-# COLUMN MAPPING from facility_leak_behavior_annual.csv:
-#   age_bins    -> age_bin  (time-varying avg stock age, 9 bins)
-#   has_single_walled  (alias for has_single_walled_dec, built in panel S10)
-#   active_tanks       (alias for active_tanks_dec)
-#   total_capacity     (alias for total_capacity_dec)
-#
-# TODO — time-varying oldest-tank age: add current-year oldest active tank
-# age to 10_Build_Annual_Panel_Optimized.R Section 9.2, then add it as a
-# GRF feature here.
+annual_data         <- load_interim("annual_data")
+tanks_1998          <- load_interim("tanks_1998")
+data_quality_report <- load_interim("data_quality_report")
+attrition_log       <- load_interim("attrition_log")
+balance_glm         <- load_interim("balance_glm")
 
-required_cols <- c(
-  "fac_wall", "fac_fuel",
-  "has_single_walled",
-  "age_bins",
-  "avg_tank_age",
-  "active_tanks", "total_capacity",
-  "has_gasoline_year", "has_diesel_year",
-  "event_first_leak", "has_previous_leak",
-  "state", "panel_id", "panel_year", "texas_treated"
-)
-missing_cols <- setdiff(required_cols, names(annual_data))
-if (length(missing_cols) > 0L)
-  stop("annual_data missing required columns: ",
-       paste(missing_cols, collapse = ", "))
+fac_mm <- readRDS(here::here("Data", "Analysis", "facility_make_model.rds"))
 
-# ---- FILTER 1: State whitelist — TX + approved controls ONLY ---------------
-n_before_state <- nrow(annual_data)
-annual_data    <- annual_data[state %in% ALL_STUDY_STATES]
-n_dropped_state <- n_before_state - nrow(annual_data)
-
-cat(sprintf("\nState filter:\n"))
-cat(sprintf("  Kept:    %s rows (%d states)\n",
-    format(nrow(annual_data), big.mark = ","),
-    uniqueN(annual_data$state)))
-cat(sprintf("  Dropped: %s rows from states outside TX + controls\n",
-    format(n_dropped_state, big.mark = ",")))
-cat(sprintf("  States retained: %s\n",
-    paste(sort(unique(annual_data$state)), collapse = ", ")))
-
-# Hard stop if TX or any expected control is missing
-missing_states <- setdiff(ALL_STUDY_STATES, unique(annual_data$state))
-if (length(missing_states) > 0)
-  warning("Expected states not found in panel: ",
-          paste(missing_states, collapse = ", "))
-
-# ---- Age bin: rename age_bins -> age_bin with defensive fallback -----------
-# If panel builder labels match AGE_BIN_LABELS, use directly.
-# Otherwise recut from avg_tank_age using make_age_bin().
-if ("age_bins" %in% names(annual_data)) {
-  existing_labels <- if (is.factor(annual_data$age_bins))
-    levels(annual_data$age_bins)
-  else
-    sort(unique(annual_data$age_bins[!is.na(annual_data$age_bins)]))
-
-  if (identical(as.character(existing_labels), AGE_BIN_LABELS)) {
-    annual_data[, age_bin := age_bins]
-    cat("\nage_bin: labels match — using age_bins directly\n")
-  } else {
-    cat("\nage_bin: WARNING — labels differ, recomputing from avg_tank_age\n")
-    cat(sprintf("  Panel:    %s\n", paste(existing_labels, collapse = ", ")))
-    cat(sprintf("  Expected: %s\n", paste(AGE_BIN_LABELS,  collapse = ", ")))
-    annual_data[, age_bin := make_age_bin(avg_tank_age)]
-  }
-} else {
-  cat("\nage_bin: age_bins column absent, computing from avg_tank_age\n")
-  annual_data[, age_bin := make_age_bin(avg_tank_age)]
-}
-
-# ---- Derive is_make_model --------------------------------------------------
-annual_data[, is_make_model := as.integer(
-  fac_wall != MM_WALL_EXCLUDE &
-  fac_fuel != MM_FUEL_EXCLUDE &
-  !is.na(age_bin)
+# ── Treatment assignment: override to match 02a CONTROL_STATES ──────────────
+annual_data[, texas_treated := fcase(
+  state == "TX",              1L,
+  state %in% CONTROL_STATES, 0L,
+  default = NA_integer_
 )]
-cat(sprintf("\nis_make_model: %s / %s facility-years classified (%.1f%%)\n",
-    format(sum(annual_data$is_make_model == 1L), big.mark = ","),
-    format(nrow(annual_data), big.mark = ","),
-    mean(annual_data$is_make_model == 1L) * 100))
+annual_data <- annual_data[!is.na(texas_treated)]
 
-# ---- FILTERS 2-5: Build estimation sample ----------------------------------
-cv_data <- annual_data[
-  panel_year        <  POST_YEAR    &   # pre-treatment only
-  has_previous_leak == 0L           &   # never-yet-leaked risk set
-  is_make_model     == 1L           &   # classified wall + fuel + age
-  has_single_walled %in% c(0L, 1L)  &   # binary wall (drop Mixed)
-  !is.na(active_tanks)              &
-  !is.na(total_capacity)            &
-  !is.na(event_first_leak)
+tanks_1998[, texas_treated := fcase(
+  state == "TX",              1L,
+  state %in% CONTROL_STATES, 0L,
+  default = NA_integer_
+)]
+tanks_1998 <- tanks_1998[!is.na(texas_treated)]
+
+# ── Tank age at reform date ──────────────────────────────────────────────────
+if (!"tank_age_at_reform" %in% names(tanks_1998)) {
+  tanks_1998[, tank_age_at_reform :=
+    as.numeric(REFORM_DATE_D - as.Date(tank_installed_date)) / 365.25]
+}
+tanks_1998 <- tanks_1998[!is.na(tank_age_at_reform) & tank_age_at_reform >= 0]
+
+# ── Merge oldest_age_at_reform from fac_mm (continuous, from Section 2.5) ───
+annual_data <- merge(
+  annual_data,
+  fac_mm[, .(panel_id, oldest_age_at_reform)],
+  by = "panel_id", all.x = TRUE
+)
+
+# ── Facility-level SW share frozen at 1998 ───────────────────────────────────
+sw_1998 <- annual_data[
+  panel_year == REFORM_YEAR & active_tanks_dec > 0,
+  .(panel_id, sw_share_fac_1998 = single_tanks_dec / active_tanks_dec * 100)
 ]
+annual_data <- merge(annual_data, sw_1998, by = "panel_id", all.x = TRUE)
 
-# Enforce ordered factor
-cv_data[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
-cv_data[, state   := factor(state)]
+# ── Alias ────────────────────────────────────────────────────────────────────
+if (!"closure_event" %in% names(annual_data) && "closure_year" %in% names(annual_data))
+  annual_data[, closure_event := closure_year]
 
-# Sanity checks — hard stop on any violation
-stopifnot("has_previous_leak must be 0 for all rows" =
-            all(cv_data$has_previous_leak == 0L))
-stopifnot("is_make_model must be 1 for all rows" =
-            all(cv_data$is_make_model == 1L))
-stopifnot("No NA age_bin allowed — check AGE_BIN_LABELS vs panel labels" =
-            !anyNA(cv_data$age_bin))
-stopifnot("Only TX and control states should remain" =
-            all(as.character(cv_data$state) %in% ALL_STUDY_STATES))
-
-n_events   <- sum(cv_data$event_first_leak)
-n_total    <- nrow(cv_data)
-event_rate <- mean(cv_data$event_first_leak)
-
-cat("Estimation sample (all states, pre-treatment):\n")
-cat(sprintf("  Facility-years:    %s\n",   format(n_total,   big.mark = ",")))
-cat(sprintf("  Unique facilities: %s\n",
-    format(uniqueN(cv_data$panel_id), big.mark = ",")))
-cat(sprintf("  States:            %d (TX + %d controls)\n",
-    uniqueN(cv_data$state),
-    uniqueN(cv_data[texas_treated == 0L, state])))
-cat(sprintf("  Age bins:          %d levels (%s to %s)\n",
-    nlevels(cv_data$age_bin),
-    levels(cv_data$age_bin)[1],
-    levels(cv_data$age_bin)[nlevels(cv_data$age_bin)]))
-cat(sprintf("  First-leak events: %s (%.3f%% base rate)\n",
-    format(n_events, big.mark = ","), event_rate * 100))
-cat(sprintf("  Class ratio (0:1): %.0f:1\n",
-    (n_total - n_events) / n_events))
+log_cat(sprintf("  annual_data: %s fy | %s facilities | %d states\n",
+  format(nrow(annual_data),             big.mark = ","),
+  format(uniqueN(annual_data$panel_id), big.mark = ","),
+  uniqueN(annual_data$state)))
+log_cat(sprintf("  tanks_1998: %s tanks (%s TX | %s CTL)\n",
+  format(nrow(tanks_1998),                   big.mark = ","),
+  format(tanks_1998[texas_treated == 1, .N], big.mark = ","),
+  format(tanks_1998[texas_treated == 0, .N], big.mark = ",")))
 
 
-#### S3: Class Weights ########################################################
+###############################################################################
+# S1: DEFINE MM SAMPLE + OVERLAP
+###############################################################################
+log_cat("\n--- S1: MM sample + overlap ---\n")
 
-n_0     <- sum(cv_data$event_first_leak == 0L)
-n_1     <- sum(cv_data$event_first_leak == 1L)
-w_ratio <- n_0 / n_1
-
-cv_data[, case_weight := fifelse(event_first_leak == 1L, w_ratio, 1.0)]
-
-cat(sprintf("\nClass weighting: w(1) = %.1f, w(0) = 1.0\n", w_ratio))
-cat(sprintf("  Upweighting %s rare events by factor %.1fx\n",
-    format(n_1, big.mark = ","), w_ratio))
-
-
-#### S4: Fit GRF Probability Forest ###########################################
-#
-# Single model: facility-level observables + state.
-#
-# TUNING GRID:
-#   mtry candidates: floor(p/3), floor(sqrt(p)), 3, 4, p
-#   For p = 7: {2, 2, 3, 4, 7} -> {2, 3, 4, 7} — meaningful coverage of the
-#   range, adding explicit values 3 and 4 to avoid the sparse {2, 7} grid
-#   produced by the standard floor(p/3) and floor(sqrt(p)) heuristics alone.
-#   min.node.size: {5, 15, 50}
-#   sample.fraction: {0.3, 0.5}
-#   Selection criterion: OOB Brier score on 500-tree forests.
-#   Final model: 2,000 trees with selected hyperparameters.
-
-FEATURES <- c(
-  "has_single_walled",
-  "age_bin_int",
-  "active_tanks",
-  "total_capacity",
-  "has_gasoline_year",
-  "has_diesel_year",
-  "state_int"
-)
-
-# Encode ordered factor age_bin as integer (preserves ordinality for GRF splits)
-cv_data[, age_bin_int := as.integer(age_bin)]
-# Encode state as integer — used as both feature and cluster ID
-cv_data[, state_int   := as.integer(factor(state))]
-
-X  <- as.matrix(cv_data[, FEATURES, with = FALSE])
-Y  <- as.integer(cv_data$event_first_leak)
-W  <- cv_data$case_weight
-CL <- cv_data$state_int   # cluster vector — one integer per row
-
-cat(sprintf("\nGRF feature matrix: %d rows x %d cols\n", nrow(X), ncol(X)))
-cat(sprintf("Features: %s\n", paste(FEATURES, collapse = ", ")))
-cat(sprintf("Clusters (states): %d unique\n", uniqueN(CL)))
-
-# Helper to safely read OOB error from either GRF slot
-oob_error <- function(fit) {
-  if (!is.null(fit$debiased.error))   return(round(fit$debiased.error,   5))
-  if (!is.null(fit$prediction.error)) return(round(fit$prediction.error, 5))
-  return(NA_real_)
-}
-
-# --- Manual Tuning Function ---
-tune_prob_forest <- function(X_mat, Y_vec, W_vec, CL_vec,
-                             n_trees_tune = 500L) {
-  p <- ncol(X_mat)
-  mtry_candidates <- unique(c(
-    max(1L, floor(p / 3L)),
-    floor(sqrt(p)),
-    3L,
-    4L,
-    p
-  ))
-  # sample.fraction: use 0.5 and 0.7 only.
-  # Values like 0.3 with cluster-level subsampling and only 20 state clusters
-  # leave too few clusters in each tree's estimation half (~3 states), causing
-  # GRF's honest split to produce NaN OOB predictions for most leaves.
-  grid <- expand.grid(
-    mtry            = mtry_candidates,
-    min.node.size   = c(5L, 15L, 50L),
-    sample.fraction = c(0.5, 0.7)
-  )
-
-  best_err    <- Inf
-  best_params <- NULL
-
-  cat(sprintf("Evaluating %d hyperparameter combinations (OOB Brier Score)...\n",
-              nrow(grid)))
-
-  for (i in seq_len(nrow(grid))) {
-    p_i <- grid[i, ]
-    set.seed(20260202L)
-    fit_tune <- probability_forest(
-      X               = X_mat,
-      Y               = factor(Y_vec, levels = c(0L, 1L)),
-      num.trees       = n_trees_tune,
-      sample.weights  = W_vec,
-      clusters        = CL_vec,
-      honesty         = FALSE,   # prediction task, not causal inference.
-                                 # honesty splits each tree's training data
-                                 # into separate "splitting" and "estimation"
-                                 # halves. with only 20 state clusters this
-                                 # leaves ~3 states in the estimation half per
-                                 # tree → empty leaves → NaN OOB predictions.
-                                 # disabling honesty also improves predictive
-                                 # AUC since the full sample is used for both
-                                 # splitting and leaf estimation.
-      mtry            = p_i$mtry,
-      min.node.size   = p_i$min.node.size,
-      sample.fraction = p_i$sample.fraction,
-      seed            = 20260202L
-    )
-    # Brier score — use get_p1() which handles GRF versions with/without dimnames
-    oob_preds <- get_p1(fit_tune$predictions)
-
-    # Guard: if OOB predictions are still all NA (should not happen with
-    # honesty = FALSE but defensive), skip this combination
-    n_valid <- sum(!is.na(oob_preds))
-    if (n_valid == 0L) {
-      cat(sprintf(
-        "  [%2d/%d] mtry=%d  min.node=%2d  sample.frac=%.1f  OOB Brier=NA (all OOB preds NA — skipping)\n",
-        i, nrow(grid), p_i$mtry, p_i$min.node.size, p_i$sample.fraction
-      ))
-      next
-    }
-
-    err <- mean((Y_vec - oob_preds)^2, na.rm = TRUE)
-
-    cat(sprintf(
-      "  [%2d/%d] mtry=%d  min.node=%2d  sample.frac=%.1f  OOB Brier=%.5f\n",
-      i, nrow(grid),
-      p_i$mtry, p_i$min.node.size, p_i$sample.fraction, err
-    ))
-
-    if (!is.nan(err) && err < best_err) {
-      best_err    <- err
-      best_params <- p_i
-    }
-  }
-
-  if (is.null(best_params))
-    stop("Tuning failed: all hyperparameter combinations produced NaN Brier scores.")
-
-  cat(sprintf(
-    ">> Best: mtry=%d  min.node=%d  sample.frac=%.1f  Brier=%.5f\n",
-    best_params$mtry, best_params$min.node.size,
-    best_params$sample.fraction, best_err
-  ))
-  return(best_params)
-}
-
-cat("\n--- Tuning model ---\n")
-best_params <- tune_prob_forest(X, Y, W, CL, n_trees_tune = 500L)
-
-cat(sprintf("\nFitting final model (%d trees)...\n", NUM_TREES))
-set.seed(20260202L)
-fit <- probability_forest(
-  X               = X,
-  Y               = factor(Y, levels = c(0L, 1L)),
-  num.trees       = NUM_TREES,
-  sample.weights  = W,
-  clusters        = CL,
-  honesty         = FALSE,   # see tuning function comment above
-  mtry            = best_params$mtry,
-  min.node.size   = best_params$min.node.size,
-  sample.fraction = best_params$sample.fraction,
-  seed            = 20260202L
-)
-cat(sprintf("  Final OOB error: %.5f\n", oob_error(fit)))
-
-# Extract OOB predictions — get_p1() handles named or unnamed prediction matrix
-cv_data[, pred := get_p1(fit$predictions)]
-
-cat("\nPrediction summary:\n")
-print(summary(cv_data$pred))
-
-
-#### S5: Variable Importance ##################################################
-#
-# GRF importance: weighted frequency each variable was chosen for a split,
-# weighted by node size. Returned as unnamed vector ordered by X column
-# position — attach names manually.
-
-vi  <- variable_importance(fit)
-imp <- data.table(
-  variable      = FEATURES,
-  importance    = as.numeric(vi)
-)
-imp[, importance_pct := importance / sum(importance) * 100]
-setorder(imp, -importance_pct)
-
-fwrite(imp, file.path(OUTPUT_TABLES, "Table_CV_VarImportance.csv"))
-cat("\nVariable importance:\n")
-print(imp)
-
-# Appendix figure — horizontal bar, sorted by importance
-imp_fig <- copy(imp)
-imp_fig[, variable := factor(variable, levels = rev(variable))]
-
-fig_imp <- ggplot(imp_fig, aes(x = importance_pct, y = variable)) +
-  geom_col(fill = COL_TX, alpha = 0.85, width = 0.65) +
-  geom_text(aes(label = sprintf("%.1f%%", importance_pct)),
-            hjust = -0.15, size = 3.0, color = "grey20") +
-  scale_x_continuous(
-    name   = "Importance (% of total split weight)",
-    expand = expansion(mult = c(0, 0.15))
-  ) +
-  labs(y = NULL) +
-  theme_pub()
-
-ggsave(file.path(OUTPUT_FIGURES, "FigureA_CV_VarImportance.png"),
-       fig_imp, width = 7, height = 4.5, dpi = 300, bg = "white")
-ggsave(file.path(OUTPUT_FIGURES, "FigureA_CV_VarImportance.pdf"),
-       fig_imp, width = 7, height = 4.5, device = cairo_pdf)
-cat("  FigureA_CV_VarImportance saved\n")
-
-
-#### S6: ROC Curve ############################################################
-
-roc_obj <- pROC::roc(cv_data$event_first_leak, cv_data$pred, quiet = TRUE)
-auc_val <- as.numeric(pROC::auc(roc_obj))
-cat(sprintf("\nOOB AUC: %.3f\n", auc_val))
-
-roc_dt <- data.table(
-  fpr = rev(1 - roc_obj$specificities),
-  tpr = rev(roc_obj$sensitivities)
-)
-
-fig_roc <- ggplot() +
-  geom_abline(slope = 1, intercept = 0,
-              linetype = "dashed", color = "grey55", linewidth = 0.5) +
-  geom_line(data  = roc_dt, aes(x = fpr, y = tpr),
-            color = COL_TX, linewidth = 0.9) +
-  geom_point(data = roc_dt, aes(x = fpr, y = tpr),
-             shape = 1, size = 1.0, stroke = 0.4,
-             color = COL_TX, fill = NA) +
-  annotate("label",
-           x = 0.65, y = 0.10,
-           label         = sprintf("AUC = %.3f", auc_val),
-           size          = 3.2,
-           fill          = "white",
-           color         = "grey20",
-           label.size    = 0.25,
-           label.padding = unit(0.22, "lines")) +
-  coord_fixed() +
-  scale_x_continuous(labels = scales::percent_format(accuracy = 1),
-                     breaks = seq(0, 1, 0.25)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-                     breaks = seq(0, 1, 0.25)) +
-  labs(x = "False Positive Rate (1 \u2212 Specificity)",
-       y = "True Positive Rate (Sensitivity)") +
-  theme_pub()
-
-ggsave(file.path(OUTPUT_FIGURES, "Figure_CV_ROC.png"),
-       fig_roc, width = 5.5, height = 5.5, dpi = 300, bg = "white")
-ggsave(file.path(OUTPUT_FIGURES, "Figure_CV_ROC.pdf"),
-       fig_roc, width = 5.5, height = 5.5, device = cairo_pdf)
-cat("  Figure_CV_ROC saved\n")
-
-
-#### S7: Partial Dependence Figure ############################################
-#
-# Marginal PDP: for each (has_single_walled, age_bin_int) cell, override
-# those two columns across ALL rows of the estimation sample and call
-# predict() on the counterfactual dataset. All other covariates — including
-# state_int, active_tanks, total_capacity, fuel type — remain at each
-# facility's observed value. Average over the full empirical distribution.
-#
-# This answers the marginal question: "if every facility were forced to be
-# single-walled and 6-8 years old, what would their average predicted risk
-# be?" It avoids conflating the age/wall gradient with other covariates that
-# happen to co-occur in those cells (which a simple group-and-average of OOB
-# predictions would not).
-#
-# Uncertainty: GRF's estimate.variance = TRUE returns per-observation
-# prediction variance. SE of the cell mean = sqrt(sum(v_hat) / n^2),
-# which propagates GRF's estimation uncertainty into the cell average.
-# 95% CI: pd_mean +/- 1.96 * pd_se, scaled to per-1,000 facility-years.
-
-# Age bin labels come directly from AGE_BIN_LABELS (defined in 01a_Setup.R).
-# Using Setup's labels directly guarantees the integer encoding fed to the
-# model during training maps correctly to the axis labels in this figure.
-# No separate PD_BIN_LABELS needed — they must be the same object.
-
-pd_grid <- CJ(
-  has_single_walled = c(0L, 1L),
-  age_bin_int       = seq_along(AGE_BIN_LABELS)
-)
-
-cat(sprintf("\nComputing marginal PDP over %d cells x %d observations...\n",
-    nrow(pd_grid), nrow(cv_data)))
-
-pd_rows <- lapply(seq_len(nrow(pd_grid)), function(i) {
-  # Counterfactual: fix wall and age bin; keep all other covariates observed
-  tmp <- copy(cv_data[, FEATURES, with = FALSE])
-  tmp[, has_single_walled := pd_grid$has_single_walled[i]]
-  tmp[, age_bin_int       := pd_grid$age_bin_int[i]]
-  X_tmp <- as.matrix(tmp)
-
-  preds <- predict(fit, newdata = X_tmp, estimate.variance = TRUE)
-  p_hat <- get_p1(preds$predictions)  # P(Y=1) — safe across GRF versions
-  v_hat <- preds$variance.estimates      # per-obs prediction variance from GRF
-
-  n       <- length(p_hat)
-  pd_mean <- mean(p_hat, na.rm = TRUE)
-  pd_se   <- sqrt(sum(v_hat, na.rm = TRUE) / n^2)  # SE of the cell mean
-
-  data.table(
-    has_single_walled = pd_grid$has_single_walled[i],
-    age_bin           = AGE_BIN_LABELS[pd_grid$age_bin_int[i]],
-    pd_mean           = pd_mean,
-    pd_se             = pd_se,
-    pd_per1k          = pd_mean * 1000,
-    pd_lo             = (pd_mean - 1.96 * pd_se) * 1000,  # 95% CI lower
-    pd_hi             = (pd_mean + 1.96 * pd_se) * 1000   # 95% CI upper
-  )
-})
-pd_dt <- rbindlist(pd_rows)
-
-# Observed cell rates — saved for appendix, NOT shown in main figure
-# (main figure shows marginal model predictions only)
-obs_dt <- cv_data[, .(
-  obs_mean    = mean(event_first_leak, na.rm = TRUE),
-  obs_per1k   = mean(event_first_leak, na.rm = TRUE) * 1000,
-  n_fac_years = .N,
-  n_events    = sum(event_first_leak)
-), by = .(has_single_walled, age_bin = as.character(age_bin))]
-
-pd_dt <- merge(pd_dt, obs_dt,
-               by = c("has_single_walled", "age_bin"), all.x = TRUE)
-
-pd_dt[, wall_label := factor(
-  fifelse(has_single_walled == 1L, "Single-Walled", "Double-Walled"),
-  levels = c("Single-Walled", "Double-Walled")
+annual_data[, is_mm := as.integer(
+  !is.na(make_model_fac) & !is.na(fac_oldest_age_bin)
 )]
-pd_dt[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
 
-fwrite(pd_dt, file.path(OUTPUT_TABLES, "Table_CV_CellRates.csv"))
-cat("  Table_CV_CellRates saved\n")
+cell_support  <- annual_data[is_mm == 1, .(
+  has_tx  = any(texas_treated == 1),
+  has_ctl = any(texas_treated == 0)
+), by = make_model_fac]
+overlap_cells <- cell_support[has_tx & has_ctl, make_model_fac]
+n_tx_only     <- cell_support[has_tx  & !has_ctl, .N]
+n_ctl_only    <- cell_support[!has_tx &  has_ctl, .N]
 
-# --- Figure ---
-pd_colors <- c("Single-Walled" = COL_TX,   "Double-Walled" = COL_CTRL)
-pd_lty    <- c("Single-Walled" = "solid",  "Double-Walled" = "dashed")
+annual_data[is_mm == 1 & !make_model_fac %in% overlap_cells, is_mm := 0L]
+mm_ids <- unique(annual_data[is_mm == 1, panel_id])
 
-# Nudge per-1k labels to avoid overlap with ribbon
-pd_dt[, label_vjust := fifelse(wall_label == "Single-Walled", -0.8, 1.6)]
+log_cat(sprintf("  Cells: %d total | %d overlap | %d TX-only | %d CTL-only\n",
+  nrow(cell_support), length(overlap_cells), n_tx_only, n_ctl_only))
+log_cat(sprintf("  MM facilities: %s (%s TX | %s CTL)\n",
+  format(length(mm_ids), big.mark = ","),
+  format(uniqueN(annual_data[is_mm == 1 & texas_treated == 1, panel_id]), big.mark = ","),
+  format(uniqueN(annual_data[is_mm == 1 & texas_treated == 0, panel_id]), big.mark = ",")))
 
-fig_pd <- ggplot(
-  pd_dt[!is.na(pd_mean)],
-  aes(x        = age_bin,
-      y        = pd_per1k,
-      group    = wall_label,
-      color    = wall_label,
-      fill     = wall_label,
-      linetype = wall_label)
-) +
-  # 95% CI ribbon from GRF prediction variance
-  geom_ribbon(aes(ymin = pd_lo, ymax = pd_hi),
-              alpha = 0.15, color = NA) +
-  geom_line(linewidth = 0.9) +
-  geom_point(shape = 19, size = 2.8) +
+
+###############################################################################
+# S2: BUILD SUBSETS
+###############################################################################
+log_cat("\n--- S2: Subsets ---\n")
+
+fac_1998_full <- annual_data[panel_year == REFORM_YEAR]
+fac_1998_mm   <- annual_data[panel_year == REFORM_YEAR & panel_id %in% mm_ids]
+
+tanks_full <- tanks_1998
+tanks_mm   <- tanks_1998[panel_id %in% mm_ids]
+
+pre_full <- annual_data[panel_year %between% c(PRE_START, PRE_END)]
+pre_mm   <- annual_data[panel_year %between% c(PRE_START, PRE_END) & panel_id %in% mm_ids]
+
+log_cat(sprintf("  1998 fac: Full=%s | MM=%s\n",
+  format(nrow(fac_1998_full), big.mark = ","),
+  format(nrow(fac_1998_mm),   big.mark = ",")))
+log_cat(sprintf("  Pre-reform fac-years: Full=%s | MM=%s\n",
+  format(nrow(pre_full), big.mark = ","),
+  format(nrow(pre_mm),   big.mark = ",")))
+
+
+###############################################################################
+# S2b: CELL COVERAGE DIAGNOSTICS
+###############################################################################
+log_cat("\n--- S2b: Cell coverage ---\n")
+
+# ── Facility cells (make_model_fac) ──────────────────────────────────────────
+fac_cell_support_full <- fac_1998_full[!is.na(make_model_fac), .(
+  has_tx  = any(texas_treated == 1),
+  has_ctl = any(texas_treated == 0)
+), by = make_model_fac]
+
+fac_cells_total_full      <- nrow(fac_cell_support_full)
+fac_cells_identified_full <- fac_cell_support_full[has_tx & has_ctl, .N]
+fac_cells_tx_only_full    <- fac_cell_support_full[has_tx & !has_ctl, .N]
+fac_cells_ctl_only_full   <- fac_cell_support_full[!has_tx & has_ctl, .N]
+fac_identified_full       <- fac_cell_support_full[has_tx & has_ctl, make_model_fac]
+
+# MM: by construction only overlap cells remain (TX-only/CTL-only = 0)
+fac_cells_total_mm      <- length(overlap_cells)
+fac_cells_identified_mm <- length(overlap_cells)
+fac_cells_tx_only_mm    <- 0L
+fac_cells_ctl_only_mm   <- 0L
+
+# Panel-year coverage (what the regression uses, not just the 1998 snapshot)
+fac_pct_identified_full_panel <- annual_data[!is.na(make_model_fac),
+  round(mean(make_model_fac %in% fac_identified_full) * 100, 1)]
+fac_pct_identified_mm_panel   <- annual_data[!is.na(make_model_fac) & is_mm == 1,
+  round(mean(make_model_fac %in% overlap_cells) * 100, 1)]
+
+# ── Tank cells (make_model_tank) ─────────────────────────────────────────────
+tank_cell_support_full <- tanks_full[!is.na(make_model_tank), .(
+  has_tx  = any(texas_treated == 1),
+  has_ctl = any(texas_treated == 0)
+), by = make_model_tank]
+
+tank_cells_total_full      <- nrow(tank_cell_support_full)
+tank_cells_identified_full <- tank_cell_support_full[has_tx & has_ctl, .N]
+tank_cells_tx_only_full    <- tank_cell_support_full[has_tx & !has_ctl, .N]
+tank_cells_ctl_only_full   <- tank_cell_support_full[!has_tx & has_ctl, .N]
+tank_identified_full       <- tank_cell_support_full[has_tx & has_ctl, make_model_tank]
+tank_pct_identified_full   <- tanks_full[!is.na(make_model_tank),
+  round(mean(make_model_tank %in% tank_identified_full) * 100, 1)]
+
+tanks_primary <- tanks_full[mm_install_cohort %in% PRIMARY_YEARS & !is.na(make_model_tank)]
+tanks_primary_mm <- tanks_mm[mm_install_cohort %in% PRIMARY_YEARS & !is.na(make_model_tank)]
+
+tank_cell_support_mm <- tanks_primary[, .(
+  has_tx  = any(texas_treated == 1),
+  has_ctl = any(texas_treated == 0)
+), by = make_model_tank]
+
+tank_cells_total_mm      <- nrow(tank_cell_support_mm)
+tank_cells_identified_mm <- tank_cell_support_mm[has_tx & has_ctl, .N]
+tank_cells_tx_only_mm    <- tank_cell_support_mm[has_tx & !has_ctl, .N]
+tank_cells_ctl_only_mm   <- tank_cell_support_mm[!has_tx & has_ctl, .N]
+tank_identified_mm       <- tank_cell_support_mm[has_tx & has_ctl, make_model_tank]
+tank_pct_identified_mm   <- tanks_primary[,
+  round(mean(make_model_tank %in% tank_identified_mm) * 100, 1)]
+
+log_cat(sprintf("  Fac cells  — Full: %d tot | %d id | %d TX-only | %d CTL-only\n",
+  fac_cells_total_full, fac_cells_identified_full,
+  fac_cells_tx_only_full, fac_cells_ctl_only_full))
+log_cat(sprintf("  Tank cells — Full: %d tot | %d id | MM: %d tot | %d id\n",
+  tank_cells_total_full, tank_cells_identified_full,
+  tank_cells_total_mm,   tank_cells_identified_mm))
+
+
+###############################################################################
+# S3: CELL x YEAR DIFF COMPUTATION (core)
+#
+# The correct way to measure pre-reform TX vs CTL differences under the
+# cell x year FE design:
+#
+#   Step 1: For each (cell, year) compute:
+#             tx_rate  = mean outcome for TX facilities in that cell-year
+#             ctl_rate = mean outcome for CTL facilities in that cell-year
+#             diff     = tx_rate - ctl_rate
+#
+#   Step 2: For each cell, average those diffs over the pre-reform years
+#             -> one diff per cell (year-average within-cell gap)
+#
+#   Step 3: For the summary row in Table 1, take a weighted average of
+#           cell diffs, weight = total facility-years in the cell
+#
+# This is exactly what the regression identifies: within-cell-year variation.
+# Rows 1 and 2 of Table 1 use pooled means (the conventional benchmark);
+# Row 3 uses this cell-year procedure.
+###############################################################################
+log_cat("\n--- S3: Cell x year diff computation ---\n")
+
+# ── Verify required outcome columns exist in pre_mm ──────────────────────────
+s3_required <- c("closure_year", "leak_year", "replacement_closure_year",
+                 "make_model_fac", "fac_wall", "fac_fuel", "fac_oldest_age_bin",
+                 "texas_treated", "panel_year")
+s3_missing  <- setdiff(s3_required, names(pre_mm))
+if (length(s3_missing) > 0) {
+  stop(sprintf("S3: Missing columns in pre_mm: %s\n  Check load_interim('annual_data') output.",
+               paste(s3_missing, collapse = ", ")))
+}
+log_cat(sprintf("  S3 column check passed (%d required columns present)\n",
+                length(s3_required)))
+
+# Step 1: cell x year means and diffs
+# Keep only cell-years where BOTH TX and CTL are present
+cell_year <- pre_mm[, {
+  tx_idx  <- texas_treated == 1
+  ctl_idx <- texas_treated == 0
+  if (!any(tx_idx) | !any(ctl_idx)) return(NULL)
+  .(
+    tx_closure  = mean(closure_year[tx_idx],              na.rm = TRUE),
+    ctl_closure = mean(closure_year[ctl_idx],             na.rm = TRUE),
+    tx_lust     = mean(leak_year[tx_idx],                 na.rm = TRUE),
+    ctl_lust    = mean(leak_year[ctl_idx],                na.rm = TRUE),
+    tx_replace  = mean(replacement_closure_year[tx_idx],  na.rm = TRUE),
+    ctl_replace = mean(replacement_closure_year[ctl_idx], na.rm = TRUE),
+    n_tx_fy     = sum(tx_idx),
+    n_ctl_fy    = sum(ctl_idx)
+  )
+}, by = .(make_model_fac, fac_wall, fac_fuel, fac_oldest_age_bin, panel_year)]
+
+if (is.null(cell_year) || nrow(cell_year) == 0) {
+  stop("S3: cell_year has 0 rows. No cell-years have both TX and CTL observations.\n  Check is_mm assignment and overlap_cells computation in S1.")
+}
+
+cell_year[, `:=`(
+  diff_closure = tx_closure  - ctl_closure,
+  diff_lust    = tx_lust     - ctl_lust,
+  diff_replace = tx_replace  - ctl_replace
+)]
+
+log_cat(sprintf("  cell_year: %d obs | %d cells | %d years\n",
+  nrow(cell_year),
+  uniqueN(cell_year$make_model_fac),
+  uniqueN(cell_year$panel_year)))
+
+# Step 2: average over years within each cell
+# Unique facility counts must come from pre_mm (can't aggregate from cell_year)
+cell_fac_counts <- pre_mm[, .(
+  n_tx  = uniqueN(panel_id[texas_treated == 1]),
+  n_ctl = uniqueN(panel_id[texas_treated == 0])
+), by = make_model_fac]
+
+cell_stats <- cell_year[, .(
+  # Year-averaged means (not pooled across facility-years)
+  closure_TX   = mean(tx_closure,    na.rm = TRUE) * 100,
+  closure_CTL  = mean(ctl_closure,   na.rm = TRUE) * 100,
+  # Average of within-cell-year diffs — the key quantity
+  closure_diff = mean(diff_closure,  na.rm = TRUE) * 100,
+  lust_TX      = mean(tx_lust,       na.rm = TRUE) * 100,
+  lust_CTL     = mean(ctl_lust,      na.rm = TRUE) * 100,
+  lust_diff    = mean(diff_lust,     na.rm = TRUE) * 100,
+  replace_TX   = mean(tx_replace,    na.rm = TRUE) * 100,
+  replace_CTL  = mean(ctl_replace,   na.rm = TRUE) * 100,
+  replace_diff = mean(diff_replace,  na.rm = TRUE) * 100,
+  # Total facility-years in cell (used as regression weight in Step 3)
+  n_fy_tx      = sum(n_tx_fy),
+  n_fy_ctl     = sum(n_ctl_fy),
+  n_years      = .N
+), by = .(make_model_fac, fac_wall, fac_fuel, fac_oldest_age_bin)]
+
+cell_stats <- merge(cell_stats, cell_fac_counts, by = "make_model_fac", all.x = TRUE)
+cell_stats[, w := n_fy_tx + n_fy_ctl]   # weight for Step 3
+
+log_cat(sprintf("  cell_stats: %d cells | %s TX fy | %s CTL fy\n",
+  nrow(cell_stats),
+  format(sum(cell_stats$n_fy_tx),  big.mark = ","),
+  format(sum(cell_stats$n_fy_ctl), big.mark = ",")))
+
+# Diagnostic: FY-weighted avg cell diffs
+log_cat(sprintf("  FY-weighted diffs: Closure %+.3fpp | LUST %+.3fpp | Replace %+.3fpp\n",
+  weighted.mean(cell_stats$closure_diff, w = cell_stats$w, na.rm = TRUE),
+  weighted.mean(cell_stats$lust_diff,    w = cell_stats$w, na.rm = TRUE),
+  weighted.mean(cell_stats$replace_diff, w = cell_stats$w, na.rm = TRUE)))
+
+# ── Cell-year weighted summary (cyw) — used in Table 0 Panel B ──────────────
+# These are the quantities the cell x year FE regression identifies.
+# Panel B's MM columns will show these instead of pooled MM means.
+cyw_closure_TX   <- weighted.mean(cell_stats$closure_TX,   w = cell_stats$w, na.rm = TRUE)
+cyw_closure_CTL  <- weighted.mean(cell_stats$closure_CTL,  w = cell_stats$w, na.rm = TRUE)
+cyw_closure_diff <- weighted.mean(cell_stats$closure_diff, w = cell_stats$w, na.rm = TRUE)
+cyw_lust_TX      <- weighted.mean(cell_stats$lust_TX,      w = cell_stats$w, na.rm = TRUE)
+cyw_lust_CTL     <- weighted.mean(cell_stats$lust_CTL,     w = cell_stats$w, na.rm = TRUE)
+cyw_lust_diff    <- weighted.mean(cell_stats$lust_diff,    w = cell_stats$w, na.rm = TRUE)
+cyw_replace_TX   <- weighted.mean(cell_stats$replace_TX,   w = cell_stats$w, na.rm = TRUE)
+cyw_replace_CTL  <- weighted.mean(cell_stats$replace_CTL,  w = cell_stats$w, na.rm = TRUE)
+cyw_replace_diff <- weighted.mean(cell_stats$replace_diff, w = cell_stats$w, na.rm = TRUE)
+
+log_cat(sprintf("  CYW summary for Panel B:\n"))
+log_cat(sprintf("    Closure:     TX=%.2f%%  CTL=%.2f%%  Diff=%+.2fpp\n",
+  cyw_closure_TX, cyw_closure_CTL, cyw_closure_diff))
+log_cat(sprintf("    LUST:        TX=%.2f%%  CTL=%.2f%%  Diff=%+.2fpp\n",
+  cyw_lust_TX, cyw_lust_CTL, cyw_lust_diff))
+log_cat(sprintf("    Replacement: TX=%.2f%%  CTL=%.2f%%  Diff=%+.2fpp\n",
+  cyw_replace_TX, cyw_replace_CTL, cyw_replace_diff))
+
+
+###############################################################################
+# PART I: PARALLEL TRENDS FIGURES
+#
+# OUTPUT 1 — Figure_RestrictionEarnsParallelTrends (2×3 grid):
+#
+#   Row 1: Full Sample
+#     Panel 1A: TX vs CTL closure rates (pooled)       — mandate spike visible
+#     Panel 1B: TX−CTL pooled diff                     — pre-trend failure
+#     Panel 1C: TX vs CTL LUST rates (pooled)          — levels context
+#
+#   Row 2: MM Sample
+#     Panel 2A: TX vs CTL closure rates (pooled)       — spike gone, levels similar
+#     Panel 2B: Three-way diff comparison              — the key identification panel
+#               Line 1: Full sample pooled diff (red)
+#               Line 2: MM pooled diff (orange)
+#               Line 3: MM cell-year weighted diff (blue)  ← what FE identifies
+#     Panel 2C: TX vs CTL LUST rates (MM)              — LUST levels context
+#
+# OUTPUT 2 — Figure_DiffComparison (standalone, large):
+#   The three-way diff panel alone, with CI ribbons on each series.
+#   Suitable for a main-text figure or appendix standalone.
+#
+# The cell-year weighted diff (Panel 2B, Line 3) is computed year-by-year from
+# S3's cell_year table: for each year, take the FY-weighted average of
+# within-cell TX-CTL diffs across all overlap cells. This shows exactly what
+# the cell×year FE is conditioning on.
+###############################################################################
+log_cat("\n\n========== PART I: PARALLEL TRENDS FIGURES ==========\n")
+
+yr_start <- 1990L
+yr_end   <- PANEL_END   # from 01a_Setup.R
+
+# ── Colours ────────────────────────────────────────────────────────────────────
+COL_NAIVE   <- "#CC3311"   # red      — full sample naive diff
+COL_POOLED  <- "#EE7733"   # orange   — MM pooled diff
+COL_CELLYEAR <- "#0077BB"  # blue     — MM cell-year weighted diff
+
+# ── Panel constructor helpers ─────────────────────────────────────────────────
+
+# Raw TX vs CTL rates over time (closure or LUST)
+make_rate_panel <- function(dt, yr_start, yr_end, outcome_col,
+                            y_lab = "Annual Closure Rate",
+                            add_mandate = FALSE, panel_label = NULL) {
+  rates <- dt[panel_year %between% c(yr_start, yr_end), {
+    vals <- get(outcome_col)
+    m    <- mean(vals, na.rm = TRUE)
+    .(rate = m,
+      se   = sqrt(m * (1 - m) / sum(!is.na(vals))))
+  }, by = .(panel_year,
+            Group = fifelse(texas_treated == 1, "Texas", "Control"))]
+
+  p <- ggplot(rates, aes(x = panel_year, y = rate, color = Group, fill = Group)) +
+    geom_ribbon(aes(ymin = rate - 1.96 * se, ymax = rate + 1.96 * se),
+                alpha = 0.12, color = NA) +
+    geom_line(linewidth = 0.9) +
+    geom_point(size = 1.8) +
+    treatment_vline()
+
+  if (add_mandate) p <- p + mandate_shade_layer()
+  if (!is.null(panel_label))
+    p <- p + annotate("label", x = yr_start + 0.5, y = Inf,
+                      vjust = 1.3, hjust = 0, size = 2.6,
+                      label = panel_label, fill = "white", label.size = 0.25)
+
+  p +
+    scale_color_manual(values = COL_PAIR) +
+    scale_fill_manual(values  = COL_PAIR) +
+    scale_x_continuous(breaks = seq(yr_start, yr_end, 4)) +
+    scale_y_continuous(labels = percent_format(accuracy = 0.1)) +
+    labs(x = NULL, y = y_lab, color = NULL, fill = NULL) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "bottom")
+}
+
+# Pooled TX-CTL diff (the naive comparison used in rows 1 and 2 of Table 1)
+make_pooled_diff <- function(dt, yr_start, yr_end, outcome_col,
+                              line_color, line_label,
+                              add_mandate = FALSE, add_ribbon = TRUE) {
+  rates <- dt[panel_year %between% c(yr_start, yr_end), {
+    vals <- get(outcome_col)
+    m    <- mean(vals, na.rm = TRUE)
+    .(rate = m, se = sqrt(m * (1 - m) / sum(!is.na(vals))))
+  }, by = .(panel_year,
+            Group = fifelse(texas_treated == 1, "Texas", "Control"))]
+
+  wide <- dcast(rates, panel_year ~ Group,
+                value.var = c("rate", "se"))
+  wide[, `:=`(diff    = rate_Texas - rate_Control,
+              diff_se = sqrt(se_Texas^2 + se_Control^2))]
+  wide[, `:=`(diff_lo = diff - 1.96 * diff_se,
+              diff_hi = diff + 1.96 * diff_se,
+              series  = line_label)]
+  wide[!is.na(diff)]
+}
+
+# Year-by-year cell-weighted diff from S3's cell_year table
+# For each year: FY-weighted avg of within-cell TX-CTL diffs across overlap cells
+make_cellyear_diff <- function(yr_start, yr_end) {
+  cy <- cell_year[panel_year %between% c(yr_start, yr_end)]
+  cy[, w_yr := n_tx_fy + n_ctl_fy]   # per cell-year weight
+
+  by_year <- cy[, .(
+    diff    = weighted.mean(diff_closure, w = w_yr, na.rm = TRUE),
+    # Bootstrap-style SE: SD of cell diffs weighted by cell size
+    diff_se = {
+      wts <- w_yr / sum(w_yr, na.rm = TRUE)
+      w_mean <- sum(wts * diff_closure, na.rm = TRUE)
+      sqrt(sum(wts * (diff_closure - w_mean)^2, na.rm = TRUE))
+    },
+    n_cells = .N
+  ), by = panel_year]
+
+  by_year[, `:=`(diff_lo = diff - 1.96 * diff_se,
+                 diff_hi = diff + 1.96 * diff_se,
+                 series  = "MM cell\u2013year weighted")]
+  by_year
+}
+
+# ── Build the three diff series ───────────────────────────────────────────────
+log_cat("  Computing three diff series...\n")
+
+# Series 1: full sample pooled diff (red) — pre-reform + post-reform
+diff_naive <- make_pooled_diff(
+  annual_data, yr_start, yr_end, "closure_year",
+  line_color = COL_NAIVE, line_label = "Full sample (naive)"
+)
+
+# Series 2: MM pooled diff (orange)
+diff_pooled <- make_pooled_diff(
+  annual_data[is_mm == 1], yr_start, yr_end, "closure_year",
+  line_color = COL_POOLED, line_label = "MM pooled"
+)
+
+# Series 3: MM cell-year weighted diff (blue)
+diff_cellyear <- make_cellyear_diff(yr_start, yr_end)
+
+# Combined for three-way panel
+diff_combined <- rbind(
+  diff_naive[,    .(panel_year, diff, diff_lo, diff_hi, series)],
+  diff_pooled[,   .(panel_year, diff, diff_lo, diff_hi, series)],
+  diff_cellyear[, .(panel_year, diff, diff_lo, diff_hi, series)]
+)
+diff_combined[, series := factor(series, levels = c(
+  "Full sample (naive)",
+  "MM pooled",
+  "MM cell\u2013year weighted"
+))]
+
+# Pre-reform means for annotation
+pre_diff_by_series <- diff_combined[panel_year < POST_YEAR, .(
+  pre_mean = mean(diff, na.rm = TRUE)
+), by = series]
+log_cat("  Pre-reform avg diff by series:\n")
+print(pre_diff_by_series)
+
+# ── Panel constructors ────────────────────────────────────────────────────────
+
+# Three-way diff panel — the key identification panel
+make_three_way_diff <- function(yr_start, yr_end, show_legend = TRUE) {
+
+  col_map <- c(
+    "Full sample (naive)"      = COL_NAIVE,
+    "MM pooled"                = COL_POOLED,
+    "MM cell\u2013year weighted" = COL_CELLYEAR
+  )
+  lty_map <- c(
+    "Full sample (naive)"      = "dashed",
+    "MM pooled"                = "dotdash",
+    "MM cell\u2013year weighted" = "solid"
+  )
+
+  p <- ggplot(diff_combined[panel_year %between% c(yr_start, yr_end)],
+              aes(x = panel_year, y = diff * 100,
+                  color = series, linetype = series, fill = series)) +
+
+    # Pre-reform shading
+    annotate("rect",
+             xmin = -Inf, xmax = POST_YEAR - 0.5,
+             ymin = -Inf, ymax = Inf,
+             fill = "grey93", alpha = 0.6) +
+
+    geom_hline(yintercept = 0, color = "grey30", linewidth = 0.5) +
+    treatment_vline() +
+
+    # CI ribbons (light)
+    geom_ribbon(aes(ymin = diff_lo * 100, ymax = diff_hi * 100),
+                alpha = 0.10, color = NA) +
+
+    geom_line(linewidth = 0.9) +
+    geom_point(size = 1.8) +
+
+    scale_color_manual(values = col_map) +
+    scale_fill_manual(values  = col_map) +
+    scale_linetype_manual(values = lty_map) +
+    scale_x_continuous(breaks = seq(yr_start, yr_end, 4)) +
+    scale_y_continuous(labels = function(x) paste0(ifelse(x >= 0, "+", ""), x, "pp")) +
+
+    labs(x    = NULL,
+         y    = "TX \u2212 CTL Closure Rate Diff (pp)",
+         color = NULL, linetype = NULL, fill = NULL) +
+
+    theme(axis.text.x  = element_text(angle = 45, hjust = 1),
+          legend.position = if (show_legend) "bottom" else "none",
+          legend.text  = element_text(size = 8),
+          panel.grid.major.x = element_blank())
+  p
+}
+
+# ── Wald p-values from 01g (optional) ────────────────────────────────────────
+pt_results  <- tryCatch(load_interim("pt_results"), error = function(e) NULL)
+p_full_wald <- if (!is.null(pt_results))
+  pt_results[grepl("Pooled", Specification), `p-value`][1] else NULL
+p_mm_wald   <- if (!is.null(pt_results))
+  pt_results[grepl("Spec A",  Specification), `p-value`][1] else NULL
+
+# ── Build panels ──────────────────────────────────────────────────────────────
+
+# Row 1: Full sample
+p_1A <- make_rate_panel(annual_data, yr_start, yr_end,
+  outcome_col  = "closure_year",
+  y_lab        = "Annual Closure Rate",
+  add_mandate  = TRUE,
+  panel_label  = "Full sample: closure rates") +
+  labs(subtitle = "Mandate window (gold) drives TX spike in 1989\u20131993.")
+
+p_1B <- make_rate_panel(annual_data, yr_start, yr_end,
+  outcome_col  = "leak_year",
+  y_lab        = "Annual LUST Rate",
+  add_mandate  = TRUE,
+  panel_label  = "Full sample: LUST rates") +
+  labs(subtitle = "TX consistently lower — levels difference, not trend.")
+
+# Row 2: MM sample + three-way diff
+p_2A <- make_rate_panel(annual_data[is_mm == 1], yr_start, yr_end,
+  outcome_col  = "closure_year",
+  y_lab        = "Annual Closure Rate",
+  panel_label  = "MM sample: closure rates") +
+  labs(subtitle = "Mandate spike removed; TX/CTL move together pre-reform.")
+
+p_2B <- make_three_way_diff(yr_start, yr_end) +
+  labs(subtitle = paste0(
+    "Blue (cell\u2013year wt) is what the FE identifies. ",
+    "Pre-reform diff near zero only after cell adjustment."))
+
+p_2C <- make_rate_panel(annual_data[is_mm == 1], yr_start, yr_end,
+  outcome_col  = "leak_year",
+  y_lab        = "Annual LUST Rate",
+  panel_label  = "MM sample: LUST rates") +
+  labs(subtitle = "LUST gap persists — structural levels difference, not trend violation.")
+
+# ── 2×3 combined figure ───────────────────────────────────────────────────────
+save_panels(
+  panels        = list(`1A` = p_1A, `1B` = p_1B, `1C` = p_2A,
+                       `2A` = p_2B, `2B` = p_2C, `2C` = p_2C),
+  base_name     = "Figure_RestrictionEarnsParallelTrends",
+  combined_name = "Figure_RestrictionEarnsParallelTrends_Combined",
+  panel_width   = 8, panel_height  = 5,
+  combined_width = 24, combined_height = 10,
+  ncol = 3, nrow = 2,
+  title    = "The Make-Model Restriction Earns Parallel Trends",
+  subtitle = paste0(
+    "Row 1: full sample — TX mandate spike fails parallel trends (panels A\u2013B). ",
+    "Row 2: MM sample with three-way diff comparison (panel D); ",
+    "cell\u2013year weighted diff (blue) shows the FE estimand is near zero pre-reform.")
+)
+
+# ── Standalone three-way diff figure (large, main-text ready) ────────────────
+p_diff_standalone <- make_three_way_diff(yr_start, yr_end, show_legend = TRUE) +
+  # Add pre-reform mean annotations per series
   geom_text(
-    aes(label = sprintf("%.1f", pd_per1k), vjust = label_vjust),
-    size        = 2.7,
-    fontface    = "bold",
-    show.legend = FALSE
-  ) +
-  scale_color_manual(values = pd_colors, name = "Wall Type") +
-  scale_fill_manual(values  = pd_colors, name = "Wall Type") +
-  scale_linetype_manual(values = pd_lty, name = "Wall Type") +
-  scale_y_continuous(
-    name   = "Predicted First-Leak Rate (per 1,000 Facility-Years)",
-    expand = expansion(mult = c(0.12, 0.12))
+    data = pre_diff_by_series[, .(
+      panel_year = PRE_START + 1L,
+      diff       = pre_mean * 100 + 0.3,   # small vertical nudge
+      label      = sprintf("Pre mean: %+.2fpp", pre_mean * 100),
+      series     = series
+    )],
+    aes(label = label, color = series),
+    hjust = 0, size = 2.8, show.legend = FALSE
   ) +
   labs(
-    title    = "Predicted Leak Risk by Tank Age and Wall Type",
-    subtitle = sprintf(
-      "%d\u2013%d. Never-leaked risk set. GRF probability forest, OOB predictions.",
-      min(cv_data$panel_year), max(cv_data$panel_year)
-    ),
-    x = "Tank Age Bin (3-year intervals)"
+    title    = NULL,
+    subtitle = NULL,
+    caption  = paste0(
+      "Pre-reform window = 1990\u20131998 (shaded). ",
+      "Vertical line = reform date (1999). ",
+      "\\textit{Full sample (naive)}: pooled TX$-$CTL means across all facilities. ",
+      "\\textit{MM pooled}: same computation restricted to overlap-cell facilities. ",
+      "\\textit{MM cell\\u2013year weighted}: for each year, the facility-year-weighted ",
+      "average of within-cell TX$-$CTL differences across ", length(overlap_cells),
+      " overlap cells. This is the quantity the cell$\\times$year FE identifies."
+    )
   ) +
-  guides(
-    color    = guide_legend(
-      override.aes   = list(shape = 19, linetype = c("solid", "dashed")),
-      title.position = "top", title.hjust = 0.5
-    ),
-    fill     = "none",
-    linetype = "none"
-  ) +
-  theme_pub() +
   theme(
-    axis.text.x      = element_text(angle = 30, hjust = 1),
-    legend.position  = "bottom",
-    legend.key.width = unit(1.8, "cm"),
-    plot.title       = element_text(face = "bold"),
-    plot.subtitle    = element_text(size = rel(0.8), color = "grey30")
+    plot.caption      = element_text(size = 7.5, hjust = 0, color = "grey30"),
+    legend.position   = "bottom",
+    legend.key.width  = unit(1.2, "cm")
   )
 
-ggsave(file.path(OUTPUT_FIGURES, "Figure_CV_PartialDep.png"),
-       fig_pd, width = 9, height = 6, dpi = 300, bg = "white")
-ggsave(file.path(OUTPUT_FIGURES, "Figure_CV_PartialDep.pdf"),
-       fig_pd, width = 9, height = 6, device = cairo_pdf)
-cat("  Figure_CV_PartialDep saved\n")
+for (ext in c("png", "pdf")) {
+  ggsave(
+    file.path(OUTPUT_FIGURES, paste0("Figure_DiffComparison.", ext)),
+    p_diff_standalone,
+    width  = 11, height = 6,
+    dpi    = if (ext == "png") 300 else NULL,
+    device = if (ext == "pdf") cairo_pdf else NULL,
+    bg     = "white"
+  )
+}
+log_cat("  Figure_DiffComparison saved (standalone three-way diff)\n")
+
+# ── Individual panel saves (for slide/appendix use) ───────────────────────────
+for (nm in c("1A", "1B", "2A", "2B", "2C")) {
+  p_obj <- get(paste0("p_", gsub("([12])([ABC])", "\\1\\2", nm) |>
+                        tolower() |> gsub("1a", "1A", x = _, fixed = TRUE) |>
+                        gsub("1b", "1B", x = _, fixed = TRUE) |>
+                        gsub("2a", "2A", x = _, fixed = TRUE) |>
+                        gsub("2b", "2B", x = _, fixed = TRUE) |>
+                        gsub("2c", "2C", x = _, fixed = TRUE)))
+  ggsave(
+    file.path(OUTPUT_FIGURES,
+              paste0("Figure_RestrictionEarnsParallelTrends_", nm, ".png")),
+    p_obj, width = 9, height = 5, dpi = 300, bg = "white"
+  )
+  ggsave(
+    file.path(OUTPUT_FIGURES,
+              paste0("Figure_RestrictionEarnsParallelTrends_", nm, ".pdf")),
+    p_obj, width = 9, height = 5, device = cairo_pdf
+  )
+}
+log_cat("  Individual panels saved (1A, 1B, 2A, 2B, 2C)\n")
 
 
-#### S8: Calibration ##########################################################
+###############################################################################
+# PART II: TABLE 0 — DESCRIPTIVE (Panels A + B + C)
+###############################################################################
+log_cat("\n\n========== PART II: TABLE 0 (DESCRIPTIVE) ==========\n")
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+welch_p <- function(x, y) {
+  tryCatch(suppressWarnings(t.test(x, y)$p.value),
+           error = function(e) NA_real_)
+}
+
+se_mean <- function(x) { x <- x[!is.na(x)]; sd(x) / sqrt(length(x)) }
+
+fmt_val <- function(x, digits, mult = 1)
+  formatC(x * mult, format = "f", digits = digits, big.mark = ",")
+
+fmt_diff <- function(d, p, digits, mult = 1)
+  sprintf("%s%s%s",
+    ifelse(d * mult >= 0, "+", ""),
+    fmt_val(d, digits, mult),
+    stars_fn(p))
+
+# Two rows: mean + SE; Diff is Welch t-test
+build_mean_se_rows <- function(label, full_tx, full_ctl, mm_tx, mm_ctl,
+                               digits = 1, mult = 1) {
+  full_tx  <- full_tx[!is.na(full_tx)];  full_ctl <- full_ctl[!is.na(full_ctl)]
+  mm_tx    <- mm_tx[!is.na(mm_tx)];      mm_ctl   <- mm_ctl[!is.na(mm_ctl)]
+  ftx_m <- mean(full_tx); ftx_se <- se_mean(full_tx)
+  fct_m <- mean(full_ctl); fct_se <- se_mean(full_ctl)
+  mtx_m <- mean(mm_tx);   mtx_se <- se_mean(mm_tx)
+  mct_m <- mean(mm_ctl);  mct_se <- se_mean(mm_ctl)
+  fd <- ftx_m - fct_m; fp <- welch_p(full_tx, full_ctl)
+  md <- mtx_m - mct_m; mp <- welch_p(mm_tx,   mm_ctl)
+  rbind(
+    data.table(
+      Variable  = label,
+      Full_TX   = fmt_val(ftx_m,  digits, mult),
+      Full_CTL  = fmt_val(fct_m,  digits, mult),
+      Full_Diff = fmt_diff(fd, fp, digits, mult),
+      MM_TX     = fmt_val(mtx_m,  digits, mult),
+      MM_CTL    = fmt_val(mct_m,  digits, mult),
+      MM_Diff   = fmt_diff(md, mp, digits, mult)
+    ),
+    data.table(
+      Variable  = "",
+      Full_TX   = sprintf("(%s)", fmt_val(ftx_se, digits, mult)),
+      Full_CTL  = sprintf("(%s)", fmt_val(fct_se, digits, mult)),
+      Full_Diff = "",
+      MM_TX     = sprintf("(%s)", fmt_val(mtx_se, digits, mult)),
+      MM_CTL    = sprintf("(%s)", fmt_val(mct_se, digits, mult)),
+      MM_Diff   = ""
+    )
+  )
+}
+
+# One row, no SE; t-test on raw observations
+build_agg_row <- function(label, full_tx_obs, full_ctl_obs, mm_tx_obs, mm_ctl_obs,
+                          digits = 1, mult = 1) {
+  full_tx_obs <- full_tx_obs[!is.na(full_tx_obs)]
+  full_ctl_obs <- full_ctl_obs[!is.na(full_ctl_obs)]
+  mm_tx_obs   <- mm_tx_obs[!is.na(mm_tx_obs)]
+  mm_ctl_obs  <- mm_ctl_obs[!is.na(mm_ctl_obs)]
+  ftx_m <- mean(full_tx_obs); fct_m <- mean(full_ctl_obs)
+  mtx_m <- mean(mm_tx_obs);   mct_m <- mean(mm_ctl_obs)
+  fd <- ftx_m - fct_m; fp <- welch_p(full_tx_obs, full_ctl_obs)
+  md <- mtx_m - mct_m; mp <- welch_p(mm_tx_obs,   mm_ctl_obs)
+  data.table(
+    Variable  = label,
+    Full_TX   = fmt_val(ftx_m, digits, mult),
+    Full_CTL  = fmt_val(fct_m, digits, mult),
+    Full_Diff = fmt_diff(fd, fp, digits, mult),
+    MM_TX     = fmt_val(mtx_m, digits, mult),
+    MM_CTL    = fmt_val(mct_m, digits, mult),
+    MM_Diff   = fmt_diff(md, mp, digits, mult)
+  )
+}
+
+# One row, Diff = "---"
+build_count_row <- function(label, full_tx_n, full_ctl_n, mm_tx_n, mm_ctl_n) {
+  fmt_n <- function(x) format(as.integer(x), big.mark = ",")
+  data.table(
+    Variable  = label,
+    Full_TX   = fmt_n(full_tx_n), Full_CTL = fmt_n(full_ctl_n), Full_Diff = "---",
+    MM_TX     = fmt_n(mm_tx_n),   MM_CTL   = fmt_n(mm_ctl_n),   MM_Diff   = "---"
+  )
+}
+
+# One row for Panel C (Full scalar vs MM scalar; CTL/Diff blank)
+build_cell_row <- function(label, full_val, mm_val,
+                           fmt_fn = function(x) format(as.integer(x), big.mark = ",")) {
+  data.table(
+    Variable  = label,
+    Full_TX   = fmt_fn(full_val), Full_CTL = "", Full_Diff = "",
+    MM_TX     = fmt_fn(mm_val),   MM_CTL   = "", MM_Diff   = ""
+  )
+}
+
+fmt_pct_c <- function(x) sprintf("%.1f\\%%", x)
+
+# ── Panel A: 1998 Cross-Section ───────────────────────────────────────────────
+log_cat("  Building Panel A...\n")
+
+panel_a <- rbind(
+  build_count_row("\\quad $N$ States (1 TX $+$ CTL)",
+    1L, length(CONTROL_STATES), 1L, length(CONTROL_STATES)),
+  build_count_row("\\quad $N$ Facilities",
+    fac_1998_full[texas_treated == 1, uniqueN(panel_id)],
+    fac_1998_full[texas_treated == 0, uniqueN(panel_id)],
+    fac_1998_mm[texas_treated == 1,   uniqueN(panel_id)],
+    fac_1998_mm[texas_treated == 0,   uniqueN(panel_id)]),
+  build_count_row("\\quad $N$ Total Tanks",
+    tanks_full[texas_treated == 1, .N], tanks_full[texas_treated == 0, .N],
+    tanks_mm[texas_treated == 1,   .N], tanks_mm[texas_treated == 0,   .N]),
+  build_mean_se_rows("Avg tanks per facility",
+    fac_1998_full[texas_treated == 1, active_tanks_dec],
+    fac_1998_full[texas_treated == 0, active_tanks_dec],
+    fac_1998_mm[texas_treated == 1,   active_tanks_dec],
+    fac_1998_mm[texas_treated == 0,   active_tanks_dec], digits = 1),
+  build_mean_se_rows("Avg capacity per facility (gal)",
+    fac_1998_full[texas_treated == 1, total_capacity_dec],
+    fac_1998_full[texas_treated == 0, total_capacity_dec],
+    fac_1998_mm[texas_treated == 1,   total_capacity_dec],
+    fac_1998_mm[texas_treated == 0,   total_capacity_dec], digits = 0),
+  build_mean_se_rows("Avg tank age (facility level)",
+    fac_1998_full[texas_treated == 1, avg_tank_age_dec],
+    fac_1998_full[texas_treated == 0, avg_tank_age_dec],
+    fac_1998_mm[texas_treated == 1,   avg_tank_age_dec],
+    fac_1998_mm[texas_treated == 0,   avg_tank_age_dec], digits = 1),
+  build_mean_se_rows("Avg age of oldest tank (fac level)",
+    fac_1998_full[texas_treated == 1, oldest_age_at_reform],
+    fac_1998_full[texas_treated == 0, oldest_age_at_reform],
+    fac_1998_mm[texas_treated == 1,   oldest_age_at_reform],
+    fac_1998_mm[texas_treated == 0,   oldest_age_at_reform], digits = 1),
+  build_agg_row("Avg age of state tank fleet",
+    tanks_full[texas_treated == 1, tank_age_at_reform],
+    tanks_full[texas_treated == 0, tank_age_at_reform],
+    tanks_mm[texas_treated == 1,   tank_age_at_reform],
+    tanks_mm[texas_treated == 0,   tank_age_at_reform], digits = 1),
+  build_agg_row("Share of state fleet: Single-Wall \\%",
+    as.numeric(tanks_full[texas_treated == 1, mm_wall == "Single-Walled"]),
+    as.numeric(tanks_full[texas_treated == 0, mm_wall == "Single-Walled"]),
+    as.numeric(tanks_mm[texas_treated == 1,   mm_wall == "Single-Walled"]),
+    as.numeric(tanks_mm[texas_treated == 0,   mm_wall == "Single-Walled"]),
+    digits = 1, mult = 100),
+  build_mean_se_rows("Avg share of SW tanks per fac (\\%)",
+    fac_1998_full[texas_treated == 1, sw_share_fac_1998],
+    fac_1998_full[texas_treated == 0, sw_share_fac_1998],
+    fac_1998_mm[texas_treated == 1,   sw_share_fac_1998],
+    fac_1998_mm[texas_treated == 0,   sw_share_fac_1998], digits = 1)
+)
+
+# ── Panel B: Pre-Reform Outcome Flows (1990-1998) ─────────────────────────────
+# Full columns: pooled facility-year means with SE (conventional descriptive).
+# MM columns:   cell-year weighted means (the regression-relevant quantity).
+#               The cell-year weighted diff is the quantity the cell x year FE
+#               identifies. It is NOT tx_mean - ctl_mean from this row; it is
+#               the weighted average of within-cell-year diffs (see S3).
+#               No SE row for MM: these are constructed summary statistics.
+log_cat("  Building Panel B...\n")
+
+# Helper: one outcome row. Full side = pooled mean + SE. MM side = cyw scalar.
+build_panelb_row <- function(label,
+                              full_tx_obs, full_ctl_obs,
+                              cyw_tx, cyw_ctl, cyw_diff,
+                              digits = 2) {
+  full_tx_obs <- full_tx_obs[!is.na(full_tx_obs)]
+  full_ctl_obs <- full_ctl_obs[!is.na(full_ctl_obs)]
+  ftx_m  <- mean(full_tx_obs) * 100
+  fct_m  <- mean(full_ctl_obs) * 100
+  fd     <- ftx_m - fct_m
+  fp     <- welch_p(full_tx_obs, full_ctl_obs)
+  ftx_se <- se_mean(full_tx_obs) * 100
+  fct_se <- se_mean(full_ctl_obs) * 100
+
+  # Diff format: cyw_diff is already in pp from S3
+  cyw_diff_str <- sprintf("%s%s",
+    ifelse(cyw_diff >= 0, "+", ""),
+    formatC(cyw_diff, format = "f", digits = digits))
+
+  rbind(
+    data.table(
+      Variable  = label,
+      Full_TX   = formatC(ftx_m,  format = "f", digits = digits),
+      Full_CTL  = formatC(fct_m,  format = "f", digits = digits),
+      Full_Diff = fmt_diff(fd / 100, fp, digits, 100),
+      MM_TX     = formatC(cyw_tx, format = "f", digits = digits),
+      MM_CTL    = formatC(cyw_ctl, format = "f", digits = digits),
+      MM_Diff   = cyw_diff_str
+    ),
+    data.table(
+      Variable  = "",
+      Full_TX   = sprintf("(%s)", formatC(ftx_se, format = "f", digits = digits)),
+      Full_CTL  = sprintf("(%s)", formatC(fct_se, format = "f", digits = digits)),
+      Full_Diff = "",
+      MM_TX     = "",
+      MM_CTL    = "",
+      MM_Diff   = ""
+    )
+  )
+}
+
+panel_b <- rbind(
+  build_panelb_row("Avg Closure Rate (\\%)",
+    pre_full[texas_treated == 1, closure_year],
+    pre_full[texas_treated == 0, closure_year],
+    cyw_closure_TX, cyw_closure_CTL, cyw_closure_diff),
+  build_panelb_row("Avg LUST Rate (\\%)",
+    pre_full[texas_treated == 1, leak_year],
+    pre_full[texas_treated == 0, leak_year],
+    cyw_lust_TX, cyw_lust_CTL, cyw_lust_diff),
+  build_panelb_row("Avg Replacement Rate (\\%)",
+    pre_full[texas_treated == 1, replacement_closure_year],
+    pre_full[texas_treated == 0, replacement_closure_year],
+    cyw_replace_TX, cyw_replace_CTL, cyw_replace_diff),
+  build_count_row("\\quad $N$ Facility-Years",
+    pre_full[texas_treated == 1, .N], pre_full[texas_treated == 0, .N],
+    pre_mm[texas_treated == 1,   .N], pre_mm[texas_treated == 0,   .N])
+)
+
+# ── Panel C: Cell Coverage ────────────────────────────────────────────────────
+log_cat("  Building Panel C...\n")
+
+panel_c <- rbind(
+  data.table(Variable = "\\textit{Facility cells} (wall $\\times$ fuel $\\times$ age bin at reform)",
+    Full_TX = "", Full_CTL = "", Full_Diff = "", MM_TX = "", MM_CTL = "", MM_Diff = ""),
+  build_cell_row("\\quad Total cells",
+    fac_cells_total_full, fac_cells_total_mm),
+  build_cell_row("\\quad Identified cells (TX \\& CTL present)",
+    fac_cells_identified_full, fac_cells_identified_mm),
+  build_cell_row("\\quad Unidentified: TX-only (no CTL)",
+    fac_cells_tx_only_full, fac_cells_tx_only_mm),
+  build_cell_row("\\quad Unidentified: CTL-only (no TX)",
+    fac_cells_ctl_only_full, fac_cells_ctl_only_mm),
+  build_cell_row("\\quad \\% facility-years in identified cells (full panel)",
+    fac_pct_identified_full_panel, fac_pct_identified_mm_panel, fmt_fn = fmt_pct_c),
+
+  data.table(Variable = "\\textit{Tank cells} (wall $\\times$ fuel $\\times$ capacity $\\times$ cohort; MM: 1989--1997 only)",
+    Full_TX = "", Full_CTL = "", Full_Diff = "", MM_TX = "", MM_CTL = "", MM_Diff = ""),
+  build_cell_row("\\quad Total cells",
+    tank_cells_total_full, tank_cells_total_mm),
+  build_cell_row("\\quad Identified cells (TX \\& CTL present)",
+    tank_cells_identified_full, tank_cells_identified_mm),
+  build_cell_row("\\quad Unidentified: TX-only (no CTL)",
+    tank_cells_tx_only_full, tank_cells_tx_only_mm),
+  build_cell_row("\\quad Unidentified: CTL-only (no TX)",
+    tank_cells_ctl_only_full, tank_cells_ctl_only_mm),
+  build_cell_row("\\quad \\% tanks in identified cells",
+    tank_pct_identified_full, tank_pct_identified_mm, fmt_fn = fmt_pct_c)
+)
+
+# ── Combine + render ──────────────────────────────────────────────────────────
+table0 <- rbind(panel_a, panel_b, panel_c)
+setnames(table0, c("Variable", "TX", "CTL", "Diff.", "TX ", "CTL ", "Diff. "))
+
+log_cat("\n=== Table 0 Preview ===\n")
+print(table0)
+
+n_a     <- nrow(panel_a)
+n_ab    <- nrow(panel_a) + nrow(panel_b)
+n_total <- nrow(table0)
+panel_c_header_rows <- n_ab + which(panel_c$Variable != "" & panel_c$Full_TX == "")
+
+table0_tex <- kbl(
+  table0, format = "latex", booktabs = TRUE, linesep = "", escape = FALSE,
+  align = c("l", "r", "r", "r", "r", "r", "r"),
+  caption = NULL, label = NULL
+) |>
+  add_header_above(c(
+    " "                           = 1,
+    "Full Sample"                 = 3,
+    "Make-Model Sample"           = 3
+  ), escape = FALSE) |>
+  pack_rows("Panel A: 1998 Cross-Section (Risk Covariates)",  1,      n_a,    bold = TRUE) |>
+  pack_rows("Panel B: Pre-Reform Outcome Flows (1990--1998; MM = cell-year weighted)", n_a+1,  n_ab,   bold = TRUE) |>
+  pack_rows("Panel C: Make-Model Cell Coverage",              n_ab+1, n_total, bold = TRUE) |>
+  row_spec(which(table0$Variable == ""), color = "gray50") |>
+  row_spec(panel_c_header_rows, color = "gray40", italic = TRUE) |>
+  column_spec(3, color = ifelse(seq_len(n_total) > n_ab, "gray85", "black")) |>
+  column_spec(4, color = ifelse(seq_len(n_total) > n_ab, "gray85", "black")) |>
+  column_spec(6, color = ifelse(seq_len(n_total) > n_ab, "gray85", "black")) |>
+  column_spec(7, color = ifelse(seq_len(n_total) > n_ab, "gray85", "black")) |>
+  kable_styling(latex_options = "scale_down", font_size = 10)
+
+save_table(table0, "Table0_Descriptive")
+write_tex(table0_tex, "Table0_Descriptive")
+log_cat("  Table0_Descriptive written.\n")
+
+
+###############################################################################
+# PART III: TABLE 1 — PROGRESSIVE BALANCE (Appendix)
 #
-# Decile calibration: bin OOB predicted scores into deciles, plot mean
-# observed release rate against mean predicted score within each bin.
-# Points near the 45-degree line confirm the model produces reliable
-# probability estimates, not just a ranking.
+# This table shows the progressive narrowing from naive pooled to cell-year
+# weighted diffs. It is pedagogically useful but the first two rows are nearly
+# identical, which undercuts the visual. The parallel trends figures carry
+# the identification argument in the main text. Table 1 goes to the appendix.
+###############################################################################
+log_cat("\n\n========== PART III: TABLE 1 (PROGRESSIVE BALANCE — APPENDIX) ==========\n")
 
-make_cal_dt <- function(pred_col) {
-  dt     <- cv_data[!is.na(get(pred_col)) & !is.na(event_first_leak)]
-  breaks <- unique(quantile(dt[[pred_col]],
-                            probs = seq(0, 1, 0.1), na.rm = TRUE))
-  if (length(breaks) < 3L) {
-    warning("Insufficient score variation for calibration")
-    return(NULL)
+fmt_r   <- function(x) sprintf("%.2f", x)
+fmt_sgn <- function(x) fifelse(x >= 0, sprintf("+%.2f", x), sprintf("%.2f", x))
+fmt_n_b <- function(x) formatC(as.integer(x), format = "d", big.mark = ",")
+
+# ── Row 1: Full Sample (Naive) — pooled ──────────────────────────────────────
+naive <- data.table(
+  Comparison   = "Full Sample (Naive)",
+  n_tx         = pre_full[texas_treated == 1, uniqueN(panel_id)],
+  n_ctl        = pre_full[texas_treated == 0, uniqueN(panel_id)],
+  closure_TX   = pre_full[texas_treated == 1, mean(closure_year, na.rm = TRUE) * 100],
+  closure_CTL  = pre_full[texas_treated == 0, mean(closure_year, na.rm = TRUE) * 100],
+  lust_TX      = pre_full[texas_treated == 1, mean(leak_year,    na.rm = TRUE) * 100],
+  lust_CTL     = pre_full[texas_treated == 0, mean(leak_year,    na.rm = TRUE) * 100]
+)
+naive[, `:=`(closure_diff = closure_TX - closure_CTL,
+             lust_diff    = lust_TX    - lust_CTL)]
+
+# ── Row 2: MM Sample (Pooled) — pooled within MM facilities ──────────────────
+pooled <- data.table(
+  Comparison   = "MM Sample (Pooled)",
+  n_tx         = pre_mm[texas_treated == 1, uniqueN(panel_id)],
+  n_ctl        = pre_mm[texas_treated == 0, uniqueN(panel_id)],
+  closure_TX   = pre_mm[texas_treated == 1, mean(closure_year, na.rm = TRUE) * 100],
+  closure_CTL  = pre_mm[texas_treated == 0, mean(closure_year, na.rm = TRUE) * 100],
+  lust_TX      = pre_mm[texas_treated == 1, mean(leak_year,    na.rm = TRUE) * 100],
+  lust_CTL     = pre_mm[texas_treated == 0, mean(leak_year,    na.rm = TRUE) * 100]
+)
+pooled[, `:=`(closure_diff = closure_TX - closure_CTL,
+              lust_diff    = lust_TX    - lust_CTL)]
+
+# ── Row 3: Cell-Year Weighted — CORRECT ──────────────────────────────────────
+# From S3: cell_stats has year-averaged rates and year-averaged diffs per cell.
+# closure_TX/CTL: FY-weighted mean of year-averaged cell rates
+# closure_diff:   FY-weighted mean of year-averaged within-cell diffs
+#                 (NOT derived from closure_TX - closure_CTL)
+cell_wt <- data.table(
+  Comparison   = "MM Sample (Cell-Year Weighted)",
+  n_tx         = sum(cell_stats$n_tx),
+  n_ctl        = sum(cell_stats$n_ctl),
+  closure_TX   = weighted.mean(cell_stats$closure_TX,   w = cell_stats$w, na.rm = TRUE),
+  closure_CTL  = weighted.mean(cell_stats$closure_CTL,  w = cell_stats$w, na.rm = TRUE),
+  closure_diff = weighted.mean(cell_stats$closure_diff, w = cell_stats$w, na.rm = TRUE),
+  lust_TX      = weighted.mean(cell_stats$lust_TX,      w = cell_stats$w, na.rm = TRUE),
+  lust_CTL     = weighted.mean(cell_stats$lust_CTL,     w = cell_stats$w, na.rm = TRUE),
+  lust_diff    = weighted.mean(cell_stats$lust_diff,    w = cell_stats$w, na.rm = TRUE)
+)
+
+balance_rows <- rbind(naive, pooled, cell_wt, fill = TRUE)
+
+balance_print <- balance_rows[, .(
+  Comparison,
+  `$N_{TX}$`  = fmt_n_b(n_tx),
+  `$N_{CTL}$` = fmt_n_b(n_ctl),
+  `TX`        = fmt_r(closure_TX),
+  `CTL`       = fmt_r(closure_CTL),
+  `Diff.`     = fmt_sgn(closure_diff),
+  `TX `       = fmt_r(lust_TX),
+  `CTL `      = fmt_r(lust_CTL),
+  `Diff. `    = fmt_sgn(lust_diff)
+)]
+
+log_cat("\n=== Table 1: Progressive Balance ===\n")
+print(balance_print)
+log_cat(sprintf(
+  "\nClosure — Naive: %+.3fpp | Pooled: %+.3fpp | Cell-Year Wt: %+.3fpp\n",
+  balance_rows[1, closure_diff],
+  balance_rows[2, closure_diff],
+  balance_rows[3, closure_diff]))
+log_cat(sprintf(
+  "LUST    — Naive: %+.3fpp | Pooled: %+.3fpp | Cell-Year Wt: %+.3fpp\n",
+  balance_rows[1, lust_diff],
+  balance_rows[2, lust_diff],
+  balance_rows[3, lust_diff]))
+
+overlap_note <- {
+  if (n_tx_only + n_ctl_only > 0) {
+    sprintf("%d cell(s) lacking common support (%d TX-only, %d CTL-only) excluded.",
+            n_tx_only + n_ctl_only, n_tx_only, n_ctl_only)
+  } else {
+    "All MM cells have common support."
   }
-  dt[, decile := cut(get(pred_col), breaks = breaks,
-                     include.lowest = TRUE, labels = FALSE)]
-  cal <- dt[!is.na(decile), .(
-    mean_pred = mean(get(pred_col),    na.rm = TRUE),
-    mean_obs  = mean(event_first_leak, na.rm = TRUE),
-    n_fac_yrs = .N,
-    n_events  = sum(event_first_leak)
-  ), by = decile][order(decile)]
-  fwrite(cal, file.path(OUTPUT_TABLES, "Table_CV_Calibration.csv"))
-  cal
 }
 
-cal <- make_cal_dt("pred")
+balance_tex <- kbl(
+  balance_print, format = "latex", booktabs = TRUE, linesep = "",
+  escape = FALSE, align = c("l", "r", "r", "r", "r", "r", "r", "r", "r"),
+  caption = NULL, label = NULL
+) |>
+  add_header_above(c(" " = 3, "Closure Rate (\\%)" = 3, "Leak Rate (\\%)" = 3),
+    escape = FALSE) |>
+  row_spec(1, italic = TRUE) |>
+  row_spec(3, bold   = TRUE) |>
+  kable_styling(latex_options = "scale_down", font_size = 10)
 
-if (!is.null(cal)) {
-  xy_max <- max(cal$mean_obs, cal$mean_pred, na.rm = TRUE) * 1.08
+save_table(balance_print, "Table1_Balance")
+write_tex(balance_tex, "Table1_Balance")
+log_cat("  Table1_Balance written.\n")
 
-  fig_cal <- ggplot(cal, aes(x = mean_pred, y = mean_obs)) +
-    geom_abline(slope = 1, intercept = 0,
-                linetype = "dashed", color = "grey55", linewidth = 0.5) +
-    geom_line(color = COL_TX, linewidth = 0.6) +
-    geom_point(aes(size = n_fac_yrs),
-               color = COL_TX, shape = 19, alpha = 0.85) +
-    geom_text(aes(label = decile),
-              vjust = -0.9, size = 2.5, color = "grey30") +
-    coord_fixed(xlim = c(0, xy_max), ylim = c(0, xy_max)) +
-    scale_x_continuous(labels = scales::percent_format(accuracy = 0.01)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 0.01)) +
-    scale_size_continuous(range = c(2, 7), guide = "none") +
-    labs(x = "Mean Predicted Probability",
-         y = "Mean Observed Release Rate") +
-    theme_pub()
 
-  ggsave(file.path(OUTPUT_FIGURES, "Figure_CV_Calibration.png"),
-         fig_cal, width = 5.5, height = 5.5, dpi = 300, bg = "white")
-  ggsave(file.path(OUTPUT_FIGURES, "Figure_CV_Calibration.pdf"),
-         fig_cal, width = 5.5, height = 5.5, device = cairo_pdf)
-  cat("  Figure_CV_Calibration saved\n")
+###############################################################################
+# PART IV: CELL-LEVEL BALANCE DETAIL (Appendix)
+###############################################################################
+log_cat("\n\n========== PART IV: CELL-LEVEL BALANCE DETAIL ==========\n")
+
+age_order <- c("0-2yr", "3-5yr", "6-8yr", "9-11yr", "12-14yr", "15-19yr", "20yr-Plus")
+
+# Drop cells with blank wall or fuel (produce " / " group label in LaTeX)
+cell_stats_print <- cell_stats[
+  !is.na(fac_wall) & nchar(trimws(fac_wall)) > 0 &
+  !is.na(fac_fuel) & nchar(trimws(fac_fuel)) > 0
+]
+cell_stats_print[, age_ord := factor(fac_oldest_age_bin, levels = age_order)]
+setorder(cell_stats_print, fac_wall, fac_fuel, age_ord)
+
+cell_print <- cell_stats_print[, .(
+  Wall        = fac_wall,
+  Fuel        = fac_fuel,
+  `Age Bin`   = fac_oldest_age_bin,
+  `$N_{TX}$`  = fmt_n_b(n_tx),
+  `$N_{CTL}$` = fmt_n_b(n_ctl),
+  `TX`        = fmt_r(closure_TX),
+  `CTL`       = fmt_r(closure_CTL),
+  `Diff.`     = fmt_sgn(closure_diff),
+  `TX `       = fmt_r(lust_TX),
+  `CTL `      = fmt_r(lust_CTL),
+  `Diff. `    = fmt_sgn(lust_diff),
+  `TX  `      = fmt_r(replace_TX),
+  `CTL  `     = fmt_r(replace_CTL),
+  `Diff.  `   = fmt_sgn(replace_diff)
+)]
+
+log_cat(sprintf("  %d cells in detail table\n", nrow(cell_print)))
+print(cell_print)
+
+cell_groups <- cell_stats_print[, .(
+  start = .I[1], end = .I[.N]
+), by = .(fac_wall, fac_fuel)]
+cell_groups[, label := paste0(fac_wall, " / ", fac_fuel)]
+
+cell_kbl <- cell_print[, !c("Wall", "Fuel")]
+
+cell_tex <- kbl(
+  cell_kbl, format = "latex", booktabs = TRUE, linesep = "",
+  escape = FALSE, align = c("l", "r", "r", "r", "r", "r", "r", "r", "r", "r", "r", "r"),
+  caption = NULL, label = NULL
+) |>
+  add_header_above(c(" " = 3, "Closure Rate (\\%)" = 3, "Leak Rate (\\%)" = 3, "Replacement Rate (\\%)" = 3),
+    escape = FALSE) |>
+  kable_styling(latex_options = "scale_down", font_size = 9)
+
+for (i in seq_len(nrow(cell_groups))) {
+  cell_tex <- cell_tex |>
+    pack_rows(cell_groups$label[i],
+              cell_groups$start[i],
+              cell_groups$end[i], bold = FALSE, italic = TRUE)
 }
 
+save_table(cell_stats_print, "TableA_Balance_CellDetail")
+write_tex(cell_tex, "TableA_Balance_CellDetail")
+log_cat("  TableA_Balance_CellDetail written.\n")
 
-#### S9: Appendix — Lift + Score Separation ###################################
 
-make_appendix_figs <- function(pred_col, label, file_suffix) {
+###############################################################################
+# PART V: APPENDIX TABLES
+###############################################################################
+log_cat("\n\n========== PART V: APPENDIX TABLES ==========\n")
 
-  dt <- cv_data[!is.na(get(pred_col)) & !is.na(event_first_leak)]
-  setorderv(dt, pred_col, order = -1L)
-  dt[, cum_pct_screened := seq_len(.N) / .N]
-  dt[, cum_pct_events   := cumsum(event_first_leak) /
-                            sum(event_first_leak, na.rm = TRUE)]
+# ── Table B.1: Attrition Log ─────────────────────────────────────────────────
+log_cat("  Table B.1\n")
+attrition_dt <- rbindlist(lapply(seq_along(attrition_log), function(i) {
+  e <- attrition_log[[i]]
+  data.table(Step = i - 1L, Stage = e$stage, Filter = e$filter,
+             Facilities = e$facilities, `Fac-Years` = e$fac_years)
+}))
+attrition_dt[, delta_fac := c(NA_integer_, diff(Facilities))]
+attrition_dt[, delta_fy  := c(NA_integer_, diff(`Fac-Years`))]
+setnames(attrition_dt,
+         c("delta_fac", "delta_fy"),
+         c("Delta Facilities", "Delta Fac-Years"))
+print(attrition_dt)
+save_table(attrition_dt, "TableB1_Attrition_Log")
+write_tex(
+  kbl(attrition_dt, format = "latex", booktabs = TRUE, linesep = "",
+      caption = NULL, label = NULL) |>
+    kable_styling(latex_options = "scale_down", font_size = 9),
+  "TableB1_Attrition_Log"
+)
 
-  top10 <- dt[cum_pct_screened <= 0.101, max(cum_pct_events, na.rm = TRUE)]
-  top20 <- dt[cum_pct_screened <= 0.201, max(cum_pct_events, na.rm = TRUE)]
-
-  cat(sprintf("  [%s] Top 10%%: %.0f%% events | Top 20%%: %.0f%% events\n",
-              label, top10 * 100, top20 * 100))
-
-  lift_line <- rbind(
-    data.table(x = 0, y = 0, type = label),
-    dt[, .(x = cum_pct_screened, y = cum_pct_events, type = label)],
-    data.table(x = c(0, 1), y = c(0, 1), type = "Random")
+# ── Table B.3: Missing-Date Balance ──────────────────────────────────────────
+log_cat("  Table B.3\n")
+if (!is.null(balance_glm)) {
+  broom_balance <- broom::tidy(balance_glm, conf.int = TRUE)
+  save_table(as.data.table(broom_balance), "TableB3_Missing_Date_Balance")
+  write_tex(
+    kbl(broom_balance[, c("term", "estimate", "std.error", "statistic", "p.value")],
+        format = "latex", booktabs = TRUE, linesep = "", digits = 4,
+        caption = NULL, label = NULL) |>
+      kable_styling(latex_options = "scale_down", font_size = 9),
+    "TableB3_Missing_Date_Balance"
   )
-  lift_pts <- dt[, .(x = cum_pct_screened, y = cum_pct_events)]
-
-  fig_lift <- ggplot() +
-    geom_line(data = lift_line,
-              aes(x = x, y = y, color = type, linetype = type),
-              linewidth = 0.9) +
-    geom_point(data  = lift_pts, aes(x = x, y = y),
-               shape = 1, size = 1.6, stroke = 0.55,
-               color = COL_TX, fill = NA) +
-    geom_segment(aes(x = 0.10, xend = 0.10, y = 0, yend = top10),
-                 linetype = "dotted", color = "grey50", linewidth = 0.4) +
-    geom_segment(aes(x = 0, xend = 0.10, y = top10, yend = top10),
-                 linetype = "dotted", color = "grey50", linewidth = 0.4) +
-    annotate("text",
-             x     = 0.12, y = top10 * 0.88, hjust = 0,
-             size  = 2.8, color = "grey30",
-             label = sprintf("Top 10%%:\n%.0f%% of releases captured",
-                             top10 * 100)) +
-    scale_color_manual(
-      values = setNames(c(COL_TX, "grey55"), c(label, "Random"))) +
-    scale_linetype_manual(
-      values = setNames(c("solid", "dashed"), c(label, "Random"))) +
-    scale_x_continuous(labels = scales::percent_format(accuracy = 1)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-    labs(x     = "Fraction of Facilities Screened (descending risk)",
-         y     = "Cumulative Fraction of Releases Captured",
-         color = NULL, linetype = NULL) +
-    theme_pub() +
-    theme(legend.position = "bottom")
-
-  ggsave(file.path(OUTPUT_FIGURES,
-                   sprintf("FigureA_CV_Lift_%s.png", file_suffix)),
-         fig_lift, width = 6, height = 5.5, dpi = 300, bg = "white")
-  ggsave(file.path(OUTPUT_FIGURES,
-                   sprintf("FigureA_CV_Lift_%s.pdf", file_suffix)),
-         fig_lift, width = 6, height = 5.5, device = cairo_pdf)
-
-  dt[, outcome_label := fifelse(event_first_leak == 1L,
-                                "Confirmed Release", "No Release")]
-  x_cap <- quantile(dt[[pred_col]], 0.99, na.rm = TRUE)
-
-  fig_sep <- ggplot(
-    dt[get(pred_col) <= x_cap],
-    aes(x = get(pred_col), fill = outcome_label, color = outcome_label)
-  ) +
-    geom_density(alpha = 0.35, linewidth = 0.7) +
-    scale_fill_manual(values = c(
-      "Confirmed Release" = COL_TX,
-      "No Release"        = COL_CTRL)) +
-    scale_color_manual(values = c(
-      "Confirmed Release" = COL_TX,
-      "No Release"        = COL_CTRL)) +
-    scale_x_continuous(
-      labels = scales::percent_format(accuracy = 0.01),
-      limits = c(0, x_cap)) +
-    labs(x = "Predicted Annual Release Probability",
-         y = "Density", fill = NULL, color = NULL) +
-    theme_pub() +
-    theme(legend.position = "bottom")
-
-  ggsave(file.path(OUTPUT_FIGURES,
-                   sprintf("FigureA_CV_ScoreSep_%s.png", file_suffix)),
-         fig_sep, width = 6, height = 4.5, dpi = 300, bg = "white")
-  ggsave(file.path(OUTPUT_FIGURES,
-                   sprintf("FigureA_CV_ScoreSep_%s.pdf", file_suffix)),
-         fig_sep, width = 6, height = 4.5, device = cairo_pdf)
-
-  invisible(list(top10 = top10, top20 = top20))
 }
 
-cat("\nAppendix figures:\n")
-app <- make_appendix_figs("pred", "GRF Probability Forest", "State")
+# ── Table A.0: State Data Quality ────────────────────────────────────────────
+# Motivates 16-state control group selection.
+# CONTROL_STATES is authoritative; harmonization tier labels used only for
+# Tier 1 / Tier 2 sub-labeling. GA/MO/WV appear as Remainder in DQ report
+# but are in CONTROL_STATES (100% close-date miss on closed tanks only).
+log_cat("  Table A.0\n")
+dq <- fread(here::here("Data", "Processed", "Master_Data_Quality_Report.csv"))
+log_cat(sprintf("  DQ columns: %s\n", paste(names(dq), collapse = ", ")))
 
+dq[, lust_missing_pct := fifelse(
+  !is.na(total_lusts) & total_lusts > 0,
+  round(n_missing_report_date / total_lusts * 100, 1), NA_real_)]
 
-#### S10: GoF Summary Table ###################################################
+EXCL_TREATED <- c("AZ", "CT", "FL", "IA", "MI", "WI")
+EXCL_NO_FUND <- c("OR", "WA")
 
-gof_summary <- data.table(
-  Model            = "GRF Probability Forest (with State)",
-  AUC_OOB          = round(auc_val,        3),
-  Top10_pct_events = round(app$top10 * 100, 1),
-  Top20_pct_events = round(app$top20 * 100, 1),
-  N_fac_years      = n_total,
-  N_events         = n_events,
-  Base_rate_pct    = round(event_rate * 100, 3),
-  Class_weight     = round(w_ratio, 1)
-)
-fwrite(gof_summary, file.path(OUTPUT_TABLES, "Table_CV_GoF_Summary.csv"))
-cat("\nGoF summary:\n")
-print(gof_summary)
-
-
-#### S11: Risk Score Outputs ##################################################
-#
-# Two objects saved:
-#
-# (A) analysis_cv_data_fac_year.rds
-#     Grain:    panel_id x panel_year (pre-treatment years only)
-#     Join key: panel_id + panel_year
-#     Use:      year-by-year risk controls in 02a/02b analysis
-#
-# (B) analysis_cv_data_fac.rds
-#     Grain:    panel_id (one row per facility)
-#     Join key: panel_id
-#     Use:      fixed pre-reform risk covariate in HTE analysis
-#     Snapshot: SNAP_YEAR (1998). Facilities not observed in 1998 fall back
-#               to the most recent available pre-treatment year.
-
-# ---- (A) Facility-year ----
-cv_scores_fy <- cv_data[, .(
-  panel_id,
-  panel_year,
-  state,
-  texas_treated,
-  risk_score = pred
-)]
-saveRDS(cv_scores_fy,
-        file.path(ANALYSIS_DIR, "analysis_cv_data_fac_year.rds"))
-cat(sprintf("\nSaved: analysis_cv_data_fac_year.rds  (%s rows)\n",
-    format(nrow(cv_scores_fy), big.mark = ",")))
-cat("  Join key: panel_id + panel_year\n")
-
-# ---- (B) Facility-level snapshot ----
-snap <- cv_data[panel_year == SNAP_YEAR, .(
-  panel_id,
-  state,
-  texas_treated,
-  risk_score = pred,
-  snap_year  = panel_year
-)]
-
-# Fallback for facilities not observed in SNAP_YEAR
-missing_ids <- setdiff(unique(cv_data$panel_id), snap$panel_id)
-if (length(missing_ids) > 0L) {
-  cat(sprintf("  %s facilities missing in %d — using last pre-reform obs\n",
-      format(length(missing_ids), big.mark = ","), SNAP_YEAR))
-  fallback <- cv_data[
-    panel_id %in% missing_ids,
-    .SD[which.max(panel_year)],
-    by      = panel_id,
-    .SDcols = c("state", "texas_treated", "pred", "panel_year")
-  ]
-  setnames(fallback,
-           c("pred", "panel_year"),
-           c("risk_score", "snap_year"))
-  snap <- rbindlist(list(snap, fallback), use.names = TRUE, fill = TRUE)
+mis_assigned <- intersect(CONTROL_STATES, dq[study_group %like% "Remainder", state])
+if (length(mis_assigned) > 0) {
+  log_cat(sprintf("  WARNING — Remainder in DQ but in CONTROL_STATES: %s\n",
+    paste(mis_assigned, collapse = ", ")))
 }
 
-# Risk quartile (pooled) for convenience in downstream HTE
-q_cuts <- quantile(snap$risk_score,
-                   probs = c(0, 0.25, 0.50, 0.75, 1.0), na.rm = TRUE)
-snap[, risk_quartile := cut(
-  risk_score,
-  breaks         = unique(q_cuts),
-  include.lowest = TRUE,
-  labels         = c("Q1-Low", "Q2", "Q3", "Q4-High")[
-    seq_len(length(unique(q_cuts)) - 1L)]
+dq[, group_clean := fcase(
+  state == "TX",   "Target",
+  state %in% CONTROL_STATES & study_group %like% "Control Tier 1", "Control Tier 1",
+  state %in% CONTROL_STATES & study_group %like% "Control Tier 2", "Control Tier 2",
+  state %in% CONTROL_STATES,  "Control (Analysis)",
+  state %in% EXCL_TREATED,    "Excl. (Treated)",
+  state %in% EXCL_NO_FUND,    "Excl. (No Fund)",
+  study_group %like% "Remainder", "Remainder",
+  default = "Other"
 )]
 
-saveRDS(snap, file.path(ANALYSIS_DIR, "analysis_cv_data_fac.rds"))
-cat(sprintf("Saved: analysis_cv_data_fac.rds         (%s rows)\n",
-    format(nrow(snap), big.mark = ",")))
-cat(sprintf("  Join key: panel_id  |  snapshot year: %d\n", SNAP_YEAR))
-cat(sprintf("  TX: %s | Control: %s\n",
-    format(sum(snap$texas_treated == 1L), big.mark = ","),
-    format(sum(snap$texas_treated == 0L), big.mark = ",")))
+group_order <- c("Target", "Control Tier 1", "Control Tier 2", "Control (Analysis)",
+                 "Excl. (Treated)", "Excl. (No Fund)", "Remainder")
+dq[, group_clean := factor(group_clean, levels = group_order)]
+setorder(dq, group_clean, state)
 
-# Distribution check: TX vs control
-cat("\nRisk score by group (1998 snapshot):\n")
-print(snap[, .(
-  Mean   = round(mean(risk_score,           na.rm = TRUE), 4),
-  Median = round(median(risk_score,         na.rm = TRUE), 4),
-  P75    = round(quantile(risk_score, 0.75, na.rm = TRUE), 4),
-  N      = .N
-), by = .(Group = fifelse(texas_treated == 1L, "Texas", "Control"))])
+fmt_pct_dq <- function(x)
+  fifelse(is.na(x), "---", fifelse(x == 0, "0.0", formatC(x, format = "f", digits = 1)))
 
-ks <- ks.test(
-  snap[texas_treated == 1L, risk_score],
-  snap[texas_treated == 0L, risk_score]
-)
-cat(sprintf("KS test TX vs Control: D = %.4f, p = %.4f\n",
-    ks$statistic, ks$p.value))
+dq[, pct_closed_missing_date  := fmt_pct_dq(pct_closed_missing_date)]
+dq[, pct_missing_install_date := fmt_pct_dq(pct_missing_install_date)]
+dq[, pct_miss_tank_type       := fmt_pct_dq(pct_miss_tank_type)]
+dq[, lust_missing_pct         := fmt_pct_dq(lust_missing_pct)]
+dq[, total_tanks_fmt          := formatC(total_tanks, format = "d", big.mark = ",")]
+
+dq_print <- dq[, .(
+  State = state, group_clean, Tanks = total_tanks_fmt,
+  `Close Date`   = pct_closed_missing_date,
+  `Install Date` = pct_missing_install_date,
+  `Wall Type`    = pct_miss_tank_type,
+  `LUST Date`    = lust_missing_pct
+)]
+
+grp_idx <- function(g) {
+  rows <- which(dq_print$group_clean == g)
+  if (length(rows) == 0) return(c(1L, 1L))
+  c(min(rows), max(rows))
+}
+dq_kbl <- dq_print[, !"group_clean"]
+
+dq_tex <- kbl(
+  dq_kbl, format = "latex", booktabs = TRUE, linesep = "",
+  align = c("l", "r", "r", "r", "r", "r"),
+  caption = NULL, label = NULL
+) |>
+  add_header_above(c(" " = 2, "\\% Missing (tanks)" = 3, "\\% Missing (LUSTs)" = 1),
+    escape = FALSE) |>
+  pack_rows("Target",             grp_idx("Target")[1],             grp_idx("Target")[2]) |>
+  pack_rows("Control Tier 1",     grp_idx("Control Tier 1")[1],     grp_idx("Control Tier 1")[2]) |>
+  pack_rows("Control Tier 2",     grp_idx("Control Tier 2")[1],     grp_idx("Control Tier 2")[2]) |>
+  pack_rows("Control (Analysis)", grp_idx("Control (Analysis)")[1], grp_idx("Control (Analysis)")[2]) |>
+  pack_rows("Excl. (Treated)",    grp_idx("Excl. (Treated)")[1],    grp_idx("Excl. (Treated)")[2]) |>
+  pack_rows("Excl. (No Fund)",    grp_idx("Excl. (No Fund)")[1],    grp_idx("Excl. (No Fund)")[2]) |>
+  pack_rows("Remainder",          grp_idx("Remainder")[1],          grp_idx("Remainder")[2]) |>
+  kable_styling(latex_options = "scale_down", font_size = 9)
+
+save_table(dq_print[, !"group_clean"], "TableA0_DataQuality_ByState")
+write_tex(dq_tex, "TableA0_DataQuality_ByState")
+log_cat("  TableA0_DataQuality_ByState written.\n")
 
 
-#### Summary ##################################################################
+###############################################################################
+# DONE
+###############################################################################
 
-cat("\n========================================================\n")
-cat("01n COMPLETE\n\n")
-cat(sprintf("  Sample:     %s facility-years | %s first-leak events (%.3f%% base rate)\n",
-    format(n_total,  big.mark = ","),
-    format(n_events, big.mark = ","),
-    event_rate * 100))
-cat(sprintf("  Class wt:   %.0f:1  (0s:1s) — minority class upweighted\n", w_ratio))
-cat(sprintf("  OOB AUC:    %.3f\n", auc_val))
-cat(sprintf("  Top 10%%:    %.0f%% of releases captured\n", app$top10 * 100))
-cat(sprintf("  Top 20%%:    %.0f%% of releases captured\n", app$top20 * 100))
-cat("\n  Main figures:\n")
-cat("    Figure_CV_ROC\n")
-cat("    Figure_CV_PartialDep  (95% GRF variance bands)\n")
-cat("    Figure_CV_Calibration\n")
-cat("\n  Appendix figures:\n")
-cat("    FigureA_CV_Lift_State\n")
-cat("    FigureA_CV_ScoreSep_State\n")
-cat("    FigureA_CV_VarImportance\n")
-cat("\n  Risk score outputs (Data/Analysis/):\n")
-cat("    analysis_cv_data_fac_year.rds   join on panel_id + panel_year\n")
-cat("    analysis_cv_data_fac.rds        join on panel_id (1998 snapshot)\n")
-cat("========================================================\n")
+log_cat("\n\n=== 01l COMPLETE ===\n")
+log_cat(sprintf("  Figure_RestrictionEarnsParallelTrends (2x2)\n"))
+log_cat(sprintf("  Table0_Descriptive.tex      (%d rows)\n",    nrow(table0)))
+log_cat(sprintf("  Table1_Balance.tex          (3-row)\n"))
+log_cat(sprintf("  TableA_Balance_CellDetail   (%d cells)\n",   nrow(cell_stats_print)))
+log_cat(sprintf("  TableB1_Attrition_Log.tex\n"))
+log_cat(sprintf("  TableB3_Missing_Date_Balance.tex\n"))
+log_cat(sprintf("  TableA0_DataQuality_ByState.tex\n"))
+close_log("01l_DataQuality_and_Balance")
