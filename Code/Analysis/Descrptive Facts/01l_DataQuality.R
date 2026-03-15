@@ -994,13 +994,13 @@ table0_tex <- kbl(
   pack_rows("Panel A: 1998 Cross-Section (Risk Covariates)",  1,      n_a,    bold = TRUE) |>
   pack_rows("Panel B: Pre-Reform Outcome Flows (1990--1998)", n_a+1,  n_ab,   bold = TRUE) |>
   pack_rows("Panel C: Make-Model Cell Coverage",              n_ab+1, n_total, bold = TRUE) |>
-  row_spec(which(table0$Variable == ""), color = "gray50") |>
-  row_spec(panel_c_header_rows, color = "gray40", italic = TRUE) |>
-  column_spec(3, color = ifelse(seq_len(n_total) > n_ab, "gray85", "black")) |>
-  column_spec(4, color = ifelse(seq_len(n_total) > n_ab, "gray85", "black")) |>
-  column_spec(6, color = ifelse(seq_len(n_total) > n_ab, "gray85", "black")) |>
-  column_spec(7, color = ifelse(seq_len(n_total) > n_ab, "gray85", "black")) |>
-  kable_styling(font_size = 10)
+row_spec(which(table0$Variable == ""), color = "gray!50") |>
+  row_spec(panel_c_header_rows, color = "gray!60", italic = TRUE) |>
+  column_spec(3, color = ifelse(seq_len(n_total) > n_ab, "lightgray", "black")) |>
+  column_spec(4, color = ifelse(seq_len(n_total) > n_ab, "lightgray", "black")) |>
+  column_spec(6, color = ifelse(seq_len(n_total) > n_ab, "lightgray", "black")) |>
+  column_spec(7, color = ifelse(seq_len(n_total) > n_ab, "lightgray", "black")) |>
+    kable_styling(font_size = 10)
 
 save_table(table0, "Table0_Descriptive")
 write_tex(table0_tex, "Table0_Descriptive")

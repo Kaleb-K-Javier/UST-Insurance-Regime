@@ -436,7 +436,7 @@ tune_prob_forest <- function(X_mat, Y_vec, W_vec, CL_vec,
   ))
   grid <- expand.grid(
     mtry            = mtry_candidates,
-    min.node.size   = c(5L, 15L, 50L),
+    min.node.size   = c(5L, 20L),
     sample.fraction = c(0.5, 0.7)
   )
 

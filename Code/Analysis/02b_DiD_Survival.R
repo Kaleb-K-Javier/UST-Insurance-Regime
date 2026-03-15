@@ -45,7 +45,8 @@
 #   S7   Survivorship Diagnostic
 #   S8   Binned Scatter: Closure Rate by Cohort × Period × Group
 #   S9   PRIMARY Cox Model + Slide Replication + Three-Sample Structure
-#   S10  Cox Event Study (parallel trends test)
+#   S10  Cox Event Study (parallel trends test, standard reference = -1)
+#   S10b COX EVENT STUDY (ANTICIPATION-EXPLICIT: ref = -2, antic = -1)
 #   S11  Reference OLS LPM and Cloglog FE
 #   S12  Duration Model Comparison Table
 #   S13  HTE by Wall Type
@@ -1496,10 +1497,35 @@ cat("Saved: Output/Tables/T3_triple_diff.tex\n")
 ################################################################################
 summary(matched_tanks$mm_install_cohort)
 matched_tanks[,deadline_sw := as.integer(panel_year == 1998) * single_wall]
-mean(matched_tanks$deadline_sw)
+mean(matched_tanks$mm_install_cohort)
+nrow(matched_tanks[mm_install_cohort>1998])
 # --- Pooled event studies (matched sample) ---
 # Alternative: reform date = 1998 (anticipation-inclusive)
 matched_tanks[, did_term_early := texas_treated * as.integer(panel_year >= 1998L)]
+
+m_ols_1_early_pooled = feols(
+  closure_event ~ did_term_early | tank_panel_id + panel_year,
+  data    = matched_tanks,
+  cluster = ~state
+)
+
+m_ols_1_early_pooled = feols(
+  closure_event ~ did_term_early*above_median_age | tank_panel_id + panel_year,
+  data    = matched_tanks,
+  weights = ~cem_weight,
+  cluster = ~state
+)
+
+matched_tanks[,rel_year_early := panel_year - 1998L]
+
+m_es_matched_early <- feols(
+  closure_event ~ i(rel_year_early, texas_treated, ref = -1) + deadline_sw |
+    tank_panel_id + panel_year,
+  data    = matched_tanks,
+  cluster = ~state
+)
+etable(m_es_matched_early)
+iplot(m_es_matched_early)
 
 m_es_matched <- feols(
   closure_event ~ i(rel_year_es, texas_treated, ref = -2) +deadline_sw|
@@ -1508,6 +1534,14 @@ m_es_matched <- feols(
   weights = ~cem_weight,
   cluster = ~state
 )
+
+m_es_matched <- feols(
+  closure_event ~ i(rel_year_es, texas_treated, ref = -1) +deadline_sw|
+    tank_panel_id + panel_year,
+  data    = matched_tanks,
+  cluster = ~state
+)
+
 
 etable(m_es_matched)
 m_es_cell <- feols(
@@ -1645,7 +1679,7 @@ save_gg <- function(p, filename, width = 7, height = 5) {
 # --- Figure 1: Pooled matched ---
 p1 <- es_ggplot(m_es_matched,   point_col = "grey25",
                 label = "Pooled (matched sample)")
-save_gg(p1, "F1_es_pooled_matched")
+save_gg(p1, "F1_es_pooled_matched_no_weights")
 
 # --- Figure 2: Pooled cell x year FE ---
 p2 <- es_ggplot(m_es_cell,      point_col = "grey25",
@@ -1664,7 +1698,9 @@ save_gg(p4, "F4_es_above_median")
 
 cat("Saved: Output/Figures/F1-F4 (PDF + PNG)\n")
 
-
+p5 <- es_ggplot(m_es_matched_early, point_col = "grey25",
+                label = "Pooled (matched sample, reform = 1998)")
+fixest::iplot(m_es_matched_early)
 
 ################################################################################
 # Raw Closure Rates: Estimation Sample
@@ -1675,12 +1711,12 @@ cat("Saved: Output/Figures/F1-F4 (PDF + PNG)\n")
 
 # ---- OLS matched sample rates ----
 ols_rates <- matched_tanks[, .(
-  closure_rate = weighted.mean(closure_event, w = cem_weight, na.rm = TRUE),
+  closure_rate = weighted.mean(closure_event, na.rm = TRUE),
   n            = .N
 ), by = .(
   panel_year,
   group = fifelse(texas_treated == 1L, "Texas", "Control States")
-)][panel_year >= 1990L]
+)]
 
 # ---- Cox sample rates ----
 cox_sample[, plot_year := as.integer(
@@ -2876,6 +2912,67 @@ res_es_3d <- run_cox_event_study(
 # Log-HR scale
 res_es_loghr <- run_cox_event_study(
   exact_split_df[is_post_mandate == 1L], y_metric = "log_hr", label = "Primary-LogHR")
+
+cat("\n\n")
+
+# ════════════════════════════════════════════════════════════════════════════
+# ANTICIPATION-EXPLICIT EVENT STUDY SPECIFICATIONS
+# ════════════════════════════════════════════════════════════════════════════
+# Shift reference year to 1997 (τ = -2) and explicitly estimate the
+# anticipation effect (1998 = τ = -1) as a separate parameter.
+# This allows formal testing of parallel trends in the PRE-ANTICIPATION period
+# (τ ≤ -2, i.e., 1997 and earlier) while quantifying anticipatory behavior.
+# ════════════════════════════════════════════════════════════════════════════
+
+cat("========================================\n")
+cat("S10b: COX EVENT STUDY (ANTICIPATION-EXPLICIT)\n")
+cat("========================================\n\n")
+
+source(here("Code", "Helpers", "S10_Cox_EventStudy_Anticipation.R"))
+
+# ── Primary anticipation-explicit spec (post-mandate sample) ────────────────
+res_es_anticipation_primary <- run_cox_event_study_anticipation(
+  exact_split_df[is_post_mandate == 1L],
+  label = "Primary-PostMandate-Anticipation"
+)
+
+# ── Sensitivity: Single-walled subsample ──────────────────────────────────
+res_es_anticipation_sw <- run_cox_event_study_anticipation(
+  exact_split_df[mm_wall == "Single-Walled" & is_post_mandate == 1L],
+  label = "SingleWalled-PostMandate-Anticipation"
+)
+
+# ── Sensitivity: Tighter pooling structure ────────────────────────────────
+res_es_anticipation_tight <- run_cox_event_study_anticipation(
+  exact_split_df[is_post_mandate == 1L],
+  pool_pre = -2L, pool_post = 10L,
+  label = "Primary-TightPool-Anticipation"
+)
+
+# ── Print anticipation summary ────────────────────────────────────────────
+cat("\nANTICIPATION EFFECT SUMMARY (Texas Reform):\n")
+cat("═" %rep% 70, "\n")
+cat(sprintf(
+  "Anticipation Effect (1998): β = %+.4f, p-val = %.4f, Δ = %+.2f%%\n",
+  res_es_anticipation_primary$anticipation$coef,
+  res_es_anticipation_primary$anticipation$p,
+  res_es_anticipation_primary$anticipation$pct
+))
+cat("\nInterpretation:\n")
+cat(sprintf(
+  "  • Tanks in TX began closing before the statutory 1999 reform date\n"
+))
+cat(sprintf(
+  "  • Estimated anticipatory behavior: %+.1f%% change in annual closure hazard\n",
+  res_es_anticipation_primary$anticipation$pct
+))
+cat(sprintf(
+  "  • Reference year (1997) parallel-trends test: χ²(%d) = %.2f, p = %.4f\n",
+  res_es_anticipation_primary$pre_tests$dof_all,
+  res_es_anticipation_primary$pre_tests$chi_all,
+  res_es_anticipation_primary$pre_tests$p_all
+))
+cat("═" %rep% 70, "\n\n")
 
 cat("\n")
 
