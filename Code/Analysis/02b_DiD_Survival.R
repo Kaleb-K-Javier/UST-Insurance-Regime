@@ -1664,6 +1664,116 @@ save_gg(p4, "F4_es_above_median")
 
 cat("Saved: Output/Figures/F1-F4 (PDF + PNG)\n")
 
+
+
+################################################################################
+# Raw Closure Rates: Estimation Sample
+# Two separate figures, each plotting Texas and control states on the same axes.
+#   Figure A: Matched tank sample (OLS estimation sample, CEM-weighted)
+#   Figure B: Cox sample (exact-date spells collapsed to annual)
+################################################################################
+
+# ---- OLS matched sample rates ----
+ols_rates <- matched_tanks[, .(
+  closure_rate = weighted.mean(closure_event, w = cem_weight, na.rm = TRUE),
+  n            = .N
+), by = .(
+  panel_year,
+  group = fifelse(texas_treated == 1L, "Texas", "Control States")
+)][panel_year >= 1990L]
+
+# ---- Cox sample rates ----
+cox_sample[, plot_year := as.integer(
+  format(as.Date(t_exit, origin = "1970-01-01"), "%Y")
+)]
+cox_rates <- cox_sample[plot_year >= 1990L & plot_year <= 2020L, .(
+  closure_rate = mean(failure, na.rm = TRUE),
+  n            = .N
+), by = .(
+  plot_year,
+  group = fifelse(texas_treated == 1L, "Texas", "Control States")
+)]
+
+# ---- Shared plot function ----
+COL_GROUP <- c("Texas" = COL_TX, "Control States" = COL_CTRL)
+
+plot_raw_closure <- function(dt, x_var, reform_x, reform_label,
+                              show_mandate = FALSE) {
+  p <- ggplot(dt, aes(x = .data[[x_var]], y = closure_rate,
+                      colour = group, group = group)) +
+    { if (show_mandate)
+        annotate("rect",
+                 xmin = 1989, xmax = 1993,
+                 ymin = -Inf, ymax = Inf,
+                 fill = COL_PRE, alpha = 0.12)
+      else list() } +
+    geom_vline(xintercept = reform_x, linetype = "dashed",
+               colour = "grey35", linewidth = 0.55) +
+    annotate("text",
+             x = reform_x + 0.25,
+             y = max(dt$closure_rate, na.rm = TRUE) * 0.97,
+             label = reform_label,
+             hjust = 0, size = 2.8, colour = "grey35") +
+    geom_line(linewidth = 0.75) +
+    geom_point(size = 1.8) +
+    scale_colour_manual(values = COL_GROUP,
+                        guide  = guide_legend(direction = "horizontal")) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+    scale_x_continuous(breaks = seq(1990, 2020, by = 5)) +
+    labs(x = "Calendar Year",
+         y = "Annual Tank Closure Rate",
+         colour = NULL) +
+    theme_pub() +
+    theme(
+      legend.position    = c(0.85, 0.92),
+      legend.background  = element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor   = element_blank()
+    )
+
+  if (show_mandate) {
+    p <- p + annotate("text",
+                      x     = 1991,
+                      y     = max(dt$closure_rate, na.rm = TRUE) * 0.75,
+                      label = "Mandate\nWindow",
+                      hjust = 0.5, size = 2.6,
+                      colour = COL_PRE, fontface = "italic")
+  }
+  p
+}
+
+# ---- Figure A: OLS matched sample ----
+p_ols <- plot_raw_closure(
+  dt             = ols_rates,
+  x_var          = "panel_year",
+  reform_x       = 1999,
+  reform_label   = "Reform\n(Jan 1999)",
+  show_mandate   = TRUE
+)
+
+ggsave(file.path(OUTPUT_FIGURES, "Figure_OLS_Sample_ClosureRates.pdf"),
+       p_ols, width = 7, height = 4.5, device = cairo_pdf)
+ggsave(file.path(OUTPUT_FIGURES, "Figure_OLS_Sample_ClosureRates.png"),
+       p_ols, width = 7, height = 4.5, dpi = 300)
+cat("Saved: Figure_OLS_Sample_ClosureRates\n")
+
+# ---- Figure B: Cox sample ----
+p_cox <- plot_raw_closure(
+  dt             = cox_rates,
+  x_var          = "plot_year",
+  reform_x       = 1999,
+  reform_label   = "Reform\n(Dec 1998)",
+  show_mandate   = FALSE
+)
+
+ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_Sample_ClosureRates.pdf"),
+       p_cox, width = 7, height = 4.5, device = cairo_pdf)
+ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_Sample_ClosureRates.png"),
+       p_cox, width = 7, height = 4.5, dpi = 300)
+cat("Saved: Figure_Cox_Sample_ClosureRates\n")
+
+
+
 #### end or pretty &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
 library(HonestDiD)
@@ -1722,7 +1832,7 @@ p_rr <- ggplot(sensitivity, aes(x = M)) +
                      labels = scales::number_format(accuracy = 0.001)) +
   theme_pub()
 
-  
+
 save_gg(p_rr, "Figure_RR_Sensitivity")
 
 #### end or pretty &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
