@@ -1323,17 +1323,15 @@ grp_idx <- function(g) {
 }
 dq_kbl <- dq_print[, !"group_clean"]
 
+
 dq_tex <- kbl(
   dq_kbl, format = "latex", booktabs = TRUE, linesep = "",
+  escape = FALSE,
   align = c("l", "r", "r", "r", "r", "r"),
   caption = NULL, label = NULL
 ) |>
-  # FIX: was c(" "=2, "\\% Missing (tanks)"=3, "\\% Missing (LUSTs)"=1)
-  # A span of width=1 in the last position generates \cmidrule{6-6}, which
-  # causes "Misplaced \noalign" in XeLaTeX. Merged into a single 4-column
-  # "% Missing" span; tank vs LUST distinction is preserved in column names.
   add_header_above(
-    c(" " = 2, "\\% Missing (Tanks: Close / Install / Wall  $|$  LUSTs: LUST Date)" = 4),
+    c(" " = 2, "Missing Data Rates (Tanks: Close / Install / Wall | LUSTs: LUST Date)" = 4),
     escape = FALSE
   ) |>
   pack_rows("Target",             grp_idx("Target")[1],             grp_idx("Target")[2]) |>
@@ -1348,7 +1346,6 @@ dq_tex <- kbl(
 save_table(dq_print[, !"group_clean"], "TableA0_DataQuality_ByState")
 write_tex(dq_tex, "TableA0_DataQuality_ByState")
 log_cat("  TableA0_DataQuality_ByState written.\n")
-
 
 ###############################################################################
 # DONE

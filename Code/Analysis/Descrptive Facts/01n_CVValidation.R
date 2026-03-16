@@ -659,6 +659,74 @@ ggsave(file.path(OUTPUT_FIGURES, "Figure_CV_ROC.pdf"),
        fig_roc, width = 5.5, height = 5.5, device = cairo_pdf)
 cat("  Figure_CV_ROC saved\n")
 
+#### S6b: Precision-Recall Curve ##############################################
+#
+# PR curve is preferred over ROC for rare-event settings. The no-skill
+# baseline is the marginal event rate (a horizontal line at ~0.01-0.03),
+# making lift above baseline immediately visible. PR-AUC is reported as
+# the area under the interpolated curve.
+
+library(PRROC)
+
+pr_obj <- pr.curve(
+  scores.class0 = cv_data[event_first_leak == 1L, pred],
+  scores.class1 = cv_data[event_first_leak == 0L, pred],
+  curve         = TRUE
+)
+pr_auc <- pr_obj$auc.integral
+
+pr_dt <- as.data.table(pr_obj$curve)
+setnames(pr_dt, c("recall", "precision", "threshold"))
+
+fig_pr <- ggplot(pr_dt, aes(x = recall, y = precision)) +
+  geom_hline(
+    yintercept = event_rate,
+    linetype   = "dashed",
+    color      = "grey55",
+    linewidth  = 0.5
+  ) +
+  geom_line(color = COL_TX, linewidth = 0.9) +
+  annotate(
+    "label",
+    x             = 0.65,
+    y             = event_rate + (max(pr_dt$precision) - event_rate) * 0.12,
+    label         = sprintf("No-skill baseline: %.2f%%", event_rate * 100),
+    size          = 2.8,
+    fill          = "white",
+    color         = "grey40",
+    label.size    = 0.2,
+    label.padding = unit(0.2, "lines")
+  ) +
+  annotate(
+    "label",
+    x             = 0.65,
+    y             = max(pr_dt$precision) * 0.88,
+    label         = sprintf("PR-AUC = %.3f", pr_auc),
+    size          = 3.2,
+    fill          = "white",
+    color         = "grey20",
+    label.size    = 0.25,
+    label.padding = unit(0.22, "lines")
+  ) +
+  scale_x_continuous(
+    name   = "Recall (Sensitivity)",
+    labels = scales::percent_format(accuracy = 1),
+    breaks = seq(0, 1, 0.25),
+    limits = c(0, 1)
+  ) +
+  scale_y_continuous(
+    name   = "Precision (Positive Predictive Value)",
+    labels = scales::percent_format(accuracy = 0.1),
+    limits = c(0, NA),
+    expand = expansion(mult = c(0.02, 0.08))
+  ) +
+  theme_pub()
+
+ggsave(file.path(OUTPUT_FIGURES, "Figure_CV_PR.png"),
+       fig_pr, width = 5.5, height = 5.5, dpi = 300, bg = "white")
+ggsave(file.path(OUTPUT_FIGURES, "Figure_CV_PR.pdf"),
+       fig_pr, width = 5.5, height = 5.5, device = cairo_pdf)
+cat(sprintf("  Figure_CV_PR saved  (PR-AUC = %.3f)\n", pr_auc))
 
 #### S7: Partial Dependence Figure ############################################
 #
