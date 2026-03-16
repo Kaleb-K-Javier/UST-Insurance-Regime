@@ -1119,7 +1119,6 @@ save_table(balance_print, "Table1_Balance")
 write_tex(balance_tex, "Table1_Balance")
 log_cat("  Table1_Balance written.\n")
 
-
 ###############################################################################
 # PART IV: CELL-LEVEL BALANCE DETAIL (Appendix)
 ###############################################################################
@@ -1127,12 +1126,6 @@ log_cat("\n\n========== PART IV: CELL-LEVEL BALANCE DETAIL ==========\n")
 
 age_order <- c("0-2yr", "3-5yr", "6-8yr", "9-11yr", "12-14yr", "15-19yr", "20yr-Plus")
 
-# Restrict cell detail to the regression-sample cells (same filter as S3):
-#   - Excludes Unknown-Wall and Unknown-Fuel portfolios (uninterpretable
-#     actuarial risk profile; also excluded from 02b tank sample)
-#   - Requires n_TX >= CELL_MIN_TX unique facilities (thin cells suppressed)
-# This ensures the appendix table is consistent with Figure_DiffComparison
-# and Table 1 Row 3.
 cell_stats_print <- cell_stats[
   make_model_fac %in% reg_cells &
   !is.na(fac_wall) & nchar(trimws(fac_wall)) > 0 &
@@ -1164,7 +1157,11 @@ print(cell_print)
 cell_groups <- cell_stats_print[, .(
   start = .I[1], end = .I[.N]
 ), by = .(fac_wall, fac_fuel)]
-cell_groups[, label := paste0(fac_wall, " / ", fac_fuel)]
+
+# FIX: escape underscores in pack_rows labels — fac_wall/fac_fuel values may
+# contain underscores (e.g. "Single_Walled", "Unknown_Fuel") which break
+# XeLaTeX when escape=FALSE is active on the table.
+cell_groups[, label := gsub("_", "\\_", paste0(fac_wall, " / ", fac_fuel), fixed = TRUE)]
 
 cell_kbl <- cell_print[, !c("Wall", "Fuel")]
 
@@ -1203,8 +1200,25 @@ attrition_dt <- rbindlist(lapply(seq_along(attrition_log), function(i) {
 attrition_dt[, delta_fac := c(NA_integer_, diff(Facilities))]
 attrition_dt[, delta_fy  := c(NA_integer_, diff(`Fac-Years`))]
 
-# FIX: use LaTeX math delta instead of Unicode \u0394 — safer with XeLaTeX
-# since font glyph coverage for Δ is not guaranteed; $\Delta$ always renders.
+# FIX: escape special LaTeX characters in all character columns.
+# Required because escape=FALSE is set on kbl() for the $\Delta$ headers —
+# once escape=FALSE is active, kableExtra stops sanitizing cell values,
+# so any _ % & # in raw data strings will break XeLaTeX compilation.
+# Specifically: "first_observed < 1998" → "first\_observed < 1998"
+escape_latex_text <- function(x) {
+  x <- gsub("_", "\\_", x, fixed = TRUE)   # _ → \_ (math subscript guard)
+  x <- gsub("%", "\\%", x, fixed = TRUE)   # % → \% (comment char guard)
+  x <- gsub("&", "\\&", x, fixed = TRUE)   # & → \& (column sep guard)
+  x <- gsub("#", "\\#", x, fixed = TRUE)   # # → \# (macro char guard)
+  x
+}
+
+char_cols <- names(attrition_dt)[sapply(attrition_dt, is.character)]
+for (col in char_cols) {
+  set(attrition_dt, j = col, value = escape_latex_text(attrition_dt[[col]]))
+}
+
+# FIX: LaTeX math delta instead of Unicode \u0394 (font-glyph-independent)
 setnames(attrition_dt,
   c("delta_fac", "delta_fy"),
   c("$\\Delta$ Facilities", "$\\Delta$ Fac-Years")
@@ -1214,7 +1228,7 @@ print(attrition_dt)
 save_table(attrition_dt, "TableB1_Attrition_Log")
 write_tex(
   kbl(attrition_dt, format = "latex", booktabs = TRUE, linesep = "",
-      escape = FALSE,   # FIX: must be FALSE so $\Delta$ renders as math
+      escape = FALSE,   # FALSE required for $\Delta$ headers; text escaped above
       caption = NULL, label = NULL) |>
     kable_styling(font_size = 9),
   "TableB1_Attrition_Log"
@@ -1225,6 +1239,12 @@ log_cat("  TableB1_Attrition_Log written.\n")
 log_cat("  Table B.3\n")
 if (!is.null(balance_glm)) {
   broom_balance <- broom::tidy(balance_glm, conf.int = TRUE)
+
+  # FIX: escape underscores in the term column — GLM coefficient names come
+  # directly from variable names in your model (e.g. "tank_age", "wall_type")
+  # and will break XeLaTeX as bare _ is interpreted as a math subscript.
+  broom_balance$term <- gsub("_", "\\_", broom_balance$term, fixed = TRUE)
+
   save_table(as.data.table(broom_balance), "TableB3_Missing_Date_Balance")
   write_tex(
     kbl(broom_balance[, c("term", "estimate", "std.error", "statistic", "p.value")],
@@ -1233,7 +1253,9 @@ if (!is.null(balance_glm)) {
       kable_styling(font_size = 9),
     "TableB3_Missing_Date_Balance"
   )
+  log_cat("  TableB3_Missing_Date_Balance written.\n")
 }
+
 # ── Table A.0: State Data Quality ────────────────────────────────────────────
 # Motivates 16-state control group selection.
 # CONTROL_STATES is authoritative; harmonization tier labels used only for

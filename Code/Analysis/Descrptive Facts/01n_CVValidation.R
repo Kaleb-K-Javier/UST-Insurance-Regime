@@ -57,6 +57,13 @@
 #   Never-yet-leaked risk set: has_previous_leak == 0.
 #   Make-model primary sample: is_make_model == 1.
 #
+# TEST MODE:
+#   Set TEST_MODE <- TRUE (below) to skip hyperparameter tuning entirely and
+#   run with pre-validated parameters at a reduced tree count (200 trees).
+#   All output files are written to their normal paths so the full pipeline
+#   can be verified end-to-end before committing to a production run.
+#   Set TEST_MODE <- FALSE for a full production run (2,000 trees + tuning).
+#
 # OUTPUTS
 # -------
 # Main figures (Output/Figures/):
@@ -179,7 +186,38 @@ theme_pub <- function(base_size = 12) {
 theme_set(theme_pub())
 
 # ---- GRF constants ----------------------------------------------------------
-NUM_TREES <- 2000L   # final forest size; tuning uses 50-tree forests
+# NUM_TREES is set here; TEST_MODE (below) may override it to 200.
+NUM_TREES <- 2000L   # production forest size; tuning uses 50-tree forests
+
+# ---- Fast test mode ---------------------------------------------------------
+# Set TEST_MODE = TRUE to skip tuning entirely and run with pre-validated
+# parameters at a reduced tree count. All output files are written to their
+# normal paths — use this for a full end-to-end smoke test before production.
+# Set TEST_MODE = FALSE for the real production run (2,000 trees + tuning).
+#
+# Pre-validated parameters (from tuning log):
+#   mtry = 7, min.node.size = 5, sample.fraction = 0.7, Brier = 0.18048
+TEST_MODE <- TRUE   # <-- flip to TRUE for a fast smoke test
+
+BEST_PARAMS_FIXED <- list(
+  mtry            = 7L,
+  min.node.size   = 5L,
+  sample.fraction = 0.7
+)
+
+if (TEST_MODE) {
+  NUM_TREES <- 200L
+  cat("================================================================================\n")
+  cat("*** TEST MODE ACTIVE — tuning skipped, pre-validated parameters injected ***\n")
+  cat(sprintf("    mtry=%d  min.node.size=%d  sample.fraction=%.1f  Brier=%.5f\n",
+              BEST_PARAMS_FIXED$mtry,
+              BEST_PARAMS_FIXED$min.node.size,
+              BEST_PARAMS_FIXED$sample.fraction,
+              0.18048))
+  cat(sprintf("    Tree count reduced to %d for speed.\n", NUM_TREES))
+  cat("    All output files will be written to their normal paths.\n")
+  cat("================================================================================\n\n")
+}
 
 # ---- Safe GRF prediction extractor ------------------------------------------
 # GRF probability_forest returns a predictions matrix with columns named by
@@ -371,6 +409,7 @@ cat(sprintf("  Upweighting %s rare events by factor %.1fx\n",
 # Single model: facility-level observables + state.
 # tune.parameters = "all" is NOT available for probability_forest.
 # Manual 50-tree grid search used instead — see tuning function below.
+# In TEST_MODE, tuning is skipped and BEST_PARAMS_FIXED is used directly.
 
 FEATURES <- c(
   "has_single_walled",
@@ -501,8 +540,18 @@ tune_prob_forest <- function(X_mat, Y_vec, W_vec, CL_vec,
   return(best_params)
 }
 
-cat("\n--- Tuning ---\n")
-best_params <- tune_prob_forest(X, Y, W, CL)
+# ---- Tuning or inject pre-validated parameters ------------------------------
+if (TEST_MODE) {
+  cat("\n--- Tuning SKIPPED (TEST_MODE) — using pre-validated parameters ---\n")
+  cat(sprintf("    mtry=%d  min.node.size=%d  sample.fraction=%.1f\n",
+              BEST_PARAMS_FIXED$mtry,
+              BEST_PARAMS_FIXED$min.node.size,
+              BEST_PARAMS_FIXED$sample.fraction))
+  best_params <- BEST_PARAMS_FIXED
+} else {
+  cat("\n--- Tuning ---\n")
+  best_params <- tune_prob_forest(X, Y, W, CL)
+}
 
 cat(sprintf("\nFitting final model (%d trees)...\n", NUM_TREES))
 set.seed(20260202L)
@@ -902,7 +951,9 @@ gof_summary <- data.table(
   N_fac_years      = n_total,
   N_events         = n_events,
   Base_rate_pct    = round(event_rate * 100, 3),
-  Class_weight     = round(w_ratio, 1)
+  Class_weight     = round(w_ratio, 1),
+  Test_mode        = TEST_MODE,
+  Num_trees        = NUM_TREES
 )
 fwrite(gof_summary, file.path(OUTPUT_TABLES, "Table_CV_GoF_Summary.csv"))
 cat("\nGoF summary:\n")
@@ -1004,12 +1055,19 @@ cat(sprintf("KS test TX vs Control: D = %.4f, p = %.4f\n",
 #### Summary ##################################################################
 
 cat("\n========================================================\n")
-cat("01n COMPLETE\n\n")
+if (TEST_MODE) {
+  cat("01n COMPLETE  [TEST MODE — %d trees, tuning skipped]\n\n", NUM_TREES)
+} else {
+  cat("01n COMPLETE  [PRODUCTION — %d trees]\n\n", NUM_TREES)
+}
 cat(sprintf("  Sample:     %s facility-years | %s first-leak events (%.3f%% base rate)\n",
     format(n_total,  big.mark = ","),
     format(n_events, big.mark = ","),
     event_rate * 100))
 cat(sprintf("  Class wt:   %.0f:1  (0s:1s) — minority class upweighted\n", w_ratio))
+cat(sprintf("  Parameters: mtry=%d  min.node.size=%d  sample.fraction=%.1f\n",
+    best_params$mtry, best_params$min.node.size, best_params$sample.fraction))
+cat(sprintf("  Num trees:  %d\n", NUM_TREES))
 cat(sprintf("  OOB AUC:    %.3f\n", auc_val))
 cat(sprintf("  Top 10%%:    %.0f%% of releases captured\n", app$top10 * 100))
 cat(sprintf("  Top 20%%:    %.0f%% of releases captured\n", app$top20 * 100))
