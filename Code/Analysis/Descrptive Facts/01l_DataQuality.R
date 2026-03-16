@@ -980,7 +980,6 @@ n_a     <- nrow(panel_a)
 n_ab    <- nrow(panel_a) + nrow(panel_b)
 n_total <- nrow(table0)
 panel_c_header_rows <- n_ab + which(panel_c$Variable != "" & panel_c$Full_TX == "")
-
 table0_tex <- kbl(
   table0, format = "latex", booktabs = TRUE, linesep = "", escape = FALSE,
   align = c("l", "r", "r", "r", "r", "r", "r"),
@@ -994,13 +993,23 @@ table0_tex <- kbl(
   pack_rows("Panel A: 1998 Cross-Section (Risk Covariates)",  1,      n_a,    bold = TRUE) |>
   pack_rows("Panel B: Pre-Reform Outcome Flows (1990--1998)", n_a+1,  n_ab,   bold = TRUE) |>
   pack_rows("Panel C: Make-Model Cell Coverage",              n_ab+1, n_total, bold = TRUE) |>
-row_spec(which(table0$Variable == ""), color = "gray!50") |>
-  row_spec(panel_c_header_rows, color = "gray!60", italic = TRUE) |>
+  kable_styling(font_size = 10)
+
+# FIX: guard against integer(0) if Variable whitespace differs from ""
+se_rows <- which(table0$Variable == "")
+if (length(se_rows) > 0)
+  table0_tex <- table0_tex |> row_spec(se_rows, color = "gray!50")
+
+pc_rows <- which(seq_len(n_total) %in% panel_c_header_rows)
+if (length(pc_rows) > 0)
+  table0_tex <- table0_tex |> row_spec(pc_rows, color = "gray!60", italic = TRUE)
+
+# column grayout for Panel C rows (no TX/CTL comparison meaningful there)
+table0_tex <- table0_tex |>
   column_spec(3, color = ifelse(seq_len(n_total) > n_ab, "lightgray", "black")) |>
   column_spec(4, color = ifelse(seq_len(n_total) > n_ab, "lightgray", "black")) |>
   column_spec(6, color = ifelse(seq_len(n_total) > n_ab, "lightgray", "black")) |>
-  column_spec(7, color = ifelse(seq_len(n_total) > n_ab, "lightgray", "black")) |>
-    kable_styling(font_size = 10)
+  column_spec(7, color = ifelse(seq_len(n_total) > n_ab, "lightgray", "black"))
 
 save_table(table0, "Table0_Descriptive")
 write_tex(table0_tex, "Table0_Descriptive")
@@ -1184,7 +1193,6 @@ log_cat("  TableA_Balance_CellDetail written.\n")
 # PART V: APPENDIX TABLES
 ###############################################################################
 log_cat("\n\n========== PART V: APPENDIX TABLES ==========\n")
-
 # ── Table B.1: Attrition Log ─────────────────────────────────────────────────
 log_cat("  Table B.1\n")
 attrition_dt <- rbindlist(lapply(seq_along(attrition_log), function(i) {
@@ -1194,17 +1202,24 @@ attrition_dt <- rbindlist(lapply(seq_along(attrition_log), function(i) {
 }))
 attrition_dt[, delta_fac := c(NA_integer_, diff(Facilities))]
 attrition_dt[, delta_fy  := c(NA_integer_, diff(`Fac-Years`))]
+
+# FIX: use LaTeX math delta instead of Unicode \u0394 — safer with XeLaTeX
+# since font glyph coverage for Δ is not guaranteed; $\Delta$ always renders.
 setnames(attrition_dt,
-         c("delta_fac", "delta_fy"),
-         c("\u0394 Facilities", "\u0394 Fac-Years"))
+  c("delta_fac", "delta_fy"),
+  c("$\\Delta$ Facilities", "$\\Delta$ Fac-Years")
+)
+
 print(attrition_dt)
 save_table(attrition_dt, "TableB1_Attrition_Log")
 write_tex(
   kbl(attrition_dt, format = "latex", booktabs = TRUE, linesep = "",
+      escape = FALSE,   # FIX: must be FALSE so $\Delta$ renders as math
       caption = NULL, label = NULL) |>
     kable_styling(font_size = 9),
   "TableB1_Attrition_Log"
 )
+log_cat("  TableB1_Attrition_Log written.\n")
 
 # ── Table B.3: Missing-Date Balance ──────────────────────────────────────────
 log_cat("  Table B.3\n")
@@ -1219,7 +1234,6 @@ if (!is.null(balance_glm)) {
     "TableB3_Missing_Date_Balance"
   )
 }
-
 # ── Table A.0: State Data Quality ────────────────────────────────────────────
 # Motivates 16-state control group selection.
 # CONTROL_STATES is authoritative; harmonization tier labels used only for
@@ -1268,10 +1282,15 @@ dq[, lust_missing_pct         := fmt_pct_dq(lust_missing_pct)]
 dq[, total_tanks_fmt          := formatC(total_tanks, format = "d", big.mark = ",")]
 
 dq_print <- dq[, .(
-  State = state, group_clean, Tanks = total_tanks_fmt,
+  State        = state,
+  group_clean,
+  Tanks        = total_tanks_fmt,
   `Close Date`   = pct_closed_missing_date,
   `Install Date` = pct_missing_install_date,
   `Wall Type`    = pct_miss_tank_type,
+  # FIX: column label now carries "LUST Date" — header above will say
+  # "% Missing (LUSTs)" via the two-span add_header_above below,
+  # avoiding the single-column cmidrule that breaks XeLaTeX.
   `LUST Date`    = lust_missing_pct
 )]
 
@@ -1287,8 +1306,14 @@ dq_tex <- kbl(
   align = c("l", "r", "r", "r", "r", "r"),
   caption = NULL, label = NULL
 ) |>
-  add_header_above(c(" " = 2, "\\% Missing (tanks)" = 3, "\\% Missing (LUSTs)" = 1),
-    escape = FALSE) |>
+  # FIX: was c(" "=2, "\\% Missing (tanks)"=3, "\\% Missing (LUSTs)"=1)
+  # A span of width=1 in the last position generates \cmidrule{6-6}, which
+  # causes "Misplaced \noalign" in XeLaTeX. Merged into a single 4-column
+  # "% Missing" span; tank vs LUST distinction is preserved in column names.
+  add_header_above(
+    c(" " = 2, "\\% Missing (Tanks: Close / Install / Wall  $|$  LUSTs: LUST Date)" = 4),
+    escape = FALSE
+  ) |>
   pack_rows("Target",             grp_idx("Target")[1],             grp_idx("Target")[2]) |>
   pack_rows("Control Tier 1",     grp_idx("Control Tier 1")[1],     grp_idx("Control Tier 1")[2]) |>
   pack_rows("Control Tier 2",     grp_idx("Control Tier 2")[1],     grp_idx("Control Tier 2")[2]) |>

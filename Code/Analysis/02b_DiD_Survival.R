@@ -1501,31 +1501,7 @@ mean(matched_tanks$mm_install_cohort)
 nrow(matched_tanks[mm_install_cohort>1998])
 # --- Pooled event studies (matched sample) ---
 # Alternative: reform date = 1998 (anticipation-inclusive)
-matched_tanks[, did_term_early := texas_treated * as.integer(panel_year >= 1998L)]
 
-m_ols_1_early_pooled = feols(
-  closure_event ~ did_term_early | tank_panel_id + panel_year,
-  data    = matched_tanks,
-  cluster = ~state
-)
-
-m_ols_1_early_pooled = feols(
-  closure_event ~ did_term_early*above_median_age | tank_panel_id + panel_year,
-  data    = matched_tanks,
-  weights = ~cem_weight,
-  cluster = ~state
-)
-
-matched_tanks[,rel_year_early := panel_year - 1998L]
-
-m_es_matched_early <- feols(
-  closure_event ~ i(rel_year_early, texas_treated, ref = -1) + deadline_sw |
-    tank_panel_id + panel_year,
-  data    = matched_tanks,
-  cluster = ~state
-)
-etable(m_es_matched_early)
-iplot(m_es_matched_early)
 
 m_es_matched <- feols(
   closure_event ~ i(rel_year_es, texas_treated, ref = -2) +deadline_sw|
@@ -1676,10 +1652,11 @@ save_gg <- function(p, filename, width = 7, height = 5) {
   invisible(p)
 }
 
+etable(m_es_matched)
 # --- Figure 1: Pooled matched ---
 p1 <- es_ggplot(m_es_matched,   point_col = "grey25",
                 label = "Pooled (matched sample)")
-save_gg(p1, "F1_es_pooled_matched_no_weights")
+save_gg(p1, "F1_es_pooled_matched")
 
 # --- Figure 2: Pooled cell x year FE ---
 p2 <- es_ggplot(m_es_cell,      point_col = "grey25",
@@ -1807,8 +1784,171 @@ ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_Sample_ClosureRates.pdf"),
 ggsave(file.path(OUTPUT_FIGURES, "Figure_Cox_Sample_ClosureRates.png"),
        p_cox, width = 7, height = 4.5, dpi = 300)
 cat("Saved: Figure_Cox_Sample_ClosureRates\n")
+################################################################################
+# CORRECTED EVENT STUDY PLOTTING SUITE
+################################################################################
+library(ggplot2)
+library(broom)
+
+ES_YLIM <- c(-0.025, 0.025)
+ES_REF  <- -2L
+
+# 1. Tidy function with corrected regex for "rel_year_early"
+es_tidy <- function(model, ref = ES_REF) {
+  df <- tidy(model, conf.int = TRUE)
+  
+  # Isolate terms specific to the new variable name
+  df <- df[grepl("rel_year_early::", df$term), ]
+  
+  # Extract the numeric year
+  df$year <- as.integer(gsub(".*rel_year_early::([-0-9]+):texas_treated.*", "\\1", df$term))
+  
+  # Inject omitted reference row
+  ref_row <- data.frame(
+    term     = paste0("ref_", ref),
+    estimate = 0, std.error = 0,
+    conf.low = 0, conf.high = 0,
+    year     = ref,
+    stringsAsFactors = FALSE
+  )
+  
+  df <- rbind(df[, c("term","estimate","std.error","conf.low","conf.high","year")], ref_row)
+  df[order(df$year), ]
+}
+
+# 2. Base Theme
+es_theme <- function() {
+  theme_classic(base_size = 11, base_family = "Times") +
+  theme(
+    axis.line        = element_line(colour = "black", linewidth = 0.4),
+    axis.ticks       = element_line(colour = "black", linewidth = 0.3),
+    axis.text        = element_text(colour = "black"),
+    panel.grid       = element_blank(),
+    legend.position  = "none",
+    plot.title       = element_blank(),
+    plot.margin      = margin(8, 10, 8, 8)
+  )
+}
+
+# 3. Main Plotting Function
+es_ggplot <- function(model, point_col = "grey25", label = NULL, ylim = ES_YLIM, ref = ES_REF) {
+  
+  df      <- es_tidy(model, ref = ref)
+  ref_row <- df[df$year == ref, ]
+  est_row <- df[df$year != ref, ]
+  
+  p <- ggplot(df, aes(x = year, y = estimate)) +
+    geom_errorbar(data = est_row,
+                  aes(ymin = conf.low, ymax = conf.high),
+                  colour = point_col, width = 0.25, linewidth = 0.45) +
+    geom_hline(yintercept = 0, colour = "grey60", linewidth = 0.5) +
+    geom_vline(xintercept = 0, linetype = "dashed",
+               colour = "grey40", linewidth = 0.5) +
+    geom_line(data = est_row, colour = point_col, linewidth = 0.55, alpha = 0.5) +
+    geom_point(data = est_row, colour = point_col, size = 1.8) +
+    geom_point(data = ref_row, shape = 1, size = 2.2, colour = "grey40") +
+    annotate("text", x = ref, y = ylim[1] * 0.82,
+             label = sprintf("(%d)\nomitted", ref),
+             size = 2.8, colour = "grey35", fontface = "italic",
+             lineheight = 0.85) +
+    { if (!is.null(label))
+        annotate("text", x = -Inf, y = Inf, label = label,
+                 hjust = -0.08, vjust = 1.4, size = 3,
+                 colour = "grey25", fontface = "plain")
+      else list() } +
+    scale_x_continuous(breaks = sort(unique(df$year))) +
+    scale_y_continuous(limits = ylim) +
+    labs(x = "Years Relative to 1999 (2 Years Before as Reference)",
+         y = "Effect on Annual Closure Probability") +
+    es_theme()
+  
+  return(p)
+}
+# Define explicit event window bounds
+LOWER_BIN <- -5L
+UPPER_BIN <- 10L
+
+# 1. Construct raw relative time (treatment year = 1998)
+matched_tanks[, rel_year_early := panel_year - 1998L]
+
+# 2. Apply simultaneous lower and upper endpoint binning
+matched_tanks[, rel_year_early := pmax(pmin(rel_year_early, UPPER_BIN), LOWER_BIN)]
+# Run the model with the binned variable
+# Run the model with the binned variable
+m_es_matched_early <- feols(
+  # CHANGE: Swapped panel_year for rel_year_early inside i()
+  closure_event ~ i(rel_year_early, texas_treated, ref = -1)  | 
+    tank_panel_id + panel_year,
+  weights = ~cem_weight,
+  data    = matched_tanks,
+  cluster = ~state
+)
+matched_tanks[, did_term_early := texas_treated * as.integer(panel_year >= 1998L)]
+
+m_ols_1_early_pooled = feols(
+  closure_event ~ did_term_early | tank_panel_id + panel_year,
+  data    = matched_tanks,
+    weights = ~cem_weight,
+  cluster = ~state
+)
+
+m_ols_1_pooled = feols(
+  closure_event ~ did_term | tank_panel_id + panel_year,
+  data    = matched_tanks,
+  weights = ~cem_weight,
+  cluster = ~state
+)
+
+etable(m_ols_1_pooled, m_ols_1_early_pooled)
+
+m_ols_1_early_pooled = feols(
+  closure_event ~ did_term_early*above_median_age | tank_panel_id + panel_year,
+  data    = matched_tanks,
+  weights = ~cem_weight,
+  cluster = ~state
+)
 
 
+
+# Generate the plot
+p_antic_primary <- es_ggplot(
+  model = m_es_matched_early, 
+  point_col = "grey25",
+  label = "Primary (post-mandate, 1990–1997)",
+  ylim = c(-0.01, 0.01),
+)
+etable(m_es_matched_early)
+
+print(p_antic_primary)
+
+# 2. Save it out as PDF and PNG for pubs
+ggsave("Figure_ES_Anticipation_Primary.pdf", 
+       plot = p_antic_primary, 
+       width = 7, height = 5, 
+       device = cairo_pdf)
+
+ggsave("Figure_ES_Anticipation_Primary.png", 
+       plot = p_antic_primary, 
+       width = 7, height = 5, 
+       dpi = 300, 
+       bg = "white")
+
+matched_tanks[,rel_year_early := panel_year - 1998L]
+
+m_es_matched_early <- feols(
+  closure_event ~ i(rel_year_early, texas_treated, ref = -2) + deadline_sw |
+    tank_panel_id + panel_year,
+    weights = ~cem_weight,
+  data    = matched_tanks,
+  cluster = ~state
+)
+
+
+save_gg(p_primary_corrected, "Figure_ES_Primary_Final")
+
+etable(m_es_matched_early)
+iplot(m_es_matched_early)
+log_step("Anticipation event study figures saved (3 specs).")
 
 #### end or pretty &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
