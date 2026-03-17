@@ -1,0 +1,26 @@
+\begin{table}
+\centering
+\begin{talltblr}[         %% tabularray outer open
+entry=none,label=none,
+note{}={* p \num{< 0.1}, ** p \num{< 0.05}, *** p \num{< 0.01}},
+note{ }={Cluster-robust standard errors by state in parentheses. Hazard ratios (exp[$\hat{\beta}$]) reported. Spells split at January 1, 1999 so DiD is a proper time-varying covariate. Strata defined on make-model excluding age cohort (\texttt{make\_model\_noage}) so age variation is not absorbed into the baseline hazard. Old $=$ above median age at reform ($\geq$5 yr).},
+]                     %% tabularray outer close
+{                     %% tabularray inner open
+colspec={Q[]Q[]Q[]Q[]Q[]},
+hline{2}={1-5}{solid, black, 0.05em},
+hline{6}={1-5}{solid, black, 0.05em},
+hline{1}={1-5}{solid, black, 0.08em},
+hline{9}={1-5}{solid, black, 0.08em},
+column{2-5}={}{halign=c},
+column{1}={}{halign=l},
+}                     %% tabularray inner close
+& (1) & (2) & (3) & (4) \\
+DiD & \num{1.192} & \num{0.969} & \num{1.198} & \num{1.184} \\
+& (\num{0.039}) & (\num{0.047}) & (\num{0.062}) & (\num{0.049}) \\
+DiD $\times$ Old ($\geq$5 yr) &  & \num{1.437}*** &  &  \\
+&  & (\num{0.084}) &  &  \\
+Observations & \num{66,903} & \num{66,903} & \num{31,580} & \num{35,323} \\
+Strata (make-model, no age) & \checkmark & \checkmark & \checkmark & \checkmark \\
+Age Subsample & All & All & $<$5 yr & $\geq$5 yr \\
+\end{talltblr}
+\end{table}

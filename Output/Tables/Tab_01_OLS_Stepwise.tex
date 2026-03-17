@@ -1,0 +1,32 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcccccc}
+   \toprule
+                                                   & (1)           & (2)           & (3)            & (4)            & (5)           & (6) \\   
+                                                   & (1)           & (2)           & (3)            & (4)            & (5)           & (6)\\  
+   \midrule 
+   DiD                                             & 0.0034        & 0.0039        & 0.0006         & 0.0019         & 0.0017        & 0.0043\\   
+                                                   & (0.0024)      & (0.0025)      & (0.0021)       & (0.0021)       & (0.0023)      & (0.0025)\\   
+   DiD $\times$ Old ($\geq$5 yr)                   &               &               & 0.0042$^{***}$ & 0.0030$^{***}$ &               &   \\   
+                                                   &               &               & (0.0004)       & (0.0008)       &               &   \\   
+   Tank FE                                         & \checkmark    & \checkmark    & \checkmark     & \checkmark     & \checkmark    & \checkmark\\   
+   Year FE                                         & \checkmark    & \checkmark    & \checkmark     & \checkmark     & \checkmark    & \checkmark\\   
+   Cell $\times$ Year FE                           &               & \checkmark    &                & \checkmark     &               & \\  
+   Age Subsample                                   & All           & All           & All            & All            & $<$5 yr       & $\geq$5 yr\\   
+   Control Mean (post-reform)                      & 0.0104        & 0.0104        & 0.0104         & 0.0104         & 0.0104        & 0.0104\\  
+    \\
+   Observations                                    & 776,212       & 776,208       & 776,212        & 776,208        & 350,780       & 425,432\\  
+   R$^2$                                           & 0.08986       & 0.09423       & 0.08987        & 0.09423        & 0.09430       & 0.08697\\  
+    \\
+   tank\_panel\_id fixed effects                   & $\checkmark$  & $\checkmark$  & $\checkmark$   & $\checkmark$   & $\checkmark$  & $\checkmark$\\   
+   panel\_year fixed effects                       & $\checkmark$  &               & $\checkmark$   &                & $\checkmark$  & $\checkmark$\\   
+   panel\_year-make\_model\_noage fixed effects    &               & $\checkmark$  &                & $\checkmark$   &               & \\  
+   \bottomrule
+\end{tabular}
+ 
+\par \raggedright 
+Cluster-robust standard errors by state in parentheses. Old $=$ above median age at reform ($\geq$5 yr). Level effect of tank age absorbed by tank fixed effect. CEM weights applied throughout.
+\par\endgroup
+
+

@@ -1,0 +1,19 @@
+state,group,pre_rate_per1k,post_rate_per1k,n_pre_ty,n_post_ty,change
+ME,Control States,61.58,24.68,9036,9853,-36.9
+AR,Control States,25.23,16.06,24151,25980,-9.17
+MN,Control States,25.05,8.76,31432,40940,-16.29
+LA,Control States,12.31,14.14,17178,22213,1.83
+ID,Control States,9.35,8.17,7886,10942,-1.18
+OK,Control States,9.07,12.08,13961,17601,3.01
+MD,Control States,8.62,19.04,27786,31785,10.42
+OH,Control States,7.76,16.42,51841,61820,8.66
+CO,Control States,7.47,10.36,14672,19241,2.89
+TN,Control States,6.71,10.38,32380,41515,3.67
+KY,Control States,4.81,10.34,25824,33588,5.53
+NC,Control States,4.56,12.08,46109,56091,7.52
+MA,Control States,4.27,12.86,25412,30269,8.59
+KS,Control States,3.57,13.36,12250,14739,9.79
+VA,Control States,2.87,7.76,46264,58708,4.89
+SD,Control States,0.09,0.57,9579,12277,0.48
+MO,Control States,0,0,15407,20456,0
+TX,Texas,9.56,12.42,70657,90855,2.86

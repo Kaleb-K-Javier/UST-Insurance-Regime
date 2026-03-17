@@ -1,0 +1,33 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \toprule
+                                   & (1)           & (2)           & (3)            & (4) \\   
+                                   & (1)           & (2)           & (3)            & (4)\\  
+   \midrule 
+   DiD (Post $\geq$ 1999)          & 0.0044$^{*}$  &               & 0.0015         &   \\   
+                                   & (0.0024)      &               & (0.0022)       &   \\   
+   DiD (Post $\geq$ 1998)          &               & 0.0058$^{**}$ &                & 0.0030\\   
+                                   &               & (0.0025)      &                & (0.0022)\\   
+   DiD (1999) $\times$ Old         &               &               & 0.0043$^{***}$ &   \\   
+                                   &               &               & (0.0004)       &   \\   
+   DiD (1998) $\times$ Old         &               &               &                & 0.0036$^{***}$\\   
+                                   &               &               &                & (0.0005)\\   
+   Reform Definition               & 1999          & 1998          & 1999           & 1998\\  
+   Age Interaction                 & No            & No            & Yes            & Yes\\  
+   Control Mean (post-reform)      & 0.0104        & 0.0104        & 0.0104         & 0.0104\\  
+    \\
+   Observations                    & 808,367       & 808,367       & 808,367        & 808,367\\  
+   R$^2$                           & 0.08978       & 0.08979       & 0.08979        & 0.08979\\  
+    \\
+   tank\_panel\_id fixed effects   & $\checkmark$  & $\checkmark$  & $\checkmark$   & $\checkmark$\\   
+   panel\_year fixed effects       & $\checkmark$  & $\checkmark$  & $\checkmark$   & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+ 
+\par \raggedright 
+Cluster-robust standard errors by state in parentheses. Tank and year fixed effects throughout. CEM weights applied. Old $=$ above median age at reform ($\geq$5 yr). Columns (3) and (4) test whether anticipation effects differ by age.
+\par\endgroup
+
+
