@@ -1950,6 +1950,97 @@ etable(m_es_matched_early)
 iplot(m_es_matched_early)
 log_step("Anticipation event study figures saved (3 specs).")
 
+
+
+#========================================================
+# HONEST SENSITIVITY (Rambachan-Roth)
+# ============================================================
+library(HonestDiD)
+library(ggplot2)
+
+# Extract coefficients and VCOV
+b <- coef(m_es_1)
+V <- vcov(m_es_1, type = "clustered")
+
+# Verify coefficient count before passing to HonestDiD
+# rel_year_es_sub bins: -5, -4, -3, -2 | (ref = -1) | 0, 1, ..., 15
+# That's 4 pre + 16 post = 20 coefficients
+cat("Number of ES coefficients:", length(b), "\n")
+cat("Coefficient names:\n")
+print(names(b))
+
+# Set pre/post counts — VERIFY these match length(b)
+n_pre  <- 4L   # t = -5, -4, -3, -2
+n_post <- 16L  # t = 0, 1, 2, ..., 15
+stopifnot(n_pre + n_post == length(b))
+
+sensitivity <- createSensitivityResults(
+  betahat        = b,
+  sigma          = V,
+  numPrePeriods  = n_pre,
+  numPostPeriods = n_post,
+  alpha          = 0.05
+)
+
+# ── Extract pre-period coefficients programmatically ──────────
+# Parse the rel_year integer from coefficient names
+es_names  <- names(b)
+rel_years <- as.integer(stringr::str_extract(es_names, "-?\\d+"))
+
+# Pre-period = negative rel_years (excluding the reference)
+pre_idx   <- which(rel_years < -1L)
+pre_coefs <- b[pre_idx[order(rel_years[pre_idx])]]  # sorted by time
+
+cat("Pre-period coefficients:\n")
+print(pre_coefs)
+
+max_pre_slope <- max(abs(diff(pre_coefs)))
+cat("Max absolute pre-trend slope:", max_pre_slope, "\n")
+
+# ── Sensitivity plot ──────────────────────────────────────────
+sensitivity |>
+  ggplot(aes(x = M)) +
+  geom_ribbon(aes(ymin = lb, ymax = ub),
+              fill = COL_TX, alpha = 0.25) +
+  geom_line(aes(y = lb), color = COL_TX, linewidth = 0.8) +
+  geom_line(aes(y = ub), color = COL_TX, linewidth = 0.8) +
+  geom_hline(yintercept = 0,
+             linetype = "dashed", color = "grey40") +
+  # Breakdown point
+  geom_vline(xintercept = 0.00720,
+             linetype = "dotted", color = "grey40") +
+  annotate("text",
+           x     = 0.00740,
+           y     = 0.004,
+           label = "Breakdown\nM = 0.0072",
+           hjust = 0, vjust = 0,
+           size  = 3, color = "grey30") +
+  # Max observed pre-trend slope
+  geom_vline(xintercept = max_pre_slope,
+             linetype = "dashed", color = "steelblue",
+             linewidth = 0.6) +
+  annotate("text",
+           x     = max_pre_slope + 0.0005,
+           y     = 0.029,
+           label = paste0("Max observed\npre-trend slope\n= ",
+                          sprintf("%.4f", max_pre_slope)),
+           hjust = 0, vjust = 1,
+           size  = 3, color = "steelblue") +
+  scale_x_continuous(
+    labels = function(x) sprintf("%.4f", x),
+    name   = "M: Maximum Slope of Parallel Trends Violation (pp/year)"
+  ) +
+  scale_y_continuous(
+    labels = function(x) sprintf("%.3f", x),
+    name   = "Robust 95% Confidence Interval for ATT"
+  ) +
+  coord_cartesian(ylim = c(-0.005, 0.035)) +
+  theme_pub()
+
+ggsave(file.path(OUTPUT_FIGURES,
+                 "Figure_RR_Sensitivity.png"),
+       width = 8, height = 5, dpi = 300)
+
 #### end or pretty &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
 library(HonestDiD)
