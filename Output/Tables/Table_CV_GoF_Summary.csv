@@ -1,0 +1,2 @@
+Model,Primary,AUC,PR_AUC,Top10_pct_events,Top20_pct_events,N_fac_years,N_events,Base_rate_pct,Class_weight,Test_mode
+"Elastic Net Logistic Saturated (alpha=1.00, lambda=0.000082, folds=5, cols=82)",TRUE,0.8,0.029,42,60.5,3929425,27455,0.699,142.1,TRUE
