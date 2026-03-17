@@ -1,0 +1,29 @@
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{threeparttable}
+\usepackage{threeparttablex}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{tablefootnote}
+\usepackage{tikz}
+\usepackage{pdflscape}
+\usepackage{etoolbox}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{adjustbox}
+\hypersetup{
+  colorlinks  = true,
+  linkcolor   = black,
+  citecolor   = black,
+  urlcolor    = black
+}
+\usepackage[authoryear, round]{natbib}
+\preto\section{\clearpage}
+
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}

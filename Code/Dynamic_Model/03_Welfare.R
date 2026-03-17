@@ -27,7 +27,7 @@ suppressPackageStartupMessages({
   library(ggplot2)
   library(here)
   library(scales)
-  library(xtable) # Added for QME slide table generation
+  library(xtable)
 })
 
 source(here("Code", "Helpers", "improved_estimator_OPTIMIZED.r"))
@@ -52,7 +52,7 @@ SCALE_FACTOR <- 10000  # 1 model unit = $10,000
 # Externality multiplier: social cost = ext_mult x private loss
 EXT_MULT_DEFAULT <- 2.0
 
-# ==============================================================================
+
 # 1. LOAD ESTIMATION OUTPUT & PRIMITIVES
 # ==============================================================================
 cat("\n[1/7] Loading Estimation Results & Primitives...\n")
@@ -89,7 +89,6 @@ cat(sprintf("  State space: %d states\n", n_states))
 # ==============================================================================
 # 2. POPULATION WEIGHTS FROM DATA
 # ==============================================================================
-# Load panel to get cross-sectional composition for weighting.
 
 panel_path <- here("Data", "Processed", "annual_facility_panel.csv")
 if (file.exists(panel_path)) {
@@ -117,8 +116,6 @@ chain_labels <- unique(chain_id)
 # 3. ERGODIC DISTRIBUTION (DECOMPOSED BY SUB-CHAIN)
 # ==============================================================================
 
-#' Compute quasi-stationary distribution within each disconnected sub-chain,
-#' then combine using observed population shares.
 compute_weighted_ergodic <- function(P, F_maintain, states, pop_weights,
                                       max_iter = 5000, tol = 1e-10) {
 
@@ -130,14 +127,11 @@ compute_weighted_ergodic <- function(P, F_maintain, states, pop_weights,
     idx <- which(chain_id == cl)
     n_sub <- length(idx)
 
-    # Sub-chain transition kernel
     T_sub <- as.matrix(Diagonal(n_sub, x = p_m[idx]) %*% F_maintain[idx, idx])
 
-    # Population share for this sub-chain
     chain_share <- sum(pop_weights[idx])
     if (chain_share < 1e-15) next
 
-    # Power iteration: init from data distribution within chain
     mu_sub <- pop_weights[idx] / sum(pop_weights[idx])
 
     for (iter in 1:max_iter) {
@@ -155,7 +149,6 @@ compute_weighted_ergodic <- function(P, F_maintain, states, pop_weights,
       mu_sub <- mu_new
     }
 
-    # Scale by chain's population share
     mu_full[idx] <- mu_sub * chain_share
   }
 
@@ -180,7 +173,7 @@ solve_counterfactual <- function(scenario = c("baseline", "social", "subsidy", "
 
   theta_cf <- theta_base
 
-if (scenario == "social") {
+  if (scenario == "social") {
     theta_cf["gamma_risk"] <- externality_mult
     cat(sprintf("  gamma_risk: %.3f -> %.3f\n",
                 theta_base["gamma_risk"], theta_cf["gamma_risk"]))
@@ -247,39 +240,35 @@ solve_mandate_equilibrium <- function(theta, cache, config, states,
 
 compute_welfare <- function(result, states, hazards, losses,
                             F_maintain, pop_weights,
-                            theta_ref, cache_ref, config, 
+                            theta_ref, cache_ref, config,
                             externality_mult = EXT_MULT_DEFAULT) {
 
   P_policy <- result$P
-  V_policy <- result$V 
+  V_policy <- result$V
 
   mu <- compute_weighted_ergodic(P_policy, F_maintain, states, pop_weights)
 
-  # Re-evaluate Real Value using baseline primitives (No Transfers)
   U_real <- calculate_flow_utilities_model_b(theta_ref, cache_ref)
   V_real <- invert_value_function_model_b(P_policy, U_real, config)
 
-  # Aggregation
   avg_firm_surplus_perceived <- sum(mu * V_policy)
   avg_firm_surplus_real      <- sum(mu * V_real)
 
   exp_leak_risk    <- sum(mu * P_policy[, "maintain"] * hazards)
   exp_private_loss <- sum(mu * P_policy[, "maintain"] * hazards * losses)
   exp_external_dam <- exp_private_loss * (externality_mult - 1)
-  
-  # Social Welfare = Real Private Value - External Damages
+
   pv_factor <- 1 / (1 - config$beta)
   social_welfare_val <- avg_firm_surplus_real - (exp_external_dam * pv_factor)
 
   govt_cost_implied <- avg_firm_surplus_perceived - avg_firm_surplus_real
 
-  # Subgroup Closures
   subgroup_close <- function(mask) {
     w <- mu[mask]; s <- sum(w)
     if (s < 1e-15) return(NA_real_)
     sum(w * P_policy[mask, "close"]) / s
   }
-  
+
   sw <- states$w == "single"; dw <- states$w == "double"
   young <- states$A <= 4;     old <- states$A >= 7
   ff <- states$rho == "FF";   rb <- states$rho == "RB"
@@ -289,12 +278,12 @@ compute_welfare <- function(result, states, hazards, losses,
     Converged        = result$converged,
     Avg_Close_Prob   = sum(mu * P_policy[, "close"]),
     Exp_Leak_Risk    = exp_leak_risk,
-    Exp_External_Dam = exp_external_dam,         # Correctly exported for Fig 6
-    Firm_Surplus     = avg_firm_surplus_perceived, 
-    Real_Surplus     = avg_firm_surplus_real,      
-    Social_Welfare   = social_welfare_val,         
-    Govt_Cost        = govt_cost_implied,          
-    
+    Exp_External_Dam = exp_external_dam,
+    Firm_Surplus     = avg_firm_surplus_perceived,
+    Real_Surplus     = avg_firm_surplus_real,
+    Social_Welfare   = social_welfare_val,
+    Govt_Cost        = govt_cost_implied,
+
     Close_SW = subgroup_close(sw), Close_DW = subgroup_close(dw),
     Close_Young = subgroup_close(young), Close_Old = subgroup_close(old),
     Close_SW_RB = subgroup_close(sw & rb), Close_SW_FF = subgroup_close(sw & ff),
@@ -336,8 +325,8 @@ cat("\n[3/7] Computing Welfare (Standardized to Baseline Primitives)...\n")
 welfare_args <- list(states = states, hazards = primitives$hazards,
                      losses = primitives$losses, F_maintain = transitions$maintain,
                      pop_weights = pop_weights,
-                     theta_ref = theta_hat, 
-                     cache_ref = res_baseline$cache, 
+                     theta_ref = theta_hat,
+                     cache_ref = res_baseline$cache,
                      config = config)
 
 welfare_results <- rbindlist(lapply(
@@ -351,7 +340,6 @@ welfare_results[, Delta_Close_pp := (Avg_Close_Prob - bl$Avg_Close_Prob) * 100]
 welfare_results[, Delta_Risk_pct := (Exp_Leak_Risk - bl$Exp_Leak_Risk) / bl$Exp_Leak_Risk * 100]
 welfare_results[, Delta_Social_W := Social_Welfare - bl$Social_Welfare]
 
-# Avoided leaks & cost-effectiveness
 welfare_results[, Avoided_Leaks := bl$Exp_Leak_Risk - Exp_Leak_Risk]
 welfare_results[, Cost_Per_Avoided_Leak := fifelse(
   Avoided_Leaks > 0 & Govt_Cost > 0, Govt_Cost / Avoided_Leaks, NA_real_
@@ -360,7 +348,6 @@ welfare_results[, Cost_Per_Avoided_Leak := fifelse(
 # --- Generate Production LaTeX Table ---
 cat("\n[4/7] Generating LaTeX Table for QME Slides...\n")
 
-# Format for display
 tex_dt <- welfare_results[, .(
   Scenario = simpleCap(as.character(Scenario)),
   `Closure Rate` = sprintf("%.1f\\%%", Avg_Close_Prob * 100),
@@ -370,23 +357,20 @@ tex_dt <- welfare_results[, .(
   `$\\Delta$ Welfare` = sprintf("%+.3f", Delta_Social_W)
 )]
 
-# Create xtable object
-xt <- xtable(tex_dt, 
+xt <- xtable(tex_dt,
              caption = "Counterfactual Welfare Analysis (Model B)",
              label = "tab:welfare_cf",
              align = c("l", "l", "c", "c", "c", "c", "c"))
 
-# Save to file
-print(xt, 
+print(xt,
       file = file.path(RESULTS_DIR, "Welfare_Summary.tex"),
       include.rownames = FALSE,
-      sanitize.text.function = identity, # Allow LaTeX symbols in columns
+      sanitize.text.function = identity,
       booktabs = TRUE)
 
 cat(sprintf("  Saved LaTeX table to: %s\n", file.path(RESULTS_DIR, "Welfare_Summary.tex")))
 
-# Console Print
-print(welfare_results[, .(Scenario, Close=sprintf("%.1f%%", Avg_Close_Prob*100), 
+print(welfare_results[, .(Scenario, Close=sprintf("%.1f%%", Avg_Close_Prob*100),
                           dSocW=sprintf("%+.3f", Delta_Social_W))])
 
 fwrite(welfare_results, file.path(RESULTS_DIR, "Counterfactual_Welfare.csv"))
@@ -396,13 +380,10 @@ fwrite(welfare_results, file.path(RESULTS_DIR, "Counterfactual_Welfare.csv"))
 # ==============================================================================
 cat("\n[5/7] Generating Figures...\n")
 
-# FIX: Define pv_factor globally for this section to prevent scope errors in Fig 6 & Loop
-pv_factor <- 1 / (1 - config$beta) 
+pv_factor <- 1 / (1 - config$beta)
 
 theme_pub <- theme_minimal(base_size = 13) +
   theme(legend.position = "bottom",
-        plot.title = element_text(face = "bold", size = 14),
-        plot.subtitle = element_text(size = 11, color = "grey30"),
         panel.grid.minor = element_blank())
 
 scenario_colors <- c("Baseline" = "grey40", "Mandate" = "#D55E00",
@@ -418,7 +399,6 @@ plot_data <- rbindlist(lapply(all_results, function(res) {
     A         = states$A,
     Age_Years = (states$A - 1) * 5 + 2.5,
     Wall      = as.character(states$w),
-    # RENAME: FF -> Uniform Premium
     Regime    = ifelse(states$rho == "FF", "Uniform Premium", "Risk-Based"),
     P_Close   = res$P[, "close"],
     P_Maintain = res$P[, "maintain"],
@@ -433,12 +413,10 @@ g1 <- ggplot(plot_data[Wall == "single"],
              aes(x = Age_Years, y = P_Close, color = Scenario)) +
   geom_line(linewidth = 1.1) +
   geom_point(size = 1.8, alpha = 0.7) +
-  facet_wrap(~ Regime) + # Labels already handled in data.table creation
+  facet_wrap(~ Regime) +
   scale_y_continuous(limits = c(0, 1), labels = percent) +
   scale_color_manual(values = scenario_colors) +
-  labs(title = "Single-Wall Closure Probability by Policy Scenario",
-       subtitle = "Structural counterfactuals, by insurance regime",
-       x = "Tank Age (Years)", y = "P(Close)") +
+  labs(x = "Tank Age (Years)", y = "P(Close)") +
   theme_pub
 
 ggsave(file.path(RESULTS_DIR, "CF_Closure_SW.png"), g1, width = 10, height = 6, dpi = 300)
@@ -468,10 +446,7 @@ g2 <- ggplot(df_wedge, aes(x = Age_Years, y = Prob, color = Type, linetype = Typ
   scale_linetype_manual(values = c("Private (Baseline)" = "solid",
                                     "Social Optimum" = "dashed")) +
   scale_y_continuous(labels = percent, limits = c(0, NA)) +
-  labs(title = "The Welfare Wedge: Uninternalized Leak Externality",
-       subtitle = "Single-wall tanks, risk-based insurance",
-       x = "Tank Age (Years)", y = "P(Close)",
-       color = NULL, linetype = NULL) +
+  labs(x = "Tank Age (Years)", y = "P(Close)", color = NULL, linetype = NULL) +
   theme_pub +
   theme(legend.position = c(0.25, 0.85),
         legend.background = element_rect(fill = alpha("white", 0.8), color = NA))
@@ -488,18 +463,8 @@ df_regime <- rbind(
              Regime = "Risk-Based"),
   data.table(Age_Years = (states$A[idx_FF] - 1) * 5 + 2.5,
              Prob = res_baseline$P[idx_FF, "close"],
-             Regime = "Uniform Premium") # RENAME: Uniform Premium
+             Regime = "Uniform Premium")
 )
-
-# Determine direction for subtitle
-rb_old <- res_baseline$P[idx_RB[which.max(states$A[idx_RB])], "close"]
-ff_old <- res_baseline$P[idx_FF[which.max(states$A[idx_FF])], "close"]
-
-if (rb_old > ff_old) {
-  regime_subtitle <- "Risk-based pricing increases exit incentives for high-risk tanks"
-} else {
-  regime_subtitle <- "Uniform premium pooling depresses exit rates for high-risk tanks"
-}
 
 g3 <- ggplot(df_regime, aes(x = Age_Years, y = Prob, color = Regime)) +
   geom_line(linewidth = 1.2) +
@@ -507,9 +472,7 @@ g3 <- ggplot(df_regime, aes(x = Age_Years, y = Prob, color = Regime)) +
   scale_color_manual(values = c("Risk-Based" = "#0072B2",
                                  "Uniform Premium" = "#E69F00")) +
   scale_y_continuous(labels = percent) +
-  labs(title = "Insurance Regime and Closure Incentives",
-       subtitle = regime_subtitle,
-       x = "Tank Age (Years)", y = "P(Close)", color = NULL) +
+  labs(x = "Tank Age (Years)", y = "P(Close)", color = NULL) +
   theme_pub
 
 ggsave(file.path(RESULTS_DIR, "Moral_Hazard.png"), g3, width = 8, height = 6, dpi = 300)
@@ -544,9 +507,7 @@ g4 <- ggplot(df_surv, aes(x = Year, y = Survival, color = Scenario, linetype = S
   geom_line(linewidth = 1.2) +
   scale_color_manual(values = scenario_colors) +
   scale_y_continuous(labels = percent, limits = c(0, 1)) +
-  labs(title = "Fleet Cleansing Dynamics",
-       subtitle = "Survival of single-wall RB cohort (initial age 15 years)",
-       x = "Years from Policy Implementation",
+  labs(x = "Years from Policy Implementation",
        y = "Fraction of Cohort Remaining",
        color = NULL, linetype = NULL) +
   theme_pub
@@ -554,27 +515,24 @@ g4 <- ggplot(df_surv, aes(x = Year, y = Survival, color = Scenario, linetype = S
 ggsave(file.path(RESULTS_DIR, "Fleet_Survival.png"), g4, width = 8, height = 6, dpi = 300)
 
 # ---------- FIGURE 5: Value Function ----------
-g5 <- ggplot(plot_data[Wall == "single" & Regime == "Risk-Based"], # Using new label
+g5 <- ggplot(plot_data[Wall == "single" & Regime == "Risk-Based"],
              aes(x = Age_Years, y = Value, color = Scenario)) +
   geom_line(linewidth = 1.1) +
   scale_color_manual(values = scenario_colors) +
-  labs(title = "Value Function: Single-Wall Tanks, Risk-Based Insurance",
-       subtitle = "V(x) in annual revenue units",
-       x = "Tank Age (Years)", y = expression(V(x))) +
+  labs(x = "Tank Age (Years)", y = expression(V(x))) +
   theme_pub
 
 ggsave(file.path(RESULTS_DIR, "Value_Function.png"), g5, width = 8, height = 5, dpi = 300)
 
-# ---------- FIGURE 6: WELFARE DECOMPOSITION (CORRECTED) ----------
+# ---------- FIGURE 6: WELFARE DECOMPOSITION ----------
 bl_fw  <- welfare_results[Scenario == "baseline", Firm_Surplus]
-# FIXED: Using correct column name Exp_External_Dam
 bl_dam <- welfare_results[Scenario == "baseline", Exp_External_Dam] * pv_factor
 bl_sw  <- welfare_results[Scenario == "baseline", Social_Welfare]
 
 dt_delta <- welfare_results[Scenario != "baseline", .(
   Scenario = factor(Scenario, levels = c("social", "subsidy", "mandate"),
                     labels = c("Social Optimum", "Closure Subsidy", "Mandate")),
-  
+
   `Change in Firm Surplus`   = Firm_Surplus - bl_fw,
   `Avoided External Damages` = -(Exp_External_Dam * pv_factor - bl_dam),
   `Government Cost`          = -Govt_Cost,
@@ -587,20 +545,18 @@ dt_delta_long[, Value_dollars := Value * SCALE_FACTOR]
 
 g6 <- ggplot(dt_delta_long, aes(x = Scenario, y = Value_dollars, fill = Component)) +
   geom_bar(data = dt_delta_long[Component != "Net Social Welfare Gain"],
-           stat = "identity", position = "stack", width = 0.6) + 
+           stat = "identity", position = "stack", width = 0.6) +
   geom_point(data = dt_delta_long[Component == "Net Social Welfare Gain"],
              aes(y = Value_dollars, fill = Component),
              shape = 21, size = 4, color = "black", stroke = 1.5, show.legend = TRUE) +
   geom_hline(yintercept = 0, linewidth = 0.4) +
   scale_fill_manual(values = c(
-    "Change in Firm Surplus"   = "#0072B2", 
-    "Avoided External Damages" = "#009E73", 
-    "Government Cost"          = "#D55E00", 
-    "Net Social Welfare Gain"  = "white"    
+    "Change in Firm Surplus"   = "#0072B2",
+    "Avoided External Damages" = "#009E73",
+    "Government Cost"          = "#D55E00",
+    "Net Social Welfare Gain"  = "white"
   )) +
-  labs(title = "Welfare Decomposition (Standardized)",
-       subtitle = "Components sum to Net Welfare (Dot). Subsidy treated as transfer.",
-       x = NULL, y = "Change from Baseline ($)", fill = NULL) +
+  labs(x = NULL, y = "Change from Baseline ($)", fill = NULL) +
   scale_y_continuous(labels = dollar_format()) +
   theme_pub +
   theme(legend.position = "right")
@@ -612,13 +568,13 @@ dt_heat <- plot_data[Scenario != "Baseline"]
 dt_base_ref <- plot_data[Scenario == "Baseline", .(Age_Years, Wall, Regime,
                                                     P_Close_Base = P_Close)]
 dt_heat <- merge(dt_heat, dt_base_ref, by = c("Age_Years", "Wall", "Regime"))
-dt_heat[, Delta_Close := (P_Close - P_Close_Base) * 100]  # in pp
+dt_heat[, Delta_Close := (P_Close - P_Close_Base) * 100]
 
 dt_heat[, State_Label := paste0(
   ifelse(Wall == "single", "SW", "DW"), ", ",
-  Regime)] # Already "Uniform Premium"
+  Regime)]
 
-COLOR_CAP <- 15 
+COLOR_CAP <- 15
 dt_heat[, Delta_Capped := pmin(Delta_Close, COLOR_CAP)]
 dt_heat[, Cell_Label := sprintf("%+.1f", Delta_Close)]
 dt_heat[, Is_Capped := Delta_Close > COLOR_CAP]
@@ -637,10 +593,7 @@ g7 <- ggplot(dt_heat,
                        name = expression(Delta*" P(Close) (pp)"),
                        breaks = seq(0, COLOR_CAP, 5)) +
   scale_x_continuous(breaks = seq(2.5, 42.5, 5)) +
-  labs(title = "Policy Impact Heterogeneity",
-       subtitle = paste0("Change in closure probability (pp) vs. baseline. ",
-                          "Color capped at ", COLOR_CAP, "pp; bold = exceeds cap."),
-       x = "Tank Age (Years)", y = NULL) +
+  labs(x = "Tank Age (Years)", y = NULL) +
   theme_pub +
   theme(legend.position = "right", panel.grid = element_blank())
 
@@ -654,14 +607,12 @@ cat("\n[6/7] Computing externality sensitivity...\n")
 ext_grid <- seq(1.0, 4.0, by = 0.25)
 U_real_base <- calculate_flow_utilities_model_b(theta_hat, cf_base$cache)
 
-# pv_factor is now defined globally at top of Section 8
-
 sens_results <- rbindlist(lapply(ext_grid, function(em) {
   theta_s <- theta_hat
   theta_s["gamma_risk"] <- theta_hat["gamma_risk"] * em
   eq_s <- solve_equilibrium_policy_model_b(theta_s, cf_base$cache, config)
   mu_s <- compute_weighted_ergodic(eq_s$P, transitions$maintain, states, pop_weights)
-  
+
   V_real_s <- invert_value_function_model_b(eq_s$P, U_real_base, config)
   firm_V_real <- sum(mu_s * V_real_s)
 

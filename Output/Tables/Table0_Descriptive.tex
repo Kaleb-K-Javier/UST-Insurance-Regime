@@ -1,53 +1,53 @@
 \begin{table}
-\centering\begingroup\fontsize{10}{12}\selectfont
-
-\begin{tabular}[t]{lr>{}r>{}rr>{}r>{}r}
-\toprule
-\multicolumn{1}{c}{ } & \multicolumn{3}{c}{Full Sample (Unit + Year FE)} & \multicolumn{3}{c}{MM Sample (Unit + Cell $times$ Year FE)} \\
-\cmidrule(l{3pt}r{3pt}){2-4} \cmidrule(l{3pt}r{3pt}){5-7}
-Variable & TX & CTL & Diff. & TX  & CTL  & Diff. \\
-\midrule
-\addlinespace[0.3em]
-\multicolumn{7}{l}{\textbf{Panel A: 1998 Cross-Section (Risk Covariates)}}\\
-\hspace{1em}\quad $N$ States (1 TX $+$ CTL) & 1 & \textcolor{black}{16} & \textcolor{black}{---} & 1 & \textcolor{black}{16} & \textcolor{black}{---}\\
-\hspace{1em}\quad $N$ Facilities & 25,816 & \textcolor{black}{59,064} & \textcolor{black}{---} & 25,816 & \textcolor{black}{58,759} & \textcolor{black}{---}\\
-\hspace{1em}\quad $N$ Total Tanks & 61,782 & \textcolor{black}{148,321} & \textcolor{black}{---} & 61,782 & \textcolor{black}{147,795} & \textcolor{black}{---}\\
-\hspace{1em}Avg tanks per facility & 2.7 & \textcolor{black}{2.8} & \textcolor{black}{-0.0$^{***}$} & 2.7 & \textcolor{black}{2.8} & \textcolor{black}{-0.1$^{***}$}\\
-\textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.0)} & \textcolor{black}{\textcolor{gray!50}{(0.0)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.0)} & \textcolor{black}{\textcolor{gray!50}{(0.0)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
-\hspace{1em}Avg capacity per facility (gal) & 20,358 & \textcolor{black}{21,069} & \textcolor{black}{-711$^{**}$} & 20,358 & \textcolor{black}{21,104} & \textcolor{black}{-746$^{**}$}\\
-\textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(142)} & \textcolor{black}{\textcolor{gray!50}{(306)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(142)} & \textcolor{black}{\textcolor{gray!50}{(308)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
-\hspace{1em}Avg tank age (facility level) & 15.8 & \textcolor{black}{15.0} & \textcolor{black}{+0.8$^{***}$} & 15.8 & \textcolor{black}{15.1} & \textcolor{black}{+0.7$^{***}$}\\
-\textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.1)} & \textcolor{black}{\textcolor{gray!50}{(0.0)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.1)} & \textcolor{black}{\textcolor{gray!50}{(0.0)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
-\hspace{1em}Avg age of oldest tank (fac level) & 15.6 & \textcolor{black}{15.0} & \textcolor{black}{+0.7$^{***}$} & 15.6 & \textcolor{black}{15.0} & \textcolor{black}{+0.6$^{***}$}\\
-\textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.1)} & \textcolor{black}{\textcolor{gray!50}{(0.1)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.1)} & \textcolor{black}{\textcolor{gray!50}{(0.1)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
-\hspace{1em}Avg age of state tank fleet & 15.6 & \textcolor{black}{14.5} & \textcolor{black}{+1.1$^{***}$} & 15.6 & \textcolor{black}{14.6} & \textcolor{black}{+1.0$^{***}$}\\
-\hspace{1em}Share of state fleet: Single-Wall \% & 86.7 & \textcolor{black}{79.2} & \textcolor{black}{+7.5$^{***}$} & 86.7 & \textcolor{black}{79.4} & \textcolor{black}{+7.3$^{***}$}\\
-\hspace{1em}Avg share of SW tanks per fac (\%) & 84.9 & \textcolor{black}{78.9} & \textcolor{black}{+6.0$^{***}$} & 84.9 & \textcolor{black}{79.3} & \textcolor{black}{+5.6$^{***}$}\\
-\textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.2)} & \textcolor{black}{\textcolor{gray!50}{(0.2)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.2)} & \textcolor{black}{\textcolor{gray!50}{(0.2)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
-\addlinespace[0.3em]
-\multicolumn{7}{l}{\textbf{Panel B: Pre-Reform Outcome Flows (1990--1998)}}\\
-\hspace{1em}Avg Closure Rate (\%) & 10.16 & \textcolor{black}{10.09} & \textcolor{black}{+0.07} & 10.16 & \textcolor{black}{10.09} & \textcolor{black}{+0.07}\\
-\textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.06)} & \textcolor{black}{\textcolor{gray!50}{(0.04)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.06)} & \textcolor{black}{\textcolor{gray!50}{(0.04)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
-\hspace{1em}Avg LUST Rate (\%) & 1.21 & \textcolor{black}{2.75} & \textcolor{black}{-1.54$^{***}$} & 1.21 & \textcolor{black}{2.76} & \textcolor{black}{-1.54$^{***}$}\\
-\textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.02)} & \textcolor{black}{\textcolor{gray!50}{(0.02)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.02)} & \textcolor{black}{\textcolor{gray!50}{(0.02)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
-\hspace{1em}Avg Replacement Rate (\%) & 0.79 & \textcolor{black}{1.09} & \textcolor{black}{-0.31$^{***}$} & 0.79 & \textcolor{black}{1.08} & \textcolor{black}{-0.29$^{***}$}\\
-\textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.02)} & \textcolor{black}{\textcolor{gray!50}{(0.01)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.02)} & \textcolor{black}{\textcolor{gray!50}{(0.01)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
-\hspace{1em}\quad $N$ Facility-Years & 299,351 & \textcolor{black}{680,268} & \textcolor{black}{---} & 299,351 & \textcolor{black}{678,348} & \textcolor{black}{---}\\
-\addlinespace[0.3em]
-\multicolumn{7}{l}{\textbf{Panel C: Make-Model Cell Coverage}}\\
-\textcolor{gray!60}{\em{\hspace{1em}\textit{Facility cells} (wall $\times$ fuel $\times$ age bin at reform)}} & \textcolor{gray!60}{\em{}} & \textcolor{lightgray}{\textcolor{gray!60}{\em{}}} & \textcolor{lightgray}{\textcolor{gray!60}{\em{}}} & \textcolor{gray!60}{\em{}} & \textcolor{lightgray}{\textcolor{gray!60}{\em{}}} & \textcolor{lightgray}{\textcolor{gray!60}{\em{}}}\\
-\hspace{1em}\quad Total cells & 85 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 77 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
-\hspace{1em}\quad Identified cells (TX \& CTL present) & 77 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 77 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
-\hspace{1em}\quad Unidentified: TX-only (no CTL) & 0 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 0 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
-\hspace{1em}\quad Unidentified: CTL-only (no TX) & 8 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 0 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
-\hspace{1em}\quad \% facility-years in identified cells (full panel) & 99.7\% & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 100.0\% & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
-\textcolor{gray!60}{\em{\hspace{1em}\textit{Tank cells} (wall $\times$ fuel $\times$ capacity $\times$ cohort; MM: 1989--1997 only)}} & \textcolor{gray!60}{\em{}} & \textcolor{lightgray}{\textcolor{gray!60}{\em{}}} & \textcolor{lightgray}{\textcolor{gray!60}{\em{}}} & \textcolor{gray!60}{\em{}} & \textcolor{lightgray}{\textcolor{gray!60}{\em{}}} & \textcolor{lightgray}{\textcolor{gray!60}{\em{}}}\\
-\hspace{1em}\quad Total cells & 1,923 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 455 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
-\hspace{1em}\quad Identified cells (TX \& CTL present) & 1,095 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 282 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
-\hspace{1em}\quad Unidentified: TX-only (no CTL) & 141 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 19 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
-\hspace{1em}\quad Unidentified: CTL-only (no TX) & 687 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 154 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
-\hspace{1em}\quad \% tanks in identified cells & 96.6\% & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 95.1\% & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
-\bottomrule
-\end{tabular}
-\endgroup{}
-\end{table}
+    \centering\begingroup\fontsize{10}{12}\selectfont
+    
+    \begin{tabular}[t]{lr>{}r>{}rr>{}r>{}r}
+    \toprule
+    \multicolumn{1}{c}{ } & \multicolumn{3}{c}{Full Sample (Unit + Year FE)} & \multicolumn{3}{c}{MM Sample (Unit + Cell $\times$ Year FE)} \\
+    \cmidrule(l{3pt}r{3pt}){2-4} \cmidrule(l{3pt}r{3pt}){5-7}
+    Variable & TX & CTL & Diff. & TX  & CTL  & Diff. \\
+    \midrule
+    \addlinespace[0.3em]
+    \multicolumn{7}{l}{\textbf{Panel A: 1998 Cross-Section (Risk Covariates)}}\\
+    \hspace{1em}\quad $N$ States (1 TX $+$ CTL) & 1 & \textcolor{black}{16} & \textcolor{black}{---} & 1 & \textcolor{black}{16} & \textcolor{black}{---}\\
+    \hspace{1em}\quad $N$ Facilities & 25,816 & \textcolor{black}{59,064} & \textcolor{black}{---} & 25,816 & \textcolor{black}{58,759} & \textcolor{black}{---}\\
+    \hspace{1em}\quad $N$ Total Tanks & 61,782 & \textcolor{black}{148,321} & \textcolor{black}{---} & 61,782 & \textcolor{black}{147,795} & \textcolor{black}{---}\\
+    \hspace{1em}Avg tanks per facility & 2.7 & \textcolor{black}{2.8} & \textcolor{black}{-0.0$^{***}$} & 2.7 & \textcolor{black}{2.8} & \textcolor{black}{-0.1$^{***}$}\\
+    \textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.0)} & \textcolor{black}{\textcolor{gray!50}{(0.0)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.0)} & \textcolor{black}{\textcolor{gray!50}{(0.0)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
+    \hspace{1em}Avg capacity per facility (gal) & 20,358 & \textcolor{black}{21,069} & \textcolor{black}{-711$^{**}$} & 20,358 & \textcolor{black}{21,104} & \textcolor{black}{-746$^{**}$}\\
+    \textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(142)} & \textcolor{black}{\textcolor{gray!50}{(306)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(142)} & \textcolor{black}{\textcolor{gray!50}{(308)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
+    \hspace{1em}Avg tank age (facility level) & 15.8 & \textcolor{black}{15.0} & \textcolor{black}{+0.8$^{***}$} & 15.8 & \textcolor{black}{15.1} & \textcolor{black}{+0.7$^{***}$}\\
+    \textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.1)} & \textcolor{black}{\textcolor{gray!50}{(0.0)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.1)} & \textcolor{black}{\textcolor{gray!50}{(0.0)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
+    \hspace{1em}Avg age of oldest tank (fac level) & 15.6 & \textcolor{black}{15.0} & \textcolor{black}{+0.7$^{***}$} & 15.6 & \textcolor{black}{15.0} & \textcolor{black}{+0.6$^{***}$}\\
+    \textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.1)} & \textcolor{black}{\textcolor{gray!50}{(0.1)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.1)} & \textcolor{black}{\textcolor{gray!50}{(0.1)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
+    \hspace{1em}Avg age of state tank fleet & 15.6 & \textcolor{black}{14.5} & \textcolor{black}{+1.1$^{***}$} & 15.6 & \textcolor{black}{14.6} & \textcolor{black}{+1.0$^{***}$}\\
+    \hspace{1em}Share of state fleet: Single-Wall \% & 86.7 & \textcolor{black}{79.2} & \textcolor{black}{+7.5$^{***}$} & 86.7 & \textcolor{black}{79.4} & \textcolor{black}{+7.3$^{***}$}\\
+    \hspace{1em}Avg share of SW tanks per fac (\%) & 84.9 & \textcolor{black}{78.9} & \textcolor{black}{+6.0$^{***}$} & 84.9 & \textcolor{black}{79.3} & \textcolor{black}{+5.6$^{***}$}\\
+    \textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.2)} & \textcolor{black}{\textcolor{gray!50}{(0.2)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.2)} & \textcolor{black}{\textcolor{gray!50}{(0.2)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
+    \addlinespace[0.3em]
+    \multicolumn{7}{l}{\textbf{Panel B: Pre-Reform Outcome Flows (1990--1998)}}\\
+    \hspace{1em}Avg Closure Rate (\%) & 10.16 & \textcolor{black}{10.09} & \textcolor{black}{+0.07} & 10.16 & \textcolor{black}{10.09} & \textcolor{black}{+0.07}\\
+    \textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.06)} & \textcolor{black}{\textcolor{gray!50}{(0.04)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.06)} & \textcolor{black}{\textcolor{gray!50}{(0.04)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
+    \hspace{1em}Avg LUST Rate (\%) & 1.21 & \textcolor{black}{2.75} & \textcolor{black}{-1.54$^{***}$} & 1.21 & \textcolor{black}{2.76} & \textcolor{black}{-1.54$^{***}$}\\
+    \textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.02)} & \textcolor{black}{\textcolor{gray!50}{(0.02)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.02)} & \textcolor{black}{\textcolor{gray!50}{(0.02)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
+    \hspace{1em}Avg Replacement Rate (\%) & 0.79 & \textcolor{black}{1.09} & \textcolor{black}{-0.31$^{***}$} & 0.79 & \textcolor{black}{1.08} & \textcolor{black}{-0.29$^{***}$}\\
+    \textcolor{gray!50}{\hspace{1em}} & \textcolor{gray!50}{(0.02)} & \textcolor{black}{\textcolor{gray!50}{(0.01)}} & \textcolor{black}{\textcolor{gray!50}{}} & \textcolor{gray!50}{(0.02)} & \textcolor{black}{\textcolor{gray!50}{(0.01)}} & \textcolor{black}{\textcolor{gray!50}{}}\\
+    \hspace{1em}\quad $N$ Facility-Years & 299,351 & \textcolor{black}{680,268} & \textcolor{black}{---} & 299,351 & \textcolor{black}{678,348} & \textcolor{black}{---}\\
+    \addlinespace[0.3em]
+    \multicolumn{7}{l}{\textbf{Panel C: Make-Model Cell Coverage}}\\
+    \textcolor{gray!60}{\emph{\hspace{1em}\textit{Facility cells} (wall $\times$ fuel $\times$ age bin at reform)}} & \textcolor{gray!60}{\emph{}} & \textcolor{lightgray}{\textcolor{gray!60}{\emph{}}} & \textcolor{lightgray}{\textcolor{gray!60}{\emph{}}} & \textcolor{gray!60}{\emph{}} & \textcolor{lightgray}{\textcolor{gray!60}{\emph{}}} & \textcolor{lightgray}{\textcolor{gray!60}{\emph{}}}\\
+    \hspace{1em}\quad Total cells & 85 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 77 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
+    \hspace{1em}\quad Identified cells (TX \& CTL present) & 77 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 77 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
+    \hspace{1em}\quad Unidentified: TX-only (no CTL) & 0 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 0 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
+    \hspace{1em}\quad Unidentified: CTL-only (no TX) & 8 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 0 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
+    \hspace{1em}\quad \% facility-years in identified cells (full panel) & 99.7\% & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 100.0\% & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
+    \textcolor{gray!60}{\emph{\hspace{1em}\textit{Tank cells} (wall $\times$ fuel $\times$ capacity $\times$ cohort; MM: 1989--1997 only)}} & \textcolor{gray!60}{\emph{}} & \textcolor{lightgray}{\textcolor{gray!60}{\emph{}}} & \textcolor{lightgray}{\textcolor{gray!60}{\emph{}}} & \textcolor{gray!60}{\emph{}} & \textcolor{lightgray}{\textcolor{gray!60}{\emph{}}} & \textcolor{lightgray}{\textcolor{gray!60}{\emph{}}}\\
+    \hspace{1em}\quad Total cells & 1,923 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 455 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
+    \hspace{1em}\quad Identified cells (TX \& CTL present) & 1,095 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 282 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
+    \hspace{1em}\quad Unidentified: TX-only (no CTL) & 141 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 19 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
+    \hspace{1em}\quad Unidentified: CTL-only (no TX) & 687 & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 154 & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
+    \hspace{1em}\quad \% tanks in identified cells & 96.6\% & \textcolor{lightgray}{} & \textcolor{lightgray}{} & 95.1\% & \textcolor{lightgray}{} & \textcolor{lightgray}{}\\
+    \bottomrule
+    \end{tabular}
+    \endgroup{}
+    \end{table}

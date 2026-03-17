@@ -1,15 +1,55 @@
-$if(has-frontmatter)$
-\frontmatter
-$endif$
-$if(title)$
-$if(beamer)$
-\frame{\titlepage}
-$else$
-\maketitle
-$endif$
-$if(abstract)$
-\begin{abstract}
-$abstract$
-\end{abstract}
-$endif$
-$endif$
+% Switch footnotes to symbols for title page only
+\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+
+\thispagestyle{empty}
+
+\begin{center}
+\vspace*{3cm}
+
+{\Large Internalizing Environmental Risk: Insurance Design and Firm Behavior in Hazardous Industries}
+
+\vspace{1.2cm}
+
+{\normalsize \href{https://www.kalebkjavier.com}{Kaleb K. Javier}\footnote{University of California, Berkeley, Department of Agricultural and Resource Economics. Email: \texttt{kalebkja@berkeley.edu}. Website: \texttt{kalebkjavier.com}. I thank [Insert acknowledgments and funding notes here].}}
+
+\vspace{0.6cm}
+
+{\normalsize March 16, 2026}
+
+\end{center}
+
+\vspace{.5cm}
+
+\begin{center}
+{\small \textbf{Abstract}}
+\end{center}
+
+\begin{quote}
+{\small \noindent Public trust funds in thirty-eight U.S. states insure underground storage tank
+(UST) leaks at a uniform flat fee, even though leak risk varies widely with observable
+traits such as tank age and wall construction. This paper quantifies how replacing
+flat-fee pooling with actuarially priced coverage changes firm behavior and environmental
+outcomes. I exploit Texas's 1999 closure of its trust fund, which forced all owners into
+a private market that sets premiums according to facility risk. A facility-year panel
+covering 1990--2021 links EPA inventories with administrative microdata for Texas and
+eighteen control states that retained public funds. I construct a make-model comparison
+sample that matches Texas facilities to control-state counterparts on the observable risk
+characteristics, tank age bin and wall construction type, that private insurers price,
+ensuring the comparison group is balanced on the dimensions along which the treatment
+effect is theoretically heterogeneous. Difference-in-differences and event-study estimates
+show that risk-rated premiums increased annual closure rates by two to three percentage
+points, shifted closures from market exit to on-site replacement with safer equipment,
+and reduced the probability of a reported leak by about one percentage point, nearly the
+entire pre-policy baseline for the high-risk single-wall cohort. The treatment effect is
+concentrated among older and single-walled facilities, consistent with the
+premium-gradient mechanism, and is near zero for young double-walled tanks. The findings
+provide the first causal micro-evidence that cost-based environmental liability insurance
+can internalize pollution risk more effectively than uniform public pooling, offering
+clear guidance for states that are reconsidering the structure of UST insurance programs.}
+\end{quote}
+
+% Switch back to arabic numerals for the rest of the document
+\renewcommand{\thefootnote}{\arabic{footnote}}
+\setcounter{footnote}{0}
+
+\newpage
