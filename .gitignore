@@ -41,3 +41,11 @@ staging_library/
 staging_library/
 
 renv/library/
+
+# API keys and secrets
+dewey_api.txt
+*api*.txt
+*api_key*
+*.key
+
+Code/GIS/dewey_api.txt
