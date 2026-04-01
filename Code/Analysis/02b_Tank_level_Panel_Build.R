@@ -90,6 +90,17 @@ INTEGRITY_DEADLINE_YR      <- 1998L   # §280.21(b) / §334.44(b)(1)(A); all ins
 # ---- Study states ----
 # PA excluded: PA Act 16 (June 1995) drives a spurious 1995 SW closure spike
 # unrelated to the Texas reform — confirmed by leave-one-out event study.
+
+CONTROL_STATES <- c(
+  "AR", "CO",  "ID",  "KS", "KY",
+  "LA", "MA", "MD", "ME", "MN", "MO",  "NC",
+   "OH", "OK", "SD", "TN", "VA"
+)
+
+#"IL","NM", "AL","MT", --- missin all wall type data here
+# "GA", , "WV"--> no closure dates
+
+
 CONTROL_STATES <- c(
   "AR", "CO", "ID", "KS", "KY",
   "LA", "MA", "MD", "ME", "MN", "MO", "NC",
@@ -271,9 +282,13 @@ tank_year_panel[, spill_overfill_mandate := as.integer(
 )]
 
 # ---- Tank integrity / cathodic protection window ----
-# All UST systems; §280.21(b) / §334.44(b)(1)(A); deadline Dec 22, 1998
-# Use 1996-1998 as the pressure window (3 years leading up to deadline)
+# Existing UST systems only (pre-Dec 22, 1988 installs);
+# §280.21(b) / §334.44(b)(1)(A); deadline Dec 22, 1998.
+# Post-1988 installs complied at installation under §334.44(a)/§334.45-46
+# and are not subject to the §280.21(b) upgrade deadline.
+# Use 1996-1998 as the pressure window (3 years leading up to deadline).
 tank_year_panel[, integrity_mandate := as.integer(
+  !is.na(release_det_deadline_yr) &
   panel_year %in% 1996L:1998L
 )]
 
@@ -287,9 +302,11 @@ tank_year_panel[, mandate_active := as.integer(
 )]
 
 # ---- Binned relative year for event studies ----
+# Floor at -12 (1987) to expose pre-1989 mandate compliance years;
+# cap at +15 (2014) for post-reform horizon.
 tank_year_panel[, rel_year_bin := fcase(
-  rel_year <= -8L, -8L,
-  rel_year >= 15L, 15L,
+  rel_year <= -12L, -12L,
+  rel_year >= 15L,   15L,
   default = as.integer(rel_year)
 )]
 
@@ -480,16 +497,16 @@ analysis_tanks[, `:=`(
   rel_year  = panel_year - 1999L
 )]
 
-# rel_year_es: binned [-8, 10]
+# rel_year_es: binned [-12, 15]
 analysis_tanks[, rel_year_es := fcase(
-  rel_year <= -8L, -8L,
-  rel_year >= 10L, 10L,
+  rel_year <= -12L, -12L,
+  rel_year >= 15L,   15L,
   default = as.integer(rel_year)
 )]
 
 # Anticipation spec variables (reform date = 1998)
 analysis_tanks[, rel_year_early := panel_year - 1998L]
-analysis_tanks[, rel_year_early := pmax(pmin(rel_year_early, 10L), -8L)]
+analysis_tanks[, rel_year_early := pmax(pmin(rel_year_early, 15L), -12L)]
 analysis_tanks[, did_term_early := texas_treated * as.integer(panel_year >= 1998L)]
 analysis_tanks[, deadline_sw    := as.integer(panel_year == 1998L) *
                                     as.integer(mm_wall == "Single-Walled")]

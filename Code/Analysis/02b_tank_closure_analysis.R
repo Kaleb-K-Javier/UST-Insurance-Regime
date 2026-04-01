@@ -506,7 +506,7 @@ cat("S8: EVENT STUDY MODELS\n")
 cat("========================================\n\n")
 
 # All specs include mandate_active to absorb vintage-cohort compliance windows.
-# rel_year_es is binned to [-8, 10] in the build script.
+# rel_year_es is binned to [-12, 15] in the build script.
 
 m_es_pooled <- feols(
   closure_event ~ i(rel_year_es, texas_treated, ref = -2L) + mandate_active |
@@ -646,8 +646,8 @@ V <- ev$vectors %*% diag(ev$values) %*% t(ev$vectors)
 
 cat("ES coefficients:\n"); print(names(b))
 
-# Count pre/post periods from binned rel_year_es = [-8, -7, ..., -3, -1, 0, ..., 10]
-# ref = -2 is omitted; pre = {-8,...,-3,-1}; post = {0,...,10}
+# Count pre/post periods from binned rel_year_es = [-12, -11, ..., -3, -1, 0, ..., 15]
+# ref = -2 is omitted; pre = {-12,...,-3,-1}; post = {0,...,15}
 rel_years_es <- as.integer(regmatches(names(b), regexpr("-?[0-9]+", names(b))))
 n_pre  <- sum(rel_years_es < 0L)
 n_post <- sum(rel_years_es >= 0L)
@@ -805,12 +805,15 @@ exact_split_full <- exact_split_full[t_exit > t_enter]
 exact_split_full[, did_term := texas_treated * as.integer(reform_ep == 2L)]
 
 # mandate_active for the Cox split dataset
+# Integrity window (1996-1998) restricted to existing systems (pre-Dec 22, 1988
+# installs) per §280.21(b) / §334.44(b)(1)(A). Post-1988 installs complied at
+# installation under §334.44(a) and are not subject to the upgrade deadline.
 exact_split_full[, yr_mid := as.integer(
   format(as.Date((t_enter + t_exit) / 2, origin = "1970-01-01"), "%Y"))]
 exact_split_full[, mandate_active := as.integer(
   (!is.na(release_det_deadline_yr) & yr_mid >= 1989L & yr_mid <= release_det_deadline_yr) |
   (!is.na(release_det_deadline_yr) & yr_mid %in% 1993L:1994L) |
-  (yr_mid %in% 1996L:1998L)
+  (!is.na(release_det_deadline_yr) & yr_mid %in% 1996L:1998L)
 )]
 exact_split_full[, yr_mid := NULL]
 
