@@ -49,3 +49,7 @@ dewey_api.txt
 *.key
 
 Code/GIS/dewey_api.txt
+
+# DuckDB temp files
+.tmp/
+*.tmp
