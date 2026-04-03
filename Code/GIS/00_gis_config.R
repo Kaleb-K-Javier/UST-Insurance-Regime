@@ -51,18 +51,19 @@ load_master_coords <- function(states = STUDY_STATES) {
   # Load master tank file, deduplicate to facility level, filter to valid coords.
   # Returns data.table with one row per (facility_id, state) with lat/lon.
   
-  dt <- fread(MASTER_TANKS_PATH, select = c(
-    "facility_id", "state", "latitude", "longitude"
-  ), colClasses = c(facility_id = "character", state = "character"))
-  
+dt <- fread(MASTER_TANKS_PATH, select = c(
+    "facility_id", "state", "facility_name", "latitude", "longitude"
+  ), colClasses = c(facility_id = "character", state = "character",
+                    facility_name = "character"))  
   # Filter to study states
   dt <- dt[state %in% states]
   
   # Collapse to facility level (take first non-NA coordinate per facility)
   dt <- dt[!is.na(latitude) & !is.na(longitude)]
-  dt <- dt[, .(
-    latitude  = latitude[1],
-    longitude = longitude[1]
+dt <- dt[, .(
+    facility_name = facility_name[1],
+    latitude      = latitude[1],
+    longitude     = longitude[1]
   ), by = .(facility_id, state)]
   
   # Coordinate quality gate

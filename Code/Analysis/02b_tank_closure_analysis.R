@@ -285,12 +285,6 @@ cat("========================================\n")
 cat("S4: BUILD COX SPLIT DATASET\n")
 cat("========================================\n\n")
 
-# Filter exact_base to matched IDs and survSplit at Jan 1, 1999.
-# This gives a proper counting-process dataset where did_term is
-# a time-varying covariate (0 before split, 1 after for TX tanks).
-# Splitting at the OLS POST_YEAR (Jan 1, 1999) keeps Cox and OLS estimates
-# on the same conceptual treatment onset for the stepwise tables.
-
 cox_sample <- exact_base[tank_panel_id %in% matched_ids]
 cox_sample[, above_median_age := as.integer(
   (1999L - install_yr_int) >= med_age
@@ -305,6 +299,35 @@ cox_split_df <- survSplit(
 setDT(cox_split_df)
 cox_split_df <- cox_split_df[t_exit > t_enter]
 cox_split_df[, did_term := texas_treated * as.integer(reform_ep == 2L)]
+
+# -----------------------------------------------------------------------
+# Mandate controls for Cox split data.
+# All three conditions use yr_mid (midpoint of spell) consistently.
+# Using t_enter for the lower bound and t_exit for the upper bound
+# on the release detection condition is a bug — spells spanning a
+# deadline year get misclassified. yr_mid avoids this.
+# -----------------------------------------------------------------------
+cox_split_df[, yr_mid := as.integer(
+  format(as.Date((t_enter + t_exit) / 2, origin = "1970-01-01"), "%Y")
+)]
+
+cox_split_df[, mandate_release_det := as.integer(
+  !is.na(release_det_deadline_yr) &
+  yr_mid >= 1989L &
+  yr_mid <= release_det_deadline_yr
+)]
+
+cox_split_df[, mandate_spill_overfill := as.integer(
+  !is.na(release_det_deadline_yr) &
+  yr_mid %in% 1993L:1994L
+)]
+
+cox_split_df[, mandate_integrity := as.integer(
+  !is.na(release_det_deadline_yr) &
+  yr_mid %in% 1996L:1998L
+)]
+
+cox_split_df[, yr_mid := NULL]
 
 cat(sprintf("cox_split_df: %s rows | %s tanks | %s events\n\n",
   format(nrow(cox_split_df),                  big.mark = ","),
@@ -321,43 +344,59 @@ cat("========================================\n\n")
 # M1-M2: pooled, year FE vs cell x year FE
 # M3-M4: DiD x above_median_age interaction
 # M5-M6: age subsample split
-# mandate_active included in all specs to absorb compliance-window pressure
-# on pre-1989 cohorts (applies identically to TX and controls).
+# mandate_release_det, mandate_spill_overfill, mandate_integrity replace
+# the pooled mandate_active. Each has its own coefficient, allowing the
+# forced-closure effect to differ across the three compliance regimes.
+# mandate_integrity is expected to dominate (highest stakes, mandatory
+# closure provision, adjacent to reform year).
 # Level effect of above_median_age is time-invariant -> absorbed by tank FE.
 
+MANDATE_VARS <- c("mandate_release_det", "mandate_spill_overfill", "mandate_integrity")
+
 m1 <- feols(
-  closure_event ~ did_term + mandate_active | tank_panel_id + panel_year,
+  closure_event ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity |
+    tank_panel_id + panel_year,
   data = matched_tanks, weights = ~cem_weight, cluster = ~state)
 
 m2 <- feols(
-  closure_event ~ did_term + mandate_active |
+  closure_event ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity |
     tank_panel_id + panel_year^make_model_noage,
   data = matched_tanks, weights = ~cem_weight, cluster = ~state)
 
 m3 <- feols(
-  closure_event ~ did_term + did_x_old + mandate_active |
+  closure_event ~ did_term + did_x_old +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity |
     tank_panel_id + panel_year,
   data = matched_tanks, weights = ~cem_weight, cluster = ~state)
 
 m4 <- feols(
-  closure_event ~ did_term + did_x_old + mandate_active |
+  closure_event ~ did_term + did_x_old +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity |
     tank_panel_id + panel_year^make_model_noage,
   data = matched_tanks, weights = ~cem_weight, cluster = ~state)
 
 m5 <- feols(
-  closure_event ~ did_term + mandate_active | tank_panel_id + panel_year,
+  closure_event ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity |
+    tank_panel_id + panel_year,
   data    = matched_tanks[above_median_age == 0L],
   weights = ~cem_weight, cluster = ~state)
 
 m6 <- feols(
-  closure_event ~ did_term + mandate_active | tank_panel_id + panel_year,
+  closure_event ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity |
+    tank_panel_id + panel_year,
   data    = matched_tanks[above_median_age == 1L],
   weights = ~cem_weight, cluster = ~state)
 
 ols_dict <- c(
-  "did_term"       = "DiD",
-  "did_x_old"      = sprintf("DiD $\\times$ Old ($\\geq$%.0f yr)", med_age),
-  "mandate_active" = "Mandate active"
+  "did_term"               = "DiD",
+  "did_x_old"              = sprintf("DiD $\\times$ Old ($\\geq$%.0f yr)", med_age),
+  "mandate_release_det"    = "Mandate: release detection",
+  "mandate_spill_overfill" = "Mandate: spill/overfill",
+  "mandate_integrity"      = "Mandate: integrity/cathodic"
 )
 
 etable(
@@ -365,7 +404,7 @@ etable(
   headers    = paste0("(", 1:6, ")"),
   dict       = ols_dict,
   fitstat    = ~ n + r2 + wr2,
-  keep       = c("^DiD", "Mandate"),
+  keep       = c("^DiD", "^Mandate"),
   extralines = list(
     "Tank FE"                    = rep("\\checkmark", 6),
     "Year FE"                    = rep("\\checkmark", 6),
@@ -380,7 +419,10 @@ etable(
   replace = TRUE,
   notes   = paste0(
     "Cluster-robust SEs by state. ",
-    "mandate\\_active absorbs install-cohort-specific federal compliance windows. ",
+    "Three separate mandate controls absorb install-cohort-specific federal ",
+    "compliance windows (release detection, spill/overfill prevention, ",
+    "tank integrity assessment). All mandate windows are zero for 1999 onward; ",
+    "mandate controls cannot contaminate the DiD estimate. ",
     sprintf("Old $=$ above median age at reform ($\\geq$%.0f yr). ", med_age),
     "Level effect of age absorbed by tank FE. CEM weights applied throughout."
   )
@@ -396,48 +438,46 @@ cat("========================================\n\n")
 
 # Strata on make_model_noage (not make_model_tank) so the age dimension
 # is NOT absorbed into the baseline hazard — required to identify age HTE.
-# mandate_active passed as a time-varying covariate via the survSplit data.
-
-cox_split_df[, mandate_active := as.integer(
-  !is.na(release_det_deadline_yr) & (
-    (as.integer(format(as.Date(t_enter, origin = "1970-01-01"), "%Y")) >= 1989L &
-     as.integer(format(as.Date(t_exit,  origin = "1970-01-01"), "%Y")) <= release_det_deadline_yr) |
-    (as.integer(format(as.Date((t_enter + t_exit) / 2, origin = "1970-01-01"), "%Y")) %in% 1993L:1994L) |
-    (as.integer(format(as.Date((t_enter + t_exit) / 2, origin = "1970-01-01"), "%Y")) %in% 1996L:1998L)
-  )
-)]
+# Three separate mandate controls passed as time-varying covariates via
+# the survSplit data (already constructed in S4 using yr_mid).
 
 cox1 <- coxph(
-  Surv(t_enter, t_exit, failure) ~ did_term + mandate_active +
+  Surv(t_enter, t_exit, failure) ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity +
     strata(make_model_noage),
   data = cox_split_df, cluster = state)
 
 cox2 <- coxph(
   Surv(t_enter, t_exit, failure) ~ did_term + did_term:above_median_age +
-    mandate_active + strata(make_model_noage),
+    mandate_release_det + mandate_spill_overfill + mandate_integrity +
+    strata(make_model_noage),
   data = cox_split_df, cluster = state)
 
 cox3 <- coxph(
-  Surv(t_enter, t_exit, failure) ~ did_term + mandate_active +
+  Surv(t_enter, t_exit, failure) ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity +
     strata(make_model_noage),
   data = cox_split_df[above_median_age == 0L], cluster = state)
 
 cox4 <- coxph(
-  Surv(t_enter, t_exit, failure) ~ did_term + mandate_active +
+  Surv(t_enter, t_exit, failure) ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity +
     strata(make_model_noage),
   data = cox_split_df[above_median_age == 1L], cluster = state)
 
 cox_coef_map <- c(
   "did_term"                  = "DiD",
   "did_term:above_median_age" = sprintf("DiD $\\times$ Old ($\\geq$%.0f yr)", med_age),
-  "mandate_active"            = "Mandate active"
+  "mandate_release_det"       = "Mandate: release detection",
+  "mandate_spill_overfill"    = "Mandate: spill/overfill",
+  "mandate_integrity"         = "Mandate: integrity/cathodic"
 )
 
 cox_add_rows <- tribble(
-  ~term,                         ~`(1)`,        ~`(2)`,        ~`(3)`,                                   ~`(4)`,
-  "Strata (make-model, no age)", "\\checkmark", "\\checkmark", "\\checkmark",                             "\\checkmark",
+  ~term,                         ~`(1)`,        ~`(2)`,        ~`(3)`,                              ~`(4)`,
+  "Strata (make-model, no age)", "\\checkmark", "\\checkmark", "\\checkmark",                        "\\checkmark",
   "Age subsample",               "All",          "All",
-     sprintf("$<$%.0f yr", med_age),  sprintf("$\\geq$%.0f yr", med_age)
+    sprintf("$<$%.0f yr", med_age), sprintf("$\\geq$%.0f yr", med_age)
 )
 
 msummary(
@@ -458,7 +498,8 @@ msummary(
     "Spells split at January 1, 1999. ",
     "Strata on make-model excluding vintage so age variation is not absorbed. ",
     sprintf("Old $=$ above median age at reform ($\\geq$%.0f yr). ", med_age),
-    "mandate\\_active absorbs vintage-cohort-specific compliance windows."
+    "Three mandate controls absorb cohort-specific federal compliance windows. ",
+    "mandate\\_integrity expected largest (mandatory closure provision at §334.47(a)(2))."
   )
 )
 cat("Saved: T2_cox_stepwise.tex\n\n")
@@ -474,11 +515,14 @@ cat("========================================\n\n")
 # and silently absorbed by tank FE — not a bug.
 
 td0 <- feols(
-  closure_event ~ did_term + mandate_active | tank_panel_id + panel_year,
+  closure_event ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity |
+    tank_panel_id + panel_year,
   data = matched_tanks, weights = ~cem_weight, cluster = ~state)
 
 td1 <- feols(
-  closure_event ~ did_term * single_wall * above_median_age + mandate_active |
+  closure_event ~ did_term * single_wall * above_median_age +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity |
     tank_panel_id + panel_year,
   data = matched_tanks, weights = ~cem_weight, cluster = ~state)
 
@@ -505,40 +549,70 @@ cat("========================================\n")
 cat("S8: EVENT STUDY MODELS\n")
 cat("========================================\n\n")
 
-# All specs include mandate_active to absorb vintage-cohort compliance windows.
-# rel_year_es is binned to [-12, 15] in the build script.
+# Mandate controls enter additively — not interacted with texas_treated.
+# The federal schedule is legally identical across TX and all control
+# states, so mandate pressure is not a TX-specific treatment. The three
+# coefficients residualize within-tank compliance-window closure spikes
+# before the β_τ event study coefficients identify the TX-control differential.
+#
+# Key diagnostic: after including mandate_integrity, the pre-period
+# coefficients for τ = -3, -2, -1 (1996-1998) should flatten. If they
+# do, the apparent pre-trend in the raw event study was mandate-driven
+# rather than a genuine parallel trends violation.
+
+MANDATE_RHS <- "mandate_release_det + mandate_spill_overfill + mandate_integrity"
 
 m_es_pooled <- feols(
-  closure_event ~ i(rel_year_es, texas_treated, ref = -2L) + mandate_active |
-    tank_panel_id + panel_year,
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year_es, texas_treated, ref = -2L) + %s |
+       tank_panel_id + panel_year", MANDATE_RHS)),
   data = matched_tanks, weights = ~cem_weight, cluster = ~state)
 
 m_es_cell <- feols(
-  closure_event ~ i(rel_year_es, texas_treated, ref = -2L) + mandate_active |
-    tank_panel_id + panel_year^make_model_noage,
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year_es, texas_treated, ref = -2L) + %s |
+       tank_panel_id + panel_year^make_model_noage", MANDATE_RHS)),
   data = matched_tanks, weights = ~cem_weight, cluster = ~state)
 
 m_es_below_med <- feols(
-  closure_event ~ i(rel_year_es, texas_treated, ref = -2L) + mandate_active |
-    tank_panel_id + panel_year,
-  data = matched_tanks[above_median_age == 0L],
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year_es, texas_treated, ref = -2L) + %s |
+       tank_panel_id + panel_year", MANDATE_RHS)),
+  data    = matched_tanks[above_median_age == 0L],
   weights = ~cem_weight, cluster = ~state)
 
 m_es_above_med <- feols(
-  closure_event ~ i(rel_year_es, texas_treated, ref = -2L) + mandate_active |
-    tank_panel_id + panel_year,
-  data = matched_tanks[above_median_age == 1L],
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year_es, texas_treated, ref = -2L) + %s |
+       tank_panel_id + panel_year", MANDATE_RHS)),
+  data    = matched_tanks[above_median_age == 1L],
   weights = ~cem_weight, cluster = ~state)
 
 # Anticipation spec: rel_year_early bins the pre-reform period relative to 1998
 # so that the 1998 coefficient captures anticipatory closure
 m_es_antic <- feols(
-  closure_event ~ i(rel_year_early, texas_treated, ref = -2L) + mandate_active |
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year_early, texas_treated, ref = -2L) + %s |
+       tank_panel_id + panel_year", MANDATE_RHS)),
+  data = matched_tanks, weights = ~cem_weight, cluster = ~state)
+
+# -----------------------------------------------------------------------
+# Mandate-only event study: plot the three mandate coefficients over time
+# to verify they spike in the correct windows and are zero post-1998.
+# This is a standalone diagnostic — not an identification test, but
+# a transparency exhibit showing what each mandate control is absorbing.
+# -----------------------------------------------------------------------
+m_es_mandate_diag <- feols(
+  closure_event ~
+    i(panel_year, mandate_release_det,    ref = 1998L) +
+    i(panel_year, mandate_spill_overfill, ref = 1998L) +
+    i(panel_year, mandate_integrity,      ref = 1998L) |
     tank_panel_id + panel_year,
   data = matched_tanks, weights = ~cem_weight, cluster = ~state)
 
 cat("ES pooled (ref=-2):\n"); etable(m_es_pooled)
 cat("\nES anticipation (ref=-2, treatment=1998):\n"); etable(m_es_antic)
+cat("\nMandate diagnostic:\n"); etable(m_es_mandate_diag)
 cat("\n")
 
 
@@ -757,7 +831,7 @@ cat("S13: THREE-SAMPLE COX + OLS\n")
 cat("========================================\n\n")
 
 # (A) Post-1988 only (no mandate pressure; cleanest identification)
-# (B) Full sample with mandate_active control (primary spec)
+# (B) Full sample with separate mandate controls (primary spec)
 # (C) Pre-1989 only (diagnostic: does the reform effect appear in cohorts
 #     that faced mandate pressure? If so, it reflects pre-mandate cohort exit,
 #     not the insurance reform.)
@@ -804,39 +878,57 @@ exact_split_full <- as.data.table(survSplit(
 exact_split_full <- exact_split_full[t_exit > t_enter]
 exact_split_full[, did_term := texas_treated * as.integer(reform_ep == 2L)]
 
-# mandate_active for the Cox split dataset
-# Integrity window (1996-1998) restricted to existing systems (pre-Dec 22, 1988
-# installs) per §280.21(b) / §334.44(b)(1)(A). Post-1988 installs complied at
+# -----------------------------------------------------------------------
+# Build mandate controls for exact_split_full — use yr_mid consistently.
+# Integrity window (1996-1998) restricted to pre-1989 installs per
+# §280.21(b) / §334.44(b)(1)(A). Post-1988 installs complied at
 # installation under §334.44(a) and are not subject to the upgrade deadline.
+# -----------------------------------------------------------------------
 exact_split_full[, yr_mid := as.integer(
-  format(as.Date((t_enter + t_exit) / 2, origin = "1970-01-01"), "%Y"))]
-exact_split_full[, mandate_active := as.integer(
-  (!is.na(release_det_deadline_yr) & yr_mid >= 1989L & yr_mid <= release_det_deadline_yr) |
-  (!is.na(release_det_deadline_yr) & yr_mid %in% 1993L:1994L) |
-  (!is.na(release_det_deadline_yr) & yr_mid %in% 1996L:1998L)
+  format(as.Date((t_enter + t_exit) / 2, origin = "1970-01-01"), "%Y")
 )]
+
+exact_split_full[, mandate_release_det := as.integer(
+  !is.na(release_det_deadline_yr) &
+  yr_mid >= 1989L &
+  yr_mid <= release_det_deadline_yr
+)]
+
+exact_split_full[, mandate_spill_overfill := as.integer(
+  !is.na(release_det_deadline_yr) &
+  yr_mid %in% 1993L:1994L
+)]
+
+exact_split_full[, mandate_integrity := as.integer(
+  !is.na(release_det_deadline_yr) &
+  yr_mid %in% 1996L:1998L
+)]
+
 exact_split_full[, yr_mid := NULL]
 
+MANDATE_VARS_STR <- "mandate_release_det + mandate_spill_overfill + mandate_integrity"
+
 res_A <- run_cox_ols(
-  cox_dt_arg  = exact_split_full[install_yr_int >= 1989L],
+  cox_dt_arg   = exact_split_full[install_yr_int >= 1989L],
   panel_dt_arg = panel_dt[install_yr_int >= 1989L],
-  label       = "A: Post-1988 installs (no mandate phase-in)"
+  label        = "A: Post-1988 installs (no mandate phase-in)"
+  # no extra_cox / extra_ols — post-1988 tanks have mandate flags = 0 always
 )
 
 res_B <- run_cox_ols(
   cox_dt_arg   = exact_split_full,
   panel_dt_arg = panel_dt,
-  label        = "B: Full sample + mandate_active control",
-  extra_cox    = "mandate_active",
-  extra_ols    = "mandate_active"
+  label        = "B: Full sample + separate mandate controls",
+  extra_cox    = MANDATE_VARS_STR,
+  extra_ols    = MANDATE_VARS_STR
 )
 
 res_C <- run_cox_ols(
   cox_dt_arg   = exact_split_full[install_yr_int <= 1988L],
   panel_dt_arg = panel_dt[install_yr_int <= 1988L],
   label        = "C: Pre-1989 installs only (diagnostic)",
-  extra_cox    = "mandate_active",
-  extra_ols    = "mandate_active"
+  extra_cox    = MANDATE_VARS_STR,
+  extra_ols    = MANDATE_VARS_STR
 )
 
 comparison <- rbindlist(lapply(list(res_A, res_B, res_C), function(r) {
@@ -914,8 +1006,9 @@ cat("S15: HTE BY WALL TYPE\n")
 cat("========================================\n\n")
 
 m_hte_wall_ols <- feols(
-  closure_event ~ did_term:mm_wall + mandate_active + tank_age |
-    tank_panel_id + make_model_tank^panel_year,
+  closure_event ~ did_term:mm_wall +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity +
+    tank_age | tank_panel_id + make_model_tank^panel_year,
   data = panel_dt, cluster = ~state)
 
 exact_split_full[, `:=`(
@@ -925,7 +1018,8 @@ exact_split_full[, `:=`(
 
 m_hte_wall_cox <- coxph(
   Surv(t_enter, t_exit, failure) ~ did_term_sw + did_term_dw +
-    mandate_active + strata(make_model_tank),
+    mandate_release_det + mandate_spill_overfill + mandate_integrity +
+    strata(make_model_tank),
   data = as.data.frame(exact_split_full),
   cluster = exact_split_full$state, ties = "efron")
 
@@ -956,8 +1050,9 @@ cat("========================================\n\n")
 # reform effects across cohorts.
 
 m_hte_cohort_ols <- feols(
-  closure_event ~ did_term:mm_install_cohort + mandate_active + tank_age |
-    tank_panel_id + make_model_tank^panel_year,
+  closure_event ~ did_term:mm_install_cohort +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity +
+    tank_age | tank_panel_id + make_model_tank^panel_year,
   data = panel_dt, cluster = ~state)
 
 # Get sorted install years present in the Cox split data
@@ -972,7 +1067,8 @@ cohort_did_vars <- paste0("did_yr", install_years)
 cox_cohort_fml <- as.formula(paste(
   "Surv(t_enter, t_exit, failure) ~",
   paste(cohort_did_vars, collapse = " + "),
-  "+ mandate_active + strata(make_model_tank)"
+  "+ mandate_release_det + mandate_spill_overfill + mandate_integrity",
+  "+ strata(make_model_tank)"
 ))
 m_hte_cohort_cox <- coxph(cox_cohort_fml,
   data    = as.data.frame(exact_split_full),
@@ -1102,11 +1198,14 @@ panel_dt[,         make_model_3dim := paste(mm_wall, mm_fuel, mm_install_cohort,
 exact_split_full[, make_model_3dim := paste(mm_wall, mm_fuel, mm_install_cohort, sep = "|")]
 
 m_cox_3dim <- coxph(
-  Surv(t_enter, t_exit, failure) ~ did_term + mandate_active + strata(make_model_3dim),
+  Surv(t_enter, t_exit, failure) ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity +
+    strata(make_model_3dim),
   data = as.data.frame(exact_split_full), cluster = exact_split_full$state, ties = "efron")
 m_ols_3dim <- feols(
-  closure_event ~ did_term + mandate_active + tank_age |
-    tank_panel_id + make_model_3dim^panel_year,
+  closure_event ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity +
+    tank_age | tank_panel_id + make_model_3dim^panel_year,
   data = panel_dt, cluster = ~state)
 r_3dim_cox <- extract_cox_row(m_cox_3dim)
 r_3dim_ols <- extract_panel_row(m_ols_3dim)
@@ -1118,11 +1217,14 @@ exact_no_border <- exact_split_full[!state %in% BORDER_STATES]
 panel_no_border <- panel_dt[!state %in% BORDER_STATES]
 
 m_cox_noborder <- coxph(
-  Surv(t_enter, t_exit, failure) ~ did_term + mandate_active + strata(make_model_tank),
+  Surv(t_enter, t_exit, failure) ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity +
+    strata(make_model_tank),
   data = as.data.frame(exact_no_border), cluster = exact_no_border$state, ties = "efron")
 m_ols_noborder <- feols(
-  closure_event ~ did_term + mandate_active + tank_age |
-    tank_panel_id + make_model_tank^panel_year,
+  closure_event ~ did_term +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity +
+    tank_age | tank_panel_id + make_model_tank^panel_year,
   data = panel_no_border, cluster = ~state)
 r_nb_cox <- extract_cox_row(m_cox_noborder)
 r_nb_ols <- extract_panel_row(m_ols_noborder)
