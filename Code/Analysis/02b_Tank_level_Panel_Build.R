@@ -534,6 +534,27 @@ response_long[, mandate_label := fcase(
   default = mandate_type
 )]
 
+
+
+# ---- Aggregate response_long across states within each group ----
+# Back-calculate closures from rate x exposure, then re-derive weighted rate
+response_agg <- response_long[, .(
+  n_exposed    = sum(n_exposed, na.rm = TRUE),
+  n_closed     = sum(n_exposed * closure_rate / 100, na.rm = TRUE)
+), by = .(vintage_label, state_group, mandate_type)]
+
+response_agg[, closure_rate := 100 * n_closed / n_exposed]
+response_agg[n_exposed == 0, closure_rate := 0]
+
+# Add mandate labels to match plot_data_corrected expectations
+response_agg[, mandate_label := fcase(
+  mandate_type == "Release Detection", "Release Detection\n(Deadline: 1989-1993)",
+  mandate_type == "Spill/Overfill",    "Spill/Overfill\n(Deadline: Dec 22, 1994)",
+  mandate_type == "Tank Integrity",    "Tank Integrity\n(Deadline: Dec 22, 1998)",
+  default = mandate_type
+)]
+
+
 response_plot <- ggplot(response_long[mm_install_cohort >= 1940], 
                         aes(x = n_exposed, y = closure_rate, color = state_group, size = n_exposed)) +
   geom_point(alpha = 0.6, stroke = 0.8) +
@@ -962,6 +983,43 @@ ggsave(
   width = 10, height = 6, dpi = 300
 )
 
+# ---- Build cohort_wide (needed for exit rate diff figures) ----
+tank_year_panel[, cohort_group := fcase(
+  install_yr_int < 1980L,                   "Pre-1980",
+  install_yr_int %between% c(1980L, 1988L), "1980-1988",
+  install_yr_int %between% c(1989L, 1998L), "1989-1998",
+  default = NA_character_
+)]
+
+cohort_exits <- tank_year_panel[
+  !is.na(cohort_group) &
+  panel_year %between% c(1980L, 2018L),
+  .(
+    n_active = .N,
+    n_closed = sum(closure_event)
+  ),
+  by = .(panel_year, state, cohort_group)
+]
+
+cohort_exits[, exit_rate   := 100 * n_closed / n_active]
+cohort_exits[, state_group := fifelse(state == "TX", "Texas", "Control")]
+
+cohort_exits_agg <- cohort_exits[, .(
+  exit_rate = mean(exit_rate)
+), by = .(panel_year, state_group, cohort_group)]
+
+cohort_wide <- dcast(
+  cohort_exits_agg,
+  panel_year + cohort_group ~ state_group,
+  value.var = "exit_rate"
+)
+cohort_wide[, diff := Texas - Control]
+
+cohort_palette <- c(
+  "Pre-1980"  = "#000000",
+  "1980-1988" = "#808080",
+  "1989-1998" = "#c0c0c0"
+)
 
 # ---- Figure 2: Exit rate diff grouped bar, 5-year periods, by cohort ----
 
@@ -1037,33 +1095,8 @@ ggsave(
   width = 9, height = 5, dpi = 300
 )
 
-# Rebuild cohort_exits from 1980
-cohort_exits <- tank_year_panel[
-  !is.na(cohort_group) &
-  panel_year %between% c(1980L, 2018L),
-  .(
-    n_active = .N,
-    n_closed = sum(closure_event)
-  ),
-  by = .(panel_year, state, cohort_group)
-]
+# ---- Figure 3: Exit rate diff grouped bar, four broad periods, by cohort ----
 
-cohort_exits[, exit_rate   := 100 * n_closed / n_active]
-cohort_exits[, state_group := fifelse(state == "TX", "Texas", "Control")]
-
-cohort_exits_agg <- cohort_exits[, .(
-  exit_rate = mean(exit_rate)
-), by = .(panel_year, state_group, cohort_group)]
-
-# Wide format and difference
-cohort_wide <- dcast(
-  cohort_exits_agg,
-  panel_year + cohort_group ~ state_group,
-  value.var = "exit_rate"
-)
-cohort_wide[, diff := Texas - Control]
-
-# Assign four equal-width periods
 cohort_wide[, period := fcase(
   panel_year %between% c(1980L, 1988L), "Pre-Mandate\n(1980\u20131988)",
   panel_year %between% c(1989L, 1998L), "Federal Mandates\n(1989\u20131998)",
@@ -1086,12 +1119,6 @@ bar_data[, cohort_group := factor(cohort_group,
   levels = c("Pre-1980", "1980-1988", "1989-1998")
 )]
 
-cohort_palette <- c(
-  "Pre-1980"  = "#000000",
-  "1980-1988" = "#808080",
-  "1989-1998" = "#c0c0c0"
-)
-
 fig_bar_periods <- ggplot(bar_data,
     aes(x = period, y = mean_diff, fill = cohort_group)) +
   geom_col(
@@ -1101,7 +1128,6 @@ fig_bar_periods <- ggplot(bar_data,
     linewidth = 0.3
   ) +
   geom_hline(yintercept = 0, color = "gray40", linewidth = 0.4) +
-  # Vertical line between mandate and reform periods
   geom_vline(xintercept = 2.5, linetype = "dashed",
     color = "gray40", linewidth = 0.5) +
   scale_fill_manual(
@@ -2149,6 +2175,261 @@ cat(sprintf("Unique PSM-matched CTL tanks in panel: %s\n",
 fwrite(psm_weight_lookup, file.path(OUTPUT_TABLES, "Diag_PSM_Pscores.csv"))
 cat("\n")
 
+#### S8b Kaplan-Meier Survival Figures ####
+
+cat("========================================\n")
+cat("S8b: KAPLAN-MEIER SURVIVAL FIGURES\n")
+cat("========================================\n\n")
+
+library(survival)
+library(broom)
+
+# ---- Helper: build KM data.table from a survfit object ----
+tidy_km <- function(fit) {
+  dt <- as.data.table(broom::tidy(fit))
+  dt[, group := fifelse(grepl("Texas", strata), "Texas", "Control States")]
+  dt[, group := factor(group, levels = c("Texas", "Control States"))]
+  dt
+}
+
+# ---- Helper: run and label log-rank test ----
+lr_label <- function(survdiff_obj, df = 1) {
+  pval <- 1 - pchisq(survdiff_obj$chisq, df = df)
+  sprintf("Log-rank p %s", ifelse(pval < 0.001, "< 0.001", sprintf("= %.3f", pval)))
+}
+
+# ---- Helper: standard KM ggplot ----
+km_plot <- function(km_dt, label_text, free_y = FALSE) {
+  ggplot(km_dt, aes(x = time, y = estimate, color = group, fill = group)) +
+    geom_step(linewidth = 0.9) +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
+                alpha = 0.12, color = NA) +
+    annotate("text", x = max(km_dt$time) * 0.05,
+             y = 0.08, label = label_text,
+             hjust = 0, size = 3.5, color = "gray30") +
+    scale_color_manual(
+      values = c("Texas" = COL_TX, "Control States" = COL_CTRL),
+      name   = NULL
+    ) +
+    scale_fill_manual(
+      values = c("Texas" = COL_TX, "Control States" = COL_CTRL),
+      name   = NULL
+    ) +
+    scale_x_continuous(
+      breaks = seq(0, 22, 2),
+      labels = function(x) as.integer(1999 + x)
+    ) +
+    scale_y_continuous(
+      limits = c(0, 1),
+      breaks = seq(0, 1, 0.1),
+      labels = scales::percent_format(accuracy = 1)
+    ) +
+    labs(x = "Year", y = "Survival Probability (Fraction Still Active)") +
+    theme_minimal(base_size = 11) +
+    theme(
+      legend.position  = "bottom",
+      panel.grid.minor = element_blank(),
+      panel.grid.major = element_line(color = "gray90", linewidth = 0.3)
+    )
+}
+
+# ---- Helper: vintage facet KM ggplot ----
+km_vintage_plot <- function(km_dt_v, label_text) {
+  ggplot(km_dt_v, aes(x = time, y = estimate, color = group, fill = group)) +
+    geom_step(linewidth = 0.85) +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
+                alpha = 0.12, color = NA) +
+    facet_wrap(~ vintage, ncol = 2, scales = "free_y") +
+    annotate("text", x = -Inf, y = -Inf, label = label_text,
+             hjust = -0.05, vjust = -0.5, size = 3, color = "gray40") +
+    scale_color_manual(
+      values = c("Texas" = COL_TX, "Control States" = COL_CTRL),
+      name   = NULL
+    ) +
+    scale_fill_manual(
+      values = c("Texas" = COL_TX, "Control States" = COL_CTRL),
+      name   = NULL
+    ) +
+    scale_x_continuous(
+      breaks = seq(0, 22, 4),
+      labels = function(x) as.integer(1999 + x)
+    ) +
+    scale_y_continuous(
+      breaks = seq(0, 1, 0.2),
+      labels = scales::percent_format(accuracy = 1)
+    ) +
+    labs(x = "Year", y = "Survival Probability (Fraction Still Active)") +
+    theme_minimal(base_size = 11) +
+    theme(
+      legend.position  = "bottom",
+      strip.text       = element_text(face = "bold", size = 10),
+      panel.grid.minor = element_blank(),
+      panel.grid.major = element_line(color = "gray90", linewidth = 0.3),
+      panel.spacing    = unit(14, "pt")
+    )
+}
+
+# -----------------------------------------------------------------------
+# Build base KM datasets
+# -----------------------------------------------------------------------
+
+# -- Full sample: alive at reform date --
+km_base <- exact_base[
+  t_enter <= REFORM_DAYS &
+  (is.na(tank_closed_date) | as.numeric(tank_closed_date) > REFORM_DAYS)
+]
+km_base[, `:=`(
+  t_stop_km = pmax((t_exit - REFORM_DAYS) / 365.25, 0),
+  group     = fifelse(texas_treated == 1L, "Texas", "Control States")
+)]
+km_base <- km_base[t_stop_km > 0]
+
+# Vintage bins (shared across all three samples)
+assign_vintage <- function(dt) {
+  dt[, vintage := fcase(
+    install_yr_int <  1974L,                  "Pre-1974",
+    install_yr_int %between% c(1974L, 1984L), "1974-1984",
+    install_yr_int %between% c(1985L, 1988L), "1985-1988",
+    install_yr_int %between% c(1989L, 1998L), "1989-1998 (placebo)",
+    default = NA_character_
+  )]
+  dt[, vintage := factor(vintage, levels = c(
+    "Pre-1974", "1974-1984", "1985-1988", "1989-1998 (placebo)"
+  ))]
+}
+assign_vintage(km_base)
+
+# -- CEM-matched: pull tank-level weights from tank_chars_complete --
+cem_weights_tank <- unique(
+  tank_chars_complete[cem_weight > 0, .(tank_panel_id, cem_weight)]
+)
+km_base_cem <- merge(
+  km_base[tank_panel_id %in% cem_matched_ids],
+  cem_weights_tank,
+  by = "tank_panel_id",
+  all.x = TRUE
+)
+km_base_cem[is.na(cem_weight), cem_weight := 1]
+
+# -- PSM-matched: 1:1, unit weights, filter to matched IDs --
+km_base_psm <- km_base[tank_panel_id %in% psm_matched_ids]
+
+
+# -----------------------------------------------------------------------
+# Figure 1a: 1998 Stock KM — Full Sample
+# -----------------------------------------------------------------------
+surv1   <- Surv(km_base$t_stop_km, km_base$failure)
+fit1    <- survfit(surv1 ~ group, data = km_base)
+lr1     <- lr_label(survdiff(surv1 ~ km_base$group))
+km_dt1  <- tidy_km(fit1)
+
+ggsave(
+  file.path(OUTPUT_FIGURES, "KM_1998Stock_Full.png"),
+  plot  = km_plot(km_dt1, lr1),
+  width = 9, height = 6, dpi = 300
+)
+log_step("Saved: KM_1998Stock_Full.png")
+
+
+# -----------------------------------------------------------------------
+# Figure 1b: 1998 Stock KM — CEM Matched (weighted)
+# -----------------------------------------------------------------------
+surv1c  <- Surv(km_base_cem$t_stop_km, km_base_cem$failure)
+fit1c   <- survfit(surv1c ~ group, data = km_base_cem,
+                   weights = km_base_cem$cem_weight)
+lr1c    <- lr_label(survdiff(surv1c ~ km_base_cem$group,
+                             weights = km_base_cem$cem_weight))
+km_dt1c <- tidy_km(fit1c)
+
+ggsave(
+  file.path(OUTPUT_FIGURES, "KM_1998Stock_CEM.png"),
+  plot  = km_plot(km_dt1c, lr1c),
+  width = 9, height = 6, dpi = 300
+)
+log_step("Saved: KM_1998Stock_CEM.png")
+
+
+# -----------------------------------------------------------------------
+# Figure 1c: 1998 Stock KM — PSM Matched (1:1, unweighted)
+# -----------------------------------------------------------------------
+surv1p  <- Surv(km_base_psm$t_stop_km, km_base_psm$failure)
+fit1p   <- survfit(surv1p ~ group, data = km_base_psm)
+lr1p    <- lr_label(survdiff(surv1p ~ km_base_psm$group))
+km_dt1p <- tidy_km(fit1p)
+
+ggsave(
+  file.path(OUTPUT_FIGURES, "KM_1998Stock_PSM.png"),
+  plot  = km_plot(km_dt1p, lr1p),
+  width = 9, height = 6, dpi = 300
+)
+log_step("Saved: KM_1998Stock_PSM.png")
+
+
+# -----------------------------------------------------------------------
+# Figure 2a: Vintage Cohort KM — Full Sample
+# -----------------------------------------------------------------------
+km_v    <- km_base[!is.na(vintage)]
+surv2   <- Surv(km_v$t_stop_km, km_v$failure)
+fit2    <- survfit(surv2 ~ group + vintage, data = km_v)
+lr2     <- lr_label(survdiff(surv2 ~ km_v$group + strata(km_v$vintage)))
+km_dt2  <- tidy_km(fit2)
+km_dt2[, vintage := factor(
+  sub(".*vintage=(.*)", "\\1", strata),
+  levels = levels(km_v$vintage)
+)]
+
+ggsave(
+  file.path(OUTPUT_FIGURES, "KM_Vintage_Full.png"),
+  plot  = km_vintage_plot(km_dt2, lr2),
+  width = 10, height = 8, dpi = 300
+)
+log_step("Saved: KM_Vintage_Full.png")
+
+
+# -----------------------------------------------------------------------
+# Figure 2b: Vintage Cohort KM — CEM Matched (weighted)
+# -----------------------------------------------------------------------
+km_vc   <- km_base_cem[!is.na(vintage)]
+surv2c  <- Surv(km_vc$t_stop_km, km_vc$failure)
+fit2c   <- survfit(surv2c ~ group + vintage, data = km_vc,
+                   weights = km_vc$cem_weight)
+lr2c    <- lr_label(survdiff(surv2c ~ km_vc$group + strata(km_vc$vintage),
+                             weights = km_vc$cem_weight))
+km_dt2c <- tidy_km(fit2c)
+km_dt2c[, vintage := factor(
+  sub(".*vintage=(.*)", "\\1", strata),
+  levels = levels(km_vc$vintage)
+)]
+
+ggsave(
+  file.path(OUTPUT_FIGURES, "KM_Vintage_CEM.png"),
+  plot  = km_vintage_plot(km_dt2c, lr2c),
+  width = 10, height = 8, dpi = 300
+)
+log_step("Saved: KM_Vintage_CEM.png")
+
+
+# -----------------------------------------------------------------------
+# Figure 2c: Vintage Cohort KM — PSM Matched (1:1, unweighted)
+# -----------------------------------------------------------------------
+km_vp   <- km_base_psm[!is.na(vintage)]
+surv2p  <- Surv(km_vp$t_stop_km, km_vp$failure)
+fit2p   <- survfit(surv2p ~ group + vintage, data = km_vp)
+lr2p    <- lr_label(survdiff(surv2p ~ km_vp$group + strata(km_vp$vintage)))
+km_dt2p <- tidy_km(fit2p)
+km_dt2p[, vintage := factor(
+  sub(".*vintage=(.*)", "\\1", strata),
+  levels = levels(km_vp$vintage)
+)]
+
+ggsave(
+  file.path(OUTPUT_FIGURES, "KM_Vintage_PSM.png"),
+  plot  = km_vintage_plot(km_dt2p, lr2p),
+  width = 10, height = 8, dpi = 300
+)
+log_step("Saved: KM_Vintage_PSM.png")
+
+cat("\n")
 
 #### S11 Post-Match Variable Construction ####
 
@@ -2243,7 +2524,7 @@ fwrite(
 
 fwrite(
   data.table(
-    key   = c("med_age", "ctrl_mean_post", "n_ty", "n_tanks",
+    scalar      = c("med_age", "ctrl_mean_post", "n_ty", "n_tanks",
               "n_tx_tanks", "n_ct_tanks", "n_cells",
               "reform_date", "n_alive_at_reform",
               "n_cem_matched", "n_psm_matched"),
