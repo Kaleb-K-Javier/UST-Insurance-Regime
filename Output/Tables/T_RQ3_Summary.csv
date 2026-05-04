@@ -1,0 +1,13 @@
+outcome,sample,beta,se,p,stars,n,ctrl_mean,beta_pct_ctrl
+leak_year,birth_cem,-0.012071,0.003396,0.0024,***,2614051,0.025952,-46.51
+lust_standalone,birth_cem,-0.007151,0.002513,0.0112,**,2614051,0.01686,-42.41
+lust_closure_induced,birth_cem,-0.005043,0.00178,0.0115,**,2614051,0.009621,-52.42
+tank_closure_known_leak,birth_cem,-0.00122,0.001509,0.43,"",2614051,0.005679,-21.48
+tank_closure_clean,birth_cem,0.016463,0.003808,0.0005,***,2614051,0.070432,23.37
+lust_within_90d_of_closure,birth_cem,-0.005422,0.001949,0.0128,**,2614051,0.010643,-50.94
+leak_year,reform_cem,-0.01131,0.003289,0.0031,***,2605834,0.025952,-43.58
+lust_standalone,reform_cem,-0.006651,0.002507,0.0167,**,2605834,0.01686,-39.45
+lust_closure_induced,reform_cem,-0.004758,0.001736,0.0139,**,2605834,0.009621,-49.45
+tank_closure_known_leak,reform_cem,-0.000905,0.001447,0.54,"",2605834,0.005679,-15.93
+tank_closure_clean,reform_cem,0.016892,0.003623,0.0002,***,2605834,0.070432,23.98
+lust_within_90d_of_closure,reform_cem,-0.005134,0.001921,0.0161,**,2605834,0.010643,-48.24

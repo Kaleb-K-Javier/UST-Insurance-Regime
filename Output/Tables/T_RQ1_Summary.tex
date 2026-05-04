@@ -1,0 +1,32 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcccccccccccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables:            & any\_closure  & replacement\_closure\_year   & permanent\_closure\_year   & facility\_exit  & exit\_no\_leak   & exit\_with\_leak   & retrofit\_no\_exit     & any\_closure  & replacement\_closure\_year   & permanent\_closure\_year   & facility\_exit  & exit\_no\_leak   & exit\_with\_leak   & retrofit\_no\_exit\\    
+    & \multicolumn{7}{c}{Birth-CEM Primary} & \multicolumn{7}{c}{Reform-CEM Robustness} \\ \cmidrule(lr){2-8} \cmidrule(lr){9-15}
+   Model:                          & (1)           & (2)                          & (3)                        & (4)             & (5)              & (6)                & (7)                    & (8)           & (9)                          & (10)                       & (11)            & (12)             & (13)               & (14)\\  
+   \midrule
+   \emph{Variables}\\
+   did\_term                       & 0.0119$^{**}$ & 0.0009                       & 0.0119$^{**}$              & 0.0100$^{*}$    & 0.0230$^{***}$   & -0.0086$^{***}$    & $-5.44\times 10^{-5}$  & 0.0130$^{**}$ & 0.0011                       & 0.0117$^{**}$              & 0.0127$^{**}$   & 0.0213$^{***}$   & -0.0086$^{***}$    & 0.0012\\   
+                                   & (0.0050)      & (0.0015)                     & (0.0047)                   & (0.0054)        & (0.0041)         & (0.0026)           & (0.0009)               & (0.0047)      & (0.0008)                     & (0.0044)                   & (0.0046)        & (0.0039)         & (0.0026)           & (0.0009)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   panel\_id                       & Yes           & Yes                          & Yes                        & Yes             & Yes              & Yes                & Yes                    & Yes           & Yes                          & Yes                        & Yes             & Yes              & Yes                & Yes\\  
+   make\_model\_fac-panel\_year    & Yes           &                              & Yes                        &                 & Yes              & Yes                & Yes                    & Yes           & Yes                          & Yes                        & Yes             & Yes              & Yes                & Yes\\  
+   panel\_year                     &               & Yes                          &                            & Yes             &                  &                    &                        &               &                              &                            &                 &                  &                    & \\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                    & 2,614,051     & 3,559,551                    & 2,614,051                  & 3,559,551       & 2,614,051        & 2,614,051          & 2,614,051              & 2,605,834     & 2,605,834                    & 2,605,834                  & 2,605,834       & 2,605,834        & 2,605,834          & 2,605,834\\  
+   R$^2$                           & 0.12740       & 0.05710                      & 0.08957                    & 0.19900         & 0.08407          & 0.06817            & 0.12751                & 0.12558       & 0.12459                      & 0.08900                    & 0.08317         & 0.08299          & 0.06791            & 0.12545\\  
+   Within R$^2$                    & 0.04822       & 0.00296                      & 0.01524                    & 0.00145         & 0.00170          & 0.00086            & 0.05327                & 0.04912       & 0.05280                      & 0.01582                    & 0.00042         & 0.00149          & 0.00086            & 0.05360\\  
+   \midrule \midrule
+   \multicolumn{15}{l}{\emph{Clustered (state) standard-errors in parentheses}}\\
+   \multicolumn{15}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+ 
+\par \raggedright 
+LPM coefficients, spec (3): facility FE + make-model-fac x year FE + CEM weights. Cluster-robust SEs by state. did\_term = TX x Post-1999.
+\par\endgroup
+
+

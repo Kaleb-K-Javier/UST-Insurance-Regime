@@ -1,0 +1,26 @@
+\begin{table}[htbp]
+\centering
+\caption{LUST Table A: Does the Reform Change the Rate of Leak Discoveries? Effect of the Texas Insurance Reform on Total LUST Incidence.}
+\label{tab:lust_a_total}
+\begin{tabular}{lccc}
+\toprule
+ & (1) Year FE & (2) Cell$\times$Yr & (3) 2D-Cell$\times$Yr \\
+\midrule
+TX $\times$ Post & -0.0107*** & -0.0113*** & -0.0108*** \\
+                  & (0.0030) & (0.0033) & (0.0031) \\
+$N$               & 2,605,863 & 2,605,834 & 2,605,863 \\
+Control mean      & \multicolumn{3}{c}{0.0193} \\
+\midrule
+Facility FE            & Yes & Yes & Yes \\
+Year FE                & Yes & Yes & Yes \\
+Cell$\times$Year FE   & No  & 3D  & 2D  \\
+CEM weights            & Yes & Yes & Yes \\
+Mandate controls       & Yes & Yes & Yes \\
+Sample & \multicolumn{3}{c}{Reform-CEM matched} \\
+\bottomrule
+\end{tabular}
+\begin{minipage}{\linewidth}
+\small
+\textit{Notes:} LPM coefficients. Dependent variable: Any Leak Discovery This Year (0/1). Total leak discovery includes leaks found through any channel (routine monitoring, complaints, and closure inspections). See LUST Table B for decomposition by discovery channel. Cluster-robust SEs by state (17 clusters). $^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.
+\end{minipage}
+\end{table}

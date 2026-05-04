@@ -1,0 +1,13 @@
+outcome,sample,beta,se,p,stars,n,ctrl_mean,beta_pct_ctrl
+net_tank_change,birth_cem,-0.022261,0.011694,0.074,*,3542897,-0.150091,14.83
+capacity_change_year,birth_cem,-249.033188,72.755252,0.0032,***,2598441,-8100.897185,3.07
+retrofit_year,birth_cem,-0.000177,0.000877,0.8422,"",2614051,0.01,-1.77
+n_installs,birth_cem,0.002405,0.004196,0.5741,"",2614051,0.065022,3.7
+single_to_double_year,birth_cem,0.001935,0.000546,0.0025,***,3559551,0.002033,95.16
+double_walled_installed_year,birth_cem,-0.002774,0.001141,0.0264,**,2614051,0.008913,-31.12
+net_tank_change,reform_cem,-0.025955,0.011897,0.0435,**,2590268,-0.150091,17.29
+capacity_change_year,reform_cem,-288.310127,67.980873,0.0006,***,2590268,-8100.897185,3.56
+retrofit_year,reform_cem,0.001138,0.000847,0.1967,"",2605834,0.01,11.38
+n_installs,reform_cem,0.002676,0.003986,0.5111,"",2605834,0.065022,4.12
+single_to_double_year,reform_cem,0.001161,0.000634,0.0846,*,2605834,0.002033,57.11
+double_walled_installed_year,reform_cem,-0.000911,0.000965,0.3584,"",2605834,0.008913,-10.22

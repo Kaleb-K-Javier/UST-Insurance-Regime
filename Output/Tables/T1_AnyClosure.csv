@@ -1,0 +1,7 @@
+outcome,col,sample,fe,beta,se,p,stars,n,ctrl_mean
+any_closure,col1,full_incumbent,naive,0.016265,0.00484,0.0037,***,3559551,0.032588
+any_closure,col2,full_incumbent,naive+mand,0.016254,0.004781,0.0034,***,3559551,0.032588
+any_closure,col3,full_incumbent,primary_nomatch,0.014737,0.004924,0.0082,***,2614051,0.032588
+any_closure,col4,reform_cem,naive_cem,0.015921,0.003535,0.0003,***,2605863,0.032588
+any_closure,col5,reform_cem,primary,0.012963,0.00466,0.0128,**,2605834,0.032588
+any_closure,col6,reform_cem,fe3dim,0.015849,0.004182,0.0015,***,2605863,0.032588

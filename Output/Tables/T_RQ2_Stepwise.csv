@@ -1,0 +1,11 @@
+outcome,spec,beta,se,p,stars,n
+net_tank_change,col1,-0.030029,0.012223,0.0251,**,3542897
+net_tank_change,col2,-0.031068,0.011325,0.0139,**,3542897
+net_tank_change,col3,-0.022261,0.011694,0.074,*,3542897
+net_tank_change,col4,-0.018917,0.012339,0.1436,"",2598441
+net_tank_change,col5,-0.025955,0.011897,0.0435,**,2590268
+single_to_double_year,col1,0.002,0.000487,0.0007,***,3559551
+single_to_double_year,col2,0.002022,0.000509,0.001,***,3559551
+single_to_double_year,col3,0.001935,0.000546,0.0025,***,3559551
+single_to_double_year,col4,0.000647,0.000728,0.3865,"",2614051
+single_to_double_year,col5,0.001161,0.000634,0.0846,*,2605834

@@ -1,0 +1,11 @@
+outcome,spec,beta,se,p,stars,n
+lust_standalone,col1,-0.006351,0.002512,0.0216,**,3559551
+lust_standalone,col2,-0.006366,0.002445,0.0185,**,3559551
+lust_standalone,col3,-0.007493,0.002382,0.0059,***,3559551
+lust_standalone,col4,-0.007151,0.002513,0.0112,**,2614051
+lust_standalone,col5,-0.006651,0.002507,0.0167,**,2605834
+lust_closure_induced,col1,-0.004779,0.001691,0.0116,**,3559551
+lust_closure_induced,col2,-0.004749,0.001629,0.0096,***,3559551
+lust_closure_induced,col3,-0.005133,0.001627,0.0058,***,3559551
+lust_closure_induced,col4,-0.005043,0.00178,0.0115,**,2614051
+lust_closure_induced,col5,-0.004758,0.001736,0.0139,**,2605834

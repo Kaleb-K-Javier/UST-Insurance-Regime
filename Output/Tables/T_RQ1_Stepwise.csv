@@ -1,0 +1,11 @@
+outcome,spec,beta,se,p,stars,n
+replacement_closure_year,col1,0.002844,0.001563,0.0865,*,3559551
+replacement_closure_year,col2,0.003053,0.001874,0.1216,"",3559551
+replacement_closure_year,col3,0.000912,0.001538,0.561,"",3559551
+replacement_closure_year,col4,-0.000177,0.000877,0.8422,"",2614051
+replacement_closure_year,col5,0.001138,0.000847,0.1967,"",2605834
+facility_exit,col1,0.011881,0.00551,0.0457,**,3559551
+facility_exit,col2,0.011353,0.00523,0.0444,**,3559551
+facility_exit,col3,0.010042,0.005421,0.0814,*,3559551
+facility_exit,col4,0.014407,0.004871,0.0088,***,2614051
+facility_exit,col5,0.01268,0.004598,0.0134,**,2605834

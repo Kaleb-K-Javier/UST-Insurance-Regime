@@ -1,0 +1,31 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcccccccccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables:            & leak\_year      & lust\_standalone  & lust\_closure\_induced   & tank\_closure\_known\_leak    & tank\_closure\_clean   & lust\_within\_90d\_of\_closure     & leak\_year      & lust\_standalone  & lust\_closure\_induced   & tank\_closure\_known\_leak    & tank\_closure\_clean   & lust\_within\_90d\_of\_closure\\      
+    & \multicolumn{6}{c}{Birth-CEM Primary} & \multicolumn{6}{c}{Reform-CEM Robustness} \\ \cmidrule(lr){2-7} \cmidrule(lr){8-13}
+   Model:                          & (1)             & (2)               & (3)                      & (4)                           & (5)                    & (6)                                & (7)             & (8)               & (9)                      & (10)                          & (11)                   & (12)\\  
+   \midrule
+   \emph{Variables}\\
+   did\_term                       & -0.0121$^{***}$ & -0.0072$^{**}$    & -0.0050$^{**}$           & -0.0012                       & 0.0165$^{***}$         & -0.0054$^{**}$                     & -0.0113$^{***}$ & -0.0067$^{**}$    & -0.0048$^{**}$           & -0.0009                       & 0.0169$^{***}$         & -0.0051$^{**}$\\   
+                                   & (0.0034)        & (0.0025)          & (0.0018)                 & (0.0015)                      & (0.0038)               & (0.0019)                           & (0.0033)        & (0.0025)          & (0.0017)                 & (0.0014)                      & (0.0036)               & (0.0019)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   panel\_id                       & Yes             & Yes               & Yes                      & Yes                           & Yes                    & Yes                                & Yes             & Yes               & Yes                      & Yes                           & Yes                    & Yes\\  
+   make\_model\_fac-panel\_year    & Yes             & Yes               & Yes                      & Yes                           & Yes                    & Yes                                & Yes             & Yes               & Yes                      & Yes                           & Yes                    & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                    & 2,614,051       & 2,614,051         & 2,614,051                & 2,614,051                     & 2,614,051              & 2,614,051                          & 2,605,834       & 2,605,834         & 2,605,834                & 2,605,834                     & 2,605,834              & 2,605,834\\  
+   R$^2$                           & 0.06978         & 0.06370           & 0.06413                  & 0.06829                       & 0.12129                & 0.06529                            & 0.06872         & 0.06282           & 0.06358                  & 0.06938                       & 0.11876                & 0.06471\\  
+   Within R$^2$                    & 0.00253         & 0.00049           & 0.00426                  & 0.00317                       & 0.04225                & 0.00474                            & 0.00246         & 0.00049           & 0.00407                  & 0.00374                       & 0.04246                & 0.00447\\  
+   \midrule \midrule
+   \multicolumn{13}{l}{\emph{Clustered (state) standard-errors in parentheses}}\\
+   \multicolumn{13}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+ 
+\par \raggedright 
+LPM coefficients, spec (4): facility FE + make-model-fac x year FE + mandate controls + CEM weights. Cluster-robust SEs by state. did\_term = TX x Post-1999. Standalone: LUST with no closure in 0-60d window (genuine channel). Induced: LUST within 0-60d of a closure (mechanical channel). Wide: 0-90d window robustness for induced.
+\par\endgroup
+
+

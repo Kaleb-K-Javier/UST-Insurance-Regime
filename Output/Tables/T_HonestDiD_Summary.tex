@@ -1,0 +1,18 @@
+\begin{table}[htbp]
+\centering
+\caption{HonestDiD Sensitivity (Reform-CEM ES, Primary Sample)}
+\label{tab:honestdid_fac}
+\begin{tabular}{l c c c cc}
+\toprule
+Outcome & Avg post ATT & 95\% CI & Max pre-trend & Breakdown $\bar{M}$ ($\Delta^{RM}$) & Breakdown $M$ ($\Delta^{SD}$) \\
+\midrule
+Any Tank Closure & +0.02822 & [+0.01762, +0.03882] & 0.0066 & 0.30 & 0.00030 \\
+Facility Exit & +0.00901 & [+0.00105, +0.01696] & 0.0005 & 0.10 & 0.00010 \\
+Background Leak Discovery & -0.00052 & [-0.00471, +0.00366] & 0.0160 & 0.00 & 0.00020 \\
+\bottomrule
+\end{tabular}
+\begin{minipage}{\linewidth}
+\small
+\textit{Notes:} Rambachan and Roth (2023) sensitivity analysis. Estimand is the equal-weighted average of post-reform ATT coefficients ($\tau \geq 0$). ES estimated on reform-CEM sample. Breakdown $\bar{M}$: smallest restriction under which robust CI includes zero ($\Delta^{RM}$ class). Breakdown $M$: smallest slope-smoothness restriction under which CI includes zero ($\Delta^{SD}$ class). Values shown as $\geq M_{\max}$ indicate CI excludes zero at all tested levels.
+\end{minipage}
+\end{table}

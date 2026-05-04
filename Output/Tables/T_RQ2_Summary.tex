@@ -1,0 +1,32 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcccccccccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables:            & net\_tank\_change   & capacity\_change\_year   & retrofit\_year  & n\_installs  & single\_to\_double\_year    & double\_walled\_installed\_year    & net\_tank\_change   & capacity\_change\_year   & retrofit\_year  & n\_installs  & single\_to\_double\_year    & double\_walled\_installed\_year\\     
+    & \multicolumn{6}{c}{Birth-CEM Primary} & \multicolumn{6}{c}{Reform-CEM Robustness} \\ \cmidrule(lr){2-7} \cmidrule(lr){8-13}
+   Model:                          & (1)                 & (2)                      & (3)             & (4)          & (5)                         & (6)                                & (7)                 & (8)                      & (9)             & (10)         & (11)                        & (12)\\  
+   \midrule
+   \emph{Variables}\\
+   did\_term                       & -0.0223$^{*}$       & -249.0$^{***}$           & -0.0002         & 0.0024       & 0.0019$^{***}$              & -0.0028$^{**}$                     & -0.0260$^{**}$      & -288.3$^{***}$           & 0.0011          & 0.0027       & 0.0012$^{*}$                & -0.0009\\   
+                                   & (0.0117)            & (72.76)                  & (0.0009)        & (0.0042)     & (0.0005)                    & (0.0011)                           & (0.0119)            & (67.98)                  & (0.0008)        & (0.0040)     & (0.0006)                    & (0.0010)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   panel\_id                       & Yes                 & Yes                      & Yes             & Yes          & Yes                         & Yes                                & Yes                 & Yes                      & Yes             & Yes          & Yes                         & Yes\\  
+   panel\_year                     & Yes                 &                          &                 &              & Yes                         &                                    &                     &                          &                 &              &                             & \\  
+   make\_model\_fac-panel\_year    &                     & Yes                      & Yes             & Yes          &                             & Yes                                & Yes                 & Yes                      & Yes             & Yes          & Yes                         & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                    & 3,542,897           & 2,598,441                & 2,614,051       & 2,614,051    & 3,559,551                   & 2,614,051                          & 2,590,268           & 2,590,268                & 2,605,834       & 2,605,834    & 2,605,834                   & 2,605,834\\  
+   R$^2$                           & 0.16117             & 0.05265                  & 0.12657         & 0.19884      & 0.04252                     & 0.17568                            & 0.08028             & 0.05292                  & 0.12459         & 0.20350      & 0.07091                     & 0.18215\\  
+   Within R$^2$                    & 0.00181             & 0.00025                  & 0.05245         & 0.01274      & 0.00057                     & 0.00800                            & 0.01067             & 0.00032                  & 0.05280         & 0.01099      & 0.01381                     & 0.00491\\  
+   \midrule \midrule
+   \multicolumn{13}{l}{\emph{Clustered (state) standard-errors in parentheses}}\\
+   \multicolumn{13}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+ 
+\par \raggedright 
+OLS coefficients, spec (3): facility FE + make-model-fac x year FE + CEM weights. Cluster-robust SEs by state. did\_term = TX x Post-1999. net\_tank\_change and capacity\_change\_year are continuous outcomes.
+\par\endgroup
+
+

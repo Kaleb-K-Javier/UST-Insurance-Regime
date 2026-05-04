@@ -1,0 +1,39 @@
+\begin{table}[htbp]
+\centering
+\caption{Table 2: What Are These Closures? Decomposition of Tank Closure Events into Exit, Upgrade, and Stock Reduction.}
+\label{tab:t2_closure_composition}
+\begin{tabular}{lccc}
+\toprule
+ & (1) Year FE & (2) Cell$\times$Yr & (3) 2D-Cell$\times$Yr \\
+\midrule
+\multicolumn{4}{l}{\textit{Panel A: Facility Closes Entirely -- \textit{facility\_exit}}} \\[0.3em]
+TX $\times$ Post & 0.0128*** & 0.0127** & 0.0130*** \\
+                  & (0.0042) & (0.0046) & (0.0044) \\
+$N$               & 2,605,863 & 2,605,834 & 2,605,863 \\
+Control mean      & \multicolumn{3}{c}{0.0003} \\
+\midrule
+\multicolumn{4}{l}{\textit{Panel B: Facility Upgrades a Tank -- \textit{replacement\_closure\_year}}} \\[0.3em]
+TX $\times$ Post & 0.0028 & 0.0011 & 0.0025 \\
+                  & (0.0018) & (0.0008) & (0.0018) \\
+$N$               & 2,605,863 & 2,605,834 & 2,605,863 \\
+Control mean      & \multicolumn{3}{c}{0.0142} \\
+\midrule
+\multicolumn{4}{l}{\textit{Panel C: Facility Shrinks Tank Stock -- \textit{permanent\_closure\_year}}} \\[0.3em]
+TX $\times$ Post & 0.0131*** & 0.0117** & 0.0132*** \\
+                  & (0.0036) & (0.0044) & (0.0039) \\
+$N$               & 2,605,863 & 2,605,834 & 2,605,863 \\
+Control mean      & \multicolumn{3}{c}{0.0188} \\
+\midrule
+Facility FE            & Yes & Yes & Yes \\
+Year FE                & Yes & Yes & Yes \\
+Cell$\times$Year FE   & No  & 3D  & 2D  \\
+CEM weights            & Yes & Yes & Yes \\
+Mandate controls       & Yes & Yes & Yes \\
+Sample & \multicolumn{3}{c}{Reform-CEM matched} \\
+\bottomrule
+\end{tabular}
+\begin{minipage}{\linewidth}
+\small
+\textit{Notes:} LPM coefficients. All columns use reform-survivor CEM matched facilities with CEM weights. \textit{Panel A} (Facility Closes Entirely (0/1)): the facility disappears from the registry -- all tanks are gone and no further observations exist. \textit{Panel B} (Facility Upgrades a Tank: SW Removed, DW Installed (0/1)): at least one tank closure is paired with a new tank installation, indicating a technology upgrade. \textit{Panel C} (Facility Shrinks Tank Stock: Tank Removed, No Replacement (0/1)): at least one tank is closed with no corresponding new installation; the facility continues operating with a smaller portfolio. A facility-year can simultaneously appear in Panels B and C if it both upgraded one tank and permanently removed another. 3D Cell$\times$Year FE: make\_model\_fac $\times$ year. 2D Cell$\times$Year FE: fac\_wall$\times$fac\_fuel$\times$year. Cluster-robust SEs by state (17 clusters). $^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.
+\end{minipage}
+\end{table}

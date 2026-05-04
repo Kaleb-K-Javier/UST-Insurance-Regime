@@ -1,0 +1,15 @@
+outcome,sample,beta,se,p,stars,n,ctrl_mean,beta_pct_ctrl
+any_closure,birth_cem,0.011933,0.004956,0.0277,**,2614051,0.08476,14.08
+replacement_closure_year,birth_cem,0.000912,0.001538,0.561,"",3559551,0.01,9.12
+permanent_closure_year,birth_cem,0.011901,0.004707,0.0217,**,2614051,0.075197,15.83
+facility_exit,birth_cem,0.010042,0.005421,0.0814,*,3559551,0.059184,16.97
+exit_no_leak,birth_cem,0.022975,0.004126,0,***,2614051,0.049088,46.8
+exit_with_leak,birth_cem,-0.008568,0.00258,0.004,***,2614051,0.010096,-84.86
+retrofit_no_exit,birth_cem,-0.000054,0.000885,0.9517,"",2614051,0.009829,-0.55
+any_closure,reform_cem,0.012963,0.00466,0.0128,**,2605834,0.08476,15.29
+replacement_closure_year,reform_cem,0.001138,0.000847,0.1967,"",2605834,0.01,11.38
+permanent_closure_year,reform_cem,0.011694,0.004448,0.0176,**,2605834,0.075197,15.55
+facility_exit,reform_cem,0.01268,0.004598,0.0134,**,2605834,0.059184,21.43
+exit_no_leak,reform_cem,0.021313,0.003937,0,***,2605834,0.049088,43.42
+exit_with_leak,reform_cem,-0.008633,0.00262,0.0043,***,2605834,0.010096,-85.51
+retrofit_no_exit,reform_cem,0.001247,0.000861,0.1654,"",2605834,0.009829,12.69

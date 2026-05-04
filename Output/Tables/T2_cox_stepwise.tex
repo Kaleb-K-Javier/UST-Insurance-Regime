@@ -1,23 +1,34 @@
 \begin{table}
-    \centering\begingroup\fontsize{10}{12}\selectfont
-    \begin{tabular}[t]{lcccc}
-    \toprule
-     & (1) & (2) & (3) & (4) \\
-    \midrule
-    DiD & 1.251$^{*}$ & 1.019 & 1.257 & 1.240 \\
-     & (0.041) & (0.049) & (0.065) & (0.052) \\
-    DiD $\times$ Old ($\geq$5 yr) &  & 1.436$^{***}$ &  &  \\
-     &  & (0.084) &  &  \\
-    \midrule
-    Observations & 101,898 & 101,898 & 49,246 & 52,652 \\
-    Strata (make-model, no age) & \checkmark & \checkmark & \checkmark & \checkmark \\
-    Age subsample & All & All & $<$5 yr & $\geq$5 yr \\
-    \bottomrule
-    \end{tabular}
-    
-    \vspace{0.2cm}
-    \par\raggedright\footnotesize
-    $^{*}$ $p < 0.1$, $^{**}$ $p < 0.05$, $^{***}$ $p < 0.01$.\\
-    Cluster-robust SEs by state in parentheses. Hazard ratios reported (exp[$\hat{\beta}$]). Spells split at January 1, 1999 so DiD is a proper time-varying covariate. Strata defined on make-model excluding age (\texttt{make\_model\_noage}) so that age variation is not absorbed into the baseline hazard. Old $=$ above median age at treatment ($\geq$5 yr). Level effect of age not identified (tank-invariant, collinear with strata); HTE identified via interaction (col.\ 2) and subsample split (cols.\ 3--4).
-    \endgroup{}
-    \end{table}
+\centering
+\begin{talltblr}[         %% tabularray outer open
+entry=none,label=none,
+note{}={* p \num{< 0.1}, ** p \num{< 0.05}, *** p \num{< 0.01}},
+note{ }={Cluster-robust SEs by state (N=18); hazard ratios reported. Spells split at January 1, 1999. Panel A uses the full incumbent population with no sample restriction. Panels B and C apply birth-cohort matching. Columns A2 / B2 / C2 use an identical specification --- differences in the DiD coefficient across those three columns reflect common support enforcement by the matching procedure, not the strata structure. Strata on make-model\_noage incorporates wall type, fuel type, and capacity. Wild cluster score bootstrap $p$-values reported for DiD coefficient ($B$ = 9999, Rademacher, state clusters).},
+]                     %% tabularray outer close
+{                     %% tabularray inner open
+colspec={Q[]Q[]Q[]Q[]Q[]Q[]Q[]},
+hline{2}={1-7}{solid, black, 0.05em},
+hline{10}={1-7}{solid, black, 0.05em},
+hline{1}={1-7}{solid, black, 0.08em},
+hline{17}={1-7}{solid, black, 0.08em},
+column{2-7}={}{halign=c},
+column{1}={}{halign=l},
+}                     %% tabularray inner close
+& A1 & A2 & B1 & B2 & C1 & C2 \\
+DiD & \num{1.462}*** & \num{1.597}*** & \num{1.045} & \num{1.191}* & \num{1.183} & \num{1.403}*** \\
+& (\num{0.010}) & (\num{0.011}) & (\num{0.014}) & (\num{0.016}) & (\num{0.012}) & (\num{0.015}) \\
+Mandate: release detection & \num{0.337}*** & \num{0.354}*** & \num{2.510}*** & \num{1.524}*** & \num{2.964}*** & \num{2.187}*** \\
+& (\num{0.002}) & (\num{0.002}) & (\num{0.045}) & (\num{0.029}) & (\num{0.035}) & (\num{0.026}) \\
+Mandate: spill/overfill & \num{0.219}*** & \num{0.236}*** & \num{0.146}*** & \num{0.145}*** & \num{0.145}*** & \num{0.160}*** \\
+& (\num{0.005}) & (\num{0.005}) & (\num{0.004}) & (\num{0.004}) & (\num{0.003}) & (\num{0.004}) \\
+Mandate: integrity/cathodic & \num{26583.426}*** & \num{24862.940}*** & \num{11430.585}*** & \num{16154.536}*** & \num{9197.735}*** & \num{7854.351}*** \\
+& (\num{3743.617}) & (\num{3662.575}) & (\num{3058.862}) & (\num{6200.576}) & (\num{1431.562}) & (\num{1376.661}) \\
+Observations & \num{1,010,987} & \num{1,010,987} & \num{173,150} & \num{173,150} & \num{431,456} & \num{431,456} \\
+\midrule Sample & Full panel & Full panel & PSM (birth) & PSM (birth) & CEM (birth) & CEM (birth) \\
+Weights & None & None & PSM & PSM & CEM & CEM \\
+Mandate controls & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+Strata (make-model, no age) &  & \checkmark &  & \checkmark &  & \checkmark \\
+Bootstrap $p$ (DiD) & 0.000 & 0.000 & 1.000 & 0.000 & 0.000 & 0.000 \\
+CRVE vs Boot &  &  &  & *disagree* & *disagree* &  \\
+\end{talltblr}
+\end{table}

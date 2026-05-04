@@ -1,0 +1,39 @@
+\begin{table}[htbp]
+\centering
+\caption{Table 3: What Do Replacements Do to the Portfolio? Effect of the Texas Insurance Reform on Facility Portfolio Composition.}
+\label{tab:t3_portfolio}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccc}
+\toprule
+Outcome & (1) Year FE & (2) Cell$\times$Yr & (3) 2D-Cell$\times$Yr & Ctrl Mean \\
+\midrule
+SW Tank Removed, DW Tank Installed (0/1) & 0.0018*** & 0.0012* & 0.0016** & 0.0030 \\
+ & (0.0005) & (0.0006) & (0.0007) &  \\[0.3em]
+Any DW Tank Installed This Year (0/1) & 0.0006 & -0.0009 & -0.0004 & 0.0138 \\
+ & (0.0026) & (0.0010) & (0.0012) &  \\[0.3em]
+Net Change in Tank Count (continuous) & -0.0314*** & -0.0260** & -0.0304*** & -0.0263 \\
+ & (0.0094) & (0.0119) & (0.0101) &  \\[0.3em]
+Change in Total Capacity, gallons (continuous) & -316.0850*** & -288.3101*** & -308.6747*** & -98.2379 \\
+ & (60.7569) & (67.9809) & (61.9043) &  \\[0.3em]
+Single-Wall Tanks at End of Year (continuous) & -0.0502 & -0.0675 & -0.0550 & 2.6410 \\
+ & (0.0548) & (0.0478) & (0.0494) &  \\[0.3em]
+Double-Wall Tanks at End of Year (continuous) & -0.0364 & -0.0203 & -0.0301** & 0.1955 \\
+ & (0.0250) & (0.0137) & (0.0138) &  \\[0.3em]
+Share of Portfolio That Is Single-Wall (0--1) & -0.0047 & -0.0110 & -0.0078 & 0.9082 \\
+ & (0.0108) & (0.0076) & (0.0076) &  \\[0.3em]
+\midrule
+$N$ & \multicolumn{4}{c}{2,605,834} \\
+Facility FE            & Yes & Yes & Yes & \\
+Year FE                & Yes & Yes & Yes & \\
+Cell$\times$Year FE   & No  & 3D  & 2D  & \\
+CEM weights            & Yes & Yes & Yes & \\
+Mandate controls       & Yes & Yes & Yes & \\
+Sample & \multicolumn{4}{c}{Reform-CEM matched, all facility-years} \\
+\bottomrule
+\end{tabular}
+}
+\begin{minipage}{\linewidth}
+\small
+\textit{Notes:} OLS coefficients. Unconditional estimates on all reform-CEM facility-years. Binary outcomes (rows 1--2) estimated by LPM; continuous outcomes (rows 3--7) by OLS. The reform shifts portfolio composition through the replacement channel documented in Table 2 Panel B, but these regressions do not condition on replacement occurring and are causally interpretable. 3D Cell$\times$Year FE: make\_model\_fac (wall$\times$fuel$\times$age) $\times$ year. 2D Cell$\times$Year FE: fac\_wall$\times$fac\_fuel$\times$year (robustness: drops age bin from cell definition). Cluster-robust SEs by state (17 clusters). $^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.
+\end{minipage}
+\end{table}

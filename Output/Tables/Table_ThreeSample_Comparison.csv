@@ -1,0 +1,4 @@
+Sample,Cox_logHR,Cox_HR,Cox_SE,Cox_p,Cox_N,OLS_coef_pp,OLS_SE_pp,OLS_p,OLS_N
+A: Post-1988 installs (no mandate phase-in),0.22075,1.247,0.11163,0.048,277063,0.5656,0.2363,0.0285,3503806
+B: Full sample + separate mandate controls,0.40017,1.4921,0.13312,0.0026,1078613,1.8914,0.5577,0.0035,12953519
+C: Pre-1989 installs only (diagnostic),0.44596,1.562,0.1509,0.0031,801550,2.2245,0.6616,0.0037,9449713

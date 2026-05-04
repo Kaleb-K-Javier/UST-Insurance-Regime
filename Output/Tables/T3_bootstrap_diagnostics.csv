@@ -1,0 +1,19 @@
+col,panel,spec,term,coef,crve_p,boot_p
+1,OLS,(1) Birth-CEM baseline,did_term,0.00555205188077839,0.148069733832905,0.126312631263126
+2,OLS,(2) Birth-CEM triple-diff,did_term,0.00847244552953874,0.135127940080065,
+2,OLS,(2) Birth-CEM triple-diff,did_x_old,,,
+2,OLS,(2) Birth-CEM triple-diff,did_x_sw,-0.00873442617014287,0.162790560665853,
+2,OLS,(2) Birth-CEM triple-diff,did_x_sw_old,0.0107420690665866,0.000000206678077525416,
+3,OLS,(3) Reform-CEM triple-diff,did_term,0.00493976418873229,0.393388515689074,
+3,OLS,(3) Reform-CEM triple-diff,did_x_old,0.0178339818293083,0.0000000000000220016948439618,
+3,OLS,(3) Reform-CEM triple-diff,did_x_sw,0.000156413724356064,0.98122562780248,
+3,OLS,(3) Reform-CEM triple-diff,did_x_sw_old,0.00234401568765017,0.00609318219967066,
+4,Cox,(4) Birth-CEM baseline,did_term,0.167675477599996,0.117431558487616,0
+5,Cox,(5) Birth-CEM triple-diff,did_term,0.171437638648456,0.405966659751816,1
+5,Cox,(5) Birth-CEM triple-diff,did_term:above_median_age,0.389562245317039,0.0000000000000348102262399263,0
+5,Cox,(5) Birth-CEM triple-diff,did_term:single_wall,-0.370853528486539,0.073103715593168,0
+5,Cox,(5) Birth-CEM triple-diff,did_term:above_median_age:single_wall,0.256455315981906,0.000000185829763077439,0
+6,Cox,(6) Reform-CEM triple-diff,did_term,0.314887498613265,0.0998635655009737,0
+6,Cox,(6) Reform-CEM triple-diff,did_term:above_median_age,0.194378967545897,0.00000000222754560811989,0
+6,Cox,(6) Reform-CEM triple-diff,did_term:single_wall,-0.235280486535518,0.275372818754379,0
+6,Cox,(6) Reform-CEM triple-diff,did_term:above_median_age:single_wall,0.391492288985848,0.00000000000000000000000000000000000000326806769321698,0

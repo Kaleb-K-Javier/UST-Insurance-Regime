@@ -1,30 +1,43 @@
-
-\begingroup
+\begin{table}
 \centering
-\begin{tabular}{lcc}
-   \toprule
-                                                                     & (1)           & (2) \\   
-                                                                     & (1)           & (2)\\  
-   \midrule 
-   did\_term                                                         & 0.0044$^{*}$  & -0.0105$^{***}$\\   
-                                                                     & (0.0024)      & (0.0022)\\   
-   did\_term $\times$ single\_wall                                   &               & 0.0119$^{***}$\\   
-                                                                     &               & ($8.85\times 10^{-5}$)\\    
-   did\_term $\times$ above\_median\_age                             &               & 0.0357$^{***}$\\   
-                                                                     &               & (0.0004)\\   
-   did\_term $\times$ single\_wall $\times$ above\_median\_age       &               & -0.0314$^{***}$\\   
-                                                                     &               & (0.0002)\\   
-    \\
-   Observations                                                      & 791,038       & 791,038\\  
-   R$^2$                                                             & 0.08914       & 0.08915\\  
-    \\
-   tank\_panel\_id fixed effects                                     & $\checkmark$  & $\checkmark$\\   
-   panel\_year fixed effects                                         & $\checkmark$  & $\checkmark$\\   
-   \bottomrule
-\end{tabular}
- 
-\par \raggedright 
-Cluster-robust SEs by state in parentheses. Old $=$ above median age at treatment ($\geq$5 yr). Single-Walled $=$ \texttt{mm\_wall == ``Single-walled''}. Level effects of Single-Walled and Old are time-invariant and absorbed by tank FE. CEM weights applied throughout.
-\par\endgroup
-
-
+\begin{talltblr}[         %% tabularray outer open
+entry=none,label=none,
+note{}={* p \num{< 0.1}, ** p \num{< 0.05}, *** p \num{< 0.01}},
+note{ }={Cluster-robust SEs by state (N=18). Cols (1)-(3): OLS linear probability model; coefficients are pp changes in annual closure probability. Cols (4)-(6): Cox proportional hazards; reported values are hazard ratios (exp(coef)). Cols (1) and (4) reproduce baseline pooled DiD specifications from T1 col (3) and T2 col (3) for direct comparability. Cols (2) and (5) expand to the three-way interaction DiD $\times$ single\_wall $\times$ above\_median\_age. Cols (3) and (6) re-run the (2)/(5) spec on the reform-survivor sample. Level effects of single\_wall and above\_median\_age are time-invariant at the tank level: in OLS they are absorbed by tank FE, in Cox they are absorbed by strata(make\_model\_noage). The triple-diff coefficient DiD $\times$ SW $\times$ Old measures the incremental reform effect on old single-walled tanks beyond the additive age and wall effects. Cols (2)-(3) and (5)-(6) restrict automatically to tanks alive at reform date (above\_median\_age non-missing). Median age at reform on birth-CEM alive-at-reform subset: 9.0 yr. Wild cluster bootstrap (OLS) and score bootstrap (Cox) },
+]                     %% tabularray outer close
+{                     %% tabularray inner open
+colspec={Q[]Q[]Q[]Q[]Q[]Q[]Q[]},
+hline{2}={1-7}{solid, black, 0.05em},
+hline{16}={1-7}{solid, black, 0.05em},
+hline{1}={1-7}{solid, black, 0.08em},
+hline{26}={1-7}{solid, black, 0.08em},
+column{2-7}={}{halign=c},
+column{1}={}{halign=l},
+}                     %% tabularray inner close
+& (1) & (2) & (3) & (4) & (5) & (6) \\
+DiD & \num{0.006} & \num{0.008} & \num{0.005} & \num{1.183} & \num{1.187} & \num{1.370}* \\
+& (\num{0.004}) & (\num{0.005}) & (\num{0.006}) & (\num{0.012}) & (\num{0.042}) & (\num{0.037}) \\
+DiD $\times$ Old ($\geq$9 yr) &  &  & \num{0.018}*** &  & \num{1.476}*** & \num{1.215}*** \\
+&  &  & (\num{0.001}) &  & (\num{0.068}) & (\num{0.066}) \\
+DiD $\times$ Single-Walled &  & \num{-0.009} & \num{0.000} &  & \num{0.690}* & \num{0.790} \\
+&  & (\num{0.006}) & (\num{0.007}) &  & (\num{0.030}) & (\num{0.024}) \\
+DiD $\times$ SW $\times$ Old ($\geq$9 yr) &  & \num{0.011}*** & \num{0.002}*** &  & \num{1.292}*** & \num{1.479}*** \\
+&  & (\num{0.001}) & (\num{0.001}) &  & (\num{0.069}) & (\num{0.083}) \\
+Mandate: release detection & \num{-0.012}*** & \num{-0.004}*** & \num{-0.003}** & \num{2.964}*** &  &  \\
+& (\num{0.003}) & (\num{0.001}) & (\num{0.001}) & (\num{0.035}) &  &  \\
+Mandate: spill/overfill & \num{0.007}* & \num{-0.006}*** & \num{-0.010}*** & \num{0.145}*** &  &  \\
+& (\num{0.003}) & (\num{0.001}) & (\num{0.003}) & (\num{0.003}) &  &  \\
+Mandate: integrity/cathodic & \num{0.022}*** & \num{-0.010}*** & \num{-0.013}*** & \num{9197.735}*** & \num{7848.564}*** & \num{28117.419}*** \\
+& (\num{0.002}) & (\num{0.002}) & (\num{0.003}) & (\num{1431.562}) & (\num{1398.290}) & (\num{4459.976}) \\
+Observations & \num{4,723,750} & \num{4,403,879} & \num{9,045,974} & \num{431,456} & \num{330,323} & \num{642,793} \\
+\midrule Estimator & OLS & OLS & OLS & Cox & Cox & Cox \\
+Sample & Birth-CEM & Birth-CEM & Reform-CEM & Birth-CEM & Birth-CEM & Reform-CEM \\
+Tank FE / Strata & Tank FE & Tank FE & Tank FE & --- & Strata (make-model) & Strata (make-model) \\
+Year FE & \checkmark &  &  & (implicit) & (implicit) & (implicit) \\
+Cell $\times$ Year FE &  & \checkmark & \checkmark &  &  &  \\
+Bootstrap $p$ (DiD) & 0.126 & NA & NA & 0.000 & 1.000 & 0.000 \\
+Bootstrap $p$ (DiD$\times$Old) & --- & NA & NA & --- & 0.000 & 0.000 \\
+Bootstrap $p$ (DiD$\times$SW) & --- & NA & NA & --- & 0.000 & 0.000 \\
+Bootstrap $p$ (DiD$\times$SW$\times$Old) & --- & NA & NA & --- & 0.000 & 0.000 \\
+\end{talltblr}
+\end{table}

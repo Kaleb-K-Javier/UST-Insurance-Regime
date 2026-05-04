@@ -1,0 +1,5 @@
+Specification,Breakdown_M,Max_PreTrend_Slope,Ratio_Breakdown_to_PreSlope,n_pre,n_post
+Above-median (avg all post-periods),Inf,0.00125379924552166,Inf,12,23
+Above-median (avg tau 0-4),0.000950615070427006,0.00125379924552166,0.758187623594788,12,23
+Above-median (avg tau 5-9),0.000475307535213503,0.00125379924552166,0.379093811797394,12,23
+Pooled (avg all post-periods),0.00184775720226801,0.000727654827530399,2.53933201891775,12,23

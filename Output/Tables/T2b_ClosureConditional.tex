@@ -1,0 +1,24 @@
+\begin{table}[htbp]
+\centering
+\caption{Table 2b: What Type of Closure? Descriptive Composition of Tank Closure Events Among Facilities That Closed at Least One Tank.}
+\label{tab:t2b_closure_conditional}
+\begin{tabular}{lccc}
+\toprule
+Closure Type & TX $\times$ Post & (SE) & Control Mean \\
+\midrule
+Facility Closes Entirely & 0.0798*** & (0.0168) & 0.0077 \\
+Facility Upgrades a Tank & 0.0607*** & (0.0154) & 0.4367 \\
+Facility Shrinks Tank Stock & -0.0686*** & (0.0148) & 0.5771 \\
+\midrule
+$N$ (closing fac-years) & \multicolumn{3}{c}{27,625} \\
+Cell$\times$Year FE & \multicolumn{3}{c}{3D (make\_model\_fac $\times$ year)} \\
+CEM weights          & \multicolumn{3}{c}{Yes} \\
+Mandate controls     & \multicolumn{3}{c}{Yes} \\
+Sample               & \multicolumn{3}{c}{Reform-CEM, any\_closure $= 1$} \\
+\bottomrule
+\end{tabular}
+\begin{minipage}{\linewidth}
+\small
+\textit{Notes:} LPM coefficients. Sample restricted to reform-CEM facility-years in which at least one tank closure occurred (any\_closure $= 1$). Each row describes the composition of closure events: conditional on closing a tank that year, was the event a full facility exit, a technology upgrade, or a tank stock reduction? \textit{These estimates are descriptive -- they condition on the endogenous decision to close a tank and should not be interpreted as causal effects of the reform on closure type.} For unconditional causal estimates see Table 2. Cluster-robust SEs by state. $^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.
+\end{minipage}
+\end{table}

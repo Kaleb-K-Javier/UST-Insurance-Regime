@@ -1,0 +1,10 @@
+outcome,panel,col,beta,se,p,stars,n,ctrl_mean,sample
+facility_exit,A_exit,col1,0.012779,0.004236,0.0078,***,2605863,0.000252,reform_cem_unconditional
+facility_exit,A_exit,col2,0.01268,0.004598,0.0134,**,2605834,0.000252,reform_cem_unconditional
+facility_exit,A_exit,col3,0.013021,0.004427,0.0091,***,2605863,0.000252,reform_cem_unconditional
+replacement_closure_year,B_upgrade,col1,0.002785,0.001754,0.1308,"",2605863,0.014237,reform_cem_unconditional
+replacement_closure_year,B_upgrade,col2,0.001138,0.000847,0.1967,"",2605834,0.014237,reform_cem_unconditional
+replacement_closure_year,B_upgrade,col3,0.002534,0.001842,0.1868,"",2605863,0.014237,reform_cem_unconditional
+permanent_closure_year,C_shrink,col1,0.013061,0.003584,0.002,***,2605863,0.018807,reform_cem_unconditional
+permanent_closure_year,C_shrink,col2,0.011694,0.004448,0.0176,**,2605834,0.018807,reform_cem_unconditional
+permanent_closure_year,C_shrink,col3,0.013236,0.003919,0.0036,***,2605863,0.018807,reform_cem_unconditional

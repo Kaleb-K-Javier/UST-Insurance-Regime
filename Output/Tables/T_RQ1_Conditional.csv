@@ -1,0 +1,7 @@
+outcome,sample,condition,beta,se,p,stars,n,ctrl_mean
+replacement_closure_year,birth_cem,conditional_on_closure,0.048339,0.014313,0.0038,***,27835,0.117906
+permanent_closure_year,birth_cem,conditional_on_closure,-0.056352,0.013796,0.0009,***,27835,0.887183
+facility_exit,birth_cem,conditional_on_closure,0.077592,0.018264,0.0006,***,27835,0.698251
+replacement_closure_year,reform_cem,conditional_on_closure,0.06066,0.015372,0.0012,***,27625,0.117906
+permanent_closure_year,reform_cem,conditional_on_closure,-0.068634,0.014807,0.0003,***,27625,0.887183
+facility_exit,reform_cem,conditional_on_closure,0.079761,0.016836,0.0002,***,27625,0.698251

@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\centering
+\caption{Vintage Heterogeneity in Reform Effect}
+\label{tbl:vintage_hte_ols}
+\begin{tabular}{lccccccc}
+\toprule
+Vintage & ATT & SE & 95\% CI & CRVE $p$ & Boot $p$ & N tanks & N TX \\
+\midrule
+1960-1964 & NA & NA & [NA, NA] & NA & NA & 66 & 0 \\
+1965-1969 & NA & NA & [NA, NA] & NA & NA & 85 & 0 \\
+1970-1974 & NA & NA & [NA, NA] & NA & NA & 132 & 0 \\
+1975-1979 & NA & NA & [NA, NA] & NA & NA & 92 & 0 \\
+1980-1984 & NA & NA & [NA, NA] & NA & NA & 88 & 0 \\
+1985-1989 & 0.0101$^{***}$ & 0.0039 & [0.0025, 0.0176] & 0.009 & -Inf & 114,298 & 28,658 \\
+1990-1994 & 0.0065$^{**}$ & 0.0026 & [0.0015, 0.0115] & 0.010 & -Inf & 54,055 & 7,920 \\
+1995-1998 (ref) & 0.0013 & 0.0020 & [-0.0026, 0.0053] & 0.504 & NA & 35,114 & 5,653 \\
+\bottomrule
+\end{tabular}
+\par\raggedright
+Notes: Saturated OLS vintage HTE on birth-CEM matched sample; pre-reform incumbents. Reference bin: 1995-1998 (most recent pre-reform cohort). Vintage ATTs constructed via delta-method addition of DiD main effect and DiD$\times$vintage\_bin interaction; SEs use clustered VCV. CRVE $p$ uses cluster-robust delta-method asymptotic test. Boot $p$: conservative bootstrap p-value (max of did\_term and interaction p-values; 9999 Rademacher draws, state clusters). Stars: *** $p<0.01$, ** $p<0.05$, * $p<0.1$ (CRVE).
+\end{table}

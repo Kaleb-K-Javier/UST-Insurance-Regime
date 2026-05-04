@@ -1,0 +1,7 @@
+outcome,sample,condition,beta,se,p,stars,n,ctrl_mean
+net_tank_change,birth_cem,conditional_on_retrofit,-0.097521,0.194414,0.6228,"",4485,-1.36846
+capacity_change_year,birth_cem,conditional_on_retrofit,3892.545621,2924.251034,0.2018,"",4485,-7328.335809
+single_to_double_year,birth_cem,conditional_on_retrofit,-0.028469,0.047214,0.555,"",4499,0.203286
+net_tank_change,reform_cem,conditional_on_retrofit,-0.277771,0.170155,0.1221,"",4445,-1.36846
+capacity_change_year,reform_cem,conditional_on_retrofit,2669.683846,2467.116262,0.2952,"",4445,-7328.335809
+single_to_double_year,reform_cem,conditional_on_retrofit,-0.030419,0.041744,0.4767,"",4459,0.203286

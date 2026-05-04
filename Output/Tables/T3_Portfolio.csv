@@ -1,0 +1,22 @@
+outcome,row_label,col,beta,se,p,stars,n,ctrl_mean
+single_to_double_year,"SW Tank Removed, DW Tank Installed (0/1)",col1,0.001793,0.00051,0.0027,***,2605863,0.00304
+single_to_double_year,"SW Tank Removed, DW Tank Installed (0/1)",col2,0.001161,0.000634,0.0846,*,2605834,0.00304
+single_to_double_year,"SW Tank Removed, DW Tank Installed (0/1)",col3,0.001571,0.00069,0.036,**,2605863,0.00304
+double_walled_installed_year,Any DW Tank Installed This Year (0/1),col1,0.000584,0.002642,0.8276,"",2605863,0.013784
+double_walled_installed_year,Any DW Tank Installed This Year (0/1),col2,-0.000911,0.000965,0.3584,"",2605834,0.013784
+double_walled_installed_year,Any DW Tank Installed This Year (0/1),col3,-0.00041,0.001239,0.7446,"",2605863,0.013784
+net_tank_change,Net Change in Tank Count (continuous),col1,-0.031395,0.009357,0.0038,***,2590296,-0.026329
+net_tank_change,Net Change in Tank Count (continuous),col2,-0.025955,0.011897,0.0435,**,2590268,-0.026329
+net_tank_change,Net Change in Tank Count (continuous),col3,-0.030368,0.010112,0.008,***,2590296,-0.026329
+capacity_change_year,"Change in Total Capacity, gallons (continuous)",col1,-316.085001,60.756893,0.0001,***,2590296,-98.2379
+capacity_change_year,"Change in Total Capacity, gallons (continuous)",col2,-288.310127,67.980873,0.0006,***,2590268,-98.2379
+capacity_change_year,"Change in Total Capacity, gallons (continuous)",col3,-308.674698,61.904348,0.0001,***,2590296,-98.2379
+n_sw_eoy,Single-Wall Tanks at End of Year (continuous),col1,-0.050163,0.054753,0.3724,"",2605863,2.641027
+n_sw_eoy,Single-Wall Tanks at End of Year (continuous),col2,-0.067541,0.047828,0.1759,"",2605834,2.641027
+n_sw_eoy,Single-Wall Tanks at End of Year (continuous),col3,-0.055007,0.049358,0.2806,"",2605863,2.641027
+n_dw_eoy,Double-Wall Tanks at End of Year (continuous),col1,-0.036363,0.024956,0.1633,"",2605863,0.195535
+n_dw_eoy,Double-Wall Tanks at End of Year (continuous),col2,-0.020285,0.013675,0.1563,"",2605834,0.195535
+n_dw_eoy,Double-Wall Tanks at End of Year (continuous),col3,-0.030129,0.01381,0.0435,**,2605863,0.195535
+pct_sw,Share of Portfolio That Is Single-Wall (0--1),col1,-0.004735,0.010807,0.6668,"",2605863,0.908173
+pct_sw,Share of Portfolio That Is Single-Wall (0--1),col2,-0.011046,0.00757,0.1627,"",2605834,0.908173
+pct_sw,Share of Portfolio That Is Single-Wall (0--1),col3,-0.007789,0.007613,0.3206,"",2605863,0.908173
