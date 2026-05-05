@@ -110,6 +110,10 @@ suppressPackageStartupMessages({
   library(here)
 })
 
+# Inputs come from the Z drive (server, read-only). Outputs stay local.
+# See Code/Helpers/data_paths.R for the rationale and z_path() / data_in() helpers.
+source(here::here("Code", "Helpers", "data_paths.R"))
+
 options(scipen = 999)
 set.seed(20260202L)
 setDTthreads(14L)
@@ -238,7 +242,7 @@ get_p1 <- function(pred_mat) {
 }
 
 # ---- Load panel data --------------------------------------------------------
-PANEL_CSV <- here("Data", "Processed", "facility_leak_behavior_annual.csv")
+PANEL_CSV <- z_path("Data", "Processed", "facility_leak_behavior_annual.csv")
 if (!file.exists(PANEL_CSV))
   stop("Panel CSV not found: ", PANEL_CSV,
        "\nRun 10_Build_Annual_Panel_Optimized.R first.")
@@ -615,7 +619,10 @@ if (USE_ELNET) {
   # Step 2: full-data CV at best alpha for OOB predictions (keep = TRUE).
   # Every row gets a held-out linear predictor from the fold it was excluded
   # from. This is the elastic net analogue of GRF's OOB predictions.
-  cat("  Fitting full-data CV at best alpha for OOS predictions...\n")
+  # Sequential: parallel CV on full 3.9M-row matrix OOMs with 15 workers each
+  # copying the design matrix. Tuning above is fine in parallel because it
+  # runs on a 200k subsample.
+  cat("  Fitting full-data CV at best alpha for OOS predictions (sequential)...\n")
   set.seed(20260202L)
   best_cv_fit <- cv.glmnet(
     x            = X_elnet,
@@ -626,7 +633,7 @@ if (USE_ELNET) {
     nfolds       = ELNET_FOLDS,
     type.measure = "deviance",
     keep         = TRUE,
-    parallel     = TRUE
+    parallel     = FALSE
   )
   best_lambda <- best_cv_fit$lambda.min
   cat(sprintf("  lambda.min=%.6f\n", best_lambda))
@@ -1310,6 +1317,39 @@ ks <- ks.test(
 )
 cat(sprintf("KS test TX vs Control: D = %.4f, p = %.4f\n",
     ks$statistic, ks$p.value))
+
+
+# ── DCM + Section 5.3 input: cell-mean predicted hazard ──────────────────────
+#
+# Aggregates row-level OOB predictions to (age_bin_int, has_single_walled)
+# cells, then also exports 5-year bin aggregates for direct use by
+# 06_Actuarial_Alignment.R.
+#
+# h_hat is the annual first-release probability averaged over all pre-reform
+# facility-years in that cell. Treated as time-invariant — the insurer prices
+# on permanent physical characteristics, not regime.
+
+dcm_hazard <- cv_data[!is.na(pred), .(
+  h_hat        = mean(pred,             na.rm = TRUE),
+  h_hat_per1k  = mean(pred,             na.rm = TRUE) * 1000,
+  h_obs_per1k  = mean(event_first_leak, na.rm = TRUE) * 1000,
+  n_fac_years  = .N,
+  n_events     = sum(event_first_leak)
+), by = .(age_bin_int, has_single_walled, age_bin)]
+
+dcm_hazard[, w_state    := as.integer(!has_single_walled) + 1L]  # SW=1, DW=2
+dcm_hazard[, wall_label := fifelse(has_single_walled == 1L,
+                                   "Single-Walled", "Double-Walled")]
+dcm_hazard[, age_bin    := factor(age_bin, levels = AGE_BIN_LABELS)]
+setorder(dcm_hazard, has_single_walled, age_bin_int)
+
+fwrite(dcm_hazard,
+       file.path(ANALYSIS_DIR, "dcm_state_hazard_rates.csv"))
+cat(sprintf(
+  "\nSaved: dcm_state_hazard_rates.csv\n  %d cells | age bins %s to %s\n",
+  nrow(dcm_hazard),
+  levels(dcm_hazard$age_bin)[1],
+  levels(dcm_hazard$age_bin)[nlevels(dcm_hazard$age_bin)]))
 
 
 #### Summary ##################################################################

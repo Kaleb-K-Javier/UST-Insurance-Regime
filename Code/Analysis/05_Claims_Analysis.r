@@ -19,6 +19,10 @@ library(fixest)
 library(marginaleffects)
 library(here)
 
+# Inputs come from the Z drive (server, read-only). Outputs stay local.
+# See Code/Helpers/data_paths.R for the rationale and z_path() / data_in() helpers.
+source(here::here("Code", "Helpers", "data_paths.R"))
+
 cat("=================================================================\n")
 cat("05_Claims_Analysis.R — Cleanup Cost Distributions & Correlates\n")
 cat("=================================================================\n\n")
@@ -48,8 +52,8 @@ save_fig <- function(plot_obj, filename, width = 10, height = 6, dpi = 300) {
 }
 
 # ── 2. Load Raw Claims (For Distribution Density) ────────────────────────────
-claims_path <- here("Data", "Processed", "all_cleaned_claims.csv")
-if (!file.exists(claims_path)) stop("all_cleaned_claims.csv not found.")
+claims_path <- z_path("Data", "Processed", "all_cleaned_claims.csv")
+if (!file.exists(claims_path)) stop("all_cleaned_claims.csv not found on Z.")
 
 claims <- fread(claims_path)
 
@@ -144,8 +148,8 @@ save_fig(fig_states, "Figure_cost_distribution_by_state", width = 8, height = 7)
 
 # ── 6. Descriptive Regressions (Merged Panel) ────────────────────────────────
 cat("\n--- Running Descriptive Correlates ---\n")
-merged_path <- here("Data", "Processed", "claims_panel_annual_merged.csv")
-if (!file.exists(merged_path)) stop("claims_panel_annual_merged.csv missing.")
+merged_path <- z_path("Data", "Processed", "claims_panel_annual_merged.csv")
+if (!file.exists(merged_path)) stop("claims_panel_annual_merged.csv missing on Z.")
 
 reg_dt <- fread(merged_path)
 
@@ -210,6 +214,85 @@ etable(m1, m2, m3, m4,
                 log_cost = "log(Cleanup Cost, 2023 USD)"),
        tex = TRUE, file = file.path(stats_dir, "Table_Claims_Regression_Main.tex"), replace = TRUE)
 cat("✓ Saved Table: Table_Claims_Regression_Main.tex\n")
+
+# ── Track which rows m4 used ──────────────────────────────────────────────────
+# feols silently drops both NAs and fixed-effect singletons. predict() returns
+# NA exactly for those dropped rows, so we use it to align reg_dt back to
+# fitted(m4) without manually replicating feols's drop logic.
+
+yhat_log_full <- predict(m4, newdata = reg_dt)
+rows_m4       <- which(!is.na(yhat_log_full))
+
+cat(sprintf("\nRows used by m4: %s\n", format(length(rows_m4), big.mark = ",")))
+
+# ── Duan (1983) smearing estimator ────────────────────────────────────────────
+# E[cost] = exp(fitted_log) * mean(exp(residuals))
+# Converts m4 log-scale fitted values to dollar-level expected costs without
+# assuming normality of the error distribution.
+
+fitted_log   <- yhat_log_full[rows_m4]
+resid_log    <- reg_dt$log_cost[rows_m4] - fitted_log
+smear_factor <- mean(exp(resid_log), na.rm = TRUE)
+
+cat(sprintf("Duan smearing factor: %.4f\n", smear_factor))
+cat(sprintf("  (>1 indicates right-skewed residuals on log scale, as expected)\n"))
+
+reg_dt[rows_m4, predicted_cost_2023 := exp(fitted_log) * smear_factor]
+
+cat(sprintf("Predicted cost summary (2023 USD):\n"))
+print(summary(reg_dt[rows_m4, predicted_cost_2023]))
+
+# ── Version 1: DCM state-cell indexing (sw_tercile) ──────────────────────────
+dcm_loss_tercile <- reg_dt[rows_m4, .(
+  L_hat    = mean(predicted_cost_2023,             na.rm = TRUE),
+  L_median = median(predicted_cost_2023,           na.rm = TRUE),
+  L_p25    = quantile(predicted_cost_2023, 0.25,   na.rm = TRUE),
+  L_p75    = quantile(predicted_cost_2023, 0.75,   na.rm = TRUE),
+  L_sd     = sd(predicted_cost_2023,               na.rm = TRUE),
+  n_claims = .N
+), by = .(age_bins, sw_tercile)]
+
+setorder(dcm_loss_tercile, age_bins, sw_tercile)
+fwrite(dcm_loss_tercile,
+       file.path(stats_dir, "dcm_state_loss_levels.csv"))
+cat(sprintf("Saved: dcm_state_loss_levels.csv (%d cells)\n",
+    nrow(dcm_loss_tercile)))
+
+# ── Version 2: Binary wall type for 06_Actuarial_Alignment.R ─────────────────
+# Recode sw_tercile to binary wall label.
+# "67-100%" single-wall share → Single-Walled
+# "0-33%"   single-wall share → Double-Walled
+# Mixed tercile (34-66%) and Unknown (NM) excluded — ambiguous wall composition.
+
+reg_dt[rows_m4, wall_binary := fcase(
+  sw_tercile == "67-100%", "Single-Walled",
+  sw_tercile == "0-33%",   "Double-Walled",
+  default = NA_character_
+)]
+
+dcm_loss_binary <- reg_dt[rows_m4 & !is.na(wall_binary), .(
+  L_hat    = mean(predicted_cost_2023,   na.rm = TRUE),
+  L_median = median(predicted_cost_2023, na.rm = TRUE),
+  L_sd     = sd(predicted_cost_2023,     na.rm = TRUE),
+  n_claims = .N
+), by = .(age_bins, wall_binary)]
+
+setorder(dcm_loss_binary, age_bins, wall_binary)
+fwrite(dcm_loss_binary,
+       file.path(stats_dir, "dcm_loss_binary_wall.csv"))
+cat(sprintf("Saved: dcm_loss_binary_wall.csv (%d cells)\n",
+    nrow(dcm_loss_binary)))
+
+cat("\n  Cell-mean expected costs (binary wall, 2023 USD):\n")
+print(dcm_loss_binary[, .(
+  age_bins,
+  wall_binary,
+  L_hat    = dollar(round(L_hat, 0)),
+  n_claims
+)])
+
+# Clean up temp columns to avoid contaminating downstream sections
+reg_dt[, `:=`(predicted_cost_2023 = NULL, wall_binary = NULL)]
 
 # ── 7. Marginal Effects Calculation & Plot
 # Interaction model feeding plot geometry maintaining binary structural factors
