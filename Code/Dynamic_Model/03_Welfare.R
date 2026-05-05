@@ -220,7 +220,7 @@ solve_mandate_equilibrium <- function(theta, cache, config, states,
   P[mandate_mask, "close"]    <- 1 - config$eps_prob
 
   for (iter in 1:5000) {
-    V <- invert_value_function_model_b(P, U, config)
+    V <- invert_value_function_model_b(P, U, cache, config)
     if (any(is.na(V))) V[is.na(V)] <- -1e5
     P_new <- compute_ccps_model_b(U, V, cache, config)
     P_new[mandate_mask, "maintain"] <- config$eps_prob
@@ -229,7 +229,7 @@ solve_mandate_equilibrium <- function(theta, cache, config, states,
     P <- P_new
   }
 
-  V_final <- invert_value_function_model_b(P, U, config)
+  V_final <- invert_value_function_model_b(P, U, cache, config)
   list(P = P, V = V_final, converged = (iter < 5000),
        n_iter = iter, n_mandated = sum(mandate_mask))
 }
@@ -249,7 +249,7 @@ compute_welfare <- function(result, states, hazards, losses,
   mu <- compute_weighted_ergodic(P_policy, F_maintain, states, pop_weights)
 
   U_real <- calculate_flow_utilities_model_b(theta_ref, cache_ref)
-  V_real <- invert_value_function_model_b(P_policy, U_real, config)
+  V_real <- invert_value_function_model_b(P_policy, U_real, cache_ref, config)
 
   avg_firm_surplus_perceived <- sum(mu * V_policy)
   avg_firm_surplus_real      <- sum(mu * V_real)
@@ -613,7 +613,7 @@ sens_results <- rbindlist(lapply(ext_grid, function(em) {
   eq_s <- solve_equilibrium_policy_model_b(theta_s, cf_base$cache, config)
   mu_s <- compute_weighted_ergodic(eq_s$P, transitions$maintain, states, pop_weights)
 
-  V_real_s <- invert_value_function_model_b(eq_s$P, U_real_base, config)
+  V_real_s <- invert_value_function_model_b(eq_s$P, U_real_base, cf_base$cache, config)
   firm_V_real <- sum(mu_s * V_real_s)
 
   leak_risk_s <- sum(mu_s * eq_s$P[, "maintain"] * primitives$hazards)

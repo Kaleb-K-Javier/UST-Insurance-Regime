@@ -90,8 +90,10 @@ rowLogSumExp <- function(X) {
 }
 
 create_state_space_est <- function() {
+  # 9 age bins x 2 wall types x 2 regimes = 36 states.
+  # Bin 9 is absorbing within Maintain (oldest age).
   states <- CJ(
-    A = 1:10,
+    A = 1:9,
     w = factor(c("single", "double"), levels = c("single", "double")),
     rho = factor(c("FF", "RB"), levels = c("FF", "RB")),
     sorted = FALSE
@@ -1271,7 +1273,7 @@ validate_estimation_inputs <- function(panel_data, states, premiums, hazards,
 #   # raw_data <- fread("path/to/your/data.csv")
   
 #   # STEP 1: Define state space (must match your data structure)
-#   states <- create_state_space_est()  # Default: A=1:10, w={single,double}, rho={FF,RB}
+#   states <- create_state_space_est()  # Default: A=1:9, w={single,double}, rho={FF,RB}
   
 #   # STEP 2: Prepare panel data (map to state_idx)
 #   panel_prepared <- prepare_panel_data(
@@ -1493,16 +1495,25 @@ calculate_flow_utilities_model_b <- function(theta, cache, profit_mult = 1.0) {
 #'
 #' This is the CLOSED-FORM inversion, not iterative.
 #' Analogous to Model A's invert_value_function_standard().
-invert_value_function_model_b <- function(P, U, config) {
-  
-  sigma <- config$sigma2
-  u_close <- U[, "close"]
-  P_close <- pmax(P[, "close"], config$min_log_val)
-  
-  # Hotz-Miller closed-form inversion for binary choice
-  V <- u_close - sigma * log(P_close) + sigma * config$gamma_E
-  
-  return(as.numeric(V))
+invert_value_function_model_b <- function(P, U, cache, config) {
+  # AM (2002) Hotz-Miller policy-marginal inversion for Maintain/Close.
+  # Close is terminal => continuation only flows through Maintain.
+  # Solve linear system (I - beta * P_m * F_maintain) V = R.
+  sigma   <- config$sigma2
+  beta    <- cache$beta
+  gamma_E <- config$gamma_E
+  n       <- cache$n_states
+
+  P_m <- pmax(P[, "maintain"], config$min_log_val)
+  P_c <- pmax(P[, "close"],    config$min_log_val)
+
+  R <- P_m * (U[, "maintain"] + sigma * (gamma_E - log(P_m))) +
+       P_c * (U[, "close"]    + sigma * (gamma_E - log(P_c)))
+
+  F_P <- Diagonal(x = as.numeric(P_m)) %*% cache$F_maintain
+  V   <- as.numeric(solve(Diagonal(n) - beta * F_P, R))
+
+  return(V)
 }
 
 # ==============================================================================
@@ -1532,12 +1543,11 @@ compute_ccps_model_b <- function(U, V, cache, config) {
   # EV_maintain: expected value if maintain (stochastic aging)
   # EV_close: expected value if close (absorbing, so EV = V for exit state)
   EV_maintain <- as.numeric(cache$F_maintain %*% V)
-  EV_close <- as.numeric(cache$F_exit %*% V)  # = V (identity matrix)
-  
-  # Choice-specific value functions
-# Choice-specific value functions
+
+  # Choice-specific value functions (Close is terminal => no continuation)
   v_maintain <- U[, "maintain"] + beta * EV_maintain
-  v_close <- U[, "close"]                    # <--- FIX: Terminal exit has no future V  
+  v_close    <- U[, "close"]
+
   # Vectorized log-sum-exp for binary logit
   v_mat <- cbind(v_maintain, v_close)
   v_max <- apply(v_mat, 1, max)
@@ -1618,7 +1628,7 @@ if (is.null(names(theta))) {
   U <- calculate_flow_utilities_model_b(theta, cache, profit_mult)
   
   # Step 2: Hotz-Miller inversion using P_fixed
-  V <- invert_value_function_model_b(P_fixed, U, config)
+  V <- invert_value_function_model_b(P_fixed, U, cache, config)
   
   # Step 3: Compute CCPs given theta and V
   P_theta <- compute_ccps_model_b(U, V, cache, config)
@@ -1754,7 +1764,7 @@ if (npl_iter > 1 && ll_path[npl_iter] < ll_path[npl_iter - 1] - 1e-6) {
 
     # Step 2: Update CCPs given new theta
     U <- calculate_flow_utilities_model_b(theta_curr, cache)
-    V <- invert_value_function_model_b(P, U, config)
+    V <- invert_value_function_model_b(P, U, cache, config)
     P_new <- compute_ccps_model_b(U, V, cache, config)
     
     # Convergence check
@@ -1788,7 +1798,7 @@ if (npl_iter > 1 && ll_path[npl_iter] < ll_path[npl_iter - 1] - 1e-6) {
   
   # Final value function
   U_final <- calculate_flow_utilities_model_b(theta_curr, cache)
-  V_final <- invert_value_function_model_b(P, U_final, config)
+  V_final <- invert_value_function_model_b(P, U_final, cache, config)
   
   return(list(
     theta_hat = theta_curr,
@@ -1830,7 +1840,7 @@ solve_equilibrium_policy_model_b <- function(theta, cache, config,
   
   for (iter in 1:max_iter) {
     # 1. Invert Value Function
-    V_old <- invert_value_function_model_b(P, U, config)
+    V_old <- invert_value_function_model_b(P, U, cache, config)
     
     # SAFETY CHECK: If V contains NAs, reset or abort
     if (any(is.na(V_old))) {
@@ -1846,7 +1856,7 @@ solve_equilibrium_policy_model_b <- function(theta, cache, config,
     # Calculate Bellman error if requested
     bellman_converged <- TRUE
     if (check_bellman) {
-      V_new <- invert_value_function_model_b(P_new, U, config)
+      V_new <- invert_value_function_model_b(P_new, U, cache, config)
       bellman_error <- max(abs(V_new - V_old), na.rm = TRUE)
       bellman_converged <- (bellman_error < tol)
     }
@@ -1861,8 +1871,8 @@ solve_equilibrium_policy_model_b <- function(theta, cache, config,
   }
   
   # Final calculation
-  V_final <- invert_value_function_model_b(P, U, config)
-  
+  V_final <- invert_value_function_model_b(P, U, cache, config)
+
   # Return result
   return(list(P = P, V = V_final, converged = (iter < max_iter)))
 }
@@ -1989,7 +1999,7 @@ generate_model_b_data_annual <- function(N_facilities = 1000,
     P_equilibrium <- P_manual
     # Compute V for consistency (optional)
     U <- calculate_flow_utilities_model_b(theta_true, cache)
-    V_equilibrium <- invert_value_function_model_b(P_equilibrium, U, config)
+    V_equilibrium <- invert_value_function_model_b(P_equilibrium, U, cache, config)
   } else {
     # Standard: Solve internally
     eq <- solve_equilibrium_policy_model_b(theta_true, cache, config)
@@ -2283,9 +2293,9 @@ npl_estimator_model_b_fast <- function(counts_vec, states, premiums, hazards,
     
     # B. Policy Update
     U <- calculate_flow_utilities_model_b(theta_curr, cache)
-    V <- invert_value_function_model_b(P, U, config)
+    V <- invert_value_function_model_b(P, U, cache, config)
     P_new_pure <- compute_ccps_model_b(U, V, cache, config)
-    
+
     # C. DAMPING (The Speedup)
     # P_next = alpha * P_new + (1-alpha) * P_old
     P_next <- (alpha * P_new_pure) + ((1 - alpha) * P)
@@ -2381,7 +2391,7 @@ npl_estimator_damped <- function(counts_vec, states, premiums, hazards, losses,
     
     # 4. Policy Update (With Damping)
     U <- calculate_flow_utilities_model_b(theta_curr, cache)
-    V <- invert_value_function_model_b(P, U, config)
+    V <- invert_value_function_model_b(P, U, cache, config)
     P_new_pure <- compute_ccps_model_b(U, V, cache, config)
     
     # DAMPING: Mix new policy with old policy

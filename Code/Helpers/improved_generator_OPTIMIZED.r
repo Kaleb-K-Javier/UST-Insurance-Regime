@@ -55,10 +55,10 @@ set_exogenous_parameters <- function() {
 }
 
 set_age_transitions <- function() {
-  # NOTE: These must sum to 1.0 for ages 1-9
-  # p_stay[i] + p_up[i] = 1.0 for i in 1:9
-  list(p_stay=c(0.985, 0.982, 0.978, 0.974, 0.970, 0.965, 0.960, 0.955, 0.950, 1.00),
-       p_up=c(0.015, 0.018, 0.022, 0.026, 0.030, 0.035, 0.040, 0.045, 0.050, 0.00))
+  # 9 age bins. Bin 9 is absorbing (p_stay=1, p_up=0).
+  # p_stay[i] + p_up[i] = 1.0 for i in 1:9.
+  list(p_stay=c(0.985, 0.982, 0.978, 0.974, 0.970, 0.965, 0.960, 0.955, 1.000),
+       p_up  =c(0.015, 0.018, 0.022, 0.026, 0.030, 0.035, 0.040, 0.045, 0.000))
 }
 
 create_transition_matrices <- function(states, age_probs) {
@@ -74,7 +74,7 @@ create_transition_matrices <- function(states, age_probs) {
   )
   
   for(i in 1:n) {
-    if(states$A[i] < 10) {
+    if(states$A[i] < 9) {
       k_s <- paste(states$A[i], states$w[i], states$rho[i], sep="_")
       k_u <- paste(states$A[i]+1, states$w[i], states$rho[i], sep="_")
       trans$maintain[i, state_map[k_s]] <- age_probs$p_stay[states$A[i]]
@@ -211,17 +211,16 @@ solve_equilibrium_policy <- function(theta_vec, sigma1, model_type, cache, confi
 # FINAL RUST-CONSISTENT TRANSITION MAP BUILDER
 # ==============================================================================
 build_transition_maps <- function() {
-  # CORRECTED: State space is (A, w, rho) where:
-  #   A: Age bins 1-10
+  # State space is (A, w, rho) where:
+  #   A: Age bins 1-9 (bin 9 absorbing)
   #   w: Wall type (single, double)
   #   rho: Policy regime (FF, RB) - FIXED, never changes
-  
-  # Define state space components
-  A_vals <- 1:10
+
+  A_vals <- 1:9
   w_types <- c("single", "double")
   rho_types <- c("FF", "RB")
-  
-  # Build full 3D state space: 10 × 2 × 2 = 40 states
+
+  # Full 3D state space: 9 × 2 × 2 = 36 states
   states <- data.table::CJ(A = A_vals, w = w_types, rho = rho_types, sorted = FALSE)
   states[, state_id := .I]
   
@@ -253,9 +252,9 @@ build_transition_maps <- function() {
     
     #--------------------------
     # 2. AGE UP: (A, w, rho) → (A+1, w, rho)
-    #    Capped at A=10
+    #    Capped at A=9 (absorbing oldest bin)
     #--------------------------
-    A_next <- min(A + 1L, 10L)
+    A_next <- min(A + 1L, 9L)
     key_up <- paste(A_next, w, rho, sep = "_")
     next_state_up[s] <- state_map[[key_up]]
     

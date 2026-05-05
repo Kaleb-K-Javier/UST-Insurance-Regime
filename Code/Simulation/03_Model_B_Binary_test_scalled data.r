@@ -65,7 +65,7 @@ npl_estimator_damped <- function(counts_vec, states, premiums, hazards, losses,
     
     # 3. Policy Update (With Damping)
     U <- calculate_flow_utilities_model_b(theta_curr, cache)
-    V <- invert_value_function_model_b(P, U, config)
+    V <- invert_value_function_model_b(P, U, cache, config)
     P_new_pure <- compute_ccps_model_b(U, V, cache, config)
     
     # DAMPING: P_next = alpha*P_new + (1-alpha)*P_old

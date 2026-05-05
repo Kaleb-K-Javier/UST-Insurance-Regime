@@ -169,7 +169,7 @@ generate_model_b_data_annual <- function(N_facilities = 1000,
     P_equilibrium <- P_manual
     # Compute V for consistency (optional)
     U <- calculate_flow_utilities_model_b(theta_true, cache)
-    V_equilibrium <- invert_value_function_model_b(P_equilibrium, U, config)
+    V_equilibrium <- invert_value_function_model_b(P_equilibrium, U, cache, config)
   } else {
     # Standard: Solve internally
     eq <- solve_equilibrium_policy_model_b(theta_true, cache, config)
