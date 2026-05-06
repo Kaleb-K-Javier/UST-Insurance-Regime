@@ -4,9 +4,13 @@
 # Tests whether the Mid-Continent premium schedule tracks actuarially implied
 # expected losses across age cells. Three independent inputs:
 #
-#   (1) h_hat   — OOB hazard from 01n (TX + controls, pre-treatment),
-#                 single-walled facilities only.
-#                 Source: Data/Analysis/dcm_state_hazard_rates.csv (Z)
+#   (1) h_hat   — Hazard from 01n. Two files used:
+#                   * dcm_state_hazard_rates.csv  — bin-level (age × wall),
+#                     used for fallback when row-level is missing
+#                   * analysis_hazard_predictions_full.csv — row-level
+#                     (panel_id × panel_year), TX SW rows joined to each
+#                     facility-month for primary per-tank EL computation
+#                 Source: Data/Analysis/ on Z drive
 #
 #   (2) L_hat   — Duan-smeared OLS predicted cleanup cost from 05,
 #                 single-walled facilities only, re-aggregated to 01n's
@@ -189,6 +193,46 @@ print(cost_cells[, .(age_bin,
 
 
 ################################################################################
+#### S2.5: Row-level hazard predictions (TX, single-walled) ####################
+################################################################################
+
+cat("\n── S2.5: Row-level hazard predictions ───────────────────────────────\n")
+
+hazard_full_path <- z_path("Data", "Analysis",
+                           "analysis_hazard_predictions_full.csv")
+if (!file.exists(hazard_full_path)) {
+  cat("  WARNING: analysis_hazard_predictions_full.csv not on Z.\n")
+  cat("  Falling back to bin-mean h_hat for all TX rows in S4.\n")
+  hazard_full_tx <- NULL
+} else {
+  hazard_full <- fread(hazard_full_path)
+
+  req_full <- c("panel_id", "panel_year", "state", "has_single_walled",
+                "pred_elnet_full")
+  missing_full <- setdiff(req_full, names(hazard_full))
+  if (length(missing_full) > 0)
+    stop("hazard-full file missing columns: ",
+         paste(missing_full, collapse = ", "))
+
+  hazard_full_tx <- hazard_full[
+    state == "TX" & has_single_walled == 1L,
+    .(panel_id, panel_year, h_hat_row = pred_elnet_full)
+  ]
+  setkey(hazard_full_tx, panel_id, panel_year)
+
+  cat(sprintf("  TX SW row-level hazard rows: %s (%d distinct facilities)\n",
+      format(nrow(hazard_full_tx), big.mark = ","),
+      uniqueN(hazard_full_tx$panel_id)))
+  cat(sprintf("  Year range: %d-%d\n",
+      min(hazard_full_tx$panel_year), max(hazard_full_tx$panel_year)))
+  cat(sprintf("  h_hat_row summary (per1k): min=%.2f median=%.2f max=%.2f\n",
+      min(hazard_full_tx$h_hat_row, na.rm = TRUE)    * 1000,
+      median(hazard_full_tx$h_hat_row, na.rm = TRUE) * 1000,
+      max(hazard_full_tx$h_hat_row, na.rm = TRUE)    * 1000))
+}
+
+
+################################################################################
 #### S3: Texas premium (facility-level, binned by avg_tank_age) ################
 ################################################################################
 
@@ -272,34 +316,66 @@ if (prem_median < 100) {
   tm_all[, annual_tank_premium := tank_premium]
 }
 
-# Collapse tank-month → facility-month: avg_tank_age + sum of tank premiums.
-# This is the unit that aligns with 01n (facility-mean-age) and 05 (facility
-# claim-year). Sum-then-average preserves within-cell tank-count × age
-# covariance that mean(tank_prem)*mean(n_tanks) would lose.
-fac_month <- tm_all[
+# Operate on tm_all directly (tank-month level). Each row is one tank-month
+# with that tank's own tank_premium and age_years. Attach facility-month
+# aggregates as columns (n_tanks, avg_tank_age) without collapsing — keeps
+# tank-month weighting so big facilities count in proportion to their tank
+# count, which is the right weighting for a per-tank pricing claim.
+tm_all <- tm_all[
   !is.na(age_years) &
   !is.na(annual_tank_premium) &
-  annual_tank_premium > 0,
-  .(total_premium = sum(annual_tank_premium, na.rm = TRUE),
-    avg_tank_age  = mean(age_years,           na.rm = TRUE),
-    n_tanks       = .N),
-  by = .(FACILITY_ID, YEAR, MONTH, filing_period, period_id)
+  annual_tank_premium > 0
 ]
 
-cat(sprintf("\n  Facility-months: %s across %d periods\n",
-    format(nrow(fac_month), big.mark = ","),
-    uniqueN(fac_month$filing_period)))
+tm_all[, n_tanks      := .N,            by = .(FACILITY_ID, YEAR, MONTH)]
+tm_all[, avg_tank_age := mean(age_years, na.rm = TRUE),
+                                          by = .(FACILITY_ID, YEAR, MONTH)]
+tm_all[, age_bin      := bin_age(avg_tank_age)]
 
-fac_month[, age_bin := bin_age(avg_tank_age)]
+# Construct panel_id matching 01n's TX convention: "<FACILITY_ID>_TX"
+tm_all[, panel_id := paste0(trimws(FACILITY_ID), "_TX")]
 
-# Cell-mean facility annual premium by age bin × period
-prem_cells_by_period <- fac_month[!is.na(age_bin), .(
-  mean_premium    = mean(total_premium,   na.rm = TRUE),
-  median_premium  = median(total_premium, na.rm = TRUE),
-  sd_premium      = sd(total_premium,     na.rm = TRUE),
-  n_fac_months    = .N,
-  mean_age        = mean(avg_tank_age,    na.rm = TRUE)
+# Join row-level h_hat from analysis_hazard_predictions_full.csv (if present)
+if (!is.null(hazard_full_tx)) {
+  tm_all[hazard_full_tx, on = .(panel_id, YEAR = panel_year),
+         h_hat_row := i.h_hat_row]
+  match_rate <- mean(!is.na(tm_all$h_hat_row))
+  cat(sprintf("\n  Row-level h_hat match rate: %.1f%% of tank-months\n",
+      100 * match_rate))
+} else {
+  tm_all[, h_hat_row := NA_real_]
+}
+
+cat(sprintf("\n  Tank-months: %s across %d periods\n",
+    format(nrow(tm_all), big.mark = ","),
+    uniqueN(tm_all$filing_period)))
+cat(sprintf("  Distinct facility-months: %s\n",
+    format(uniqueN(tm_all[, .(FACILITY_ID, YEAR, MONTH)]),
+           big.mark = ",")))
+
+# Cell aggregates by age bin × period
+# - per-tank metrics: tank-month weighted (each tank-month row contributes)
+# - facility-total: needs a second pass collapsing within facility-month first
+prem_cells_pertank <- tm_all[!is.na(age_bin), .(
+  mean_per_tank_premium    = mean(annual_tank_premium,   na.rm = TRUE),
+  median_per_tank_premium  = median(annual_tank_premium, na.rm = TRUE),
+  mean_n_tanks             = mean(n_tanks,                na.rm = TRUE),
+  n_tank_months            = .N,
+  mean_age                 = mean(avg_tank_age,           na.rm = TRUE)
 ), by = .(filing_period, period_id, age_bin)]
+
+prem_cells_facility <- tm_all[!is.na(age_bin), .(
+  facility_premium = sum(annual_tank_premium, na.rm = TRUE)
+), by = .(filing_period, period_id, age_bin, FACILITY_ID, YEAR, MONTH)
+][, .(mean_facility_premium    = mean(facility_premium,   na.rm = TRUE),
+      median_facility_premium  = median(facility_premium, na.rm = TRUE),
+      n_fac_months             = .N
+), by = .(filing_period, period_id, age_bin)]
+
+prem_cells_by_period <- merge(
+  prem_cells_pertank, prem_cells_facility,
+  by = c("filing_period", "period_id", "age_bin"), all = FALSE
+)
 prem_cells_by_period[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
 setorder(prem_cells_by_period, period_id, age_bin)
 
@@ -311,7 +387,12 @@ cat(sprintf("  Cell-period table saved: %d cells\n",
 # P1 cell premiums for the alignment figure
 prem_p1 <- prem_cells_by_period[
   period_id == "P1",
-  .(age_bin, annual_premium = mean_premium, n_fac_months)
+  .(age_bin,
+    per_tank_premium = mean_per_tank_premium,
+    facility_premium = mean_facility_premium,
+    mean_n_tanks,
+    n_tank_months,
+    n_fac_months)
 ]
 
 if (nrow(prem_p1) == 0) {
@@ -319,14 +400,22 @@ if (nrow(prem_p1) == 0) {
   earliest <- prem_cells_by_period[, min(as.character(period_id))]
   prem_p1 <- prem_cells_by_period[
     period_id == earliest,
-    .(age_bin, annual_premium = mean_premium, n_fac_months)
+    .(age_bin,
+      per_tank_premium = mean_per_tank_premium,
+      facility_premium = mean_facility_premium,
+      mean_n_tanks,
+      n_tank_months,
+      n_fac_months)
   ]
 }
 
 cat("\n  P1 (2006-2014) cell premiums:\n")
 print(prem_p1[order(age_bin),
               .(age_bin,
-                annual_premium = dollar(round(annual_premium, 0)),
+                per_tank      = dollar(round(per_tank_premium, 0)),
+                facility_tot  = dollar(round(facility_premium, 0)),
+                mean_n_tanks  = round(mean_n_tanks, 1),
+                n_tank_months,
                 n_fac_months)])
 
 
@@ -336,51 +425,114 @@ print(prem_p1[order(age_bin),
 
 cat("\n── S4: Expected loss ────────────────────────────────────────────────\n")
 
-# Expected loss = annual first-release probability × predicted cost per claim
-# Both estimated outside Texas's premium book; both at the facility level;
-# both restricted to single-walled.
+# Build hazard × cost cells (facility-level expected loss per age bin).
 haz_cost <- merge(
   hazard_sw[,  .(age_bin, h_hat, n_fac_years)],
   cost_cells[, .(age_bin, L_hat, n_claims)],
   by = "age_bin", all = FALSE
 )
-haz_cost[, expected_loss := h_hat * L_hat]
+haz_cost[, facility_el := h_hat * L_hat]
 setorder(haz_cost, age_bin)
 
-cat("  Expected loss by age bin:\n")
+cat("  Facility-level expected loss by age bin:\n")
 print(haz_cost[, .(age_bin,
-                   h_hat_per1k   = round(h_hat * 1000, 2),
-                   L_hat         = dollar(round(L_hat, 0)),
-                   expected_loss = dollar(round(expected_loss, 0)))])
+                   h_hat_per1k = round(h_hat * 1000, 2),
+                   L_hat       = dollar(round(L_hat, 0)),
+                   facility_el = dollar(round(facility_el, 0)))])
 
-# Merge with P1 premium → final alignment table
-align_dt <- merge(
-  haz_cost,
-  prem_p1[, .(age_bin, annual_premium, n_fac_months)],
+# Per-tank expected loss, computed at the tank-month level.
+#
+# For each tank-month: attach the facility's row-level h_hat (from 01n's
+# full-panel predictions, joined on panel_id × YEAR) and the bin-level L_hat
+# (from 05's row-level cost predictions, aggregated to bin), then divide
+# by that facility-month's actual n_tanks. Aggregating tank-month-weighted
+# means big facilities count in proportion to their tank count — the right
+# weighting for a per-tank pricing claim.
+#
+# Hazard source: row-level h_hat where available (h_hat_row), bin-mean
+# h_hat as fallback. Under independence, P(this tank leaks) ≈ h_facility /
+# n_tanks. L_hat remains bin-level (no TX-specific cost data exists).
+tm_el <- merge(
+  tm_all[!is.na(age_bin) & period_id == "P1"],
+  haz_cost[, .(age_bin, h_hat_bin = h_hat, L_hat)],
   by = "age_bin", all = FALSE
 )
+tm_el[, h_hat_used := fifelse(!is.na(h_hat_row), h_hat_row, h_hat_bin)]
+tm_el[, per_tank_el := (h_hat_used * L_hat) / n_tanks]
+
+cat(sprintf("\n  Per-tank EL hazard source mix:\n"))
+cat(sprintf("    Row-level h_hat:  %.1f%% of tank-months\n",
+    100 * mean(!is.na(tm_el$h_hat_row))))
+cat(sprintf("    Bin-mean fallback: %.1f%% of tank-months\n",
+    100 * mean(is.na(tm_el$h_hat_row))))
+
+# Aggregate per-tank quantities to age-bin cells (P1 baseline), tank-month
+# weighted: each tank-month row contributes once.
+align_per_tank <- tm_el[, .(
+  per_tank_premium = mean(annual_tank_premium, na.rm = TRUE),
+  per_tank_el      = mean(per_tank_el,         na.rm = TRUE),
+  mean_h_hat_used  = mean(h_hat_used,          na.rm = TRUE),
+  mean_n_tanks     = mean(n_tanks,             na.rm = TRUE),
+  share_rowlevel_h = mean(!is.na(h_hat_row)),
+  n_tank_months    = .N
+), by = age_bin]
+align_per_tank[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
+setorder(align_per_tank, age_bin)
+
+# Merge in the bin-level h_hat / L_hat / counts for a complete table.
+align_dt <- merge(
+  align_per_tank,
+  haz_cost[, .(age_bin, h_hat, L_hat, facility_el, n_fac_years, n_claims)],
+  by = "age_bin", all = FALSE
+)
+
+# Facility-level premium (diagnostic — kept for reference / table only)
+align_dt <- merge(
+  align_dt,
+  prem_p1[, .(age_bin, facility_premium, n_fac_months)],
+  by = "age_bin", all = FALSE
+)
+
 setorder(align_dt, age_bin)
 
 cat(sprintf("\n  Cells in alignment: %d\n", nrow(align_dt)))
 if (nrow(align_dt) < 4)
   warning("Fewer than 4 cells in alignment — figure may not be credible.")
 
-# Loading factor (descriptive only; see caveat in caption)
-align_dt[, loading_factor := annual_premium / expected_loss]
+# Loading factor (per-tank, descriptive only; see caveat in caption)
+align_dt[, loading_factor := per_tank_premium / per_tank_el]
 
-# Headline statistics
-spearman_rho <- cor(align_dt$expected_loss, align_dt$annual_premium,
+# Headline statistics — per-tank
+spearman_rho <- cor(align_dt$per_tank_el, align_dt$per_tank_premium,
                     method = "spearman", use = "complete.obs")
-pearson_r    <- cor(align_dt$expected_loss, align_dt$annual_premium,
+pearson_r    <- cor(align_dt$per_tank_el, align_dt$per_tank_premium,
                     method = "pearson",   use = "complete.obs")
 
-# OLS through origin (descriptive level shift)
-lambda_ols <- coef(lm(annual_premium ~ 0 + expected_loss, data = align_dt))
+# OLS through origin (per-tank, descriptive level shift)
+lambda_ols <- coef(lm(per_tank_premium ~ 0 + per_tank_el, data = align_dt))
 
-cat(sprintf("\n  Spearman rho:  %.3f\n", spearman_rho))
-cat(sprintf("  Pearson r:     %.3f\n", pearson_r))
-cat(sprintf("  Lambda (OLS):  %.3f  (descriptive — see caption caveat)\n",
-    lambda_ols))
+# Diagnostic: facility-level Spearman (for comparison in the summary)
+spearman_facility <- cor(align_dt$facility_el, align_dt$facility_premium,
+                         method = "spearman", use = "complete.obs")
+
+cat(sprintf("\n  Per-tank alignment:\n"))
+cat(sprintf("    Spearman rho:  %.3f\n", spearman_rho))
+cat(sprintf("    Pearson r:     %.3f\n", pearson_r))
+cat(sprintf("    Lambda (OLS):  %.3f  (descriptive)\n", lambda_ols))
+cat(sprintf("\n  Facility-level (diagnostic): Spearman rho = %.3f\n",
+    spearman_facility))
+cat("    [confounded by portfolio shrinkage — see Section S5 caption]\n")
+
+cat("\n  Per-tank cell summary:\n")
+print(align_dt[, .(age_bin,
+                   per_tank_premium  = dollar(round(per_tank_premium, 0)),
+                   per_tank_el       = dollar(round(per_tank_el,      0)),
+                   loading_factor    = round(loading_factor,           2),
+                   h_used_per1k      = round(mean_h_hat_used * 1000,   2),
+                   share_rowlevel_h  = round(share_rowlevel_h,         2),
+                   mean_n_tanks      = round(mean_n_tanks,             1),
+                   n_tank_months,
+                   n_fac_months)])
 
 
 ################################################################################
@@ -389,20 +541,20 @@ cat(sprintf("  Lambda (OLS):  %.3f  (descriptive — see caption caveat)\n",
 
 cat("\n── S5: Alignment figure ─────────────────────────────────────────────\n")
 
-x_max <- max(align_dt$expected_loss, na.rm = TRUE) * 1.12
+x_max <- max(align_dt$per_tank_el, na.rm = TRUE) * 1.12
 fit_line <- data.table(
-  expected_loss  = seq(0, x_max, length.out = 200),
-  annual_premium = lambda_ols * seq(0, x_max, length.out = 200)
+  per_tank_el      = seq(0, x_max, length.out = 200),
+  per_tank_premium = lambda_ols * seq(0, x_max, length.out = 200)
 )
 
-annot_x <- min(align_dt$expected_loss, na.rm = TRUE)
-annot_y <- max(align_dt$annual_premium, na.rm = TRUE) * 0.97
+annot_x <- min(align_dt$per_tank_el,      na.rm = TRUE)
+annot_y <- max(align_dt$per_tank_premium, na.rm = TRUE) * 0.97
 
 fig_align <- ggplot(align_dt,
-                    aes(x = expected_loss, y = annual_premium)) +
+                    aes(x = per_tank_el, y = per_tank_premium)) +
   geom_line(data        = fit_line,
             inherit.aes = FALSE,
-            aes(x = expected_loss, y = annual_premium),
+            aes(x = per_tank_el, y = per_tank_premium),
             color       = "grey50",
             linetype    = "dashed",
             linewidth   = 0.75) +
@@ -421,32 +573,30 @@ fig_align <- ggplot(align_dt,
            label.padding = unit(0.28, "lines"),
            label         = sprintf("Spearman ρ = %.2f", spearman_rho)) +
   scale_x_continuous(
-    name   = "Model-Implied Expected Loss per Facility-Year (2023 USD)",
+    name   = "Per-Tank Expected Loss (2023 USD per tank-year)",
     labels = dollar_format(accuracy = 1),
     expand = expansion(mult = c(0.05, 0.12))) +
   scale_y_continuous(
-    name   = "Mid-Continent Annual Facility Premium, 2006-2014 (USD)",
+    name   = "Mid-Continent Per-Tank Annual Premium, 2006-2014 (USD)",
     labels = dollar_format(accuracy = 1),
     expand = expansion(mult = c(0.05, 0.08))) +
   labs(
-    title    = "Premium Schedule Tracks Expected Loss Across Age Bins",
+    title    = "Per-Tank Premium Tracks Expected Loss Across Age Bins",
     subtitle = paste0(
-      "Single-walled facilities only. Each point is one 3-year age bin. ",
-      "Dashed line: OLS through origin (descriptive)."),
+      "Single-walled facilities only. Each point is one 3-year age bin ",
+      "(facility mean tank age). Dashed line: OLS through origin."),
     caption  = paste0(
-      "Notes: Expected loss = h_hat × L_hat. ",
-      "h_hat = OOB hazard from 01n elastic net (TX + controls, ",
-      "pre-treatment, single-walled). ",
-      "L_hat = Duan-smeared OLS predicted cost from 05 (six-state trust ",
-      "fund ledgers, single-walled, re-aggregated to 3-year bins from ",
-      "row-level predictions). ",
-      "Premium = facility-month total tank premium from reconstructed ",
-      "Mid-Continent Casualty SERFF filing (2006-2014), averaged across ",
-      "facility-months in each bin. Spearman ρ = ",
-      round(spearman_rho, 2), ". ",
-      "The OLS-through-origin slope mixes underwriting markup with ",
-      "Texas-vs-control-state cost-level differences and cannot identify ",
-      "either separately — interpret only as descriptive.")
+      "Notes: Per-tank premium = mean(tank_premium) across TX Mid-Continent ",
+      "tank-months in each bin (2006-2014 filing). Per-tank expected loss = ",
+      "h_hat × L_hat / n_tanks, computed at the tank-month level using each ",
+      "facility's row-level h_hat (01n full-panel elastic net predictions) ",
+      "and that facility-month's actual n_tanks, then averaged tank-month ",
+      "weighted within bins. L_hat = Duan-smeared OLS predicted cost from ",
+      "05 (six-state trust fund ledgers, single-walled, 3-year bins from ",
+      "row-level predictions). Spearman ρ = ", round(spearman_rho, 2), ". ",
+      "The OLS slope mixes underwriting markup with TX-vs-control cost-level ",
+      "differences and the independence assumption in dividing facility ",
+      "hazard by n_tanks — interpret only as descriptive.")
   ) +
   theme_pub()
 
@@ -470,11 +620,11 @@ if (n_periods_avail < 2) {
 
   neutral <- prem_cells_by_period[
     age_bin == NEUTRAL_BIN,
-    .(filing_period, neutral_premium = mean_premium)
+    .(filing_period, neutral_premium = mean_per_tank_premium)
   ]
 
   evo_dt <- merge(prem_cells_by_period, neutral, by = "filing_period")
-  evo_dt[, premium_index := mean_premium / neutral_premium]
+  evo_dt[, premium_index := mean_per_tank_premium / neutral_premium]
 
   # Keep bins with non-trivial coverage in every available period
   bins_keep <- evo_dt[
@@ -520,9 +670,9 @@ if (n_periods_avail < 2) {
         "fine-grained discount steps for young tanks (shaded zone)."),
       caption  = paste0(
         "Source: reconstructed Mid-Continent Casualty SERFF filings, four ",
-        "periods. Facility-month premium = sum of in-service tank premiums; ",
-        "binned by facility mean tank age. Bins below 10 facility-months ",
-        "in any period are dropped to suppress small-cell noise.")
+        "periods. Per-tank premium = total facility premium / n_tanks at the ",
+        "facility-month level, averaged within bins. Bins below 10 ",
+        "facility-months in any period are dropped to suppress small-cell noise.")
     ) +
     theme_pub() +
     theme(axis.text.x = element_text(angle = 30, hjust = 1))
@@ -539,13 +689,19 @@ cat("\n── S7: Output tables ────────────────
 
 align_out <- align_dt[, .(
   age_bin,
-  h_hat_per1k     = round(h_hat * 1000, 2),
-  L_hat_2023usd   = round(L_hat,         0),
-  expected_loss   = round(expected_loss, 0),
-  annual_premium  = round(annual_premium, 0),
-  loading_factor  = round(loading_factor, 3),
+  h_hat_bin_per1k     = round(h_hat * 1000,                2),
+  h_hat_used_per1k    = round(mean_h_hat_used * 1000,      2),
+  share_rowlevel_h    = round(share_rowlevel_h,            3),
+  L_hat_2023usd       = round(L_hat,                       0),
+  facility_el         = round(facility_el,                 0),
+  per_tank_el         = round(per_tank_el,                 0),
+  per_tank_premium    = round(per_tank_premium,            0),
+  facility_premium    = round(facility_premium,            0),
+  mean_n_tanks        = round(mean_n_tanks,                2),
+  loading_factor      = round(loading_factor,              3),
   n_fac_years,
   n_claims,
+  n_tank_months,
   n_fac_months
 )]
 fwrite(align_out, file.path(OUTPUT_TABLES, "Table_Actuarial_Alignment.csv"))
@@ -553,18 +709,21 @@ cat(sprintf("  Saved: Table_Actuarial_Alignment.csv (%d rows)\n",
     nrow(align_out)))
 
 load_summary <- data.table(
-  spearman_rho   = round(spearman_rho, 3),
-  pearson_r      = round(pearson_r,    3),
-  lambda_ols     = round(lambda_ols,   3),
-  lambda_mean    = round(mean(align_dt$loading_factor,   na.rm = TRUE), 3),
-  lambda_median  = round(median(align_dt$loading_factor, na.rm = TRUE), 3),
-  n_cells        = nrow(align_dt),
-  premium_period = "2006-2014 (P1 baseline)",
-  scope          = "Single-walled facilities only; Texas Mid-Continent fleet",
+  spearman_rho_pertank   = round(spearman_rho,      3),
+  pearson_r_pertank      = round(pearson_r,         3),
+  lambda_ols_pertank     = round(lambda_ols,        3),
+  lambda_mean_pertank    = round(mean(align_dt$loading_factor,   na.rm = TRUE), 3),
+  lambda_median_pertank  = round(median(align_dt$loading_factor, na.rm = TRUE), 3),
+  spearman_rho_facility  = round(spearman_facility, 3),
+  n_cells                = nrow(align_dt),
+  premium_period         = "2006-2014 (P1 baseline)",
+  scope                  = "Single-walled facilities only; TX Mid-Continent",
   note = paste0(
-    "Loading factor = annual_premium / expected_loss. Mixes underwriting ",
-    "markup with TX-vs-control-state cost-level differences. Cannot ",
-    "identify either separately — interpret only as descriptive.")
+    "Per-tank: premium = total_premium / n_tanks (row-level), ",
+    "EL = h_hat × L_hat / n_tanks (row-level), aggregated to bins. ",
+    "Facility-level Spearman included as diagnostic — confounded by ",
+    "portfolio shrinkage with age. Loading factor is descriptive only: ",
+    "mixes underwriting markup with TX-vs-control cost-level differences.")
 )
 fwrite(load_summary, file.path(OUTPUT_TABLES, "Table_Actuarial_Loading.csv"))
 cat("  Saved: Table_Actuarial_Loading.csv\n")
@@ -577,21 +736,21 @@ cat("  Saved: Table_Premium_Cell_By_Period.csv (in S3)\n")
 
 cat("\n── S8: Diagnostic checks ────────────────────────────────────────────\n")
 
-# CHECK 1: Expected loss roughly increasing in age
-is_mono_el <- all(diff(align_dt$expected_loss) >= 0, na.rm = TRUE)
+# CHECK 1: Per-tank EL roughly increasing in age
+is_mono_el <- all(diff(align_dt$per_tank_el) >= 0, na.rm = TRUE)
 if (is_mono_el) {
-  cat("  CHECK 1 PASS: Expected loss non-decreasing in age.\n")
+  cat("  CHECK 1 PASS: Per-tank EL non-decreasing in age.\n")
 } else {
-  cat("  CHECK 1 NOTE: Expected loss not strictly monotone (acceptable —\n")
+  cat("  CHECK 1 NOTE: Per-tank EL not strictly monotone (acceptable —\n")
   cat("                may reflect within-bin composition noise).\n")
 }
 
-# CHECK 2: Premium roughly increasing in age
-is_mono_pr <- all(diff(align_dt$annual_premium) >= 0, na.rm = TRUE)
+# CHECK 2: Per-tank premium roughly increasing in age
+is_mono_pr <- all(diff(align_dt$per_tank_premium) >= 0, na.rm = TRUE)
 if (is_mono_pr) {
-  cat("  CHECK 2 PASS: Premium non-decreasing in age.\n")
+  cat("  CHECK 2 PASS: Per-tank premium non-decreasing in age.\n")
 } else {
-  cat("  CHECK 2 NOTE: Premium not strictly monotone in age.\n")
+  cat("  CHECK 2 NOTE: Per-tank premium not strictly monotone in age.\n")
 }
 
 # CHECK 3: Rank correlation positive
@@ -619,10 +778,12 @@ cat(sprintf("  CHECK 5 INFO: Mean loading factor = %.2f (descriptive).\n",
 
 cat("\n========================================================\n")
 cat("06_Actuarial_Alignment.R COMPLETE\n\n")
-cat(sprintf("  Alignment cells:   %d\n",   nrow(align_dt)))
-cat(sprintf("  Spearman rho:      %.3f\n", spearman_rho))
-cat(sprintf("  Pearson r:         %.3f\n", pearson_r))
-cat(sprintf("  Lambda (OLS):      %.3f  (descriptive)\n", lambda_ols))
+cat(sprintf("  Alignment cells:        %d\n",   nrow(align_dt)))
+cat(sprintf("  Per-tank Spearman rho:  %.3f\n", spearman_rho))
+cat(sprintf("  Per-tank Pearson r:     %.3f\n", pearson_r))
+cat(sprintf("  Per-tank lambda (OLS):  %.3f  (descriptive)\n", lambda_ols))
+cat(sprintf("  Facility Spearman rho:  %.3f  (diagnostic — size confounded)\n",
+    spearman_facility))
 cat(sprintf("  Premium period:    2006-2014 (P1 baseline)\n"))
 cat(sprintf("  Filing periods in evolution fig: %d\n", n_periods_avail))
 cat("\n  Figures:\n")
