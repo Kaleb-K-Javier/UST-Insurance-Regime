@@ -194,18 +194,24 @@ print(cost_cells[, .(age_bin,
 
 cat("\n── S3: Texas premium ────────────────────────────────────────────────\n")
 
-# Path encoding: "Rate FIllings" directory name has a soft-hyphen in some
-# variants. Try all three.
-rate_dir_candidates <- c(
-  here("Rate FIllings", "Mid-Continent Casualty Company ­– 23418"),
-  here("Rate FIllings", "Mid-Continent Casualty Company - 23418"),
-  here("Rate FIllings", "Mid-Continent Casualty Company – 23418")
+# Locate rate-filing CSVs by glob pattern — sidesteps soft-hyphen / em-dash
+# encoding issues in the "Mid-Continent Casualty Company – 23418" subdir name
+# that bite when comparing literal paths from `here()`.
+glob_patterns <- c(
+  file.path(getwd(), "Rate FIllings", "*",
+            "texas_midcontinent_tank_month_premium_*.csv"),
+  file.path(getwd(), "Data", "Rate FIllings", "*",
+            "texas_midcontinent_tank_month_premium_*.csv")
 )
-RATE_DIR <- rate_dir_candidates[dir.exists(rate_dir_candidates)][1]
-if (is.na(RATE_DIR))
-  stop("Rate FIllings directory not found. Check path encoding.")
+matching_files <- unique(unlist(lapply(glob_patterns, Sys.glob)))
 
+if (length(matching_files) == 0)
+  stop("No tank-month premium files found. Searched:\n  ",
+       paste(glob_patterns, collapse = "\n  "))
+
+RATE_DIR <- dirname(matching_files[1])
 cat(sprintf("  Rate dir: %s\n", RATE_DIR))
+cat(sprintf("  Tank-month files matched: %d\n", length(matching_files)))
 
 tm_registry <- data.table(
   period_id     = c("P1", "P2", "P3", "P4"),
@@ -217,8 +223,14 @@ tm_registry <- data.table(
     "texas_midcontinent_tank_month_premium_2021_onwards.csv"
   )
 )
-tm_registry[, filepath := file.path(RATE_DIR, filename)]
-tm_registry[, exists   := file.exists(filepath)]
+# Match registry filenames against actually-found files (basename comparison
+# avoids any path-encoding mismatch on the directory portion).
+matched_basenames <- basename(matching_files)
+tm_registry[, filepath := vapply(filename, function(fn) {
+  hit <- matching_files[matched_basenames == fn]
+  if (length(hit) == 0) NA_character_ else hit[1]
+}, character(1))]
+tm_registry[, exists := !is.na(filepath) & file.exists(filepath)]
 
 cat("  File availability:\n")
 print(tm_registry[, .(period_id, filing_period, exists)])
