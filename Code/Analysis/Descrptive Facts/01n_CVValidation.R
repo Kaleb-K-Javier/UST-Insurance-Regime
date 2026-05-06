@@ -677,6 +677,86 @@ if (USE_ELNET) {
     )
   )
   cat("  Elastic net predictions written to pred_elnet\n")
+
+  # ── Predict on the full panel (pre + post 1999) for DCM downstream ─────────
+  # 04b_Replacement_Panel_Prep.R needs hazards for post-reform years too —
+  # the elnet was trained pre-reform (no leakage) but predictions are valid
+  # for any feature combination. Build the same saturated matrix on the
+  # broader sample (every filter except the year cut), score with fit_elnet,
+  # then re-apply the same Platt scaling that was fit on the training labels.
+  cat("\n--- Predicting elnet on full panel (pre + post 1999) ---\n")
+
+  full_data <- annual_data[
+    has_previous_leak == 0L           &
+    is_make_model     == 1L           &
+    has_single_walled %in% c(0L, 1L)  &
+    !is.na(active_tanks)              &
+    !is.na(total_capacity)
+    # event_first_leak is no longer required — we score post-1999 facility-
+    # years that have NA event_first_leak by construction (post-reform).
+  ]
+  full_data[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
+  full_data[, state   := factor(state, levels = levels(cv_data$state))]
+
+  X_full <- model.matrix(
+    ~ (factor(age_bin) + has_single_walled + active_tanks +
+       total_capacity + has_gasoline_year + has_diesel_year)^2 +
+      factor(state),
+    data = as.data.frame(full_data)
+  )[, -1L]
+
+  # Sanity: design matrix columns must match training. Reorder to be safe.
+  if (!setequal(colnames(X_full), colnames(X_elnet))) {
+    extra   <- setdiff(colnames(X_full),  colnames(X_elnet))
+    missing <- setdiff(colnames(X_elnet), colnames(X_full))
+    stop("Full-panel design matrix columns differ from training:\n",
+         "  extra:   ", paste(extra,   collapse = ", "), "\n",
+         "  missing: ", paste(missing, collapse = ", "))
+  }
+  X_full <- X_full[, colnames(X_elnet)]
+
+  lp_full   <- as.numeric(predict(fit_elnet, newx = X_full, type = "link"))
+  pred_full <- as.numeric(predict(platt_fit,
+                                  newdata = data.frame(lp_oos = lp_full),
+                                  type = "response"))
+  full_data[, pred_elnet_full := pred_full]
+
+  cat(sprintf("  Scored %s facility-years (pre + post 1999)\n",
+              format(nrow(full_data), big.mark = ",")))
+  cat(sprintf("  Median predicted hazard: %.5f\n",
+              median(pred_full, na.rm = TRUE)))
+  cat("  By era:\n")
+  print(full_data[, .(N = .N,
+                      median_pred = round(median(pred_elnet_full,
+                                                 na.rm = TRUE), 5),
+                      mean_pred   = round(mean(  pred_elnet_full,
+                                                 na.rm = TRUE), 5)),
+                  by = .(era = fifelse(panel_year < POST_YEAR,
+                                       "pre-1999", "post-1999"))][order(era)])
+
+  fwrite(full_data[, .(panel_id, panel_year, state, texas_treated,
+                       has_single_walled, age_bin, pred_elnet_full)],
+         file.path(ANALYSIS_DIR, "analysis_hazard_predictions_full.csv"))
+  cat("  Saved: analysis_hazard_predictions_full.csv\n")
+
+  # Persist the trained model + scaling for future re-use without re-running
+  # the entire CV. Loading: readRDS(.../analysis_elnet_model.rds)$fit_elnet
+  saveRDS(list(
+    fit_elnet         = fit_elnet,
+    platt_fit         = platt_fit,
+    best_params_elnet = best_params_elnet,
+    feature_cols      = colnames(X_elnet),
+    age_bin_levels    = levels(cv_data$age_bin),
+    state_levels      = levels(cv_data$state),
+    formula_used      = "~ (factor(age_bin) + has_single_walled + active_tanks + total_capacity + has_gasoline_year + has_diesel_year)^2 + factor(state)",
+    primary_model     = PRIMARY_MODEL,
+    n_train_rows      = nrow(cv_data),
+    train_event_rate  = event_rate,
+    timestamp         = Sys.time()
+  ), file.path(ANALYSIS_DIR, "analysis_elnet_model.rds"))
+  cat("  Saved: analysis_elnet_model.rds (fit_elnet + platt_fit + metadata)\n")
+
+  rm(full_data, X_full, lp_full, pred_full); invisible(gc())
 }
 
 # ---- Set primary prediction column ------------------------------------------
