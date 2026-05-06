@@ -541,26 +541,31 @@ print(align_dt[, .(age_bin,
 
 cat("\n── S5: Alignment figure ─────────────────────────────────────────────\n")
 
-x_max <- max(align_dt$per_tank_el, na.rm = TRUE) * 1.12
-fit_line <- data.table(
-  per_tank_el      = seq(0, x_max, length.out = 200),
-  per_tank_premium = lambda_ols * seq(0, x_max, length.out = 200)
+# Reshape to long for the two-line plot
+plot_dt <- melt(
+  align_dt[, .(age_bin,
+               `Per-Tank Expected Loss` = per_tank_el,
+               `Per-Tank Premium`       = per_tank_premium)],
+  id.vars       = "age_bin",
+  variable.name = "series",
+  value.name    = "usd"
 )
+plot_dt[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
+plot_dt[, series  := factor(series,
+                            levels = c("Per-Tank Expected Loss",
+                                       "Per-Tank Premium"))]
 
-annot_x <- min(align_dt$per_tank_el,      na.rm = TRUE)
-annot_y <- max(align_dt$per_tank_premium, na.rm = TRUE) * 0.97
+annot_x <- 1L
+annot_y <- max(plot_dt$usd, na.rm = TRUE) * 0.98
 
-fig_align <- ggplot(align_dt,
-                    aes(x = per_tank_el, y = per_tank_premium)) +
-  geom_line(data        = fit_line,
-            inherit.aes = FALSE,
-            aes(x = per_tank_el, y = per_tank_premium),
-            color       = "grey50",
-            linetype    = "dashed",
-            linewidth   = 0.75) +
-  geom_point(size = 3.8, alpha = 0.92, color = "#0072B2") +
-  geom_text(aes(label = as.character(age_bin)),
-            vjust = -0.85, size = 2.8, color = "grey30") +
+fig_align <- ggplot(plot_dt,
+                    aes(x     = age_bin,
+                        y     = usd,
+                        color = series,
+                        shape = series,
+                        group = series)) +
+  geom_line(linewidth = 1.0) +
+  geom_point(size = 3.6, alpha = 0.95) +
   annotate("label",
            x             = annot_x,
            y             = annot_y,
@@ -569,38 +574,49 @@ fig_align <- ggplot(align_dt,
            size          = 3.1,
            fill          = "white",
            color         = "grey20",
-           label.size    = 0.25,
            label.padding = unit(0.28, "lines"),
-           label         = sprintf("Spearman ρ = %.2f", spearman_rho)) +
-  scale_x_continuous(
-    name   = "Per-Tank Expected Loss (2023 USD per tank-year)",
-    labels = dollar_format(accuracy = 1),
-    expand = expansion(mult = c(0.05, 0.12))) +
+           label         = sprintf("Spearman ρ = %.2f\nλ (OLS) = %.2f",
+                                   spearman_rho, lambda_ols)) +
+  scale_color_manual(
+    values = c("Per-Tank Expected Loss" = "#D55E00",
+               "Per-Tank Premium"       = "#0072B2"),
+    name   = NULL) +
+  scale_shape_manual(
+    values = c("Per-Tank Expected Loss" = 17,
+               "Per-Tank Premium"       = 19),
+    name   = NULL) +
   scale_y_continuous(
-    name   = "Mid-Continent Per-Tank Annual Premium, 2006-2014 (USD)",
+    name   = "USD per Tank-Year (2023)",
     labels = dollar_format(accuracy = 1),
-    expand = expansion(mult = c(0.05, 0.08))) +
+    expand = expansion(mult = c(0.05, 0.10))) +
+  scale_x_discrete(name = "Facility Mean Tank Age (years)") +
   labs(
     title    = "Per-Tank Premium Tracks Expected Loss Across Age Bins",
     subtitle = paste0(
-      "Single-walled facilities only. Each point is one 3-year age bin ",
-      "(facility mean tank age). Dashed line: OLS through origin."),
+      "Single-walled facilities, TX Mid-Continent, 2006-2014 filing. ",
+      "Both quantities in 2023 USD per tank-year — the vertical gap is the ",
+      "loading factor; the parallel rise across bins is the alignment."),
     caption  = paste0(
       "Notes: Per-tank premium = mean(tank_premium) across TX Mid-Continent ",
-      "tank-months in each bin (2006-2014 filing). Per-tank expected loss = ",
-      "h_hat × L_hat / n_tanks, computed at the tank-month level using each ",
-      "facility's row-level h_hat (01n full-panel elastic net predictions) ",
-      "and that facility-month's actual n_tanks, then averaged tank-month ",
-      "weighted within bins. L_hat = Duan-smeared OLS predicted cost from ",
-      "05 (six-state trust fund ledgers, single-walled, 3-year bins from ",
-      "row-level predictions). Spearman ρ = ", round(spearman_rho, 2), ". ",
-      "The OLS slope mixes underwriting markup with TX-vs-control cost-level ",
-      "differences and the independence assumption in dividing facility ",
-      "hazard by n_tanks — interpret only as descriptive.")
+      "tank-months in each bin. Per-tank expected loss = h_hat × L_hat / ",
+      "n_tanks, computed at the tank-month level using each facility's ",
+      "row-level h_hat (01n full-panel elastic net) and that facility-",
+      "month's actual n_tanks, then averaged tank-month weighted within ",
+      "bins. L_hat = Duan-smeared OLS predicted cost from 05 (six-state ",
+      "trust fund ledgers, single-walled, 3-year bins from row-level ",
+      "predictions). Spearman ρ = ", round(spearman_rho, 2),
+      "; OLS λ = ", round(lambda_ols, 2), ". The level gap reflects the ",
+      "TX trust fund reimbursement scheme (insurer covers deductible + ",
+      "over-cap, not full cleanup cost) and the independence assumption ",
+      "in dividing facility hazard by n_tanks. Interpret λ as descriptive.")
   ) +
-  theme_pub()
+  theme_pub() +
+  theme(
+    legend.position = "bottom",
+    axis.text.x     = element_text(angle = 30, hjust = 1)
+  )
 
-save_fig(fig_align, "Figure_Actuarial_Alignment", w = 7.5, h = 6.5)
+save_fig(fig_align, "Figure_Actuarial_Alignment", w = 8, h = 6)
 
 
 ################################################################################
