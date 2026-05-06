@@ -1,36 +1,37 @@
 ################################################################################
 # 06_Actuarial_Alignment.R
 #
-# PURPOSE:
-#   Section 5.3 — Tests whether the Mid-Continent premium schedule tracks
-#   actuarially implied expected losses across rate cells, using three
-#   entirely independent data sources:
+# Tests whether the Mid-Continent premium schedule tracks actuarially implied
+# expected losses across age cells. Three independent inputs:
 #
-#     (1) Predicted hazard rates   — OOB predictions from 01n_CVValidation.R
-#                                    (control-state pre-treatment panel)
-#     (2) Predicted cleanup costs  — Duan-smeared m4 fitted values from
-#                                    05_Claims_Analysis.R
-#                                    (six control-state trust fund ledgers)
-#     (3) Premium schedule         — Real cell-mean premiums from reconstructed
-#                                    Mid-Continent Casualty tank-month data
-#                                    (SERFF rate filings, all four periods)
+#   (1) h_hat   — OOB hazard from 01n (TX + controls, pre-treatment),
+#                 single-walled facilities only.
+#                 Source: Data/Analysis/dcm_state_hazard_rates.csv (Z)
 #
-#   Also produces the filing-period evolution figure showing that the age
-#   gradient became more granular — especially on the downward/discount side —
-#   across the four filing periods.
+#   (2) L_hat   — Duan-smeared OLS predicted cleanup cost from 05,
+#                 single-walled facilities only, re-aggregated to 01n's
+#                 3-year age bins from row-level predictions.
+#                 Source: Data/Analysis/dcm_predicted_cost_rowlevel.csv (Z)
 #
-# INPUTS (must exist before running):
-#   Data/Analysis/dcm_state_hazard_rates.csv       from 01n
-#   Output/Tables/dcm_loss_binary_wall.csv         from 05
-#   Rate FIllings/Mid-Continent Casualty Company */
-#     texas_midcontinent_tank_month_premium_2006_to_04_2014.csv
-#     texas_midcontinent_tank_month_premium_2014_05_to_2019_01.csv
-#     texas_midcontinent_tank_month_premium_2019_2021.csv
-#     texas_midcontinent_tank_month_premium_2021_onwards.csv
+#   (3) Premium — Cell-mean facility-month annualised premium from
+#                 reconstructed Mid-Continent SERFF tank-month data,
+#                 collapsed to facility-month and binned by avg_tank_age.
+#                 Source: Rate FIllings/Mid-Continent Casualty Company .../
+#
+# Design notes (read before changing this script):
+#   * The Texas Mid-Continent fleet is ~0% double-walled steel, so wall type
+#     does not generate premium variation in this book. Alignment is on age
+#     bins only, single-walled curve only, facility-level on both sides.
+#   * All three age binnings are reconciled to 01n's 3-year master grid by
+#     re-aggregating from row-level inputs (cost, premium) — no regression
+#     is re-run here.
+#   * Lambda (OLS through origin) is reported descriptively only. It mixes
+#     underwriting markup with TX-vs-control-state cost-level differences
+#     and cannot identify either separately. Spearman rho is the headline.
 #
 # OUTPUTS:
-#   Output/Figures/Figure_Actuarial_Alignment.png/.pdf
-#   Output/Figures/Figure_Premium_Age_Evolution.png/.pdf
+#   Output/Figures/Figure_Actuarial_Alignment.{png,pdf}
+#   Output/Figures/Figure_Premium_Age_Evolution.{png,pdf}
 #   Output/Tables/Table_Actuarial_Alignment.csv
 #   Output/Tables/Table_Actuarial_Loading.csv
 #   Output/Tables/Table_Premium_Cell_By_Period.csv
@@ -47,32 +48,35 @@ suppressPackageStartupMessages({
   library(here)
 })
 
+source(here::here("Code", "Helpers", "data_paths.R"))
+
 options(scipen = 999)
 
 cat("=================================================================\n")
-cat("06_Actuarial_Alignment.R\n")
-cat("Premium Schedule vs. Actuarial Expected Loss\n")
+cat("06_Actuarial_Alignment.R  —  Premium vs. Expected Loss\n")
 cat("=================================================================\n\n")
 
-# ── Output directories ────────────────────────────────────────────────────────
+# ── 01n age-bin definition (master grid) ─────────────────────────────────────
+# Must match make_age_bin() in 01n_CVValidation.R exactly.
+AGE_BIN_BREAKS <- c(0, 3, 6, 9, 12, 15, 18, 21, 24, Inf)
+AGE_BIN_LABELS <- c("0-2", "3-5", "6-8", "9-11", "12-14",
+                    "15-17", "18-20", "21-23", "24+")
+
+bin_age <- function(a) {
+  factor(
+    cut(a, breaks = AGE_BIN_BREAKS, labels = AGE_BIN_LABELS,
+        right = FALSE, include.lowest = TRUE),
+    levels = AGE_BIN_LABELS, ordered = FALSE
+  )
+}
+
+# ── Output dirs ──────────────────────────────────────────────────────────────
 OUTPUT_FIGURES <- here("Output", "Figures")
 OUTPUT_TABLES  <- here("Output", "Tables")
-ANALYSIS_DIR   <- here("Data", "Analysis")
-
 for (d in c(OUTPUT_FIGURES, OUTPUT_TABLES))
   dir.create(d, recursive = TRUE, showWarnings = FALSE)
 
-# ── Colours and theme ─────────────────────────────────────────────────────────
-COL_SW <- "#D55E00"
-COL_DW <- "#0072B2"
-
-PERIOD_COLORS <- c(
-  "2006-2014" = "#D55E00",
-  "2014-2019" = "#E69F00",
-  "2019-2021" = "#009E73",
-  "2021+"     = "#0072B2"
-)
-
+# ── Theme ────────────────────────────────────────────────────────────────────
 theme_pub <- function(base_size = 12) {
   theme_minimal(base_size = base_size) +
     theme(
@@ -100,154 +104,113 @@ save_fig <- function(p, name, w = 8, h = 6) {
   cat(sprintf("  Saved: %s (.png + .pdf)\n", name))
 }
 
-# ── Age bin ordering (5-year, matching 05_Claims_Analysis.R) ─────────────────
-AGE_BIN_ORDER_5YR <- c("0-5", "5-10", "10-15", "15-20",
-                        "20-25", "25-30", "30-35", "35+")
-
-bin_age_years <- function(a) {
-  fcase(
-    is.na(a),   NA_character_,
-    a <   5,    "0-5",
-    a <  10,    "5-10",
-    a <  15,    "10-15",
-    a <  20,    "15-20",
-    a <  25,    "20-25",
-    a <  30,    "25-30",
-    a <  35,    "30-35",
-    a >= 35,    "35+"
-  )
-}
+PERIOD_COLORS <- c(
+  "2006-2014" = "#D55E00",
+  "2014-2019" = "#E69F00",
+  "2019-2021" = "#009E73",
+  "2021+"     = "#0072B2"
+)
 
 
 ################################################################################
-#### S1: Load Hazard Rates (01n output) ########################################
+#### S1: Hazard (single-walled, 3-year bins from 01n) ##########################
 ################################################################################
 
-cat("\n── S1: Loading hazard rates ──────────────────────────────────────────\n")
+cat("── S1: Hazard ────────────────────────────────────────────────────────\n")
 
-hazard_path <- file.path(ANALYSIS_DIR, "dcm_state_hazard_rates.csv")
+hazard_path <- z_path("Data", "Analysis", "dcm_state_hazard_rates.csv")
 if (!file.exists(hazard_path))
-  stop("dcm_state_hazard_rates.csv not found.\n",
-       "Run 01n_CVValidation.R first and ensure the S11 addition is present.")
+  stop("dcm_state_hazard_rates.csv not found on Z. Run 01n first.")
 
 hazard_raw <- fread(hazard_path)
-cat(sprintf("  Loaded: %d rows from dcm_state_hazard_rates.csv\n",
-    nrow(hazard_raw)))
 
-# Confirm required columns
-req_haz <- c("age_bin_int", "has_single_walled", "h_hat", "h_hat_per1k", "n_fac_years")
+req_haz <- c("age_bin_int", "has_single_walled", "h_hat", "n_fac_years")
 missing_haz <- setdiff(req_haz, names(hazard_raw))
 if (length(missing_haz) > 0)
   stop("hazard file missing columns: ", paste(missing_haz, collapse = ", "))
 
-hazard_raw[, wall_label := fifelse(
-  as.integer(has_single_walled) == 1L, "Single-Walled", "Double-Walled"
-)]
+hazard_sw <- hazard_raw[
+  has_single_walled == 1L,
+  .(age_bin_int,
+    age_bin = factor(AGE_BIN_LABELS[age_bin_int], levels = AGE_BIN_LABELS),
+    h_hat,
+    n_fac_years)
+]
+setorder(hazard_sw, age_bin_int)
 
-# ── Crosswalk: 3-year age bins (01n) → 5-year age bins (05 / premiums) ───────
-#
-# 01n uses 9 bins with breaks at (0,3,6,9,12,15,18,21,24,Inf).
-# age_bin_int: 1="0-2", 2="3-5", 3="6-8", 4="9-11", 5="12-14",
-#              6="15-17", 7="18-20", 8="21-23", 9="24+"
-#
-# Mapping to 5-year bins:
-#   int 1 (0-2)   → "0-5"
-#   int 2 (3-5)   → "0-5"     ← note: 3-5 straddles the boundary; assign low
-#   int 3 (6-8)   → "5-10"
-#   int 4 (9-11)  → "10-15"   ← 9 straddles; assign to 10-15
-#   int 5 (12-14) → "10-15"
-#   int 6 (15-17) → "15-20"
-#   int 7 (18-20) → "15-20"
-#   int 8 (21-23) → "20-25"
-#   int 9 (24+)   → "20-25"   (24+ facilities are mostly 24-30; bin at 20-25)
-#
-# Bins 25-30, 30-35, 35+ in the cost/premium data have no hazard counterpart
-# because the 01n estimation sample (1990-entry cohort) caps out around 24 years
-# by the pre-treatment window end. These cells are dropped from the alignment
-# figure with a note.
-
-crosswalk <- data.table(
-  age_bin_int  = 1:9,
-  age_bins_5yr = c("0-5", "0-5", "5-10", "10-15", "10-15",
-                   "15-20", "15-20", "20-25", "20-25")
-)
-
-hazard_xw <- merge(hazard_raw, crosswalk, by = "age_bin_int")
-
-# Aggregate 3-year cells to 5-year cells using facility-year weighted mean
-hazard_5yr <- hazard_xw[, .(
-  h_hat       = weighted.mean(h_hat,       w = n_fac_years, na.rm = TRUE),
-  h_hat_per1k = weighted.mean(h_hat_per1k, w = n_fac_years, na.rm = TRUE),
-  n_fac_years = sum(n_fac_years)
-), by = .(age_bins_5yr, wall_label)]
-
-hazard_5yr[, age_bins_5yr := factor(age_bins_5yr, levels = AGE_BIN_ORDER_5YR)]
-setorder(hazard_5yr, wall_label, age_bins_5yr)
-
-cat(sprintf("  Hazard cells after 5-year aggregation: %d\n", nrow(hazard_5yr)))
-cat("  Cell summary:\n")
-print(hazard_5yr[, .(age_bins_5yr, wall_label,
-                     h_hat_per1k = round(h_hat_per1k, 2),
-                     n_fac_years)])
+cat(sprintf("  Loaded %d SW hazard cells\n", nrow(hazard_sw)))
+print(hazard_sw[, .(age_bin,
+                    h_hat_per1k = round(h_hat * 1000, 2),
+                    n_fac_years)])
 
 
 ################################################################################
-#### S2: Load Cost Predictions (05 output) #####################################
+#### S2: Cost (single-walled, re-binned from row-level to 3-year) ##############
 ################################################################################
 
-cat("\n── S2: Loading cost predictions ──────────────────────────────────────\n")
+cat("\n── S2: Cost ─────────────────────────────────────────────────────────\n")
 
-loss_path <- file.path(OUTPUT_TABLES, "dcm_loss_binary_wall.csv")
-if (!file.exists(loss_path))
-  stop("dcm_loss_binary_wall.csv not found.\n",
-       "Run 05_Claims_Analysis.R first and ensure the DCM output block is present.")
+cost_path <- z_path("Data", "Analysis", "dcm_predicted_cost_rowlevel.csv")
+if (!file.exists(cost_path))
+  stop("dcm_predicted_cost_rowlevel.csv not found on Z. Re-run 05.")
 
-loss_raw <- fread(loss_path)
-cat(sprintf("  Loaded: %d rows from dcm_loss_binary_wall.csv\n", nrow(loss_raw)))
+cost_raw <- fread(cost_path)
 
-# Confirm required columns
-req_loss <- c("age_bins", "wall_binary", "L_hat", "n_claims")
-missing_loss <- setdiff(req_loss, names(loss_raw))
-if (length(missing_loss) > 0)
-  stop("loss file missing columns: ", paste(missing_loss, collapse = ", "))
+req_cost <- c("avg_tank_age", "has_single_walled", "predicted_cost_2023")
+missing_cost <- setdiff(req_cost, names(cost_raw))
+if (length(missing_cost) > 0)
+  stop("cost file missing columns: ", paste(missing_cost, collapse = ", "))
 
-# Rename to match join keys
-loss_dt <- copy(loss_raw)
-setnames(loss_dt, c("age_bins", "wall_binary"), c("age_bins_5yr", "wall_label"))
-loss_dt[, age_bins_5yr := factor(age_bins_5yr, levels = AGE_BIN_ORDER_5YR)]
+cat(sprintf("  Loaded %s row-level cost predictions\n",
+    format(nrow(cost_raw), big.mark = ",")))
 
-cat(sprintf("  Cost cells available: %d\n", nrow(loss_dt)))
-cat("  Cell summary:\n")
-print(loss_dt[, .(age_bins_5yr, wall_label,
-                  L_hat    = dollar(round(L_hat, 0)),
-                  n_claims)])
+cost_sw <- cost_raw[
+  has_single_walled == 1L &
+  !is.na(avg_tank_age) &
+  !is.na(predicted_cost_2023) &
+  predicted_cost_2023 > 0
+]
+
+cost_sw[, age_bin := bin_age(avg_tank_age)]
+
+cost_cells <- cost_sw[!is.na(age_bin), .(
+  L_hat    = mean(predicted_cost_2023,   na.rm = TRUE),
+  L_median = median(predicted_cost_2023, na.rm = TRUE),
+  L_sd     = sd(predicted_cost_2023,     na.rm = TRUE),
+  n_claims = .N
+), by = age_bin]
+cost_cells[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
+setorder(cost_cells, age_bin)
+
+cat(sprintf("  SW cost cells (3-year bins): %d\n", nrow(cost_cells)))
+print(cost_cells[, .(age_bin,
+                     L_hat = dollar(round(L_hat, 0)),
+                     n_claims)])
 
 
 ################################################################################
-#### S3: Load Real Premium Data (tank-month outputs from rate engines) #########
+#### S3: Texas premium (facility-level, binned by avg_tank_age) ################
 ################################################################################
 
-cat("\n── S3: Loading real premium data ─────────────────────────────────────\n")
+cat("\n── S3: Texas premium ────────────────────────────────────────────────\n")
 
-# ── Path helper ───────────────────────────────────────────────────────────────
-# Note: the Rate FIllings directory name contains a soft-hyphen character
-# in the original scripts. Try both variants.
+# Path encoding: "Rate FIllings" directory name has a soft-hyphen in some
+# variants. Try all three.
 rate_dir_candidates <- c(
-  here("Rate FIllings", "Mid-Continent Casualty Company \u00ad\u2013 23418"),
+  here("Rate FIllings", "Mid-Continent Casualty Company ­– 23418"),
   here("Rate FIllings", "Mid-Continent Casualty Company - 23418"),
-  here("Rate FIllings", "Mid-Continent Casualty Company \u2013 23418")
+  here("Rate FIllings", "Mid-Continent Casualty Company – 23418")
 )
 RATE_DIR <- rate_dir_candidates[dir.exists(rate_dir_candidates)][1]
 if (is.na(RATE_DIR))
-  stop("Rate FIllings directory not found. Check path encoding in Rate FIllings/.")
+  stop("Rate FIllings directory not found. Check path encoding.")
 
 cat(sprintf("  Rate dir: %s\n", RATE_DIR))
 
-# ── File registry ─────────────────────────────────────────────────────────────
 tm_registry <- data.table(
-  period_id    = c("P1", "P2", "P3", "P4"),
+  period_id     = c("P1", "P2", "P3", "P4"),
   filing_period = c("2006-2014", "2014-2019", "2019-2021", "2021+"),
-  filename     = c(
+  filename      = c(
     "texas_midcontinent_tank_month_premium_2006_to_04_2014.csv",
     "texas_midcontinent_tank_month_premium_2014_05_to_2019_01.csv",
     "texas_midcontinent_tank_month_premium_2019_2021.csv",
@@ -260,18 +223,9 @@ tm_registry[, exists   := file.exists(filepath)]
 cat("  File availability:\n")
 print(tm_registry[, .(period_id, filing_period, exists)])
 
-missing_files <- tm_registry[exists == FALSE]
-if (nrow(missing_files) > 0) {
-  cat(sprintf(
-    "  WARNING: %d filing period(s) missing. Alignment figure will use available periods only.\n",
-    nrow(missing_files)))
-}
-
-# ── Load available files ──────────────────────────────────────────────────────
 tm_list <- lapply(seq_len(nrow(tm_registry)), function(i) {
   row <- tm_registry[i]
   if (!row$exists) return(NULL)
-
   dt <- tryCatch(
     fread(row$filepath, showProgress = FALSE),
     error = function(e) {
@@ -280,7 +234,6 @@ tm_list <- lapply(seq_len(nrow(tm_registry)), function(i) {
     }
   )
   if (is.null(dt)) return(NULL)
-
   dt[, filing_period := row$filing_period]
   dt[, period_id     := row$period_id]
   cat(sprintf("    %s: %s rows\n",
@@ -292,230 +245,158 @@ tm_all <- rbindlist(Filter(Negate(is.null), tm_list),
                     use.names = TRUE, fill = TRUE)
 
 if (nrow(tm_all) == 0)
-  stop("No tank-month premium files loaded. Check RATE_DIR and file names.")
+  stop("No tank-month premium files loaded.")
 
-cat(sprintf("  Total tank-months: %s across %d periods\n",
-    format(nrow(tm_all), big.mark = ","),
-    uniqueN(tm_all$filing_period)))
-
-# ── Standardise wall type ─────────────────────────────────────────────────────
-# is_double_walled_steel = 1 → Double-Walled
-# All other construction types → Single-Walled
-# Reinforced fiberglass gets 0.00 construction load (same as SW) so grouping
-# it with SW is consistent with the premium schedule logic.
-
-if ("is_double_walled_steel" %in% names(tm_all)) {
-  tm_all[, wall_label := fcase(
-    as.integer(is_double_walled_steel) == 1L, "Double-Walled",
-    default = "Single-Walled"
-  )]
-} else {
-  # Fallback: use double_walled flag if present
-  if ("double_walled" %in% names(tm_all)) {
-    tm_all[, wall_label := fcase(
-      as.integer(double_walled) == 1L, "Double-Walled",
-      default = "Single-Walled"
-    )]
-    cat("  NOTE: used double_walled flag (is_double_walled_steel not found)\n")
-  } else {
-    stop("Cannot identify wall type column in tank-month data.")
-  }
-}
-
-# ── Bin age_years to 5-year bins ─────────────────────────────────────────────
-if (!"age_years" %in% names(tm_all))
-  stop("age_years column missing from tank-month data.")
-
-tm_all[, age_bins_5yr := factor(bin_age_years(age_years),
-                                levels = AGE_BIN_ORDER_5YR)]
-
-# ── Detect premium frequency: annual vs monthly ───────────────────────────────
-# BASE_RATE = $300/tank/year in all filings. If tank_premium median is ~$300-400
-# the column is already annual (one rate applied per contract month record).
-# If median is ~$25-35, the column is monthly and needs x12.
-# We inspect the distribution and apply the appropriate multiplier.
-
+# Detect monthly vs annual premium (BASE_RATE = $300/tank/year in all filings;
+# tank_premium ~ $25 → monthly, ~ $300+ → annual)
 prem_median <- median(tm_all$tank_premium, na.rm = TRUE)
 cat(sprintf("\n  tank_premium median: $%.2f\n", prem_median))
 
 if (prem_median < 100) {
-  cat("  Detected MONTHLY premium — multiplying by 12 to annualise.\n")
+  cat("  Detected MONTHLY premium — annualising x12\n")
   tm_all[, annual_tank_premium := tank_premium * 12]
 } else {
-  cat("  Detected ANNUAL premium — using tank_premium directly.\n")
+  cat("  Detected ANNUAL premium\n")
   tm_all[, annual_tank_premium := tank_premium]
 }
 
-# ── Validity filter ───────────────────────────────────────────────────────────
-n_before <- nrow(tm_all)
-tm_all <- tm_all[
-  !is.na(age_bins_5yr)         &
-  !is.na(annual_tank_premium)  &
-  annual_tank_premium > 0      &
-  !is.na(wall_label)
+# Collapse tank-month → facility-month: avg_tank_age + sum of tank premiums.
+# This is the unit that aligns with 01n (facility-mean-age) and 05 (facility
+# claim-year). Sum-then-average preserves within-cell tank-count × age
+# covariance that mean(tank_prem)*mean(n_tanks) would lose.
+fac_month <- tm_all[
+  !is.na(age_years) &
+  !is.na(annual_tank_premium) &
+  annual_tank_premium > 0,
+  .(total_premium = sum(annual_tank_premium, na.rm = TRUE),
+    avg_tank_age  = mean(age_years,           na.rm = TRUE),
+    n_tanks       = .N),
+  by = .(FACILITY_ID, YEAR, MONTH, filing_period, period_id)
 ]
-cat(sprintf("  After validity filter: %s rows (dropped %s)\n",
-    format(nrow(tm_all), big.mark = ","),
-    format(n_before - nrow(tm_all), big.mark = ",")))
 
-# ── Cell-mean premiums by filing period ───────────────────────────────────────
-cell_premiums_by_period <- tm_all[, .(
-  mean_premium    = mean(annual_tank_premium,   na.rm = TRUE),
-  median_premium  = median(annual_tank_premium, na.rm = TRUE),
-  sd_premium      = sd(annual_tank_premium,     na.rm = TRUE),
-  n_tank_months   = .N,
-  mean_age_years  = mean(age_years,             na.rm = TRUE)
-), by = .(filing_period, period_id, age_bins_5yr, wall_label)]
+cat(sprintf("\n  Facility-months: %s across %d periods\n",
+    format(nrow(fac_month), big.mark = ","),
+    uniqueN(fac_month$filing_period)))
 
-setorder(cell_premiums_by_period, period_id, wall_label, age_bins_5yr)
+fac_month[, age_bin := bin_age(avg_tank_age)]
 
-fwrite(cell_premiums_by_period,
+# Cell-mean facility annual premium by age bin × period
+prem_cells_by_period <- fac_month[!is.na(age_bin), .(
+  mean_premium    = mean(total_premium,   na.rm = TRUE),
+  median_premium  = median(total_premium, na.rm = TRUE),
+  sd_premium      = sd(total_premium,     na.rm = TRUE),
+  n_fac_months    = .N,
+  mean_age        = mean(avg_tank_age,    na.rm = TRUE)
+), by = .(filing_period, period_id, age_bin)]
+prem_cells_by_period[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
+setorder(prem_cells_by_period, period_id, age_bin)
+
+fwrite(prem_cells_by_period,
        file.path(OUTPUT_TABLES, "Table_Premium_Cell_By_Period.csv"))
-cat(sprintf("\n  Cell-period table saved: %d cells\n",
-    nrow(cell_premiums_by_period)))
+cat(sprintf("  Cell-period table saved: %d cells\n",
+    nrow(prem_cells_by_period)))
 
-# ── Cell-mean premiums for P1 (2006-2014) — alignment figure baseline ─────────
-cell_premiums_p1 <- tm_all[
-  period_id == "P1" & !is.na(age_bins_5yr),
-  .(
-    annual_premium = mean(annual_tank_premium, na.rm = TRUE),
-    n_tank_months  = .N
-  ),
-  by = .(age_bins_5yr, wall_label)
+# P1 cell premiums for the alignment figure
+prem_p1 <- prem_cells_by_period[
+  period_id == "P1",
+  .(age_bin, annual_premium = mean_premium, n_fac_months)
 ]
 
-if (nrow(cell_premiums_p1) == 0) {
-  cat("  WARNING: P1 (2006-2014) data not available.\n")
-  cat("  Falling back to earliest available period for alignment figure.\n")
-  earliest_period <- tm_all[, min(period_id)]
-  cell_premiums_p1 <- tm_all[
-    period_id == earliest_period,
-    .(annual_premium = mean(annual_tank_premium, na.rm = TRUE),
-      n_tank_months  = .N),
-    by = .(age_bins_5yr, wall_label)
+if (nrow(prem_p1) == 0) {
+  cat("  WARNING: P1 (2006-2014) data missing — falling back to earliest period.\n")
+  earliest <- prem_cells_by_period[, min(as.character(period_id))]
+  prem_p1 <- prem_cells_by_period[
+    period_id == earliest,
+    .(age_bin, annual_premium = mean_premium, n_fac_months)
   ]
-  cat(sprintf("  Using period: %s\n",
-      tm_registry[period_id == earliest_period, filing_period]))
 }
 
-cat("\n  P1 cell premiums (annualised per tank):\n")
-print(cell_premiums_p1[order(wall_label, age_bins_5yr),
-                        .(age_bins_5yr, wall_label,
-                          annual_premium = dollar(round(annual_premium, 0)),
-                          n_tank_months)])
+cat("\n  P1 (2006-2014) cell premiums:\n")
+print(prem_p1[order(age_bin),
+              .(age_bin,
+                annual_premium = dollar(round(annual_premium, 0)),
+                n_fac_months)])
 
 
 ################################################################################
-#### S4: Merge and Compute Expected Loss #######################################
+#### S4: Merge and compute expected loss #######################################
 ################################################################################
 
-cat("\n── S4: Computing expected loss ───────────────────────────────────────\n")
+cat("\n── S4: Expected loss ────────────────────────────────────────────────\n")
 
-# Merge hazard + cost on (age_bins_5yr, wall_label)
+# Expected loss = annual first-release probability × predicted cost per claim
+# Both estimated outside Texas's premium book; both at the facility level;
+# both restricted to single-walled.
 haz_cost <- merge(
-  hazard_5yr[, .(age_bins_5yr, wall_label, h_hat, h_hat_per1k, n_fac_years)],
-  loss_dt[,    .(age_bins_5yr, wall_label, L_hat, n_claims)],
-  by = c("age_bins_5yr", "wall_label"),
-  all = FALSE
+  hazard_sw[,  .(age_bin, h_hat, n_fac_years)],
+  cost_cells[, .(age_bin, L_hat, n_claims)],
+  by = "age_bin", all = FALSE
 )
+haz_cost[, expected_loss := h_hat * L_hat]
+setorder(haz_cost, age_bin)
 
-cat(sprintf("  Cells after hazard-cost merge: %d\n", nrow(haz_cost)))
+cat("  Expected loss by age bin:\n")
+print(haz_cost[, .(age_bin,
+                   h_hat_per1k   = round(h_hat * 1000, 2),
+                   L_hat         = dollar(round(L_hat, 0)),
+                   expected_loss = dollar(round(expected_loss, 0)))])
 
-if (nrow(haz_cost) == 0)
-  stop("Hazard-cost merge produced no rows. Check age bin label alignment.")
-
-# Expected loss = annual first-release probability x expected cost per release
-# h_hat is probability per facility-year (not per 1,000)
-# L_hat is expected remediation cost in 2023 USD per confirmed release
-# Result: expected environmental loss in 2023 USD per facility-year
-
-haz_cost[, expected_loss     := h_hat * L_hat]
-haz_cost[, expected_loss_1k  := h_hat_per1k * L_hat / 1000]
-
-cat("  Expected loss by cell:\n")
-print(haz_cost[order(wall_label, age_bins_5yr),
-               .(age_bins_5yr, wall_label,
-                 h_hat_per1k  = round(h_hat_per1k, 2),
-                 L_hat        = dollar(round(L_hat, 0)),
-                 expected_loss = dollar(round(expected_loss, 0)))])
-
-# Merge with P1 premiums
+# Merge with P1 premium → final alignment table
 align_dt <- merge(
   haz_cost,
-  cell_premiums_p1[, .(age_bins_5yr, wall_label, annual_premium, n_tank_months)],
-  by = c("age_bins_5yr", "wall_label"),
-  all = FALSE
+  prem_p1[, .(age_bin, annual_premium, n_fac_months)],
+  by = "age_bin", all = FALSE
 )
+setorder(align_dt, age_bin)
 
-cat(sprintf("\n  Cells in final alignment table: %d\n", nrow(align_dt)))
+cat(sprintf("\n  Cells in alignment: %d\n", nrow(align_dt)))
+if (nrow(align_dt) < 4)
+  warning("Fewer than 4 cells in alignment — figure may not be credible.")
 
-if (nrow(align_dt) == 0)
-  stop("Premium merge produced no rows. Check age bin labels in cell_premiums_p1.")
-
-# Loading factor: premium / expected_loss
-# lambda = 1: break-even pricing
-# lambda > 1: includes profit, admin costs, reinsurance loading
+# Loading factor (descriptive only; see caveat in caption)
 align_dt[, loading_factor := annual_premium / expected_loss]
 
-# Rank correlation — key statistic
+# Headline statistics
 spearman_rho <- cor(align_dt$expected_loss, align_dt$annual_premium,
                     method = "spearman", use = "complete.obs")
 pearson_r    <- cor(align_dt$expected_loss, align_dt$annual_premium,
                     method = "pearson",   use = "complete.obs")
 
-cat(sprintf("\n  Gradient alignment:\n"))
-cat(sprintf("    Spearman rank correlation: %.3f\n", spearman_rho))
-cat(sprintf("    Pearson correlation:       %.3f\n", pearson_r))
-cat(sprintf("\n  Loading factor (premium / expected loss):\n"))
-cat(sprintf("    Mean:    %.3f\n", mean(align_dt$loading_factor,   na.rm = TRUE)))
-cat(sprintf("    Median:  %.3f\n", median(align_dt$loading_factor, na.rm = TRUE)))
-cat(sprintf("    Range:   [%.3f, %.3f]\n",
-    min(align_dt$loading_factor, na.rm = TRUE),
-    max(align_dt$loading_factor, na.rm = TRUE)))
-
-# OLS loading factor (no intercept — proportionality constraint)
+# OLS through origin (descriptive level shift)
 lambda_ols <- coef(lm(annual_premium ~ 0 + expected_loss, data = align_dt))
-cat(sprintf("    OLS (no-intercept): %.3f\n", lambda_ols))
+
+cat(sprintf("\n  Spearman rho:  %.3f\n", spearman_rho))
+cat(sprintf("  Pearson r:     %.3f\n", pearson_r))
+cat(sprintf("  Lambda (OLS):  %.3f  (descriptive — see caption caveat)\n",
+    lambda_ols))
 
 
 ################################################################################
-#### S5: Figure 1 — Actuarial Alignment Scatter ################################
+#### S5: Alignment figure ######################################################
 ################################################################################
 
-cat("\n── S5: Figure — Actuarial Alignment ─────────────────────────────────\n")
+cat("\n── S5: Alignment figure ─────────────────────────────────────────────\n")
 
-# Proportionality line through origin
-x_max_align <- max(align_dt$expected_loss, na.rm = TRUE) * 1.12
+x_max <- max(align_dt$expected_loss, na.rm = TRUE) * 1.12
 fit_line <- data.table(
-  expected_loss  = seq(0, x_max_align, length.out = 200),
-  annual_premium = lambda_ols * seq(0, x_max_align, length.out = 200)
+  expected_loss  = seq(0, x_max, length.out = 200),
+  annual_premium = lambda_ols * seq(0, x_max, length.out = 200)
 )
 
-# Annotation position: top-left
 annot_x <- min(align_dt$expected_loss, na.rm = TRUE)
 annot_y <- max(align_dt$annual_premium, na.rm = TRUE) * 0.97
 
 fig_align <- ggplot(align_dt,
-                    aes(x     = expected_loss,
-                        y     = annual_premium,
-                        color = wall_label,
-                        shape = wall_label)) +
-  # Proportionality line
-  geom_line(data       = fit_line,
-            aes(x = expected_loss, y = annual_premium),
+                    aes(x = expected_loss, y = annual_premium)) +
+  geom_line(data        = fit_line,
             inherit.aes = FALSE,
+            aes(x = expected_loss, y = annual_premium),
             color       = "grey50",
             linetype    = "dashed",
             linewidth   = 0.75) +
-  # Data points
-  geom_point(size = 3.8, alpha = 0.92) +
-  # Age bin labels
-  geom_text(aes(label = as.character(age_bins_5yr)),
-            vjust       = -0.85,
-            size        = 2.6,
-            color       = "grey30",
-            show.legend = FALSE) +
-  # Correlation + lambda annotation
+  geom_point(size = 3.8, alpha = 0.92, color = "#0072B2") +
+  geom_text(aes(label = as.character(age_bin)),
+            vjust = -0.85, size = 2.8, color = "grey30") +
   annotate("label",
            x             = annot_x,
            y             = annot_y,
@@ -526,268 +407,198 @@ fig_align <- ggplot(align_dt,
            color         = "grey20",
            label.size    = 0.25,
            label.padding = unit(0.28, "lines"),
-           label         = sprintf(
-             "Spearman \u03c1 = %.2f\n\u03bb (OLS loading) = %.2f",
-             spearman_rho, lambda_ols)) +
-  scale_color_manual(
-    values = c("Single-Walled" = COL_SW, "Double-Walled" = COL_DW),
-    name   = "Wall Type") +
-  scale_shape_manual(
-    values = c("Single-Walled" = 19, "Double-Walled" = 17),
-    name   = "Wall Type") +
+           label         = sprintf("Spearman ρ = %.2f", spearman_rho)) +
   scale_x_continuous(
     name   = "Model-Implied Expected Loss per Facility-Year (2023 USD)",
     labels = dollar_format(accuracy = 1),
     expand = expansion(mult = c(0.05, 0.12))) +
   scale_y_continuous(
-    name   = "Mid-Continent Annual Tank Premium, 2006-2014 Filing (USD)",
+    name   = "Mid-Continent Annual Facility Premium, 2006-2014 (USD)",
     labels = dollar_format(accuracy = 1),
     expand = expansion(mult = c(0.05, 0.08))) +
   labs(
-    title   = "Premium Schedule Tracks Actuarial Expected Loss Across Rate Cells",
-    subtitle = sprintf(
-      "Each point is one (age bin \u00d7 wall type) cell. Dashed line: premium = \u03bb \u00d7 expected loss (\u03bb = %.2f).",
-      lambda_ols),
-    caption = paste0(
-      "Notes: Expected loss = predicted release probability (cross-validated elastic net, ",
-      "pre-treatment control states, 01n) \u00d7 predicted cleanup cost (Duan-smeared OLS, ",
-      "six-state trust fund ledgers, 05). ",
-      "Premium = cell-mean annual tank premium from Mid-Continent Casualty SERFF filing ",
-      "(2006-2014), reconstructed from TCEQ financial responsibility records. ",
-      "Data sources are independent. Spearman \u03c1 = ", round(spearman_rho, 2),
-      ". Dashed line forced through origin (premium = \u03bb \u00d7 expected loss).")
+    title    = "Premium Schedule Tracks Expected Loss Across Age Bins",
+    subtitle = paste0(
+      "Single-walled facilities only. Each point is one 3-year age bin. ",
+      "Dashed line: OLS through origin (descriptive)."),
+    caption  = paste0(
+      "Notes: Expected loss = h_hat × L_hat. ",
+      "h_hat = OOB hazard from 01n elastic net (TX + controls, ",
+      "pre-treatment, single-walled). ",
+      "L_hat = Duan-smeared OLS predicted cost from 05 (six-state trust ",
+      "fund ledgers, single-walled, re-aggregated to 3-year bins from ",
+      "row-level predictions). ",
+      "Premium = facility-month total tank premium from reconstructed ",
+      "Mid-Continent Casualty SERFF filing (2006-2014), averaged across ",
+      "facility-months in each bin. Spearman ρ = ",
+      round(spearman_rho, 2), ". ",
+      "The OLS-through-origin slope mixes underwriting markup with ",
+      "Texas-vs-control-state cost-level differences and cannot identify ",
+      "either separately — interpret only as descriptive.")
   ) +
-  theme_pub() +
-  theme(legend.position = "bottom")
+  theme_pub()
 
 save_fig(fig_align, "Figure_Actuarial_Alignment", w = 7.5, h = 6.5)
 
 
 ################################################################################
-#### S6: Figure 2 — Age Gradient Evolution Across Filing Periods ###############
+#### S6: Period evolution figure ###############################################
 ################################################################################
 
-cat("\n── S6: Figure — Premium Age Gradient Evolution ───────────────────────\n")
+cat("\n── S6: Period evolution figure ──────────────────────────────────────\n")
 
-# We need at least two filing periods for a meaningful evolution figure
-n_periods_available <- uniqueN(cell_premiums_by_period$filing_period)
-cat(sprintf("  Filing periods available: %d\n", n_periods_available))
+n_periods_avail <- uniqueN(prem_cells_by_period$filing_period)
+cat(sprintf("  Filing periods available: %d\n", n_periods_avail))
 
-if (n_periods_available < 2) {
-  cat("  WARNING: fewer than 2 periods available — evolution figure skipped.\n")
+if (n_periods_avail < 2) {
+  cat("  WARNING: <2 periods — evolution figure skipped.\n")
 } else {
+  # Index to the bin closest to "10-15 years" — i.e., 12-14 in 01n's grid.
+  NEUTRAL_BIN <- "12-14"
 
-  # Index premiums to the neutral bin (10-15 years) within each period x wall type
-  # This removes level differences across periods and shows gradient shape only
-  NEUTRAL_BIN <- "10-15"
-
-  neutral_prems <- cell_premiums_by_period[
-    age_bins_5yr == NEUTRAL_BIN,
-    .(filing_period, wall_label, neutral_premium = mean_premium)
+  neutral <- prem_cells_by_period[
+    age_bin == NEUTRAL_BIN,
+    .(filing_period, neutral_premium = mean_premium)
   ]
 
-  evo_dt <- merge(
-    cell_premiums_by_period,
-    neutral_prems,
-    by = c("filing_period", "wall_label")
-  )
-
+  evo_dt <- merge(prem_cells_by_period, neutral, by = "filing_period")
   evo_dt[, premium_index := mean_premium / neutral_premium]
 
-  # Restrict to bins that are populated in all available periods
-  # to avoid gaps in the line chart
-  bins_all_periods <- evo_dt[
-    !is.na(premium_index) & n_tank_months >= 10,
-    .(n_periods = uniqueN(filing_period)),
-    by = .(age_bins_5yr, wall_label)
-  ][n_periods == n_periods_available, .(age_bins_5yr, wall_label)]
+  # Keep bins with non-trivial coverage in every available period
+  bins_keep <- evo_dt[
+    !is.na(premium_index) & n_fac_months >= 10,
+    .(n_pds = uniqueN(filing_period)), by = age_bin
+  ][n_pds == n_periods_avail, age_bin]
 
-  evo_plot <- merge(evo_dt, bins_all_periods,
-                    by = c("age_bins_5yr", "wall_label"))
-
-  evo_plot[, age_bins_5yr   := factor(age_bins_5yr, levels = AGE_BIN_ORDER_5YR)]
-  evo_plot[, filing_period  := factor(filing_period,
+  evo_plot <- evo_dt[age_bin %in% bins_keep]
+  evo_plot[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
+  evo_plot[, filing_period := factor(filing_period,
                                       levels = c("2006-2014","2014-2019",
                                                  "2019-2021","2021+"))]
 
-  # Flag which filing period introduced the young-tank discount granularity
-  # (2019+ is the first to have sub-5-year steps; 0-5 bin captures them here)
-  young_bins <- c("0-5", "5-10")
+  young_bins <- c("0-2", "3-5")
 
   fig_evo <- ggplot(evo_plot,
-                    aes(x        = age_bins_5yr,
-                        y        = premium_index,
-                        color    = filing_period,
-                        linetype = wall_label,
-                        group    = interaction(filing_period, wall_label))) +
-    # Reference line at index = 1
-    geom_hline(yintercept = 1,
-               linetype   = "dotted",
-               color      = "grey55",
-               linewidth  = 0.5) +
-    # Shade the young-tank discount zone
+                    aes(x     = age_bin,
+                        y     = premium_index,
+                        color = filing_period,
+                        group = filing_period)) +
+    geom_hline(yintercept = 1, linetype = "dotted",
+               color = "grey55", linewidth = 0.5) +
     annotate("rect",
-             xmin  = 0.5,
-             xmax  = length(young_bins) + 0.5,
-             ymin  = -Inf,
-             ymax  = Inf,
-             fill  = "grey90",
-             alpha = 0.4) +
+             xmin = 0.5, xmax = length(young_bins) + 0.5,
+             ymin = -Inf, ymax = Inf,
+             fill = "grey90", alpha = 0.4) +
     annotate("text",
-             x      = 1,
-             y      = Inf,
-             vjust  = 1.6,
-             hjust  = 0.5,
-             size   = 2.5,
-             color  = "grey40",
-             label  = "Young-tank\ndiscount zone") +
+             x = 1, y = Inf, vjust = 1.6, hjust = 0.5,
+             size = 2.5, color = "grey40",
+             label = "Young-tank\ndiscount zone") +
     geom_line(linewidth = 0.85) +
     geom_point(size = 2.4) +
     scale_color_manual(values = PERIOD_COLORS, name = "Filing Period") +
-    scale_linetype_manual(
-      values = c("Single-Walled" = "solid", "Double-Walled" = "dashed"),
-      name   = "Wall Type") +
     scale_y_continuous(
-      name   = "Premium Index (= 1.00 at 10-15 year bin)",
-      labels = function(x) sprintf("%.2f\u00d7", x)) +
-    scale_x_discrete(name = "Tank Age Bin (years)") +
+      name   = sprintf("Premium Index (= 1.00 at %s bin)", NEUTRAL_BIN),
+      labels = function(x) sprintf("%.2f×", x)) +
+    scale_x_discrete(name = "Facility Mean Tank Age (years)") +
     labs(
       title    = "Mid-Continent Age Premium Gradient: Increasing Granularity Over Time",
       subtitle = paste0(
-        "Indexed to the 10-15 year bin within each filing period and wall type. ",
-        "Each line is one filing period. Shaded area = young-tank bins where ",
-        "the 2019+ filing introduced fine-grained discount steps absent from earlier schedules."),
-      caption = paste0(
-        "Notes: Cell-mean annual tank premiums from reconstructed Mid-Continent Casualty ",
-        "rate filings (SERFF), four periods: 2006-2014, 2014-2019, 2019-2021, 2021+. ",
-        "Indexed at 1.00 for the 10-15 year age bin within each period and wall type. ",
-        "The 2006-2014 filing uses 6 age steps (maximum load at >25 years). ",
-        "The 2014-2019 filing extends the upper tail to >50 years. ",
-        "The 2019+ filing adds two-year increment credits for tanks under 10 years.")
+        "Cell-mean facility annual premium by 3-year age bin, indexed to ",
+        NEUTRAL_BIN, " within each filing period. The 2019+ filing introduces ",
+        "fine-grained discount steps for young tanks (shaded zone)."),
+      caption  = paste0(
+        "Source: reconstructed Mid-Continent Casualty SERFF filings, four ",
+        "periods. Facility-month premium = sum of in-service tank premiums; ",
+        "binned by facility mean tank age. Bins below 10 facility-months ",
+        "in any period are dropped to suppress small-cell noise.")
     ) +
     theme_pub() +
-    theme(
-      axis.text.x      = element_text(angle = 30, hjust = 1),
-      legend.position  = "bottom",
-      legend.box       = "vertical",
-      legend.spacing.y = unit(0.15, "cm")
-    )
+    theme(axis.text.x = element_text(angle = 30, hjust = 1))
 
   save_fig(fig_evo, "Figure_Premium_Age_Evolution", w = 9, h = 6.5)
 }
 
 
 ################################################################################
-#### S7: Save Output Tables ####################################################
+#### S7: Output tables #########################################################
 ################################################################################
 
-cat("\n── S7: Saving output tables ──────────────────────────────────────────\n")
+cat("\n── S7: Output tables ────────────────────────────────────────────────\n")
 
-# ── Full alignment table (appendix) ──────────────────────────────────────────
 align_out <- align_dt[, .(
-  age_bins_5yr,
-  wall_label,
-  h_hat_per1k      = round(h_hat_per1k,    2),
-  L_hat_2023usd    = round(L_hat,           0),
-  expected_loss    = round(expected_loss,   0),
-  annual_premium   = round(annual_premium,  0),
-  loading_factor   = round(loading_factor,  3),
+  age_bin,
+  h_hat_per1k     = round(h_hat * 1000, 2),
+  L_hat_2023usd   = round(L_hat,         0),
+  expected_loss   = round(expected_loss, 0),
+  annual_premium  = round(annual_premium, 0),
+  loading_factor  = round(loading_factor, 3),
   n_fac_years,
   n_claims,
-  n_tank_months
+  n_fac_months
 )]
-setorder(align_out, wall_label, age_bins_5yr)
-
 fwrite(align_out, file.path(OUTPUT_TABLES, "Table_Actuarial_Alignment.csv"))
-cat(sprintf("  Saved: Table_Actuarial_Alignment.csv (%d rows)\n", nrow(align_out)))
+cat(sprintf("  Saved: Table_Actuarial_Alignment.csv (%d rows)\n",
+    nrow(align_out)))
 
-# ── Loading factor summary ────────────────────────────────────────────────────
 load_summary <- data.table(
-  spearman_rho       = round(spearman_rho, 3),
-  pearson_r          = round(pearson_r,    3),
-  lambda_ols         = round(lambda_ols,   3),
-  lambda_mean        = round(mean(align_dt$loading_factor,   na.rm = TRUE), 3),
-  lambda_median      = round(median(align_dt$loading_factor, na.rm = TRUE), 3),
-  lambda_sw_mean     = round(
-    mean(align_dt[wall_label == "Single-Walled", loading_factor], na.rm = TRUE), 3),
-  lambda_dw_mean     = round(
-    mean(align_dt[wall_label == "Double-Walled", loading_factor], na.rm = TRUE), 3),
-  n_cells            = nrow(align_dt),
-  premium_period     = "2006-2014 (P1 baseline)",
+  spearman_rho   = round(spearman_rho, 3),
+  pearson_r      = round(pearson_r,    3),
+  lambda_ols     = round(lambda_ols,   3),
+  lambda_mean    = round(mean(align_dt$loading_factor,   na.rm = TRUE), 3),
+  lambda_median  = round(median(align_dt$loading_factor, na.rm = TRUE), 3),
+  n_cells        = nrow(align_dt),
+  premium_period = "2006-2014 (P1 baseline)",
+  scope          = "Single-walled facilities only; Texas Mid-Continent fleet",
   note = paste0(
-    "Loading factor = annual_premium / expected_loss. ",
-    "Expected loss = h_hat (OOB predicted annual release probability, 01n) x ",
-    "L_hat (Duan-smeared OLS cost prediction, 05). ",
-    "Premium = cell-mean annual tank premium from Mid-Continent SERFF filing. ",
-    "All three data sources are independent.")
+    "Loading factor = annual_premium / expected_loss. Mixes underwriting ",
+    "markup with TX-vs-control-state cost-level differences. Cannot ",
+    "identify either separately — interpret only as descriptive.")
 )
-
 fwrite(load_summary, file.path(OUTPUT_TABLES, "Table_Actuarial_Loading.csv"))
-cat(sprintf("  Saved: Table_Actuarial_Loading.csv\n"))
-cat(sprintf("  Saved: Table_Premium_Cell_By_Period.csv (written in S3)\n"))
+cat("  Saved: Table_Actuarial_Loading.csv\n")
+cat("  Saved: Table_Premium_Cell_By_Period.csv (in S3)\n")
 
 
 ################################################################################
-#### S8: Diagnostic Checks #####################################################
+#### S8: Diagnostic checks #####################################################
 ################################################################################
 
-cat("\n── S8: Diagnostic checks ─────────────────────────────────────────────\n")
+cat("\n── S8: Diagnostic checks ────────────────────────────────────────────\n")
 
-# Check 1: SW premiums exceed DW premiums at every age bin
-sw_dw_check <- dcast(
-  align_dt[, .(age_bins_5yr, wall_label, annual_premium)],
-  age_bins_5yr ~ wall_label,
-  value.var = "annual_premium"
-)
-sw_dw_check[, sw_gt_dw := `Single-Walled` > `Double-Walled`]
-if (all(sw_dw_check$sw_gt_dw, na.rm = TRUE)) {
-  cat("  CHECK 1 PASS: Single-Walled premium > Double-Walled at all age bins.\n")
+# CHECK 1: Expected loss roughly increasing in age
+is_mono_el <- all(diff(align_dt$expected_loss) >= 0, na.rm = TRUE)
+if (is_mono_el) {
+  cat("  CHECK 1 PASS: Expected loss non-decreasing in age.\n")
 } else {
-  cat("  CHECK 1 FAIL: Some age bins have SW premium <= DW premium.\n")
-  print(sw_dw_check[sw_gt_dw == FALSE | is.na(sw_gt_dw)])
+  cat("  CHECK 1 NOTE: Expected loss not strictly monotone (acceptable —\n")
+  cat("                may reflect within-bin composition noise).\n")
 }
 
-# Check 2: Expected loss monotonically increasing in age for SW
-sw_hazard <- align_dt[wall_label == "Single-Walled"][order(age_bins_5yr)]
-if (nrow(sw_hazard) > 1) {
-  is_mono <- all(diff(sw_hazard$expected_loss) >= 0, na.rm = TRUE)
-  if (is_mono) {
-    cat("  CHECK 2 PASS: Single-Walled expected loss is non-decreasing in age.\n")
-  } else {
-    cat("  CHECK 2 NOTE: Single-Walled expected loss is not strictly monotone in age.\n")
-    cat("                This may reflect within-bin composition differences (acceptable).\n")
-    print(sw_hazard[, .(age_bins_5yr, expected_loss = round(expected_loss, 0))])
-  }
+# CHECK 2: Premium roughly increasing in age
+is_mono_pr <- all(diff(align_dt$annual_premium) >= 0, na.rm = TRUE)
+if (is_mono_pr) {
+  cat("  CHECK 2 PASS: Premium non-decreasing in age.\n")
+} else {
+  cat("  CHECK 2 NOTE: Premium not strictly monotone in age.\n")
 }
 
-# Check 3: Rank correlation direction
+# CHECK 3: Rank correlation positive
 if (spearman_rho > 0) {
-  cat(sprintf("  CHECK 3 PASS: Spearman rho = %.3f (positive gradient alignment).\n",
+  cat(sprintf("  CHECK 3 PASS: Spearman rho = %.3f (positive).\n",
       spearman_rho))
 } else {
-  cat(sprintf("  CHECK 3 FAIL: Spearman rho = %.3f (gradient NOT aligned).\n",
-      spearman_rho))
+  cat(sprintf("  CHECK 3 FAIL: Spearman rho = %.3f.\n", spearman_rho))
 }
 
-# Check 4: Loading factor plausibility (should be 1.0 - 3.0 for P&C insurance)
+# CHECK 4: Cell count
+cat(sprintf("  CHECK 4 INFO: %d alignment cells.\n", nrow(align_dt)))
+if (nrow(align_dt) < 5)
+  cat("  WARNING: <5 cells — figure may not be credible.\n")
+
+# CHECK 5: Lambda plausibility (descriptive only)
 lambda_mean <- mean(align_dt$loading_factor, na.rm = TRUE)
-if (lambda_mean >= 0.8 && lambda_mean <= 4.0) {
-  cat(sprintf("  CHECK 4 PASS: Mean loading factor = %.2f (plausible range for P&C).\n",
-      lambda_mean))
-} else {
-  cat(sprintf("  CHECK 4 WARNING: Mean loading factor = %.2f (outside expected range).\n",
-      lambda_mean))
-  cat("  Possible causes: unit mismatch in premium (monthly vs annual), ",
-      "cost deflation error, or genuine pricing anomaly.\n")
-}
-
-# Check 5: Cell count
-n_alignment_cells <- nrow(align_dt)
-cat(sprintf("  CHECK 5 INFO: %d cells in alignment figure.\n", n_alignment_cells))
-if (n_alignment_cells < 6) {
-  cat("  WARNING: fewer than 6 cells — figure may not be credible.\n")
-  cat("  Consider whether age bin crosswalk is dropping too many cells.\n")
-}
+cat(sprintf("  CHECK 5 INFO: Mean loading factor = %.2f (descriptive).\n",
+    lambda_mean))
 
 
 ################################################################################
@@ -796,18 +607,17 @@ if (n_alignment_cells < 6) {
 
 cat("\n========================================================\n")
 cat("06_Actuarial_Alignment.R COMPLETE\n\n")
-cat(sprintf("  Alignment cells:      %d\n",         nrow(align_dt)))
-cat(sprintf("  Spearman rho:         %.3f\n",       spearman_rho))
-cat(sprintf("  Pearson r:            %.3f\n",       pearson_r))
-cat(sprintf("  OLS loading (lambda): %.3f\n",       lambda_ols))
-cat(sprintf("  Premium period:       2006-2014 (P1)\n"))
-cat(sprintf("  Filing periods in evolution fig: %d\n",
-    uniqueN(cell_premiums_by_period$filing_period)))
+cat(sprintf("  Alignment cells:   %d\n",   nrow(align_dt)))
+cat(sprintf("  Spearman rho:      %.3f\n", spearman_rho))
+cat(sprintf("  Pearson r:         %.3f\n", pearson_r))
+cat(sprintf("  Lambda (OLS):      %.3f  (descriptive)\n", lambda_ols))
+cat(sprintf("  Premium period:    2006-2014 (P1 baseline)\n"))
+cat(sprintf("  Filing periods in evolution fig: %d\n", n_periods_avail))
 cat("\n  Figures:\n")
 cat("    Figure_Actuarial_Alignment      (main — Section 5.3)\n")
-cat("    Figure_Premium_Age_Evolution    (evolution — Section 5.3 or 2.6)\n")
+cat("    Figure_Premium_Age_Evolution    (period evolution)\n")
 cat("\n  Tables:\n")
-cat("    Table_Actuarial_Alignment.csv   (appendix cell-level detail)\n")
-cat("    Table_Actuarial_Loading.csv     (loading factor summary)\n")
-cat("    Table_Premium_Cell_By_Period.csv (cell premiums by filing period)\n")
+cat("    Table_Actuarial_Alignment.csv\n")
+cat("    Table_Actuarial_Loading.csv\n")
+cat("    Table_Premium_Cell_By_Period.csv\n")
 cat("========================================================\n")
