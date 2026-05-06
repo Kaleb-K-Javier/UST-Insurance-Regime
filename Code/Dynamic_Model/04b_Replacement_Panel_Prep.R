@@ -275,8 +275,8 @@ fac_panel <- merge(
 #   - TX rows: Mid-Continent mean_tank_premium from 04a
 #   - Control rows: state_fr_premium fr_premium_per_tank_yr from 02b
 fac_panel[, premium_per_tank := fcase(
-  texas_treated == 1L & !is.na(tx_mean_tank_premium), tx_mean_tank_premium,
-  texas_treated == 0L,                                fr_premium_per_tank_yr,
+  texas_treated == 1L & !is.na(tx_mean_tank_premium), as.double(tx_mean_tank_premium),
+  texas_treated == 0L,                                as.double(fr_premium_per_tank_yr),
   default = NA_real_
 )]
 fac_panel[, premium_per_tank_scaled := premium_per_tank / SCALE_FACTOR]
