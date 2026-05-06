@@ -291,6 +291,27 @@ print(dcm_loss_binary[, .(
   n_claims
 )])
 
+# ── Row-level predictions for downstream re-aggregation ─────────────────────
+# Mirrors 01n's analysis_cv_data_fac_year.rds — lets 06 re-bin to any
+# resolution (e.g., 3-year bins to match 01n hazard) without re-running m4.
+analysis_dir <- here("Data", "Analysis")
+dir.create(analysis_dir, recursive = TRUE, showWarnings = FALSE)
+
+rowlevel_cols <- intersect(
+  c("panel_id", "panel_year", "state",
+    "age_bins", "avg_tank_age",
+    "sw_tercile", "wall_binary", "has_single_walled",
+    "single_tanks", "double_tanks", "active_tanks",
+    "total_capacity", "capacity_1k",
+    "claims_total_2023", "log_cost", "predicted_cost_2023"),
+  names(reg_dt)
+)
+
+fwrite(reg_dt[rows_m4, ..rowlevel_cols],
+       file.path(analysis_dir, "dcm_predicted_cost_rowlevel.csv"))
+cat(sprintf("Saved: dcm_predicted_cost_rowlevel.csv (%s rows, %d cols)\n",
+    format(length(rows_m4), big.mark = ","), length(rowlevel_cols)))
+
 # Clean up temp columns to avoid contaminating downstream sections
 reg_dt[, `:=`(predicted_cost_2023 = NULL, wall_binary = NULL)]
 
