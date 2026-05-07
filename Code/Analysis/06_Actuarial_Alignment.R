@@ -154,9 +154,24 @@ print(hazard_sw[, .(age_bin,
 
 cat("\n── S2: Cost ─────────────────────────────────────────────────────────\n")
 
-cost_path <- z_path("Data", "Analysis", "dcm_predicted_cost_rowlevel.csv")
-if (!file.exists(cost_path))
-  stop("dcm_predicted_cost_rowlevel.csv not found on Z. Re-run 05.")
+# Prefer the 3-year + winsorized + interacted file from 05 (cleaner L_hat
+# across age bins). Fall back to the legacy 5-year file with re-binning if
+# the 3-year file isn't available.
+cost_path_3yr <- z_path("Data", "Analysis",
+                        "dcm_predicted_cost_rowlevel_3yr.csv")
+cost_path_5yr <- z_path("Data", "Analysis", "dcm_predicted_cost_rowlevel.csv")
+
+if (file.exists(cost_path_3yr)) {
+  cost_path <- cost_path_3yr
+  cat("  Using 3-year + winsorized cost spec\n")
+  cost_age_col <- "age_bins_3yr"
+} else if (file.exists(cost_path_5yr)) {
+  cost_path <- cost_path_5yr
+  cat("  Using 5-year (legacy) cost spec — falling back\n")
+  cost_age_col <- NA_character_
+} else {
+  stop("No cost row-level file found on Z. Re-run 05.")
+}
 
 cost_raw <- fread(cost_path)
 
@@ -175,7 +190,13 @@ cost_sw <- cost_raw[
   predicted_cost_2023 > 0
 ]
 
-cost_sw[, age_bin := bin_age(avg_tank_age)]
+# Use the 3-year bin from 05 if present (matches 01n exactly); otherwise
+# rebin from continuous avg_tank_age.
+if (!is.na(cost_age_col) && cost_age_col %in% names(cost_sw)) {
+  cost_sw[, age_bin := factor(get(cost_age_col), levels = AGE_BIN_LABELS)]
+} else {
+  cost_sw[, age_bin := bin_age(avg_tank_age)]
+}
 
 cost_cells <- cost_sw[!is.na(age_bin), .(
   L_hat    = mean(predicted_cost_2023,   na.rm = TRUE),
@@ -539,84 +560,239 @@ print(align_dt[, .(age_bin,
 #### S5: Alignment figure ######################################################
 ################################################################################
 
-cat("\n── S5: Alignment figure ─────────────────────────────────────────────\n")
+cat("\n── S5: Alignment figures ────────────────────────────────────────────\n")
 
-# Reshape to long for the two-line plot
-plot_dt <- melt(
-  align_dt[, .(age_bin,
-               `Per-Tank Expected Loss` = per_tank_el,
-               `Per-Tank Premium`       = per_tank_premium)],
-  id.vars       = "age_bin",
-  variable.name = "series",
-  value.name    = "usd"
-)
-plot_dt[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
-plot_dt[, series  := factor(series,
-                            levels = c("Per-Tank Expected Loss",
-                                       "Per-Tank Premium"))]
+# Aggregate per-bin TX hazard from tm_el (tank-month weighted, consistent
+# with how per-tank premium is averaged). h_hat is the facility-level
+# annual leak probability — we DO NOT divide by n_tanks here; this is the
+# raw TX hazard signal.
+hazard_tx_cells <- tm_el[, .(
+  h_hat_tx   = mean(h_hat_used, na.rm = TRUE),
+  n_tank_months_h = .N
+), by = age_bin]
+hazard_tx_cells[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
+setorder(hazard_tx_cells, age_bin)
 
-annot_x <- 1L
-annot_y <- max(plot_dt$usd, na.rm = TRUE) * 0.98
+# Merge into align_dt for downstream figures and tables
+align_dt <- merge(align_dt, hazard_tx_cells, by = "age_bin", all.x = TRUE)
 
-fig_align <- ggplot(plot_dt,
-                    aes(x     = age_bin,
-                        y     = usd,
-                        color = series,
-                        shape = series,
-                        group = series)) +
-  geom_line(linewidth = 1.0) +
-  geom_point(size = 3.6, alpha = 0.95) +
-  annotate("label",
-           x             = annot_x,
-           y             = annot_y,
-           hjust         = 0,
-           vjust         = 1,
-           size          = 3.1,
-           fill          = "white",
-           color         = "grey20",
-           label.padding = unit(0.28, "lines"),
-           label         = sprintf("Spearman ρ = %.2f\nλ (OLS) = %.2f",
-                                   spearman_rho, lambda_ols)) +
-  scale_color_manual(
-    values = c("Per-Tank Expected Loss" = "#D55E00",
-               "Per-Tank Premium"       = "#0072B2"),
-    name   = NULL) +
-  scale_shape_manual(
-    values = c("Per-Tank Expected Loss" = 17,
-               "Per-Tank Premium"       = 19),
-    name   = NULL) +
-  scale_y_continuous(
-    name   = "USD per Tank-Year (2023)",
-    labels = dollar_format(accuracy = 1),
-    expand = expansion(mult = c(0.05, 0.10))) +
-  scale_x_discrete(name = "Facility Mean Tank Age (years)") +
-  labs(
-    title    = "Per-Tank Premium Tracks Expected Loss Across Age Bins",
-    subtitle = paste0(
-      "Single-walled facilities, TX Mid-Continent, 2006-2014 filing. ",
-      "Both quantities in 2023 USD per tank-year — the vertical gap is the ",
-      "loading factor; the parallel rise across bins is the alignment."),
-    caption  = paste0(
-      "Notes: Per-tank premium = mean(tank_premium) across TX Mid-Continent ",
-      "tank-months in each bin. Per-tank expected loss = h_hat × L_hat / ",
-      "n_tanks, computed at the tank-month level using each facility's ",
-      "row-level h_hat (01n full-panel elastic net) and that facility-",
-      "month's actual n_tanks, then averaged tank-month weighted within ",
-      "bins. L_hat = Duan-smeared OLS predicted cost from 05 (six-state ",
-      "trust fund ledgers, single-walled, 3-year bins from row-level ",
-      "predictions). Spearman ρ = ", round(spearman_rho, 2),
-      "; OLS λ = ", round(lambda_ols, 2), ". The level gap reflects the ",
-      "TX trust fund reimbursement scheme (insurer covers deductible + ",
-      "over-cap, not full cleanup cost) and the independence assumption ",
-      "in dividing facility hazard by n_tanks. Interpret λ as descriptive.")
-  ) +
-  theme_pub() +
-  theme(
-    legend.position = "bottom",
-    axis.text.x     = element_text(angle = 30, hjust = 1)
+# Spearman ρ on premium ↔ TX hazard (the co-author's main alignment)
+spearman_premh <- cor(align_dt$h_hat_tx, align_dt$per_tank_premium,
+                      method = "spearman", use = "complete.obs")
+
+cat(sprintf("\n  Spearman rho — premium vs TX hazard:  %.3f\n", spearman_premh))
+cat(sprintf("  Spearman rho — premium vs per-tank EL: %.3f  (backup)\n",
+    spearman_rho))
+
+#=============================================================================
+# Helper: build a two-panel "raw" figure (each series on its own y-scale)
+#=============================================================================
+make_raw_panel_fig <- function(plot_dt, series_levels, series_colors,
+                               series_shapes, y_label, fig_title,
+                               fig_subtitle, fig_caption, spearman_label,
+                               annot_panel) {
+  plot_dt[, series := factor(series, levels = series_levels)]
+
+  annot_dt <- plot_dt[series == annot_panel,
+                      .(usd_max = max(value, na.rm = TRUE)),
+                      by = series
+  ][, .(series,
+        age_bin = factor("0-2", levels = AGE_BIN_LABELS),
+        value   = usd_max * 0.99,
+        label   = spearman_label)]
+
+  ggplot(plot_dt,
+         aes(x = age_bin, y = value, group = series,
+             color = series, shape = series)) +
+    geom_line(linewidth = 1.0) +
+    geom_point(size = 3.4, alpha = 0.95) +
+    geom_label(data        = annot_dt,
+               inherit.aes = FALSE,
+               aes(x = age_bin, y = value, label = label),
+               hjust = 0, vjust = 1, size = 3.1,
+               fill = "white", color = "grey20") +
+    scale_color_manual(values = series_colors, guide = "none") +
+    scale_shape_manual(values = series_shapes, guide = "none") +
+    scale_y_continuous(name   = y_label,
+                       labels = dollar_format(accuracy = 1),
+                       expand = expansion(mult = c(0.08, 0.18))) +
+    scale_x_discrete(name = "Facility Mean Tank Age (years)") +
+    facet_wrap(~ series, ncol = 1, scales = "free_y") +
+    labs(title = fig_title, subtitle = fig_subtitle, caption = fig_caption) +
+    theme_pub() +
+    theme(axis.text.x = element_text(angle = 30, hjust = 1),
+          strip.text  = element_text(face = "bold", size = rel(0.95)))
+}
+
+#=============================================================================
+# Helper: build an "indexed" figure (both series = 1.0 at youngest bin,
+# single y-axis, gradients directly comparable)
+#=============================================================================
+make_indexed_fig <- function(plot_dt, series_levels, series_colors,
+                             series_shapes, fig_title, fig_subtitle,
+                             fig_caption, spearman_label) {
+  plot_dt <- copy(plot_dt)
+  plot_dt[, series := factor(series, levels = series_levels)]
+  plot_dt[, baseline := value[age_bin == AGE_BIN_LABELS[1]], by = series]
+  plot_dt[, indexed  := value / baseline]
+
+  annot_dt <- data.table(
+    age_bin = factor("0-2", levels = AGE_BIN_LABELS),
+    indexed = max(plot_dt$indexed, na.rm = TRUE) * 0.97,
+    label   = spearman_label
   )
 
-save_fig(fig_align, "Figure_Actuarial_Alignment", w = 8, h = 6)
+  ggplot(plot_dt,
+         aes(x = age_bin, y = indexed, group = series,
+             color = series, shape = series)) +
+    geom_hline(yintercept = 1, linetype = "dotted",
+               color = "grey55", linewidth = 0.5) +
+    geom_line(linewidth = 1.0) +
+    geom_point(size = 3.4, alpha = 0.95) +
+    geom_label(data = annot_dt, inherit.aes = FALSE,
+               aes(x = age_bin, y = indexed, label = label),
+               hjust = 0, vjust = 1, size = 3.1,
+               fill = "white", color = "grey20") +
+    scale_color_manual(values = series_colors, name = NULL) +
+    scale_shape_manual(values = series_shapes, name = NULL) +
+    scale_y_continuous(
+      name   = "Indexed (= 1.00 at 0-2 bin)",
+      labels = function(x) sprintf("%.2f×", x),
+      expand = expansion(mult = c(0.05, 0.12))) +
+    scale_x_discrete(name = "Facility Mean Tank Age (years)") +
+    labs(title = fig_title, subtitle = fig_subtitle, caption = fig_caption) +
+    theme_pub() +
+    theme(axis.text.x     = element_text(angle = 30, hjust = 1),
+          legend.position = "bottom")
+}
+
+# ── Figure A: Premium ↔ TX Hazard (MAIN) ────────────────────────────────────
+plot_a <- melt(
+  align_dt[, .(age_bin,
+               `Per-Tank Premium (USD/tank-year)`               = per_tank_premium,
+               `TX Leak Hazard (probability per facility-year)` = h_hat_tx)],
+  id.vars       = "age_bin",
+  variable.name = "series",
+  value.name    = "value"
+)
+plot_a[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
+
+label_a <- sprintf("Spearman ρ = %.2f", spearman_premh)
+title_a <- "Premium Schedule Tracks Texas-Estimated Leak Hazard"
+sub_a   <- paste0(
+  "Per-tank premium (TX Mid-Continent, 2006-2014) and TX leak hazard ",
+  "(01n elastic net OOB) both rise across age bins. The figure shows ",
+  "directional risk-signal transmission, not pricing adequacy.")
+cap_a   <- paste0(
+  "Notes: Per-tank premium = mean(tank_premium) across TX Mid-Continent ",
+  "tank-months in each bin. TX leak hazard = mean of row-level h_hat ",
+  "(01n full-panel elastic net predictions for TX single-walled ",
+  "facilities) across the same tank-months. Both quantities use the ",
+  "facility mean tank age binning that 01n uses for hazard estimation. ",
+  "Single-walled facilities only.")
+
+fig_a_raw <- make_raw_panel_fig(
+  plot_dt        = copy(plot_a),
+  series_levels  = c("Per-Tank Premium (USD/tank-year)",
+                     "TX Leak Hazard (probability per facility-year)"),
+  series_colors  = c("Per-Tank Premium (USD/tank-year)"               = "#0072B2",
+                     "TX Leak Hazard (probability per facility-year)" = "#117733"),
+  series_shapes  = c("Per-Tank Premium (USD/tank-year)"               = 19,
+                     "TX Leak Hazard (probability per facility-year)" = 15),
+  y_label        = "Series-specific scale",
+  fig_title      = title_a,
+  fig_subtitle   = paste(sub_a, "Each panel has its own y-scale (raw values)."),
+  fig_caption    = cap_a,
+  spearman_label = label_a,
+  annot_panel    = "Per-Tank Premium (USD/tank-year)"
+) +
+  scale_y_continuous(labels = scales::label_number(accuracy = 0.01),
+                     expand = expansion(mult = c(0.08, 0.18)))
+
+save_fig(fig_a_raw, "Figure_Premium_vs_Hazard_Raw", w = 8, h = 7)
+
+fig_a_idx <- make_indexed_fig(
+  plot_dt        = copy(plot_a),
+  series_levels  = c("Per-Tank Premium (USD/tank-year)",
+                     "TX Leak Hazard (probability per facility-year)"),
+  series_colors  = c("Per-Tank Premium (USD/tank-year)"               = "#0072B2",
+                     "TX Leak Hazard (probability per facility-year)" = "#117733"),
+  series_shapes  = c("Per-Tank Premium (USD/tank-year)"               = 19,
+                     "TX Leak Hazard (probability per facility-year)" = 15),
+  fig_title      = title_a,
+  fig_subtitle   = paste(sub_a,
+                         "Both series indexed to their 0-2 bin value so",
+                         "shapes are directly comparable on one axis."),
+  fig_caption    = cap_a,
+  spearman_label = label_a
+)
+
+save_fig(fig_a_idx, "Figure_Premium_vs_Hazard_Indexed", w = 8, h = 6)
+
+# ── Figure B: Premium ↔ Per-Tank Expected Loss (BACKUP) ─────────────────────
+plot_b <- melt(
+  align_dt[, .(age_bin,
+               `Per-Tank Premium (USD/tank-year)`         = per_tank_premium,
+               `Per-Tank Expected Loss (h × L / n_tanks)` = per_tank_el)],
+  id.vars       = "age_bin",
+  variable.name = "series",
+  value.name    = "value"
+)
+plot_b[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
+
+label_b <- sprintf("Spearman ρ = %.2f", spearman_rho)
+title_b <- "Premium and Constructed Per-Tank Expected Loss Across Age Bins"
+sub_b   <- paste0(
+  "Backup view: per-tank EL = h_hat × L_hat / n_tanks, where L_hat is a ",
+  "control-state donor curve (no TX cost data exists). Both rise across ",
+  "age bins; level disparity reflects deductibles + donor-state assumption.")
+cap_b   <- paste0(
+  "Notes: Per-tank premium as in main figure. Per-tank expected loss = ",
+  "h_hat × L_hat / n_tanks, computed at the tank-month level using each ",
+  "facility's row-level h_hat (01n) and bin-level L_hat (05, 3-year ",
+  "winsorized + interacted spec). Cost data from 6 control states only — ",
+  "TX has no claim observations. The level gap reflects deductibles and ",
+  "the donor-state cost curve; the figure shows directional gradient ",
+  "alignment, not pricing adequacy.")
+
+fig_b_raw <- make_raw_panel_fig(
+  plot_dt        = copy(plot_b),
+  series_levels  = c("Per-Tank Premium (USD/tank-year)",
+                     "Per-Tank Expected Loss (h × L / n_tanks)"),
+  series_colors  = c("Per-Tank Premium (USD/tank-year)"         = "#0072B2",
+                     "Per-Tank Expected Loss (h × L / n_tanks)" = "#D55E00"),
+  series_shapes  = c("Per-Tank Premium (USD/tank-year)"         = 19,
+                     "Per-Tank Expected Loss (h × L / n_tanks)" = 17),
+  y_label        = "USD per Tank-Year (2023)",
+  fig_title      = title_b,
+  fig_subtitle   = paste(sub_b, "Each panel has its own y-scale (raw USD)."),
+  fig_caption    = cap_b,
+  spearman_label = label_b,
+  annot_panel    = "Per-Tank Premium (USD/tank-year)"
+)
+
+save_fig(fig_b_raw, "Figure_Premium_vs_EL_Raw", w = 8, h = 7)
+
+fig_b_idx <- make_indexed_fig(
+  plot_dt        = copy(plot_b),
+  series_levels  = c("Per-Tank Premium (USD/tank-year)",
+                     "Per-Tank Expected Loss (h × L / n_tanks)"),
+  series_colors  = c("Per-Tank Premium (USD/tank-year)"         = "#0072B2",
+                     "Per-Tank Expected Loss (h × L / n_tanks)" = "#D55E00"),
+  series_shapes  = c("Per-Tank Premium (USD/tank-year)"         = 19,
+                     "Per-Tank Expected Loss (h × L / n_tanks)" = 17),
+  fig_title      = title_b,
+  fig_subtitle   = paste(sub_b,
+                         "Both series indexed to their 0-2 bin value."),
+  fig_caption    = cap_b,
+  spearman_label = label_b
+)
+
+save_fig(fig_b_idx, "Figure_Premium_vs_EL_Indexed", w = 8, h = 6)
+
+# Maintain back-compat: write the legacy Figure_Actuarial_Alignment as
+# the indexed EL view (so existing paper references still resolve to a file)
+save_fig(fig_b_idx, "Figure_Actuarial_Alignment", w = 8, h = 6)
 
 
 ################################################################################
@@ -707,6 +883,7 @@ align_out <- align_dt[, .(
   age_bin,
   h_hat_bin_per1k     = round(h_hat * 1000,                2),
   h_hat_used_per1k    = round(mean_h_hat_used * 1000,      2),
+  h_hat_tx_per1k      = round(h_hat_tx * 1000,             2),
   share_rowlevel_h    = round(share_rowlevel_h,            3),
   L_hat_2023usd       = round(L_hat,                       0),
   facility_el         = round(facility_el,                 0),
@@ -725,21 +902,24 @@ cat(sprintf("  Saved: Table_Actuarial_Alignment.csv (%d rows)\n",
     nrow(align_out)))
 
 load_summary <- data.table(
-  spearman_rho_pertank   = round(spearman_rho,      3),
-  pearson_r_pertank      = round(pearson_r,         3),
-  lambda_ols_pertank     = round(lambda_ols,        3),
-  lambda_mean_pertank    = round(mean(align_dt$loading_factor,   na.rm = TRUE), 3),
-  lambda_median_pertank  = round(median(align_dt$loading_factor, na.rm = TRUE), 3),
-  spearman_rho_facility  = round(spearman_facility, 3),
-  n_cells                = nrow(align_dt),
-  premium_period         = "2006-2014 (P1 baseline)",
-  scope                  = "Single-walled facilities only; TX Mid-Continent",
+  # Main: premium ↔ TX hazard (risk-signal transmission claim)
+  spearman_premium_vs_hazard  = round(spearman_premh,    3),
+  # Backup: premium ↔ per-tank EL (constructed)
+  spearman_premium_vs_el      = round(spearman_rho,      3),
+  pearson_r_premium_vs_el     = round(pearson_r,         3),
+  lambda_ols_pertank          = round(lambda_ols,        3),
+  lambda_mean_pertank         = round(mean(align_dt$loading_factor,   na.rm = TRUE), 3),
+  lambda_median_pertank       = round(median(align_dt$loading_factor, na.rm = TRUE), 3),
+  # Diagnostic: facility-level (shows the unit-mismatch / portfolio shrinkage problem)
+  spearman_rho_facility       = round(spearman_facility, 3),
+  n_cells                     = nrow(align_dt),
+  premium_period              = "2006-2014 (P1 baseline)",
+  scope                       = "Single-walled facilities only; TX Mid-Continent",
   note = paste0(
-    "Per-tank: premium = total_premium / n_tanks (row-level), ",
-    "EL = h_hat × L_hat / n_tanks (row-level), aggregated to bins. ",
-    "Facility-level Spearman included as diagnostic — confounded by ",
-    "portfolio shrinkage with age. Loading factor is descriptive only: ",
-    "mixes underwriting markup with TX-vs-control cost-level differences.")
+    "Main alignment: premium vs TX-estimated leak hazard (risk-signal ",
+    "transmission). Backup: premium vs constructed per-tank EL, where ",
+    "L_hat is a 6-state donor curve (no TX claim data). Loading factor ",
+    "is descriptive only — interpret as direction, not pricing adequacy.")
 )
 fwrite(load_summary, file.path(OUTPUT_TABLES, "Table_Actuarial_Loading.csv"))
 cat("  Saved: Table_Actuarial_Loading.csv\n")
@@ -769,12 +949,15 @@ if (is_mono_pr) {
   cat("  CHECK 2 NOTE: Per-tank premium not strictly monotone in age.\n")
 }
 
-# CHECK 3: Rank correlation positive
-if (spearman_rho > 0) {
-  cat(sprintf("  CHECK 3 PASS: Spearman rho = %.3f (positive).\n",
-      spearman_rho))
+# CHECK 3: Both rank correlations positive
+if (spearman_premh > 0 && spearman_rho > 0) {
+  cat(sprintf("  CHECK 3 PASS: Spearman rho (prem vs hazard) = %.3f, ",
+      spearman_premh))
+  cat(sprintf("(prem vs EL) = %.3f.\n", spearman_rho))
 } else {
-  cat(sprintf("  CHECK 3 FAIL: Spearman rho = %.3f.\n", spearman_rho))
+  cat(sprintf("  CHECK 3 FAIL: One or both rank correlations not positive.\n"))
+  cat(sprintf("                 prem vs hazard = %.3f; prem vs EL = %.3f\n",
+      spearman_premh, spearman_rho))
 }
 
 # CHECK 4: Cell count
@@ -794,17 +977,23 @@ cat(sprintf("  CHECK 5 INFO: Mean loading factor = %.2f (descriptive).\n",
 
 cat("\n========================================================\n")
 cat("06_Actuarial_Alignment.R COMPLETE\n\n")
-cat(sprintf("  Alignment cells:        %d\n",   nrow(align_dt)))
-cat(sprintf("  Per-tank Spearman rho:  %.3f\n", spearman_rho))
-cat(sprintf("  Per-tank Pearson r:     %.3f\n", pearson_r))
-cat(sprintf("  Per-tank lambda (OLS):  %.3f  (descriptive)\n", lambda_ols))
-cat(sprintf("  Facility Spearman rho:  %.3f  (diagnostic — size confounded)\n",
+cat(sprintf("  Alignment cells:                %d\n",   nrow(align_dt)))
+cat(sprintf("  Spearman premium vs hazard:     %.3f  (MAIN — risk transmission)\n",
+    spearman_premh))
+cat(sprintf("  Spearman premium vs EL:         %.3f  (BACKUP)\n", spearman_rho))
+cat(sprintf("  Pearson  premium vs EL:         %.3f\n", pearson_r))
+cat(sprintf("  Lambda (OLS, premium / EL):     %.3f  (descriptive)\n", lambda_ols))
+cat(sprintf("  Facility Spearman (diagnostic): %.3f  (size confounded)\n",
     spearman_facility))
 cat(sprintf("  Premium period:    2006-2014 (P1 baseline)\n"))
 cat(sprintf("  Filing periods in evolution fig: %d\n", n_periods_avail))
 cat("\n  Figures:\n")
-cat("    Figure_Actuarial_Alignment      (main — Section 5.3)\n")
-cat("    Figure_Premium_Age_Evolution    (period evolution)\n")
+cat("    Figure_Premium_vs_Hazard_Raw      (MAIN — risk transmission, faceted raw)\n")
+cat("    Figure_Premium_vs_Hazard_Indexed  (MAIN — both indexed to 0-2 baseline)\n")
+cat("    Figure_Premium_vs_EL_Raw          (BACKUP — premium vs constructed EL, faceted raw)\n")
+cat("    Figure_Premium_vs_EL_Indexed      (BACKUP — both indexed to 0-2 baseline)\n")
+cat("    Figure_Actuarial_Alignment        (legacy alias of Figure_Premium_vs_EL_Indexed)\n")
+cat("    Figure_Premium_Age_Evolution      (period evolution, four filings)\n")
 cat("\n  Tables:\n")
 cat("    Table_Actuarial_Alignment.csv\n")
 cat("    Table_Actuarial_Loading.csv\n")

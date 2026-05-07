@@ -352,4 +352,127 @@ fig_me <- ggplot(me_combined, aes(x = age_bins, y = pct_effect, color = term, gr
 
 save_fig(fig_me, "Figure_Claims_Marginal_Effects_PanelB", width = 8, height = 5)
 
+###############################################################################
+# APPENDED: 3-year bin + winsorized + interacted version (for 06 alignment)
+###############################################################################
+# A parallel cost regression specifically for 06_Actuarial_Alignment.R, with:
+#   * 3-year age bins matching 01n's hazard binning (eliminates the
+#     5-year ↔ 3-year crosswalk in 06)
+#   * Top 1% winsorization on claims_total_2023 (catastrophic claims dominate
+#     the 24+ cell — winsorizing makes the L_hat curve more robust)
+#   * age_bins_3yr × sw_tercile interaction (lets the cost gradient differ
+#     by wall composition; previously assumed common slope)
+#
+# >>> DCM AGENT NOTE <<<
+# The original 5-year outputs (dcm_loss_binary_wall.csv,
+# dcm_predicted_cost_rowlevel.csv, dcm_state_loss_levels.csv) above are still
+# the canonical inputs for the DCM. This appended section produces parallel
+# 3-year files (dcm_loss_binary_wall_3yr.csv,
+# dcm_predicted_cost_rowlevel_3yr.csv) used only by 06. When the DCM is
+# updated to a 3-year basis, the original block can be retired.
+###############################################################################
+
+cat("\n--- APPENDED: 3-year bin / winsorized cost spec (for 06) ---\n")
+
+# 3-year bin definition matching 01n's make_age_bin()
+AGE_BIN_BREAKS_3YR <- c(0, 3, 6, 9, 12, 15, 18, 21, 24, Inf)
+AGE_BIN_LABELS_3YR <- c("0-2", "3-5", "6-8", "9-11", "12-14",
+                        "15-17", "18-20", "21-23", "24+")
+
+if (!"avg_tank_age" %in% names(reg_dt))
+  stop("avg_tank_age missing — cannot build 3-year bins. Check merged panel.")
+
+reg_dt[, age_bins_3yr := cut(
+  avg_tank_age,
+  breaks         = AGE_BIN_BREAKS_3YR,
+  labels         = AGE_BIN_LABELS_3YR,
+  right          = FALSE,
+  include.lowest = TRUE
+)]
+
+# Top 1% winsorization on cost
+p99_cost <- quantile(reg_dt$claims_total_2023, 0.99, na.rm = TRUE)
+reg_dt[, claims_total_2023_wins := pmin(claims_total_2023, p99_cost)]
+reg_dt[, log_cost_wins := log(claims_total_2023_wins)]
+
+cat(sprintf("  Winsorization cap (p99): %s\n", dollar(round(p99_cost, 0))))
+cat(sprintf("  Rows winsorized:         %d (%.2f%%)\n",
+    sum(reg_dt$claims_total_2023 > p99_cost, na.rm = TRUE),
+    100 * mean(reg_dt$claims_total_2023 > p99_cost, na.rm = TRUE)))
+
+# Refit with 3-year bins, age × sw_tercile interaction, winsorized outcome
+reg_dt_3yr_sample <- reg_dt[!is.na(age_bins_3yr) & !is.na(sw_tercile)]
+
+m4_3yr <- feols(
+  log_cost_wins ~ age_bins_3yr * sw_tercile + active_tanks + capacity_1k
+  | state + panel_year,
+  data    = reg_dt_3yr_sample,
+  cluster = ~state
+)
+
+cat(sprintf("  m4_3yr fit: %s observations\n",
+    format(nobs(m4_3yr), big.mark = ",")))
+
+# Predict + Duan smear
+yhat_log_3yr <- predict(m4_3yr, newdata = reg_dt_3yr_sample)
+rows_m4_3yr  <- which(!is.na(yhat_log_3yr))
+
+fitted_log_3yr   <- yhat_log_3yr[rows_m4_3yr]
+resid_log_3yr    <- reg_dt_3yr_sample$log_cost_wins[rows_m4_3yr] - fitted_log_3yr
+smear_factor_3yr <- mean(exp(resid_log_3yr), na.rm = TRUE)
+
+cat(sprintf("  Duan smearing factor (3yr/winsor): %.4f\n", smear_factor_3yr))
+
+reg_dt_3yr <- reg_dt_3yr_sample[rows_m4_3yr]
+reg_dt_3yr[, predicted_cost_2023 := exp(fitted_log_3yr) * smear_factor_3yr]
+reg_dt_3yr[, wall_binary := fcase(
+  sw_tercile == "67-100%", "Single-Walled",
+  sw_tercile == "0-33%",   "Double-Walled",
+  default = NA_character_
+)]
+
+# Save row-level (3-year)
+rowlevel_3yr_cols <- intersect(
+  c("panel_id", "panel_year", "state",
+    "age_bins", "age_bins_3yr", "avg_tank_age",
+    "sw_tercile", "wall_binary", "has_single_walled",
+    "single_tanks", "double_tanks", "active_tanks",
+    "total_capacity", "capacity_1k",
+    "claims_total_2023", "claims_total_2023_wins",
+    "log_cost_wins", "predicted_cost_2023"),
+  names(reg_dt_3yr)
+)
+
+fwrite(reg_dt_3yr[, ..rowlevel_3yr_cols],
+       file.path(analysis_dir, "dcm_predicted_cost_rowlevel_3yr.csv"))
+cat(sprintf("  Saved: dcm_predicted_cost_rowlevel_3yr.csv (%s rows, %d cols)\n",
+    format(nrow(reg_dt_3yr), big.mark = ","), length(rowlevel_3yr_cols)))
+
+# Save cell-level (3-year × wall_binary)
+dcm_loss_binary_3yr <- reg_dt_3yr[!is.na(wall_binary), .(
+  L_hat    = mean(predicted_cost_2023,   na.rm = TRUE),
+  L_median = median(predicted_cost_2023, na.rm = TRUE),
+  L_sd     = sd(predicted_cost_2023,     na.rm = TRUE),
+  n_claims = .N
+), by = .(age_bins_3yr, wall_binary)]
+setorder(dcm_loss_binary_3yr, age_bins_3yr, wall_binary)
+fwrite(dcm_loss_binary_3yr,
+       file.path(stats_dir, "dcm_loss_binary_wall_3yr.csv"))
+cat(sprintf("  Saved: dcm_loss_binary_wall_3yr.csv (%d cells)\n",
+    nrow(dcm_loss_binary_3yr)))
+
+cat("\n  3-year + winsorized cell summary (binary wall):\n")
+print(dcm_loss_binary_3yr[, .(
+  age_bins_3yr,
+  wall_binary,
+  L_hat    = dollar(round(L_hat, 0)),
+  L_median = dollar(round(L_median, 0)),
+  n_claims
+)])
+
+# Clean up temp columns
+reg_dt[, `:=`(age_bins_3yr = NULL,
+              claims_total_2023_wins = NULL,
+              log_cost_wins = NULL)]
+
 cat("\n✓ 05_Claims_Analysis.R COMPLETE\n")
