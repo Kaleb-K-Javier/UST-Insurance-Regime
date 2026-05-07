@@ -586,7 +586,20 @@ cat(sprintf("  Spearman rho — premium vs per-tank EL: %.3f  (backup)\n",
 
 #=============================================================================
 # Helper: build a two-panel "raw" figure (each series on its own y-scale)
+#
+# The labeller is magnitude-aware:
+#   - values >= 10 are rendered as dollars ($284, $1,225)
+#   - values < 1  are rendered as percent (0.50%, 1.08%)
+# This lets one facet show hazard probabilities and another show dollar
+# premiums on the same plot without mangling either.
 #=============================================================================
+smart_axis_label <- function(x) {
+  ifelse(is.na(x), "",
+    ifelse(abs(x) >= 10,
+           scales::dollar(x, accuracy = 1),
+           scales::percent(x, accuracy = 0.01)))
+}
+
 make_raw_panel_fig <- function(plot_dt, series_levels, series_colors,
                                series_shapes, y_label, fig_title,
                                fig_subtitle, fig_caption, spearman_label,
@@ -614,7 +627,7 @@ make_raw_panel_fig <- function(plot_dt, series_levels, series_colors,
     scale_color_manual(values = series_colors, guide = "none") +
     scale_shape_manual(values = series_shapes, guide = "none") +
     scale_y_continuous(name   = y_label,
-                       labels = dollar_format(accuracy = 1),
+                       labels = smart_axis_label,
                        expand = expansion(mult = c(0.08, 0.18))) +
     scale_x_discrete(name = "Facility Mean Tank Age (years)") +
     facet_wrap(~ series, ncol = 1, scales = "free_y") +
@@ -667,10 +680,12 @@ make_indexed_fig <- function(plot_dt, series_levels, series_colors,
 }
 
 # ── Figure A: Premium ↔ TX Hazard (MAIN) ────────────────────────────────────
+# Hazard shown as a percent (% of facilities per year) — easier to read than
+# the per-1000 form. EL math elsewhere uses the raw hazard probability.
 plot_a <- melt(
   align_dt[, .(age_bin,
-               `Per-Tank Premium (USD/tank-year)`               = per_tank_premium,
-               `TX Leak Hazard (probability per facility-year)` = h_hat_tx)],
+               `Per-Tank Premium (USD/tank-year)`              = per_tank_premium,
+               `TX Leak Hazard (% of facilities per year)`     = h_hat_tx)],
   id.vars       = "age_bin",
   variable.name = "series",
   value.name    = "value"
@@ -687,38 +702,37 @@ cap_a   <- paste0(
   "Notes: Per-tank premium = mean(tank_premium) across TX Mid-Continent ",
   "tank-months in each bin. TX leak hazard = mean of row-level h_hat ",
   "(01n full-panel elastic net predictions for TX single-walled ",
-  "facilities) across the same tank-months. Both quantities use the ",
-  "facility mean tank age binning that 01n uses for hazard estimation. ",
-  "Single-walled facilities only.")
+  "facilities) across the same tank-months, expressed as percent of ",
+  "facilities leaking per year. Both quantities use the facility mean ",
+  "tank age binning that 01n uses for hazard estimation. Single-walled ",
+  "facilities only.")
 
 fig_a_raw <- make_raw_panel_fig(
   plot_dt        = copy(plot_a),
   series_levels  = c("Per-Tank Premium (USD/tank-year)",
-                     "TX Leak Hazard (probability per facility-year)"),
-  series_colors  = c("Per-Tank Premium (USD/tank-year)"               = "#0072B2",
-                     "TX Leak Hazard (probability per facility-year)" = "#117733"),
-  series_shapes  = c("Per-Tank Premium (USD/tank-year)"               = 19,
-                     "TX Leak Hazard (probability per facility-year)" = 15),
+                     "TX Leak Hazard (% of facilities per year)"),
+  series_colors  = c("Per-Tank Premium (USD/tank-year)"          = "#0072B2",
+                     "TX Leak Hazard (% of facilities per year)" = "#117733"),
+  series_shapes  = c("Per-Tank Premium (USD/tank-year)"          = 19,
+                     "TX Leak Hazard (% of facilities per year)" = 15),
   y_label        = "Series-specific scale",
   fig_title      = title_a,
   fig_subtitle   = paste(sub_a, "Each panel has its own y-scale (raw values)."),
   fig_caption    = cap_a,
   spearman_label = label_a,
   annot_panel    = "Per-Tank Premium (USD/tank-year)"
-) +
-  scale_y_continuous(labels = scales::label_number(accuracy = 0.01),
-                     expand = expansion(mult = c(0.08, 0.18)))
+)
 
 save_fig(fig_a_raw, "Figure_Premium_vs_Hazard_Raw", w = 8, h = 7)
 
 fig_a_idx <- make_indexed_fig(
   plot_dt        = copy(plot_a),
   series_levels  = c("Per-Tank Premium (USD/tank-year)",
-                     "TX Leak Hazard (probability per facility-year)"),
-  series_colors  = c("Per-Tank Premium (USD/tank-year)"               = "#0072B2",
-                     "TX Leak Hazard (probability per facility-year)" = "#117733"),
-  series_shapes  = c("Per-Tank Premium (USD/tank-year)"               = 19,
-                     "TX Leak Hazard (probability per facility-year)" = 15),
+                     "TX Leak Hazard (% of facilities per year)"),
+  series_colors  = c("Per-Tank Premium (USD/tank-year)"          = "#0072B2",
+                     "TX Leak Hazard (% of facilities per year)" = "#117733"),
+  series_shapes  = c("Per-Tank Premium (USD/tank-year)"          = 19,
+                     "TX Leak Hazard (% of facilities per year)" = 15),
   fig_title      = title_a,
   fig_subtitle   = paste(sub_a,
                          "Both series indexed to their 0-2 bin value so",
