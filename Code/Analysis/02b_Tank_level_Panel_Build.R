@@ -1436,7 +1436,61 @@ fac_stock[, `:=`(
   leak_found_by_closure      = tank_closure_revealed
 )]
 
-rm(lust_pairs, closure_lust_flags, annual_lust_flags, closures_for_lust, leaks_for_lust)
+# ---- Leak × Install pairing (parallel to leak × closure pairing above) ----
+# A LUST report within 0-60 days AFTER a tank install at the same facility is
+# treated as a "first-year-churn" leak suspect: the report is most likely an
+# install-failure / pressure-test artifact, not a real environmental release.
+# Symmetric to the closure-side `first_year_churn` exclusion in S12.1, but
+# implemented as FLAGS (not drops) so downstream consumers can choose.
+# Four windows mirror the closure-pairing scheme.
+installs_for_lust <- study_tanks[
+  !is.na(tank_installed_date),
+  .(panel_id, tank_install_date = tank_installed_date)
+]
+setkey(installs_for_lust, panel_id)
+
+leaks_install_pairs <- leaks_for_lust[installs_for_lust,
+                                       on = .(panel_id),
+                                       allow.cartesian = TRUE,
+                                       nomatch = NULL]
+leaks_install_pairs <- leaks_install_pairs[!is.na(report_date) &
+                                              !is.na(tank_install_date)]
+leaks_install_pairs[, days_after_install :=
+                       as.numeric(report_date - tank_install_date)]
+leaks_install_pairs[, `:=`(
+  is_install_prim = days_after_install >= 0 & days_after_install <= 60,
+  is_install_nar  = days_after_install >= 0 & days_after_install <= 30,
+  is_install_wid  = days_after_install >= 0 & days_after_install <= 90,
+  is_install_reg  = days_after_install >= 0 & days_after_install <= 45
+)]
+
+leak_install_flags <- leaks_install_pairs[, .(
+  any_install_prim = as.integer(any(is_install_prim, na.rm = TRUE)),
+  any_install_nar  = as.integer(any(is_install_nar,  na.rm = TRUE)),
+  any_install_wid  = as.integer(any(is_install_wid,  na.rm = TRUE)),
+  any_install_reg  = as.integer(any(is_install_reg,  na.rm = TRUE))
+), by = .(panel_id, panel_year = year(report_date))]
+
+fac_stock <- merge(fac_stock, leak_install_flags,
+                   by = c("panel_id", "panel_year"), all.x = TRUE)
+for (v in c("any_install_prim", "any_install_nar",
+            "any_install_wid", "any_install_reg")) {
+  fac_stock[is.na(get(v)), (v) := 0L]
+}
+
+# Convenience flag (uses primary 0-60d window, matching closure-side default)
+fac_stock[, leak_first_year_churn := any_install_prim]
+
+log_step(sprintf(
+  "Leak first-year-churn flags (0-60d): %s of %s leak-fac-years (%.1f%%)",
+  fmt_n(fac_stock[leak_year == 1L & leak_first_year_churn == 1L, .N]),
+  fmt_n(fac_stock[leak_year == 1L, .N]),
+  100 * mean(fac_stock[leak_year == 1L, leak_first_year_churn == 1L])
+))
+
+rm(lust_pairs, closure_lust_flags, annual_lust_flags,
+   closures_for_lust, leaks_for_lust,
+   installs_for_lust, leaks_install_pairs, leak_install_flags)
 log_step("LUST classification complete.")
 
 setorder(fac_stock, panel_id, panel_year)
@@ -1446,6 +1500,11 @@ fac_stock[, `:=`(
   ever_leaked        = as.integer(cumsum(n_leak_incidents) > 0),
   has_previous_leak  = as.integer(shift(cumsum(n_leak_incidents), 1L, fill = 0L) > 0)
 ), by = panel_id]
+
+# Canonical first-leak event indicator. Downstream hazard estimation (01n)
+# can filter on `leak_first_year_churn == 0L` to drop install-artifact leaks.
+fac_stock[, event_first_leak := as.integer(leak_year == 1L &
+                                            has_previous_leak == 0L)]
 
 # ---- S13.2 Texas FR data ----
 cat("\nS13.2: Texas FR...\n")
@@ -1588,6 +1647,17 @@ facility_panel[, wall_type := fcase(
   has_double_walled_dec == 1L & has_single_walled_dec == 1L, "Mixed",
   default = "Unknown"
 )]
+
+# Clean SW vs DW dichotomy for downstream binary analyses (DCM, descriptive
+# tables, prose). NA for Mixed/Unknown so they're naturally excluded from
+# binary-wall views without affecting the full-portfolio prediction sample
+# in 01n / 05.
+facility_panel[, wall_pure := fcase(
+  wall_type == "Single-Walled", "Single-Walled",
+  wall_type == "Double-Walled", "Double-Walled",
+  default = NA_character_
+)]
+facility_panel[, is_pure_wall := as.integer(!is.na(wall_pure))]
 facility_panel[, age_bins := cut(avg_tank_age_dec,
   breaks = c(0, 3, 6, 9, 12, 15, 18, 21, 24, Inf),
   include.lowest = TRUE,
