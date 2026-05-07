@@ -1,0 +1,4 @@
+sample,n_obs,converged,n_iter,log_lik,kappa_exit,K,gamma_price,gamma_risk,kappa_exit_USD,K_USD
+"observed (TX 2006+, controls 1999+)",2282735,TRUE,10,-268481.4,26.1222,5.1779,-0.2932,0.1644,261222,51779
+"extended (TX 1999+ engine-imputed, controls 1999+)",2428673,TRUE,9,-295362.6,25.815,5.1706,-1.1411,0.1764,258150,51706
+"absorbing-only (Replace dropped, K_log pinned)",2276525,TRUE,3,-222798.3,24.8245,20.0059,-0.1826,0.3165,248245,200059

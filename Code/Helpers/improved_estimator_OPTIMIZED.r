@@ -2423,11 +2423,672 @@ npl_estimator_damped <- function(counts_vec, states, premiums, hazards, losses,
   
   if (verbose) cat("  *** MAX ITERATIONS REACHED ***\n")
   return(list(
-    theta_hat = theta_curr, 
-    P = P, 
-    V = V, 
+    theta_hat = theta_curr,
+    P = P,
+    V = V,
     converged = FALSE,
     theta_path = theta_path,
     cache = cache
   ))
+}
+
+
+# ==============================================================================
+# ==============================================================================
+# REPLACEMENT MODEL — OPTION A: 3-ACTION MULTINOMIAL LOGIT
+# ==============================================================================
+# ==============================================================================
+# Three actions at the state level (Maintain, Exit, Replace). K enters the
+# value function through proper continuation via F_R, not only through the
+# observation-level likelihood.
+#
+# STATE SPACE: 32 states = 8 age bins x 2 wall types x 2 regimes
+#   s_idx = (rho - 1) * 16 + (w - 1) * 8 + A_bin    in 1..32
+#
+# CHOICE-SPECIFIC VALUES (state-level, given V):
+#   v_M(s) = u_M(s) + beta * (F_M %*% V)[s]
+#   v_E(s) = kappa_exit                          (terminal: no continuation)
+#   v_R(s) = -K + beta * (F_R %*% V)[s]          (F_R[s, reset(s)] = 1)
+#
+# AM-2002 inversion remains LINEAR in V given P_fixed:
+#   V = R(P) + beta * (diag(P_M) %*% F_M + diag(P_R) %*% F_R) %*% V
+# ==============================================================================
+
+
+# ==============================================================================
+# REPLACEMENT - SECTION 1: CONFIGURATION
+# ==============================================================================
+create_estimation_config_replacement <- function(beta     = 0.95,
+                                                 sigma2   = 1.0,
+                                                 npl_iter = 200) {
+  list(
+    beta    = beta,
+    sigma2  = sigma2,
+    gamma_E = 0.5772156649,
+
+    # tol_theta = 1e-5 (not 1e-6) because optim's factr=1e8 leaves ~1e-6
+    # noise in theta; a tighter outer-loop tol just spins iterations.
+    # tol_P matched to tol_theta for the same reason (P_diff floor is the
+    # binding constraint when theta has already settled).
+    tol_theta = 1e-5,
+    tol_P     = 1e-5,
+    max_npl_iter = npl_iter,
+
+    eps_prob    = 1e-12,
+    min_log_val = 1e-12,
+    v_clip      = 700,
+
+    kappa_exit_bounds  = c(-200,           500),
+    K_log_bounds       = c(log(0.01),      log(1000)),
+    gamma_price_bounds = c(-20,            5),
+    gamma_risk_bounds  = c(-5,             10),
+
+    n_actions = 3L,
+    n_params  = 4L,
+
+    action_labels = c("maintain", "exit", "replace")
+  )
+}
+
+
+# ==============================================================================
+# REPLACEMENT - SECTION 2: STATE-LEVEL HELPERS
+# ==============================================================================
+build_state_lut_replacement <- function() {
+  lut <- data.table::CJ(rho_state = 1:2, w_state = 1:2, A_bin = 1:8)
+  lut[, s_idx := (rho_state - 1L) * 16L + (w_state - 1L) * 8L + A_bin]
+  data.table::setorder(lut, s_idx)
+  lut
+}
+
+build_reset_state_lut <- function(state_lut) {
+  reset_idx <- integer(nrow(state_lut))
+  for (s in seq_len(nrow(state_lut))) {
+    reset_idx[s] <- (state_lut$rho_state[s] - 1L) * 16L +
+                    (state_lut$w_state[s]   - 1L) * 8L  + 1L
+  }
+  reset_idx
+}
+
+build_F_replace <- function(reset_state_lut) {
+  n <- length(reset_state_lut)
+  Matrix::sparseMatrix(i = seq_len(n),
+                       j = reset_state_lut,
+                       x = rep.int(1, n),
+                       dims = c(n, n))
+}
+
+
+# ==============================================================================
+# REPLACEMENT - SECTION 3: ESTIMATION CACHE
+# ==============================================================================
+create_estimation_cache_replacement <- function(primitives, obs_panel, config) {
+
+  n_states <- 32L
+  stopifnot(length(primitives$h_vec)  == n_states,
+            length(primitives$L_vec)  == n_states,
+            length(primitives$P_vec)  == n_states,
+            nrow(primitives$F_maintain) == n_states,
+            ncol(primitives$F_maintain) == n_states)
+
+  state_lut <- if (!is.null(primitives$state_lut)) {
+    data.table::as.data.table(primitives$state_lut)
+  } else {
+    build_state_lut_replacement()
+  }
+  data.table::setorder(state_lut, s_idx)
+
+  reset_state_lut <- build_reset_state_lut(state_lut)
+  F_replace       <- build_F_replace(reset_state_lut)
+
+  hazard_loss <- primitives$h_vec * primitives$L_vec
+
+  s_obs <- as.integer(obs_panel$s_idx)
+  y_it  <- as.integer(obs_panel$y_it)
+  I_rep <- as.integer(obs_panel$I_replace)
+
+  a_obs <- rep(1L, length(s_obs))     # default: Maintain
+  is_exit    <- y_it == 1L & (!is.na(I_rep)) & I_rep == 0L
+  is_replace <- y_it == 1L & (!is.na(I_rep)) & I_rep == 1L
+  a_obs[is_exit]    <- 2L
+  a_obs[is_replace] <- 3L
+  ambiguous <- y_it == 1L & is.na(I_rep)
+  if (any(ambiguous)) a_obs[ambiguous] <- 2L
+
+  stopifnot(all(s_obs %in% seq_len(n_states)),
+            all(a_obs %in% 1:3))
+
+  list(
+    n_states  = n_states,
+    n_actions = 3L,
+    n_obs     = length(s_obs),
+
+    h_vec       = primitives$h_vec,
+    L_vec       = primitives$L_vec,
+    P_vec       = primitives$P_vec,
+    hazard_loss = hazard_loss,
+    F_maintain  = primitives$F_maintain,
+    F_replace   = F_replace,
+    reset_state_lut = reset_state_lut,
+    state_lut   = state_lut,
+
+    s_obs = s_obs,
+    a_obs = a_obs,
+    y_obs = y_it,
+    I_replace = I_rep,
+
+    beta = config$beta
+  )
+}
+
+
+make_P0_mat_3action <- function(P0_mat, obs_panel, prior_alpha = 1.0,
+                                eps_prob = 1e-12) {
+
+  if (is.null(colnames(P0_mat))) colnames(P0_mat) <- c("maintain", "close")
+  if (ncol(P0_mat) == 3L) {
+    colnames(P0_mat) <- c("maintain", "exit", "replace")
+    return(P0_mat)
+  }
+  stopifnot(ncol(P0_mat) == 2L)
+
+  ob <- data.table::as.data.table(obs_panel)
+  closures <- ob[y_it == 1L]
+  global_share <- if (nrow(closures) > 0) {
+    mean(closures$I_replace == 1L, na.rm = TRUE)
+  } else 0.5
+
+  cell <- closures[, .(
+    n_close   = .N,
+    n_replace = sum(I_replace == 1L, na.rm = TRUE)
+  ), by = s_idx]
+  cell[, pi_replace :=
+         (n_replace + prior_alpha * global_share) /
+         (n_close   + prior_alpha)]
+
+  pi_vec <- rep(global_share, 32L)
+  pi_vec[cell$s_idx] <- cell$pi_replace
+
+  P3 <- cbind(
+    maintain = P0_mat[, "maintain"],
+    exit     = P0_mat[, "close"] * (1 - pi_vec),
+    replace  = P0_mat[, "close"] *      pi_vec
+  )
+  P3[P3 < eps_prob] <- eps_prob
+  P3 <- P3 / rowSums(P3)
+  P3
+}
+
+
+# ==============================================================================
+# REPLACEMENT - SECTION 4: FLOW UTILITIES
+# ==============================================================================
+flow_utilities_replacement <- function(theta, cache) {
+  if (!all(c("kappa_exit", "K_log", "gamma_price", "gamma_risk") %in%
+           names(theta))) {
+    stop("theta must be named with: kappa_exit, K_log, gamma_price, gamma_risk")
+  }
+  K <- exp(theta[["K_log"]])
+
+  u_M <- 1 + theta[["gamma_price"]] * cache$P_vec -
+             theta[["gamma_risk"]]  * cache$hazard_loss
+  u_E <- rep.int(theta[["kappa_exit"]], cache$n_states)
+  u_R <- rep.int(-K,                    cache$n_states)
+
+  cbind(maintain = u_M, exit = u_E, replace = u_R)
+}
+
+
+# ==============================================================================
+# REPLACEMENT - SECTION 5: VALUE FUNCTION INVERSION (LINEAR)
+# ==============================================================================
+invert_value_function_replacement <- function(P, U, cache, config) {
+  sigma   <- config$sigma2
+  beta    <- cache$beta
+  gamma_E <- config$gamma_E
+  n       <- cache$n_states
+
+  P_M <- pmax(P[, "maintain"], config$min_log_val)
+  P_E <- pmax(P[, "exit"],     config$min_log_val)
+  P_R <- pmax(P[, "replace"],  config$min_log_val)
+
+  R <- P_M * (U[, "maintain"] + sigma * (gamma_E - log(P_M))) +
+       P_E * (U[, "exit"]     + sigma * (gamma_E - log(P_E))) +
+       P_R * (U[, "replace"]  + sigma * (gamma_E - log(P_R)))
+
+  M <- Matrix::Diagonal(x = as.numeric(P_M)) %*% cache$F_maintain +
+       Matrix::Diagonal(x = as.numeric(P_R)) %*% cache$F_replace
+
+  V <- as.numeric(Matrix::solve(Matrix::Diagonal(n) - beta * M, R))
+  V
+}
+
+
+# ==============================================================================
+# REPLACEMENT - SECTION 6: CCP COMPUTATION
+# ==============================================================================
+update_ccps_replacement <- function(theta, V, cache, config) {
+  sigma <- config$sigma2
+  beta  <- cache$beta
+
+  U <- flow_utilities_replacement(theta, cache)
+
+  v_M <- U[, "maintain"] + beta * as.numeric(cache$F_maintain %*% V)
+  v_E <- U[, "exit"]
+  v_R <- U[, "replace"]  + beta * as.numeric(cache$F_replace  %*% V)
+
+  v_mat <- cbind(maintain = v_M, exit = v_E, replace = v_R)
+  v_max <- pmax(v_M, v_E, v_R)
+  z     <- exp((v_mat - v_max) / sigma)
+  P     <- z / rowSums(z)
+
+  P[P < config$eps_prob] <- config$eps_prob
+  P <- P / rowSums(P)
+  colnames(P) <- c("maintain", "exit", "replace")
+  P
+}
+
+
+# ==============================================================================
+# REPLACEMENT - SECTION 7: NPL PSEUDO-LIKELIHOOD
+# ==============================================================================
+npl_likelihood_replacement <- function(theta, P_fixed, cache, config) {
+
+  if (is.null(names(theta))) {
+    names(theta) <- c("kappa_exit", "K_log", "gamma_price", "gamma_risk")
+  }
+
+  sigma <- config$sigma2
+  beta  <- cache$beta
+
+  U <- flow_utilities_replacement(theta, cache)
+  V <- tryCatch(
+    invert_value_function_replacement(P_fixed, U, cache, config),
+    error = function(e) rep(NA_real_, cache$n_states)
+  )
+  if (anyNA(V)) return(1e10)
+
+  v_M <- U[, "maintain"] + beta * as.numeric(cache$F_maintain %*% V)
+  v_E <- U[, "exit"]
+  v_R <- U[, "replace"]  + beta * as.numeric(cache$F_replace  %*% V)
+
+  v_mat <- cbind(v_M, v_E, v_R)
+  v_max <- pmax(v_M, v_E, v_R)
+  v_diff <- (v_mat - v_max) / sigma
+  cl <- config$v_clip
+  v_diff[v_diff >  cl] <-  cl
+  v_diff[v_diff < -cl] <- -cl
+  log_Z <- log(rowSums(exp(v_diff)))     # length 32
+
+  log_P_state <- v_diff - log_Z          # 32 x 3 matrix
+
+  idx <- cbind(cache$s_obs, cache$a_obs)
+  ll <- sum(log_P_state[idx])
+
+  if (!is.finite(ll)) return(1e10)
+  -ll
+}
+
+
+# ==============================================================================
+# REPLACEMENT - SECTION 8: EQUILIBRIUM POLICY SOLVER
+# ==============================================================================
+solve_equilibrium_policy_replacement <- function(theta, cache, config,
+                                                 max_iter = 1000, tol = 1e-8) {
+  P <- matrix(1/3, cache$n_states, 3,
+              dimnames = list(NULL, c("maintain", "exit", "replace")))
+
+  converged <- FALSE
+  for (i in seq_len(max_iter)) {
+    U <- flow_utilities_replacement(theta, cache)
+    V <- invert_value_function_replacement(P, U, cache, config)
+    P_new <- update_ccps_replacement(theta, V, cache, config)
+    if (max(abs(P_new - P)) < tol) { converged <- TRUE; P <- P_new; break }
+    P <- P_new
+  }
+
+  U <- flow_utilities_replacement(theta, cache)
+  V <- invert_value_function_replacement(P, U, cache, config)
+
+  list(P = P, V = V, converged = converged, n_iter = i)
+}
+
+
+# ==============================================================================
+# REPLACEMENT - SECTION 9: MAIN NPL ESTIMATOR
+# ==============================================================================
+npl_estimator_replacement <- function(obs_panel,
+                                      primitives,
+                                      config,
+                                      theta_init = NULL,
+                                      P_init     = NULL,
+                                      verbose    = TRUE) {
+
+  if (verbose) {
+    cat("\n=== NPL ESTIMATOR — REPLACEMENT MODEL (Option A, 4-Param) ===\n")
+    cat(sprintf("    sample = %s | n_obs = %s | n_facilities = %s\n",
+                primitives$sample_label %||% "?",
+                format(nrow(obs_panel), big.mark = ","),
+                format(data.table::uniqueN(obs_panel$panel_id),
+                       big.mark = ",")))
+  }
+
+  cache <- create_estimation_cache_replacement(primitives, obs_panel, config)
+
+  if (is.null(theta_init)) {
+    theta_init <- c(kappa_exit = 20, K_log = log(20),
+                    gamma_price = -1.0, gamma_risk = 1.0)
+  }
+  if (is.null(names(theta_init))) {
+    names(theta_init) <- c("kappa_exit", "K_log", "gamma_price", "gamma_risk")
+  }
+  theta_curr <- theta_init
+
+  if (is.null(P_init)) {
+    P <- make_P0_mat_3action(primitives$P0_mat, obs_panel,
+                             eps_prob = config$eps_prob)
+    if (verbose) cat("    initial CCPs: split of primitives$P0_mat\n")
+  } else {
+    P <- P_init
+    if (verbose) cat("    initial CCPs: user-supplied\n")
+  }
+  stopifnot(nrow(P) == cache$n_states, ncol(P) == 3L)
+  if (is.null(colnames(P))) {
+    colnames(P) <- c("maintain", "exit", "replace")
+  }
+
+  lower_b <- c(config$kappa_exit_bounds[1], config$K_log_bounds[1],
+               config$gamma_price_bounds[1], config$gamma_risk_bounds[1])
+  upper_b <- c(config$kappa_exit_bounds[2], config$K_log_bounds[2],
+               config$gamma_price_bounds[2], config$gamma_risk_bounds[2])
+
+  theta_path <- matrix(NA_real_, config$max_npl_iter, config$n_params,
+                       dimnames = list(NULL, names(theta_init)))
+  ll_path    <- numeric(config$max_npl_iter)
+  converged  <- FALSE
+
+  for (npl_iter in seq_len(config$max_npl_iter)) {
+
+    theta_old <- theta_curr
+    theta_path[npl_iter, ] <- theta_curr
+
+    opt <- optim(
+      par     = theta_curr,
+      fn      = npl_likelihood_replacement,
+      P_fixed = P,
+      cache   = cache,
+      config  = config,
+      method  = "L-BFGS-B",
+      lower   = lower_b,
+      upper   = upper_b,
+      control = list(maxit = 300, factr = 1e8)
+    )
+    if (opt$convergence != 0 && verbose) {
+      warning(sprintf("    optim() returned code %d at NPL iter %d",
+                      opt$convergence, npl_iter))
+    }
+
+    theta_curr <- opt$par
+    names(theta_curr) <- names(theta_init)
+    ll_path[npl_iter] <- -opt$value
+
+    U <- flow_utilities_replacement(theta_curr, cache)
+    V <- invert_value_function_replacement(P, U, cache, config)
+    P_new <- update_ccps_replacement(theta_curr, V, cache, config)
+
+    theta_diff <- max(abs(theta_curr - theta_old))
+    P_diff     <- max(abs(P_new - P))
+
+    if (verbose && (npl_iter %% 5 == 0 || npl_iter <= 3)) {
+      cat(sprintf(
+        "    iter %3d: kappa=%7.3f K=%8.3f gP=%6.3f gR=%6.3f | dTh=%.1e dP=%.1e LL=%.1f\n",
+        npl_iter,
+        theta_curr[["kappa_exit"]], exp(theta_curr[["K_log"]]),
+        theta_curr[["gamma_price"]], theta_curr[["gamma_risk"]],
+        theta_diff, P_diff, ll_path[npl_iter]))
+    }
+
+    P <- P_new
+
+    if (theta_diff < config$tol_theta && P_diff < config$tol_P) {
+      converged <- TRUE
+      if (verbose) {
+        cat(sprintf("\n    *** CONVERGED at iter %d ***\n", npl_iter))
+        cat(sprintf("    theta_hat: kappa_exit=%.4f K=%.4f gP=%.4f gR=%.4f\n",
+                    theta_curr[["kappa_exit"]],
+                    exp(theta_curr[["K_log"]]),
+                    theta_curr[["gamma_price"]],
+                    theta_curr[["gamma_risk"]]))
+      }
+      break
+    }
+  }
+  if (!converged && verbose) {
+    warning(sprintf("NPL did not converge in %d iterations",
+                    config$max_npl_iter))
+  }
+
+  U_final <- flow_utilities_replacement(theta_curr, cache)
+  V_final <- invert_value_function_replacement(P, U_final, cache, config)
+
+  theta_hat <- c(kappa_exit  = unname(theta_curr[["kappa_exit"]]),
+                 K           = exp(theta_curr[["K_log"]]),
+                 gamma_price = unname(theta_curr[["gamma_price"]]),
+                 gamma_risk  = unname(theta_curr[["gamma_risk"]]))
+
+  list(
+    theta_hat      = theta_hat,
+    theta_raw      = theta_curr,
+    P_hat          = P,
+    V_hat          = V_final,
+    converged      = converged,
+    n_iter         = npl_iter,
+    log_likelihood = ll_path[npl_iter],
+    ll_path        = ll_path[seq_len(npl_iter)],
+    theta_path     = theta_path[seq_len(npl_iter), , drop = FALSE],
+    cache          = cache,
+    config         = config
+  )
+}
+
+
+# ==============================================================================
+# REPLACEMENT - SECTION 10: DATA GENERATOR (FOR MONTE CARLO)
+# ==============================================================================
+generate_replacement_data <- function(N_facilities    = 1000L,
+                                      T_periods       = 30L,
+                                      theta_true      = c(kappa_exit = 22,
+                                                          K_log = log(15),
+                                                          gamma_price = -1.0,
+                                                          gamma_risk  = 0.6),
+                                      seed            = 2025L,
+                                      P_manual        = NULL,
+                                      hazard_params   = NULL,
+                                      loss_params     = NULL,
+                                      premium_params  = NULL,
+                                      age_probs       = NULL,
+                                      config          = NULL,
+                                      verbose         = FALSE) {
+
+  set.seed(seed)
+  if (is.null(names(theta_true))) {
+    names(theta_true) <- c("kappa_exit", "K_log", "gamma_price", "gamma_risk")
+  }
+
+  state_lut <- build_state_lut_replacement()
+  n_states  <- nrow(state_lut)
+
+  hp <- modifyList(list(h0 = 0.04, h_single = 0.02, h_age = 0.004,
+                        cap_lo = 1e-3, cap_hi = 0.40),
+                   hazard_params %||% list())
+  lp <- modifyList(list(ell0 = 12, ell_age = 1.0, ell_single = 4),
+                   loss_params %||% list())
+  pp <- modifyList(list(p_FF = 0.10, p0_RB = 0.04,
+                        p_single_RB = 0.06, p_age_RB = 0.012),
+                   premium_params %||% list())
+  ap <- modifyList(list(p_up = c(0.18, 0.19, 0.20, 0.21,
+                                 0.22, 0.23, 0.24, 0.0)),
+                   age_probs %||% list())
+
+  s     <- seq_len(n_states)
+  rho_v <- state_lut$rho_state[s]
+  w_v   <- state_lut$w_state[s]
+  A_v   <- state_lut$A_bin[s]
+
+  h_vec <- pmin(pmax(hp$h0 + hp$h_single * (w_v == 1L) + hp$h_age * A_v,
+                     hp$cap_lo), hp$cap_hi)
+  L_vec <- pmax(lp$ell0 + lp$ell_age * A_v + lp$ell_single * (w_v == 1L), 1)
+  P_vec <- pp$p_FF + pp$p0_RB * (rho_v == 2L) +
+           pp$p_single_RB * (w_v == 1L) * (rho_v == 2L) +
+           pp$p_age_RB    * (A_v - 1L)  * (rho_v == 2L)
+
+  N_AGE <- 8L
+  F_maintain <- Matrix::Matrix(0, n_states, n_states, sparse = TRUE)
+  for (rho in 1:2) for (w in 1:2) for (a in 1:N_AGE) {
+    s_from <- (rho - 1L) * 16L + (w - 1L) * 8L + a
+    pu <- ap$p_up[a]
+    F_maintain[s_from, s_from] <- 1 - pu
+    if (a < N_AGE) {
+      s_up <- (rho - 1L) * 16L + (w - 1L) * 8L + (a + 1L)
+      F_maintain[s_from, s_up] <- pu
+    }
+  }
+  stopifnot(all(abs(rowSums(F_maintain) - 1) < 1e-10))
+
+  P0_close_init <- 0.10
+  P0_mat <- matrix(c(1 - P0_close_init, P0_close_init), nrow = n_states,
+                   ncol = 2, byrow = TRUE,
+                   dimnames = list(NULL, c("maintain", "close")))
+
+  primitives_stub <- list(
+    state_lut    = state_lut,
+    h_vec        = h_vec,
+    L_vec        = L_vec,
+    P_vec        = P_vec,
+    F_maintain   = F_maintain,
+    P0_mat       = P0_mat,
+    sample_label = "synthetic"
+  )
+
+  if (is.null(config)) {
+    config <- create_estimation_config_replacement(beta = 0.95, sigma2 = 1.0,
+                                                   npl_iter = 200)
+  }
+
+  obs_stub <- data.table::data.table(s_idx = 1L, y_it = 0L,
+                                     I_replace = NA_integer_)
+  cache <- create_estimation_cache_replacement(primitives_stub, obs_stub,
+                                               config)
+
+  if (!is.null(P_manual)) {
+    P_eq <- P_manual
+    U_eq <- flow_utilities_replacement(theta_true, cache)
+    V_eq <- invert_value_function_replacement(P_eq, U_eq, cache, config)
+    converged <- TRUE
+  } else {
+    eq <- solve_equilibrium_policy_replacement(theta_true, cache, config)
+    P_eq <- eq$P; V_eq <- eq$V; converged <- eq$converged
+    if (!converged && verbose) warning("equilibrium did not converge")
+  }
+  stopifnot(nrow(P_eq) == n_states, ncol(P_eq) == 3L)
+
+  panel_list <- vector("list", N_facilities)
+
+  for (fac in seq_len(N_facilities)) {
+    s_curr <- sample.int(n_states, 1L)
+    rec_s <- integer(T_periods)
+    rec_y <- integer(T_periods)
+    rec_I <- rep(NA_integer_, T_periods)
+    rec_reset <- rep(NA_integer_, T_periods)
+    n_t <- 0L
+    active <- TRUE
+
+    for (t in seq_len(T_periods)) {
+      if (!active) break
+      n_t <- t
+
+      probs <- P_eq[s_curr, ]
+      a <- sample.int(3L, 1L, prob = probs)
+
+      rec_s[t] <- s_curr
+      if (a == 1L) {
+        rec_y[t] <- 0L
+        a_idx <- state_lut$A_bin[s_curr]
+        pu <- ap$p_up[a_idx]
+        if (runif(1) < pu && a_idx < N_AGE) {
+          s_curr <- (state_lut$rho_state[s_curr] - 1L) * 16L +
+                    (state_lut$w_state[s_curr]   - 1L) * 8L  +
+                    (a_idx + 1L)
+        }
+      } else if (a == 2L) {
+        rec_y[t] <- 1L
+        rec_I[t] <- 0L
+        active <- FALSE
+      } else {
+        rec_y[t] <- 1L
+        rec_I[t] <- 1L
+        s_reset <- (state_lut$rho_state[s_curr] - 1L) * 16L +
+                   (state_lut$w_state[s_curr]   - 1L) * 8L  + 1L
+        rec_reset[t] <- s_reset
+        s_curr <- s_reset
+      }
+    }
+
+    if (n_t > 0L) {
+      panel_list[[fac]] <- data.table::data.table(
+        panel_id    = fac,
+        panel_year  = seq_len(n_t),
+        s_idx       = rec_s[seq_len(n_t)],
+        A_bin       = state_lut$A_bin     [rec_s[seq_len(n_t)]],
+        w_state     = state_lut$w_state   [rec_s[seq_len(n_t)]],
+        rho_state   = state_lut$rho_state [rec_s[seq_len(n_t)]],
+        premium     = P_vec[rec_s[seq_len(n_t)]],
+        y_it        = rec_y[seq_len(n_t)],
+        I_replace   = rec_I[seq_len(n_t)],
+        reset_state_index = rec_reset[seq_len(n_t)]
+      )
+    }
+  }
+  obs_panel <- data.table::rbindlist(panel_list)
+
+  closures <- obs_panel[y_it == 1L]
+  pi_global <- if (nrow(closures)) mean(closures$I_replace == 1L,
+                                        na.rm = TRUE) else 0.5
+  P0_close <- mean(obs_panel$y_it == 1L)
+  P0_mat_2 <- matrix(c(1 - P0_close, P0_close), nrow = n_states,
+                     ncol = 2, byrow = TRUE,
+                     dimnames = list(NULL, c("maintain", "close")))
+
+  primitives <- list(
+    state_lut    = state_lut,
+    h_vec        = h_vec,
+    L_vec        = L_vec,
+    P_vec        = P_vec,
+    F_maintain   = F_maintain,
+    P0_mat       = P0_mat_2,
+    n_exit       = sum(obs_panel$y_it == 1L &
+                       obs_panel$I_replace == 0L, na.rm = TRUE),
+    n_replace    = sum(obs_panel$y_it == 1L &
+                       obs_panel$I_replace == 1L, na.rm = TRUE),
+    pct_replace  = pi_global,
+    sample_label = "synthetic",
+    n_obs        = nrow(obs_panel),
+    n_facilities = N_facilities
+  )
+
+  list(
+    obs_panel    = obs_panel,
+    primitives   = primitives,
+    theta_true   = theta_true,
+    P_true       = P_eq,
+    V_true       = V_eq,
+    cache        = cache,
+    config       = config,
+    converged_eq = converged
+  )
+}
+
+
+if (!exists("%||%", mode = "function")) {
+  `%||%` <- function(a, b) if (is.null(a)) b else a
 }
