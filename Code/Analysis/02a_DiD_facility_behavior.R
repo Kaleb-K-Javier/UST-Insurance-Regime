@@ -53,6 +53,7 @@ suppressPackageStartupMessages({
   library(scales)
   library(broom)
   library(here)
+  library(did2s)
 })
 
 options(scipen = 999)
@@ -118,6 +119,26 @@ FE_3DIM    <- "panel_id + fac_wall_reform^fac_fuel_reform^panel_year"
 FE_ES      <- "panel_id + panel_year"
 CLUSTER_VAR <- "~state"
 
+# ---- Bootstrap constants ----
+# Wild cluster bootstrap with Rademacher weights.
+# Uses manual score bootstrap (run_boot_ols_score from 02b_DiD_Analysis.R)
+# because boottest() and fwildclusterboot break when the FE specification
+# includes cell^year interactions in fixest.
+# Applied to: all static DiD primary specs (Tables 1-3, LUST A, LUST B)
+# and to the primary any_closure ES model.
+N_BOOT    <- 9999L
+BOOT_SEED <- 42L
+
+# ---- BJS imputation estimator ----
+# Borusyak, Jaravel, Spiess (2024) two-stage imputation DiD.
+# Stage 1: fit unit + time FEs on never-treated/pre-period observations only.
+# Stage 2: impute counterfactual, regress residualized outcome on treatment.
+# Reported as col 4 in all main tables. Provides efficiency gains over TWFE
+# under heterogeneous treatment effects even with a single treatment date.
+# Package: did2s. Formula interface matches feols syntax.
+BJS_FIRST_STAGE  <- "~ 0 | panel_id + panel_year"
+BJS_SECOND_STAGE <- "~ i(post_1999, texas_treated, ref = 0)"
+
 # ---- Plain-language outcome labels ----
 # Used in table notes and figure axis labels.
 LABEL_ANY_CLOSURE  <- "Any Tank Closure (0/1)"
@@ -164,8 +185,17 @@ fmt_se <- function(x, digits = 4L) {
 # ---- B2.2: Model extraction ----
 
 extract_did <- function(m, tvar = "did_term") {
-  ct  <- coeftable(m)
-  idx <- grep(tvar, rownames(ct), fixed = TRUE)[1L]
+  if (is.null(m)) {
+    return(list(beta = NA_real_, se = NA_real_, p = NA_real_, n = NA_integer_))
+  }
+  # did2s objects use "ATT" as the coefficient name rather than did_term
+  if (inherits(m, "did2s")) {
+    ct  <- coeftable(m)
+    idx <- grep("ATT|post_1999", rownames(ct))[1L]
+  } else {
+    ct  <- coeftable(m)
+    idx <- grep(tvar, rownames(ct), fixed = TRUE)[1L]
+  }
   if (is.na(idx))
     stop(sprintf("extract_did: '%s' not found.", tvar))
   list(
@@ -307,6 +337,32 @@ run_did_3dim <- function(outcome, data) {
   )
 }
 
+# run_did_bjs: Borusyak-Jaravel-Spiess imputation estimator.
+# first_stage: FE formula for the pre-period/never-treated fit.
+# second_stage: treatment indicator formula.
+# treatment: column name of the binary treatment indicator (1 post-reform).
+# Returns a did2s object which has a coeftable() method compatible with
+# extract_did(). If did2s fails (e.g., thin cells), returns NULL silently.
+run_did_bjs <- function(outcome, data,
+                         first_stage  = BJS_FIRST_STAGE,
+                         second_stage = BJS_SECOND_STAGE,
+                         treatment    = "post_1999") {
+  tryCatch(
+    did2s::did2s(
+      data          = data,
+      yname         = outcome,
+      first_stage   = as.formula(first_stage),
+      second_stage  = as.formula(second_stage),
+      treatment     = treatment,
+      cluster_var   = "state"
+    ),
+    error = function(e) {
+      warning(sprintf("BJS did2s failed for %s: %s", outcome, e$message))
+      NULL
+    }
+  )
+}
+
 # run_did_naive_cem: reform-CEM sample, year FE only (col 1 of tables 2/3/LUST).
 run_did_naive_cem <- function(outcome, data) {
   feols(
@@ -325,7 +381,8 @@ run_threecol <- function(outcome, data = mm_fac_reform) {
   list(
     col1 = run_did_naive_cem(outcome, data),
     col2 = run_did_ols(outcome,       data),
-    col3 = run_did_3dim(outcome,      data)
+    col3 = run_did_3dim(outcome,      data),
+    col4 = run_did_bjs(outcome,       data)
   )
 }
 
@@ -348,6 +405,103 @@ run_pretrend_test <- function(m, label, sample) {
              n_pre_coefs = length(pre_nms),
              F_stat      = round(wt$stat, 3L),
              p_val       = round(wt$p,    4L))
+}
+
+# run_boot_ols_score: Kline-Santos (2012) score wild cluster bootstrap.
+# Works with any fixest FE specification including cell^year interactions
+# because it never builds a model matrix over FE levels.
+# Arguments:
+#   model : fitted feols object
+#   param : coefficient name to bootstrap (default "did_term")
+#   B     : number of bootstrap draws
+#   seed  : RNG seed
+#   data  : the data.table passed to feols() -- must contain "state" column
+# Returns list: p_boot, se_boot, ci_lo, ci_hi, t_stat
+run_boot_ols_score <- function(model,
+                                param = "did_term",
+                                B     = N_BOOT,
+                                seed  = BOOT_SEED,
+                                data  = NULL) {
+  set.seed(seed)
+  if (is.null(data)) stop("run_boot_ols_score requires explicit data= argument.")
+
+  ct  <- coeftable(model)
+  idx <- which(rownames(ct) == param)[1L]
+  if (is.na(idx)) {
+    warning(sprintf("param '%s' not in model coeftable", param))
+    return(list(p_boot=NA_real_, se_boot=NA_real_,
+                ci_lo=NA_real_, ci_hi=NA_real_, t_stat=NA_real_))
+  }
+  coef_obs <- ct[idx, "Estimate"]
+  se_obs   <- ct[idx, "Std. Error"]
+  t_obs    <- coef_obs / se_obs
+
+  obs_idx  <- fixest::obs(model)
+  states   <- data[["state"]][obs_idx]
+  clusters <- unique(states)
+  G        <- length(clusters)
+
+  wts_raw <- weights(model)
+  wts     <- if (!is.null(wts_raw)) wts_raw[obs_idx] else NULL
+
+  dm <- tryCatch({
+    data_est <- data[obs_idx]
+    as.data.frame(fixest::demean(model, data = data_est))
+  }, error = function(e) {
+    tryCatch(
+      as.data.frame(fixest::demean(model)),
+      error = function(e2) { warning(conditionMessage(e2)); NULL }
+    )
+  })
+  if (is.null(dm)) {
+    return(list(p_boot=NA_real_, se_boot=NA_real_,
+                ci_lo=NA_real_, ci_hi=NA_real_, t_stat=NA_real_))
+  }
+
+  y_nm     <- as.character(formula(model)[[2L]])
+  null_nms <- setdiff(names(dm), c(y_nm, param))
+
+  if (!param %in% names(dm)) {
+    warning(sprintf("param '%s' missing from demeaned frame", param))
+    return(list(p_boot=NA_real_, se_boot=NA_real_,
+                ci_lo=NA_real_, ci_hi=NA_real_, t_stat=NA_real_))
+  }
+
+  y_vec <- dm[[y_nm]]
+  if (length(null_nms) > 0L) {
+    X_null <- as.matrix(dm[null_nms])
+    if (!is.null(wts)) {
+      sw         <- sqrt(wts)
+      fit        <- lm.fit(sw * X_null, sw * y_vec)
+      resid_null <- fit$residuals / sw
+    } else {
+      fit        <- lm.fit(X_null, y_vec)
+      resid_null <- fit$residuals
+    }
+  } else {
+    resid_null <- y_vec
+  }
+
+  x_dm      <- dm[[param]]
+  score_vec <- if (!is.null(wts)) wts * x_dm * resid_null else x_dm * resid_null
+
+  valid          <- !is.na(score_vec) & !is.na(states)
+  cluster_scores <- as.numeric(tapply(score_vec[valid], states[valid], sum))
+
+  W          <- matrix(sample(c(-1L, 1L), B * G, replace = TRUE),
+                       nrow = B, ncol = G)
+  score_b    <- as.numeric(W %*% cluster_scores)
+  var_b      <- sum(cluster_scores^2)
+  t_boot     <- score_b / sqrt(var_b + 1e-10)
+  boot_coefs <- t_boot * se_obs + coef_obs
+
+  list(
+    p_boot  = mean(abs(t_boot) >= abs(t_obs)),
+    se_boot = sd(t_boot) * se_obs,
+    ci_lo   = unname(quantile(boot_coefs, 0.025)),
+    ci_hi   = unname(quantile(boot_coefs, 0.975)),
+    t_stat  = t_obs
+  )
 }
 
 
@@ -413,7 +567,7 @@ required_cols <- c(
   "tank_closure_revealed_reg",    "tank_closure_known_leak_reg",
   "leak_found_by_closure",
   "make_model_fac", "fac_wall_reform", "fac_fuel_reform", "oldest_age_bin",
-  "fac_is_incumbent", "first_install_yr", "had_pre1989_tanks",
+  "fac_is_incumbent", "first_install_yr", "had_pre1989_tanks", "all_post1989",
   "n_tanks_at_reform",
   "any_mandate_release_det", "any_mandate_spill_overfill",
   "any_mandate_integrity",
@@ -692,7 +846,15 @@ t1_models <- list(
     cluster = ~state
   ),
   col5 = run_did_ols("any_closure", mm_fac_reform),   # PRIMARY
-  col6 = run_did_3dim("any_closure", mm_fac_reform)   # FE_3DIM robustness
+  col6 = run_did_3dim("any_closure", mm_fac_reform),  # FE_3DIM robustness
+  col7 = run_did_bjs("any_closure", mm_fac_reform)    # BJS imputation (Borusyak-Jaravel-Spiess)
+)
+
+# Bootstrap inference for primary spec (col5)
+boot_t1_col5 <- run_boot_ols_score(
+  model = t1_models$col5,
+  param = "did_term",
+  data  = mm_fac_reform
 )
 
 log_step("Table 1 (any_closure) walk-in:")
@@ -725,27 +887,30 @@ cat("B5.3: Building Table 1 LaTeX...\n")
     paste0("\\caption{Table 1: Do Facilities Close More Tanks? ",
            "Effect of the Texas Insurance Reform on Any Tank Closure Activity.}"),
     "\\label{tab:t1_any_closure}",
-    "\\begin{tabular}{lcccccc}",
+    "\\begin{tabular}{lccccccc}",
     "\\toprule",
-    " & (1) & (2) & (3) & (4) & (5) & (6) \\\\",
+    " & (1) & (2) & (3) & (4) & (5) & (6) & (7) \\\\",
     paste0(" & Naive & +Mandates & +Cell$\\times$Yr",
-           " & CEM+Mandates & CEM+Cell$\\times$Yr & CEM+2D-Cell$\\times$Yr \\\\"),
+           " & CEM+Mandates & CEM+Cell$\\times$Yr & CEM+2D-Cell$\\times$Yr & BJS \\\\"),
     "\\midrule",
     paste0("TX $\\times$ Post & ", beta_str, " \\\\"),
     paste0("                  & ", se_str,   " \\\\"),
+    paste0("Bootstrap $p$ (col 5) & \\multicolumn{4}{c}{} & ",
+           formatC(round(boot_t1_col5$p_boot, 3L), digits = 3L, format = "f"),
+           " & \\multicolumn{2}{c}{} \\\\"),
     paste0("$N$               & ", n_str,    " \\\\"),
-    paste0("Control mean      & ", mc_tex(6L, fmt_est(cm_any_closure)), " \\\\"),
+    paste0("Control mean      & ", mc_tex(7L, fmt_est(cm_any_closure)), " \\\\"),
     "\\midrule",
-    "Facility FE              & Yes & Yes & Yes & Yes & Yes & Yes \\\\",
-    "Year FE                  & Yes & Yes & Yes & Yes & Yes & Yes \\\\",
-    "Cell$\\times$Year FE     & No  & No  & 3D  & No  & 3D  & 2D  \\\\",
-    "CEM weights              & No  & No  & No  & Yes & Yes & Yes \\\\",
-    "Mandate controls         & No  & Yes & Yes & Yes & Yes & Yes \\\\",
+    "Facility FE              & Yes & Yes & Yes & Yes & Yes & Yes & -- \\\\",
+    "Year FE                  & Yes & Yes & Yes & Yes & Yes & Yes & -- \\\\",
+    "Cell$\\times$Year FE     & No  & No  & 3D  & No  & 3D  & 2D  & -- \\\\",
+    "CEM weights              & No  & No  & No  & Yes & Yes & Yes & Yes \\\\",
+    "Mandate controls         & No  & Yes & Yes & Yes & Yes & Yes & Yes \\\\",
     paste0("Sample & ",
            mc_tex(3L, "Full incumbents (no matching)"),
            " & ",
            mc_tex(3L, "Reform-CEM matched"),
-           " \\\\"),
+           " & Reform-CEM \\\\"),
     "\\bottomrule",
     "\\end{tabular}",
     "\\begin{minipage}{\\linewidth}",
@@ -762,6 +927,15 @@ cat("B5.3: Building Table 1 LaTeX...\n")
       "2D Cell$\\times$Year FE: fac\\_wall$\\times$fac\\_fuel$\\times$year ",
       "(drops age bin; robustness). ",
       "Col (5) is the primary specification used in all subsequent tables. ",
+      "Col (7) reports the Borusyak, Jaravel, and Spiess (2024) two-stage ",
+      "imputation estimator (BJS): stage 1 fits unit and year fixed effects on ",
+      "untreated observations; stage 2 regresses the residualized outcome on ",
+      "the treatment indicator. BJS is more efficient than TWFE under ",
+      "heterogeneous treatment effects and provides an independent check on ",
+      "the primary specification. ",
+      "Bootstrap p-value reported for col (5) is from a wild cluster score ",
+      "bootstrap (Kline-Santos 2012) with Rademacher weights, B = 9999, ",
+      "clustering by state. ",
       "Cluster-robust SEs by state (17 clusters). ",
       "$^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$."
     ),
@@ -779,7 +953,8 @@ t1_dt <- rbindlist(lapply(names(t1_models), function(nm) {
     sample    = ifelse(nm %in% c("col1","col2","col3"),
                        "full_incumbent", "reform_cem"),
     fe        = c(col1="naive",col2="naive+mand",col3="primary_nomatch",
-                  col4="naive_cem",col5="primary",col6="fe3dim")[[nm]],
+                  col4="naive_cem",col5="primary",col6="fe3dim",
+                  col7="bjs_imputation")[[nm]],
     beta      = round(d$beta, 6L), se = round(d$se, 6L),
     p         = round(d$p, 4L),    stars = stars_p(d$p),
     n         = d$n,
@@ -827,6 +1002,11 @@ t2_exit    <- run_threecol("facility_exit")
 t2_upgrade <- run_threecol("replacement_closure_year")
 t2_shrink  <- run_threecol("permanent_closure_year")
 
+# Bootstrap inference for primary specs (col2)
+boot_t2_exit    <- run_boot_ols_score(t2_exit$col2,    data = mm_fac_reform)
+boot_t2_upgrade <- run_boot_ols_score(t2_upgrade$col2, data = mm_fac_reform)
+boot_t2_shrink  <- run_boot_ols_score(t2_shrink$col2,  data = mm_fac_reform)
+
 # Control means (reform-CEM, pre-reform controls)
 cm_exit    <- round(mm_fac_reform[texas_treated == 0L & panel_year < POST_YEAR,
                                    mean(facility_exit,            na.rm = TRUE)], 6L)
@@ -851,7 +1031,8 @@ cat("B6.2: Building Table 2 LaTeX...\n")
 
 build_threepanel_closure_tex <- function(panels, caption, label_tex) {
   hdr <- paste0(
-    " & (1) Year FE & (2) Cell$\\times$Yr & (3) 2D-Cell$\\times$Yr \\\\"
+    " & (1) Year FE & (2) Cell$\\times$Yr & (3) 2D-Cell$\\times$Yr",
+    " & (4) BJS \\\\"
   )
 
   panel_rows <- unlist(lapply(seq_along(panels), function(i) {
@@ -862,13 +1043,18 @@ build_threepanel_closure_tex <- function(panels, caption, label_tex) {
       paste0(fmt_est(v$beta), stars_p(v$p))), collapse = " & ")
     se_str <- paste(sapply(vals, function(v) fmt_se(v$se)), collapse = " & ")
     n_str  <- paste(sapply(vals, function(v) fmt_n(v$n)),   collapse = " & ")
+    boot_p_str <- if (!is.null(p$boot)) {
+      formatC(round(p$boot$p_boot, 3L), digits = 3L, format = "f")
+    } else "--"
     out <- c(
-      paste0("\\multicolumn{4}{l}{\\textit{Panel ", lbl, ": ",
+      paste0("\\multicolumn{5}{l}{\\textit{Panel ", lbl, ": ",
              p$label, "}} \\\\[0.3em]"),
       paste0("TX $\\times$ Post & ", beta_str, " \\\\"),
       paste0("                  & ", se_str,   " \\\\"),
+      paste0("Bootstrap $p$ (col 2) & & ", boot_p_str,
+             " & \\multicolumn{2}{c}{} \\\\"),
       paste0("$N$               & ", n_str,    " \\\\"),
-      paste0("Control mean      & ", mc_tex(3L, fmt_est(p$cm)), " \\\\")
+      paste0("Control mean      & ", mc_tex(4L, fmt_est(p$cm)), " \\\\")
     )
     if (i < length(panels)) out <- c(out, "\\midrule")
     out
@@ -879,18 +1065,18 @@ build_threepanel_closure_tex <- function(panels, caption, label_tex) {
     "\\centering",
     paste0("\\caption{", caption, "}"),
     paste0("\\label{tab:", label_tex, "}"),
-    "\\begin{tabular}{lccc}",
+    "\\begin{tabular}{lcccc}",
     "\\toprule",
     hdr,
     "\\midrule",
     panel_rows,
     "\\midrule",
-    "Facility FE            & Yes & Yes & Yes \\\\",
-    "Year FE                & Yes & Yes & Yes \\\\",
-    "Cell$\\times$Year FE   & No  & 3D  & 2D  \\\\",
-    "CEM weights            & Yes & Yes & Yes \\\\",
-    "Mandate controls       & Yes & Yes & Yes \\\\",
-    "Sample & \\multicolumn{3}{c}{Reform-CEM matched} \\\\",
+    "Facility FE            & Yes & Yes & Yes & -- \\\\",
+    "Year FE                & Yes & Yes & Yes & -- \\\\",
+    "Cell$\\times$Year FE   & No  & 3D  & 2D  & -- \\\\",
+    "CEM weights            & Yes & Yes & Yes & Yes \\\\",
+    "Mandate controls       & Yes & Yes & Yes & Yes \\\\",
+    "Sample & \\multicolumn{4}{c}{Reform-CEM matched} \\\\",
     "\\bottomrule",
     "\\end{tabular}",
     "\\begin{minipage}{\\linewidth}",
@@ -898,6 +1084,10 @@ build_threepanel_closure_tex <- function(panels, caption, label_tex) {
     paste0(
       "\\textit{Notes:} LPM coefficients. All columns use reform-survivor ",
       "CEM matched facilities with CEM weights. ",
+      "Col (4) reports the Borusyak, Jaravel, and Spiess (2024) two-stage ",
+      "imputation estimator. ",
+      "Bootstrap p-values for col (2) are from a wild cluster score bootstrap ",
+      "(Kline-Santos 2012) with Rademacher weights, B = 9999. ",
       "\\textit{Panel A} (", LABEL_FAC_EXIT, "): ",
       "the facility disappears from the registry -- all tanks are gone and ",
       "no further observations exist. ",
@@ -924,15 +1114,18 @@ tex_t2 <- build_threepanel_closure_tex(
     list(models = t2_exit,
          label  = paste0("Facility Closes Entirely -- ",
                          "\\textit{facility\\_exit}"),
-         cm     = cm_exit),
+         cm     = cm_exit,
+         boot   = boot_t2_exit),
     list(models = t2_upgrade,
          label  = paste0("Facility Upgrades a Tank -- ",
                          "\\textit{replacement\\_closure\\_year}"),
-         cm     = cm_upgrade),
+         cm     = cm_upgrade,
+         boot   = boot_t2_upgrade),
     list(models = t2_shrink,
          label  = paste0("Facility Shrinks Tank Stock -- ",
                          "\\textit{permanent\\_closure\\_year}"),
-         cm     = cm_shrink)
+         cm     = cm_shrink,
+         boot   = boot_t2_shrink)
   ),
   caption   = paste0(
     "Table 2: What Are These Closures? ",
@@ -952,6 +1145,11 @@ cat("B6.3: Table 2b — conditional-on-closure descriptive regression...\n")
 t2b_exit    <- run_did_ols("facility_exit",            mm_closure_sample)
 t2b_upgrade <- run_did_ols("replacement_closure_year", mm_closure_sample)
 t2b_shrink  <- run_did_ols("permanent_closure_year",   mm_closure_sample)
+
+# Bootstrap inference for descriptive specs
+boot_t2b_exit    <- run_boot_ols_score(t2b_exit,    data = mm_closure_sample)
+boot_t2b_upgrade <- run_boot_ols_score(t2b_upgrade, data = mm_closure_sample)
+boot_t2b_shrink  <- run_boot_ols_score(t2b_shrink,  data = mm_closure_sample)
 
 cm_cond_exit    <- round(mm_closure_sample[texas_treated == 0L & panel_year < POST_YEAR,
                                             mean(facility_exit,            na.rm = TRUE)], 6L)
@@ -974,17 +1172,22 @@ for (item in list(
 {
   t2b_items <- list(
     list(m=t2b_exit,    cm=cm_cond_exit,
-         label="Facility Closes Entirely"),
+         label="Facility Closes Entirely",
+         boot=boot_t2b_exit),
     list(m=t2b_upgrade, cm=cm_cond_upgrade,
-         label="Facility Upgrades a Tank"),
+         label="Facility Upgrades a Tank",
+         boot=boot_t2b_upgrade),
     list(m=t2b_shrink,  cm=cm_cond_shrink,
-         label="Facility Shrinks Tank Stock")
+         label="Facility Shrinks Tank Stock",
+         boot=boot_t2b_shrink)
   )
   t2b_rows <- sapply(t2b_items, function(o) {
     d <- extract_did(o$m)
+    boot_p <- formatC(round(o$boot$p_boot, 3L), digits = 3L, format = "f")
     paste0(o$label, " & ",
            paste0(fmt_est(d$beta), stars_p(d$p)), " & ",
            fmt_se(d$se), " & ",
+           boot_p, " & ",
            fmt_est(o$cm), " \\\\")
   })
 
@@ -994,18 +1197,18 @@ for (item in list(
     paste0("\\caption{Table 2b: What Type of Closure? Descriptive Composition of ",
            "Tank Closure Events Among Facilities That Closed at Least One Tank.}"),
     "\\label{tab:t2b_closure_conditional}",
-    "\\begin{tabular}{lccc}",
+    "\\begin{tabular}{lcccc}",
     "\\toprule",
-    "Closure Type & TX $\\times$ Post & (SE) & Control Mean \\\\",
+    "Closure Type & TX $\\times$ Post & (SE) & Bootstrap $p$ & Control Mean \\\\",
     "\\midrule",
     t2b_rows,
     "\\midrule",
-    paste0("$N$ (closing fac-years) & \\multicolumn{3}{c}{",
+    paste0("$N$ (closing fac-years) & \\multicolumn{4}{c}{",
            fmt_n(nobs(t2b_exit)), "} \\\\"),
-    "Cell$\\times$Year FE & \\multicolumn{3}{c}{3D (make\\_model\\_fac $\\times$ year)} \\\\",
-    "CEM weights          & \\multicolumn{3}{c}{Yes} \\\\",
-    "Mandate controls     & \\multicolumn{3}{c}{Yes} \\\\",
-    "Sample               & \\multicolumn{3}{c}{Reform-CEM, any\\_closure $= 1$} \\\\",
+    "Cell$\\times$Year FE & \\multicolumn{4}{c}{3D (make\\_model\\_fac $\\times$ year)} \\\\",
+    "CEM weights          & \\multicolumn{4}{c}{Yes} \\\\",
+    "Mandate controls     & \\multicolumn{4}{c}{Yes} \\\\",
+    "Sample               & \\multicolumn{4}{c}{Reform-CEM, any\\_closure $= 1$} \\\\",
     "\\bottomrule",
     "\\end{tabular}",
     "\\begin{minipage}{\\linewidth}",
@@ -1020,6 +1223,9 @@ for (item in list(
       "endogenous decision to close a tank and should not be interpreted as ",
       "causal effects of the reform on closure type.} For unconditional ",
       "causal estimates see Table 2. ",
+      "Bootstrap p-values are from a wild cluster score bootstrap ",
+      "(Kline-Santos 2012) with Rademacher weights, B = 9999, clustering by ",
+      "state. ",
       "Cluster-robust SEs by state. ",
       "$^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$."
     ),
@@ -1106,6 +1312,11 @@ portfolio_row_labels <- c(
 t3_models <- lapply(portfolio_outcomes, run_threecol)
 names(t3_models) <- names(portfolio_outcomes)
 
+# Bootstrap inference for primary specs (col2)
+boot_t3 <- lapply(t3_models, function(mods)
+  run_boot_ols_score(mods$col2, data = mm_fac_reform))
+names(boot_t3) <- names(t3_models)
+
 t3_cms <- sapply(portfolio_outcomes, function(y)
   round(mean(mm_fac_reform[texas_treated == 0L & panel_year < POST_YEAR,
                             get(y)], na.rm = TRUE), 6L))
@@ -1121,18 +1332,21 @@ for (nm in names(t3_models)) {
 cat("B7.2: Building Table 3 LaTeX (row format)...\n")
 
 {
-  # Each outcome is two rows: estimate row + SE row
-  # Cols: outcome label | col1 | col2 | col3 | ctrl mean
+  # Each outcome is three rows: estimate row + SE row + bootstrap-p row
+  # Cols: outcome label | col1 | col2 | col3 | col4 BJS | ctrl mean
   t3_rows <- unlist(lapply(names(t3_models), function(nm) {
     mods <- t3_models[[nm]]
     vals <- lapply(mods, extract_did)
     beta_str <- paste(sapply(vals, function(v)
       paste0(fmt_est(v$beta), stars_p(v$p))), collapse = " & ")
     se_str <- paste(sapply(vals, function(v) fmt_se(v$se)), collapse = " & ")
+    boot_p <- formatC(round(boot_t3[[nm]]$p_boot, 3L), digits = 3L, format = "f")
     c(
       paste0(portfolio_row_labels[[nm]], " & ",
              beta_str, " & ", fmt_est(t3_cms[[nm]]), " \\\\"),
-      paste0(" & ", se_str, " &  \\\\[0.3em]")
+      paste0(" & ", se_str, " &  \\\\"),
+      paste0(" \\hspace{1em}\\textit{boot $p$ (col 2)} & & ",
+             boot_p, " & \\multicolumn{2}{c}{} &  \\\\[0.3em]")
     )
   }), recursive = FALSE)
 
@@ -1145,20 +1359,20 @@ cat("B7.2: Building Table 3 LaTeX (row format)...\n")
            "Effect of the Texas Insurance Reform on Facility Portfolio Composition.}"),
     "\\label{tab:t3_portfolio}",
     "\\resizebox{\\textwidth}{!}{",
-    "\\begin{tabular}{lcccc}",
+    "\\begin{tabular}{lccccc}",
     "\\toprule",
     paste0("Outcome & (1) Year FE & (2) Cell$\\times$Yr",
-           " & (3) 2D-Cell$\\times$Yr & Ctrl Mean \\\\"),
+           " & (3) 2D-Cell$\\times$Yr & (4) BJS & Ctrl Mean \\\\"),
     "\\midrule",
     t3_rows,
     "\\midrule",
-    paste0("$N$ & \\multicolumn{4}{c}{", n_obs_t3, "} \\\\"),
-    "Facility FE            & Yes & Yes & Yes & \\\\",
-    "Year FE                & Yes & Yes & Yes & \\\\",
-    "Cell$\\times$Year FE   & No  & 3D  & 2D  & \\\\",
-    "CEM weights            & Yes & Yes & Yes & \\\\",
-    "Mandate controls       & Yes & Yes & Yes & \\\\",
-    "Sample & \\multicolumn{4}{c}{Reform-CEM matched, all facility-years} \\\\",
+    paste0("$N$ & \\multicolumn{5}{c}{", n_obs_t3, "} \\\\"),
+    "Facility FE            & Yes & Yes & Yes & -- & \\\\",
+    "Year FE                & Yes & Yes & Yes & -- & \\\\",
+    "Cell$\\times$Year FE   & No  & 3D  & 2D  & -- & \\\\",
+    "CEM weights            & Yes & Yes & Yes & Yes & \\\\",
+    "Mandate controls       & Yes & Yes & Yes & Yes & \\\\",
+    "Sample & \\multicolumn{5}{c}{Reform-CEM matched, all facility-years} \\\\",
     "\\bottomrule",
     "\\end{tabular}",
     "}",
@@ -1175,6 +1389,10 @@ cat("B7.2: Building Table 3 LaTeX (row format)...\n")
       "$\\times$ year. ",
       "2D Cell$\\times$Year FE: fac\\_wall$\\times$fac\\_fuel$\\times$year ",
       "(robustness: drops age bin from cell definition). ",
+      "Col (4) reports the Borusyak, Jaravel, and Spiess (2024) two-stage ",
+      "imputation estimator. ",
+      "Bootstrap p-values for col (2) are from a wild cluster score bootstrap ",
+      "(Kline-Santos 2012) with Rademacher weights, B = 9999. ",
       "Cluster-robust SEs by state (17 clusters). ",
       "$^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$."
     ),
@@ -1245,6 +1463,9 @@ cm_lust_total <- round(
   mm_fac_reform[texas_treated == 0L & panel_year < POST_YEAR,
                 mean(leak_year, na.rm = TRUE)], 6L)
 
+# Bootstrap inference for primary spec (col2)
+boot_lust_a <- run_boot_ols_score(t_lust_a$col2, data = mm_fac_reform)
+
 {
   d_la <- extract_did(t_lust_a$col2)
   log_step(sprintf("Total LUST (primary): %+.4f (%.4f) p=%.3f  ctrl_mean=%.5f",
@@ -1265,21 +1486,24 @@ cm_lust_total <- round(
     paste0("\\caption{LUST Table A: Does the Reform Change the Rate of Leak ",
            "Discoveries? Effect of the Texas Insurance Reform on Total LUST Incidence.}"),
     "\\label{tab:lust_a_total}",
-    "\\begin{tabular}{lccc}",
+    "\\begin{tabular}{lcccc}",
     "\\toprule",
-    " & (1) Year FE & (2) Cell$\\times$Yr & (3) 2D-Cell$\\times$Yr \\\\",
+    " & (1) Year FE & (2) Cell$\\times$Yr & (3) 2D-Cell$\\times$Yr & (4) BJS \\\\",
     "\\midrule",
     paste0("TX $\\times$ Post & ", beta_la, " \\\\"),
     paste0("                  & ", se_la,   " \\\\"),
+    paste0("Bootstrap $p$ (col 2) & & ",
+           formatC(round(boot_lust_a$p_boot, 3L), digits = 3L, format = "f"),
+           " & \\multicolumn{2}{c}{} \\\\"),
     paste0("$N$               & ", n_la,    " \\\\"),
-    paste0("Control mean      & ", mc_tex(3L, fmt_est(cm_lust_total)), " \\\\"),
+    paste0("Control mean      & ", mc_tex(4L, fmt_est(cm_lust_total)), " \\\\"),
     "\\midrule",
-    "Facility FE            & Yes & Yes & Yes \\\\",
-    "Year FE                & Yes & Yes & Yes \\\\",
-    "Cell$\\times$Year FE   & No  & 3D  & 2D  \\\\",
-    "CEM weights            & Yes & Yes & Yes \\\\",
-    "Mandate controls       & Yes & Yes & Yes \\\\",
-    "Sample & \\multicolumn{3}{c}{Reform-CEM matched} \\\\",
+    "Facility FE            & Yes & Yes & Yes & -- \\\\",
+    "Year FE                & Yes & Yes & Yes & -- \\\\",
+    "Cell$\\times$Year FE   & No  & 3D  & 2D  & -- \\\\",
+    "CEM weights            & Yes & Yes & Yes & Yes \\\\",
+    "Mandate controls       & Yes & Yes & Yes & Yes \\\\",
+    "Sample & \\multicolumn{4}{c}{Reform-CEM matched} \\\\",
     "\\bottomrule",
     "\\end{tabular}",
     "\\begin{minipage}{\\linewidth}",
@@ -1290,6 +1514,10 @@ cm_lust_total <- round(
       "Total leak discovery includes leaks found through any channel ",
       "(routine monitoring, complaints, and closure inspections). ",
       "See LUST Table B for decomposition by discovery channel. ",
+      "Col (4) reports the Borusyak, Jaravel, and Spiess (2024) two-stage ",
+      "imputation estimator. ",
+      "Bootstrap p-value for col (2) is from a wild cluster score bootstrap ",
+      "(Kline-Santos 2012) with Rademacher weights, B = 9999. ",
       "Cluster-robust SEs by state (17 clusters). ",
       "$^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$."
     ),
@@ -1317,14 +1545,18 @@ lust_windows <- list(
        ind_var = "lust_closure_induced_wide")
 )
 
-# Fit all models: 4 windows x 2 types x 3 cols = 24 models
+# Fit all models: 4 windows x 2 types x 4 cols = 32 models (4th col = BJS)
 lust_b_data <- lapply(lust_windows, function(w) {
+  sa_mods  <- run_threecol(w$sa_var)
+  ind_mods <- run_threecol(w$ind_var)
   list(
     window   = w$label,
     sa_var   = w$sa_var,
     ind_var  = w$ind_var,
-    sa_mods  = run_threecol(w$sa_var),
-    ind_mods = run_threecol(w$ind_var),
+    sa_mods  = sa_mods,
+    ind_mods = ind_mods,
+    boot_sa  = run_boot_ols_score(sa_mods$col2,  data = mm_fac_reform),
+    boot_ind = run_boot_ols_score(ind_mods$col2, data = mm_fac_reform),
     cm_sa    = round(mm_fac_reform[texas_treated == 0L & panel_year < POST_YEAR,
                                     mean(get(w$sa_var),  na.rm = TRUE)], 6L),
     cm_ind   = round(mm_fac_reform[texas_treated == 0L & panel_year < POST_YEAR,
@@ -1347,23 +1579,26 @@ for (w in lust_b_data) {
 cat("B8.3: Building LUST Table B LaTeX...\n")
 
 {
-  # Helper: format one window row (beta + SE)
-  fmt_lust_row <- function(mods, cm, window_label) {
+  # Helper: format one window row (beta + SE + bootstrap p)
+  fmt_lust_row <- function(mods, cm, window_label, boot) {
     vals     <- lapply(mods, extract_did)
     beta_str <- paste(sapply(vals, function(v)
       paste0(fmt_est(v$beta), stars_p(v$p))), collapse = " & ")
     se_str   <- paste(sapply(vals, function(v) fmt_se(v$se)), collapse = " & ")
+    boot_p   <- formatC(round(boot$p_boot, 3L), digits = 3L, format = "f")
     c(
       paste0(window_label, " & ", beta_str, " & ", fmt_est(cm), " \\\\"),
-      paste0(" & ", se_str, " &  \\\\[0.2em]")
+      paste0(" & ", se_str, " &  \\\\"),
+      paste0(" \\hspace{0.5em}\\textit{boot $p$ (col 2)} & & ",
+             boot_p, " & \\multicolumn{2}{c}{} &  \\\\[0.2em]")
     )
   }
 
   pa_rows <- unlist(lapply(lust_b_data, function(w)
-    fmt_lust_row(w$sa_mods, w$cm_sa, w$window)), recursive = FALSE)
+    fmt_lust_row(w$sa_mods, w$cm_sa, w$window, w$boot_sa)), recursive = FALSE)
 
   pb_rows <- unlist(lapply(lust_b_data, function(w)
-    fmt_lust_row(w$ind_mods, w$cm_ind, w$window)), recursive = FALSE)
+    fmt_lust_row(w$ind_mods, w$cm_ind, w$window, w$boot_ind)), recursive = FALSE)
 
   n_obs_lust <- fmt_n(nobs(lust_b_data[[1L]]$sa_mods$col2))
 
@@ -1374,41 +1609,41 @@ cat("B8.3: Building LUST Table B LaTeX...\n")
            "Discoveries. Decomposition of LUST Incidence by Discovery Channel ",
            "and Inspection Window Definition.}"),
     "\\label{tab:lust_b_decomp}",
-    "\\begin{tabular}{lcccc}",
+    "\\begin{tabular}{lccccc}",
     "\\toprule",
     paste0("Window & (1) Year FE & (2) Cell$\\times$Yr",
-           " & (3) 2D-Cell$\\times$Yr & Ctrl Mean \\\\"),
+           " & (3) 2D-Cell$\\times$Yr & (4) BJS & Ctrl Mean \\\\"),
     "\\midrule",
     # Panel A header
-    paste0("\\multicolumn{5}{l}{\\textit{Panel A: Background Leaks}} \\\\"),
-    paste0("\\multicolumn{5}{l}{\\small\\textit{",
+    paste0("\\multicolumn{6}{l}{\\textit{Panel A: Background Leaks}} \\\\"),
+    paste0("\\multicolumn{6}{l}{\\small\\textit{",
            "Leak reported with no tank closure within the window. ",
            "Reflects routine monitoring or complaint-driven discovery. ",
            "}} \\\\"),
-    paste0("\\multicolumn{5}{l}{\\small\\textit{",
+    paste0("\\multicolumn{6}{l}{\\small\\textit{",
            "An increase here indicates more genuine operational failures ",
            "or increased non-closure detection.}} \\\\[0.3em]"),
     pa_rows,
     "\\midrule",
     # Panel B header
-    paste0("\\multicolumn{5}{l}{\\textit{Panel B: Inspection-Triggered Leaks}} \\\\"),
-    paste0("\\multicolumn{5}{l}{\\small\\textit{",
+    paste0("\\multicolumn{6}{l}{\\textit{Panel B: Inspection-Triggered Leaks}} \\\\"),
+    paste0("\\multicolumn{6}{l}{\\small\\textit{",
            "Leak reported within the window around a tank closure. ",
            "Closures require regulatory inspection; inspections reveal ",
            "}} \\\\"),
-    paste0("\\multicolumn{5}{l}{\\small\\textit{",
+    paste0("\\multicolumn{6}{l}{\\small\\textit{",
            "latent contamination that already existed. An increase here ",
            "reflects faster discovery of pre-existing leaks -- an indirect ",
            "environmental benefit.}} \\\\[0.3em]"),
     pb_rows,
     "\\midrule",
-    paste0("$N$ & \\multicolumn{4}{c}{", n_obs_lust, "} \\\\"),
-    "Facility FE            & Yes & Yes & Yes & \\\\",
-    "Year FE                & Yes & Yes & Yes & \\\\",
-    "Cell$\\times$Year FE   & No  & 3D  & 2D  & \\\\",
-    "CEM weights            & Yes & Yes & Yes & \\\\",
-    "Mandate controls       & Yes & Yes & Yes & \\\\",
-    "Sample & \\multicolumn{4}{c}{Reform-CEM matched} \\\\",
+    paste0("$N$ & \\multicolumn{5}{c}{", n_obs_lust, "} \\\\"),
+    "Facility FE            & Yes & Yes & Yes & -- & \\\\",
+    "Year FE                & Yes & Yes & Yes & -- & \\\\",
+    "Cell$\\times$Year FE   & No  & 3D  & 2D  & -- & \\\\",
+    "CEM weights            & Yes & Yes & Yes & Yes & \\\\",
+    "Mandate controls       & Yes & Yes & Yes & Yes & \\\\",
+    "Sample & \\multicolumn{5}{c}{Reform-CEM matched} \\\\",
     "\\bottomrule",
     "\\end{tabular}",
     "\\begin{minipage}{\\linewidth}",
@@ -1425,6 +1660,10 @@ cat("B8.3: Building LUST Table B LaTeX...\n")
       "30-day, 45-day, and 90-day windows test sensitivity to the threshold. ",
       "3D Cell$\\times$Year FE: make\\_model\\_fac $\\times$ year. ",
       "2D Cell$\\times$Year FE: fac\\_wall$\\times$fac\\_fuel$\\times$year. ",
+      "Col (4) reports the Borusyak, Jaravel, and Spiess (2024) two-stage ",
+      "imputation estimator. ",
+      "Bootstrap p-values for col (2) are from a wild cluster score bootstrap ",
+      "(Kline-Santos 2012) with Rademacher weights, B = 9999. ",
       "Cluster-robust SEs by state (17 clusters). ",
       "$^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$."
     ),
@@ -1536,6 +1775,99 @@ es_models <- lapply(es_specs, function(spec) {
   )
 })
 names(es_models) <- sapply(es_specs, `[[`, "stem")
+
+# Bootstrap pre-trend joint test for any_closure ES
+# We bootstrap each ES coefficient separately and report the
+# bootstrap p-value for the joint pre-period test as a supplement
+# to the Wald test already computed in B9.2.
+boot_es_pretrend <- lapply(
+  grep("rel_year_bin", names(coef(es_models[["AnyClosure"]])), value = TRUE),
+  function(param) {
+    run_boot_ols_score(
+      model = es_models[["AnyClosure"]],
+      param = param,
+      data  = mm_fac_es
+    )
+  }
+)
+names(boot_es_pretrend) <- grep(
+  "rel_year_bin", names(coef(es_models[["AnyClosure"]])), value = TRUE
+)
+# Save bootstrap p-values to CSV alongside ES coefficients
+boot_es_dt <- data.table(
+  term    = names(boot_es_pretrend),
+  p_crve  = sapply(boot_es_pretrend, function(b) {
+    ct  <- coeftable(es_models[["AnyClosure"]])
+    idx <- which(rownames(ct) == names(boot_es_pretrend)[1L])[1L]
+    ct[idx, "Pr(>|t|)"]
+  }),
+  p_boot  = sapply(boot_es_pretrend, `[[`, "p_boot"),
+  se_boot = sapply(boot_es_pretrend, `[[`, "se_boot"),
+  ci_lo   = sapply(boot_es_pretrend, `[[`, "ci_lo"),
+  ci_hi   = sapply(boot_es_pretrend, `[[`, "ci_hi")
+)
+fwrite(boot_es_dt,
+       file.path(OUTPUT_TABLES, "ES_AnyClosure_BootstrapPvals.csv"))
+
+# BJS imputation event study for any_closure
+# did2s::event_study() implements the BJS ES directly.
+es_bjs_any_closure <- tryCatch(
+  did2s::event_study(
+    data          = mm_fac_es,
+    yname         = "any_closure",
+    idname        = "panel_id",
+    tname         = "panel_year",
+    gname         = "panel_year",   # all treated in 1999
+    estimator     = "did2s",
+    cluster_var   = "state"
+  ),
+  error = function(e) {
+    warning(sprintf("BJS event_study failed: %s", e$message))
+    NULL
+  }
+)
+
+# Save BJS ES coefficients if estimation succeeded
+if (!is.null(es_bjs_any_closure)) {
+  bjs_coefs <- as.data.table(es_bjs_any_closure)
+  bjs_coefs[, spec := "BJS_imputation"]
+  fwrite(bjs_coefs,
+         file.path(OUTPUT_TABLES, "ES_AnyClosure_BJS.csv"))
+  log_step("Wrote: ES_AnyClosure_BJS.csv")
+}
+
+# ---- Static DiD wild cluster bootstrap consolidation ----
+# Bootstrap p-values were computed per-section alongside each primary fit
+# (boot_t1_col5, boot_t2_*, boot_t2b_*, boot_t3, boot_lust_a, boot_sa/ind in
+# lust_b_data). Consolidate them all into a single CSV for cross-table reference.
+log_step("Consolidating wild cluster bootstrap results across all tables...")
+boot_static <- list(
+  T1_AnyClosure   = boot_t1_col5,
+  T2_FacExit      = boot_t2_exit,
+  T2_Upgrade      = boot_t2_upgrade,
+  T2_Shrink       = boot_t2_shrink,
+  T2b_FacExit     = boot_t2b_exit,
+  T2b_Upgrade     = boot_t2b_upgrade,
+  T2b_Shrink      = boot_t2b_shrink,
+  LUSTA_LeakYear  = boot_lust_a
+)
+for (nm in names(t3_models)) {
+  boot_static[[paste0("T3_", nm)]] <- boot_t3[[nm]]
+}
+for (w in lust_b_data) {
+  win_nm <- gsub("[^A-Za-z0-9]", "", w$window)
+  boot_static[[paste0("LUSTB_SA_",  win_nm)]] <- w$boot_sa
+  boot_static[[paste0("LUSTB_IND_", win_nm)]] <- w$boot_ind
+}
+boot_static_dt <- rbindlist(lapply(names(boot_static), function(nm) {
+  b <- boot_static[[nm]]
+  data.table(spec = nm, p_boot = b$p_boot, se_boot = b$se_boot,
+             ci_lo = b$ci_lo, ci_hi = b$ci_hi, t_stat = b$t_stat)
+}))
+fwrite(boot_static_dt,
+       file.path(OUTPUT_TABLES, "StaticDiD_BootstrapPvals.csv"))
+log_step(sprintf("Wrote: StaticDiD_BootstrapPvals.csv (%d specs)",
+                 nrow(boot_static_dt)))
 
 # ---- B9.2: Pre-trend joint Wald tests ----
 cat("B9.2: Pre-trend joint Wald tests...\n")
@@ -2200,6 +2532,287 @@ cat("\n")
 
 
 ################################################################################
+# B12B: HTE BY TANK VINTAGE / MANDATE EXPOSURE
+################################################################################
+#
+# Tests whether the reform's effect varies with the federal mandate exposure
+# of the facility's tanks. The relevant cut is install year 1990:
+#
+#   Pre-1989 vintage (had_pre1989_tanks == 1): facility had at least one tank
+#     installed in 1988 or earlier. These tanks are subject to the federal
+#     UST corrective-action mandates: release detection (deadlines 1989-1993),
+#     spill/overfill prevention (Dec 1994), and tank integrity (Dec 1998).
+#     These facilities faced concurrent regulatory pressure during the
+#     reform window and may have had stronger latent incentives to act.
+#
+#   All-post-1989 vintage (all_post1989 == 1): every tank at the facility
+#     was installed in 1990 or later. These tanks were "new" under federal
+#     rules and are exempt from the retrofit mandates above. Their reform
+#     response isolates the insurance-channel effect from the mandate channel.
+#
+# A differential treatment effect by vintage indicates that mandate exposure
+# either amplifies or substitutes for the insurance reform's behavioral push.
+
+cat("\n========================================\n")
+cat("B12B: HTE BY TANK VINTAGE / MANDATE EXPOSURE\n")
+cat("========================================\n\n")
+
+cat("B12B.1: Preparing vintage HTE samples...\n")
+
+# Construct vintage group factor on reform-CEM sample
+mm_vint <- copy(mm_fac_reform)
+mm_vint[, vintage_group := fcase(
+  had_pre1989_tanks == 1L,                       "Pre-1989",
+  all_post1989      == 1L,                        "All-Post-1989",
+  default = NA_character_
+)]
+mm_vint <- mm_vint[!is.na(vintage_group)]
+mm_vint[, vintage_group := factor(vintage_group,
+                                   levels = c("Pre-1989", "All-Post-1989"))]
+
+n_pre  <- uniqueN(mm_vint[vintage_group == "Pre-1989",      panel_id])
+n_post <- uniqueN(mm_vint[vintage_group == "All-Post-1989", panel_id])
+log_step(sprintf("Vintage HTE sample: %s fy | %s pre-1989 facs | %s all-post-1989 facs",
+  fmt_n(nrow(mm_vint)), fmt_n(n_pre), fmt_n(n_post)))
+
+cat("B12B.2: Fitting vintage HTE models...\n")
+
+vintage_outcomes <- c(
+  any_closure = "any_closure",
+  exit        = "facility_exit",
+  upgrade     = "replacement_closure_year",
+  shrink      = "permanent_closure_year",
+  lust_total  = "leak_year",
+  lust_back   = "lust_standalone"
+)
+
+build_vintage_fml <- function(depvar) {
+  as.formula(sprintf(
+    "%s ~ did_term + did_term:vintage_group %s | %s",
+    depvar, MANDATE_CONTROLS_RHS, FE_PRIMARY
+  ))
+}
+
+vintage_models <- lapply(vintage_outcomes, function(y) {
+  feols(build_vintage_fml(y), data = mm_vint,
+        weights = ~cem_weight, cluster = ~state)
+})
+names(vintage_models) <- names(vintage_outcomes)
+
+cat("B12B.3: Extracting vintage HTE ATTs...\n")
+
+# Reference level is "Pre-1989" (the mandate-exposed group).
+# did_term            = ATT for Pre-1989
+# did_term + interact = ATT for All-Post-1989 (mandate-exempt)
+# interact term itself = differential effect (test of HTE)
+extract_vintage_atts <- function(m, outcome_label) {
+  b <- coef(m)
+  V <- vcov(m, type = "clustered")
+  did_idx <- which(names(b) == "did_term")
+  stopifnot("did_term not found" = length(did_idx) == 1L)
+
+  # Reference: Pre-1989
+  att_pre <- b[did_idx]
+  se_pre  <- sqrt(V[did_idx, did_idx])
+  p_pre   <- 2 * pnorm(-abs(att_pre / se_pre))
+
+  # All-Post-1989: did_term + interaction
+  int_nm  <- "did_term:vintage_groupAll-Post-1989"
+  int_idx <- which(names(b) == int_nm)
+  if (length(int_idx) == 0L) {
+    int_nm  <- "vintage_groupAll-Post-1989:did_term"
+    int_idx <- which(names(b) == int_nm)
+  }
+  if (length(int_idx) == 0L) {
+    warning(sprintf("Interaction term not found in %s", outcome_label))
+    return(rbindlist(list(
+      data.table(outcome=outcome_label, vintage="Pre-1989",      is_ref=TRUE,
+                 est=round(att_pre,6L), se=round(se_pre,6L),
+                 ci_lo=round(att_pre-1.96*se_pre,6L),
+                 ci_hi=round(att_pre+1.96*se_pre,6L),
+                 p=round(p_pre,4L), stars=stars_p(p_pre),
+                 diff_est=NA_real_, diff_se=NA_real_, diff_p=NA_real_),
+      data.table(outcome=outcome_label, vintage="All-Post-1989", is_ref=FALSE,
+                 est=NA_real_, se=NA_real_, ci_lo=NA_real_, ci_hi=NA_real_,
+                 p=NA_real_, stars="", diff_est=NA_real_,
+                 diff_se=NA_real_, diff_p=NA_real_)
+    )))
+  }
+
+  # Differential effect (mandate-exempt minus mandate-pressured)
+  diff_est <- b[int_idx]
+  diff_se  <- sqrt(V[int_idx, int_idx])
+  diff_p   <- 2 * pnorm(-abs(diff_est / diff_se))
+
+  # All-Post-1989 ATT level
+  att_post <- att_pre + b[int_idx]
+  var_post <- V[did_idx, did_idx] + V[int_idx, int_idx] +
+                2 * V[did_idx, int_idx]
+  se_post  <- sqrt(max(var_post, 0))
+  p_post   <- 2 * pnorm(-abs(att_post / se_post))
+
+  rbindlist(list(
+    data.table(outcome=outcome_label, vintage="Pre-1989", is_ref=TRUE,
+               est=round(att_pre,6L), se=round(se_pre,6L),
+               ci_lo=round(att_pre-1.96*se_pre,6L),
+               ci_hi=round(att_pre+1.96*se_pre,6L),
+               p=round(p_pre,4L), stars=stars_p(p_pre),
+               diff_est=round(diff_est,6L),
+               diff_se =round(diff_se,6L),
+               diff_p  =round(diff_p,4L)),
+    data.table(outcome=outcome_label, vintage="All-Post-1989", is_ref=FALSE,
+               est=round(att_post,6L), se=round(se_post,6L),
+               ci_lo=round(att_post-1.96*se_post,6L),
+               ci_hi=round(att_post+1.96*se_post,6L),
+               p=round(p_post,4L), stars=stars_p(p_post),
+               diff_est=round(diff_est,6L),
+               diff_se =round(diff_se,6L),
+               diff_p  =round(diff_p,4L))
+  ))
+}
+
+outcome_labels_vintage <- c(
+  any_closure = "Any Tank Closure",
+  exit        = "Facility Exit",
+  upgrade     = "Tank Upgrade",
+  shrink      = "Tank Stock Reduction",
+  lust_total  = "Total Leak Discovery",
+  lust_back   = "Background Leak Discovery"
+)
+
+vintage_atts <- rbindlist(lapply(names(vintage_models), function(nm)
+  extract_vintage_atts(vintage_models[[nm]], outcome_labels_vintage[[nm]])))
+
+log_step("Vintage HTE ATTs (primary spec):")
+for (nm in names(outcome_labels_vintage)) {
+  sub <- vintage_atts[outcome == outcome_labels_vintage[[nm]]]
+  log_step(sprintf("  %s:  diff (post1989 - pre1989) = %+.4f (%.4f) p=%.3f",
+    outcome_labels_vintage[[nm]],
+    sub$diff_est[1L], sub$diff_se[1L], sub$diff_p[1L]))
+  for (i in seq_len(nrow(sub))) {
+    r <- sub[i]
+    log_step(sprintf("    %-14s: %+.4f (%.4f) p=%.3f",
+      r$vintage, r$est, r$se, r$p), 1L)
+  }
+}
+
+# B12B.4: Forest plot
+vintage_atts[, vintage := factor(vintage,
+                                  levels = c("Pre-1989", "All-Post-1989"))]
+vintage_atts[, outcome_f := factor(outcome,
+                                    levels = rev(unname(outcome_labels_vintage)))]
+
+vintage_colors <- c("Pre-1989" = COL_TX, "All-Post-1989" = COL_CTRL)
+
+p_vintage <- ggplot(
+  vintage_atts[!is.na(est)],
+  aes(x = est, y = outcome_f,
+      xmin = ci_lo, xmax = ci_hi,
+      color = vintage, group = vintage)
+) +
+  geom_vline(xintercept = 0, linetype = "dashed",
+             color = "grey50", linewidth = 0.5) +
+  geom_pointrange(
+    position = position_dodge(width = 0.55),
+    size = 0.35, linewidth = 0.5
+  ) +
+  scale_color_manual(values = vintage_colors,
+                     name   = "Tank vintage at reform") +
+  labs(
+    x = "ATT (Texas x Post), LPM coefficient",
+    y = NULL,
+    subtitle = paste0(
+      "Pre-1989 = facility has any tank installed before 1990 (mandate-exposed); ",
+      "All-Post-1989 = every tank installed 1990+ (mandate-exempt)"
+    )
+  ) +
+  theme_pub() +
+  theme(legend.position = "bottom",
+        axis.text.y = element_text(size = 10),
+        plot.subtitle = element_text(size = 9, color = "grey30"))
+
+save_gg(p_vintage,
+        file.path(OUTPUT_FIGURES, "Figure_HTE_Vintage"),
+        width = 9.5, height = 5.5)
+log_step("Saved: Figure_HTE_Vintage.png/.pdf")
+
+fwrite(vintage_atts, file.path(OUTPUT_TABLES, "T_HTE_Vintage.csv"))
+log_step("Wrote: T_HTE_Vintage.csv")
+
+# B12B.5: LaTeX table for vintage HTE
+{
+  vint_rows <- unlist(lapply(names(outcome_labels_vintage), function(nm) {
+    sub  <- vintage_atts[outcome == outcome_labels_vintage[[nm]]]
+    pre  <- sub[vintage == "Pre-1989"]
+    post <- sub[vintage == "All-Post-1989"]
+    diff_p_str <- formatC(round(sub$diff_p[1L], 3L), digits = 3L, format = "f")
+    diff_stars <- stars_p(sub$diff_p[1L])
+    c(
+      paste0(outcome_labels_vintage[[nm]], " & ",
+             paste0(fmt_est(pre$est),  stars_p(pre$p)),  " & ",
+             paste0(fmt_est(post$est), stars_p(post$p)), " & ",
+             paste0(fmt_est(sub$diff_est[1L]), diff_stars), " & ",
+             diff_p_str, " \\\\"),
+      paste0(" & ", fmt_se(pre$se),  " & ",
+                    fmt_se(post$se), " & ",
+                    fmt_se(sub$diff_se[1L]), " &  \\\\[0.3em]")
+    )
+  }), recursive = FALSE)
+
+  tex_vintage <- c(
+    "\\begin{table}[htbp]",
+    "\\centering",
+    paste0("\\caption{Heterogeneous Treatment Effects by Tank Vintage at Reform: ",
+           "Mandate-Exposed (Pre-1989) vs.\\ Mandate-Exempt (All-Post-1989) Facilities.}"),
+    "\\label{tab:hte_vintage}",
+    "\\begin{tabular}{lcccc}",
+    "\\toprule",
+    " & Pre-1989 & All-Post-1989 & Difference & Diff $p$ \\\\",
+    " & (mandate-exposed) & (mandate-exempt) & (post -- pre) & \\\\",
+    "\\midrule",
+    vint_rows,
+    "\\midrule",
+    paste0("$N$ (fac-years) & \\multicolumn{4}{c}{",
+           fmt_n(nrow(mm_vint)), "} \\\\"),
+    paste0("$N$ facilities  & ", fmt_n(n_pre), " & ", fmt_n(n_post),
+           " & \\multicolumn{2}{c}{} \\\\"),
+    "Cell$\\times$Year FE & \\multicolumn{4}{c}{3D (make\\_model\\_fac $\\times$ year)} \\\\",
+    "CEM weights          & \\multicolumn{4}{c}{Yes} \\\\",
+    "Mandate controls     & \\multicolumn{4}{c}{Yes} \\\\",
+    "Sample               & \\multicolumn{4}{c}{Reform-CEM, vintage-classified} \\\\",
+    "\\bottomrule",
+    "\\end{tabular}",
+    "\\begin{minipage}{\\linewidth}",
+    "\\small",
+    paste0(
+      "\\textit{Notes:} LPM coefficients from a single regression per outcome ",
+      "with a treatment $\\times$ vintage interaction. ",
+      "\\textit{Pre-1989}: facility had at least one tank installed in 1988 or earlier ",
+      "(\\texttt{had\\_pre1989\\_tanks} $= 1$). These tanks are subject to the ",
+      "federal UST mandates: release detection (1989--1993), spill/overfill ",
+      "prevention (Dec 1994), and tank integrity (Dec 1998). ",
+      "\\textit{All-Post-1989}: every tank at the facility was installed in 1990 ",
+      "or later (\\texttt{all\\_post1989} $= 1$); these tanks are exempt from ",
+      "the retrofit mandates above. ",
+      "The Pre-1989 column reports the ATT for mandate-exposed facilities (ref). ",
+      "The All-Post-1989 column reports the ATT for mandate-exempt facilities. ",
+      "The Difference column reports the interaction coefficient (mandate-exempt ",
+      "minus mandate-exposed); a non-zero value indicates that mandate exposure ",
+      "amplifies or substitutes for the insurance-reform channel. ",
+      "Cluster-robust SEs by state. ",
+      "$^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$."
+    ),
+    "\\end{minipage}",
+    "\\end{table}"
+  )
+  write_tex(tex_vintage, file.path(OUTPUT_TABLES, "T_HTE_Vintage.tex"))
+  log_step("Wrote: T_HTE_Vintage.tex")
+}
+
+cat("\n")
+
+
+################################################################################
 # B13: EXPORT
 ################################################################################
 
@@ -2257,8 +2870,12 @@ for (nm in names(age_models)) {
   saveRDS(age_models[[nm]],
           file.path(ANALYSIS_DIR, sprintf("fac_hte_age_%s.rds", nm)))
 }
-log_step(sprintf("  %d wall + %d age HTE models saved",
-  length(wall_models), length(age_models)))
+for (nm in names(vintage_models)) {
+  saveRDS(vintage_models[[nm]],
+          file.path(ANALYSIS_DIR, sprintf("fac_hte_vintage_%s.rds", nm)))
+}
+log_step(sprintf("  %d wall + %d age + %d vintage HTE models saved",
+  length(wall_models), length(age_models), length(vintage_models)))
 
 cat("B13.8: Scalar diagnostics CSV...\n")
 

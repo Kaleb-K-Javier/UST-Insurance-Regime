@@ -870,12 +870,34 @@ fac_stock <- tank_year_panel[
     avg_tank_age          = mean(tank_age, na.rm = TRUE),
     max_tank_age          = fifelse(any(!is.na(tank_age)), max(tank_age, na.rm = TRUE), NA_real_),
     min_tank_age          = fifelse(any(!is.na(tank_age)), min(tank_age, na.rm = TRUE), NA_real_),
-    n_closures            = sum(closure_event, na.rm = TRUE),
-    any_closure           = as.integer(sum(closure_event, na.rm = TRUE) > 0L),
-    n_sw_closures         = sum(closure_event == 1L & mm_wall == "Single-Walled", na.rm = TRUE),
-    n_dw_closures         = sum(closure_event == 1L & mm_wall == "Double-Walled", na.rm = TRUE),
-    any_sw_closure        = as.integer(sum(closure_event == 1L & mm_wall == "Single-Walled", na.rm = TRUE) > 0L),
-    capacity_closed       = sum(fifelse(closure_event == 1L, capacity, 0), na.rm = TRUE),
+    # All closure measures exclude first-year-churn tanks (tanks that close
+    # in the same calendar year they were installed). These installation-year
+    # failures are not economically meaningful exits -- they represent failed
+    # inspections at install, data entry errors, or rapid corrective removals
+    # with no connection to the mandate or reform behavior under study.
+    # first_year_churn == 1 flags are set in S4 (tank_year_panel construction).
+    n_closures   = sum(closure_event[first_year_churn == 0L | is.na(first_year_churn)],
+                       na.rm = TRUE),
+    any_closure  = as.integer(
+      sum(closure_event[first_year_churn == 0L | is.na(first_year_churn)],
+          na.rm = TRUE) > 0L),
+    n_sw_closures = sum(
+      closure_event == 1L & mm_wall == "Single-Walled" &
+      (first_year_churn == 0L | is.na(first_year_churn)),
+      na.rm = TRUE),
+    n_dw_closures = sum(
+      closure_event == 1L & mm_wall == "Double-Walled" &
+      (first_year_churn == 0L | is.na(first_year_churn)),
+      na.rm = TRUE),
+    any_sw_closure = as.integer(sum(
+      closure_event == 1L & mm_wall == "Single-Walled" &
+      (first_year_churn == 0L | is.na(first_year_churn)),
+      na.rm = TRUE) > 0L),
+    capacity_closed = sum(
+      fifelse(closure_event == 1L &
+              (first_year_churn == 0L | is.na(first_year_churn)),
+              capacity, 0),
+      na.rm = TRUE),
     any_mandate_release_det    = as.integer(any(mandate_release_det == 1L,    na.rm = TRUE)),
     any_mandate_spill_overfill = as.integer(any(mandate_spill_overfill == 1L, na.rm = TRUE)),
     any_mandate_integrity      = as.integer(any(mandate_integrity == 1L,      na.rm = TRUE)),
@@ -894,6 +916,23 @@ fac_stock <- tank_year_panel[
 
 log_step(sprintf("Facility-year stock: %s rows | %s facilities",
   fmt_n(nrow(fac_stock)), fmt_n(uniqueN(fac_stock$panel_id))))
+
+# Diagnostic: how many closure-events were excluded due to first-year-churn
+n_churn_events <- tank_year_panel[
+  state %in% STUDY_STATES &
+  closure_event == 1L &
+  first_year_churn == 1L, .N
+]
+n_total_events <- tank_year_panel[
+  state %in% STUDY_STATES &
+  closure_event == 1L, .N
+]
+log_step(sprintf(
+  "First-year-churn exclusion: %s of %s closure-events removed (%.1f%%)",
+  fmt_n(n_churn_events),
+  fmt_n(n_total_events),
+  100 * n_churn_events / n_total_events
+))
 
 # ---- S12.2 End-of-year stocks ----
 fac_stock[, `:=`(
@@ -954,8 +993,15 @@ fac_max_install <- study_tanks[
   .(fac_max_install_date = max(tank_installed_date, na.rm = TRUE)),
   by = panel_id
 ]
+# Exclude first-year-churn tanks from closure type classification.
+# A tank that closes in its installation year is not a replacement
+# candidate and should not count toward permanent or replacement closures.
+# first_year_churn is defined as close_yr == install_yr AND failure == 1,
+# computed in S4. We replicate the definition here using the tank-level
+# dates rather than the panel-year flag.
 closed_tanks_fac <- study_tanks[
-  !is.na(tank_closed_date),
+  !is.na(tank_closed_date) &
+  year(tank_closed_date) != year(tank_installed_date),
   .(panel_id, tank_panel_id, tank_closed_date, tank_installed_date,
     mm_wall, mm_fuel, capacity)
 ]
@@ -1048,6 +1094,7 @@ fac_bio <- study_tanks[, .(
   had_pre1975_tanks    = as.integer(any(year(tank_installed_date) <= 1974L, na.rm = TRUE)),
   had_pre1989_tanks    = as.integer(any(year(tank_installed_date) <= 1988L, na.rm = TRUE)),
   all_post1988         = as.integer(all(year(tank_installed_date) >= 1989L, na.rm = TRUE)),
+  all_post1989         = as.integer(all(year(tank_installed_date) >= 1990L, na.rm = TRUE)),
   ever_had_sw          = as.integer(any(mm_wall == "Single-Walled", na.rm = TRUE)),
   ever_had_dw          = as.integer(any(mm_wall == "Double-Walled", na.rm = TRUE)),
   texas_treated        = first(texas_treated),
@@ -1503,7 +1550,7 @@ facility_panel <- merge(
               total_gasoline_ever, total_diesel_ever,
               prop_sw_ever, prop_dw_ever, prop_gasoline_ever, prop_diesel_ever,
               had_pre1965_tanks, had_pre1975_tanks, had_pre1989_tanks,
-              all_post1988, ever_had_sw, ever_had_dw,
+              all_post1988, all_post1989, ever_had_sw, ever_had_dw,
               total_tanks_bin, sw_share_ever_bin,
               fac_is_incumbent, fac_vintage, birth_cohort_bin)],
   by = "panel_id", all.x = TRUE
