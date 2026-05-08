@@ -116,7 +116,8 @@ COL_CTRL <- "#0072B2"
 FE_NAIVE   <- "panel_id + panel_year"
 FE_PRIMARY <- "panel_id + make_model_fac^panel_year"
 FE_3DIM    <- "panel_id + fac_wall_reform^fac_fuel_reform^panel_year"
-FE_ES      <- "panel_id + panel_year"
+FE_ES      <- "panel_id + make_model_fac^panel_year"
+FE_ES2     <- "panel_id + panel_year"
 CLUSTER_VAR <- "~state"
 
 # ---- Bootstrap constants ----
@@ -158,7 +159,6 @@ stopifnot(
   "TX not in STUDY_STATES"        = "TX" %in% STUDY_STATES,
   "control states count"          = length(CONTROL_STATES) == 17L
 )
-
 
 ################################################################################
 # B2: HELPER FUNCTIONS
@@ -347,6 +347,14 @@ run_did_bjs <- function(outcome, data,
                          first_stage  = BJS_FIRST_STAGE,
                          second_stage = BJS_SECOND_STAGE,
                          treatment    = "post_1999") {
+  # If the data contains an explicit cell-year FE id, prefer that in the
+  # BJS first stage to avoid relying on fixest-specific '^' shorthand.
+  if (missing(first_stage) || identical(first_stage, BJS_FIRST_STAGE)) {
+    if ("cell_year_fe" %in% names(data)) {
+      first_stage <- "~ 0 | panel_id + cell_year_fe"
+    }
+  }
+
   tryCatch(
     did2s::did2s(
       data          = data,
@@ -698,6 +706,10 @@ mm_fac_reform <- fac_reform_cem_panel[
   !is.na(did_term)      &
   panel_year %between% c(PANEL_START, PANEL_END)
 ]
+
+# Explicit cell-year FE id for BJS first-stage (used only by did2s)
+# This creates a compact integer group for each (make_model_fac x year).
+mm_fac_reform[, cell_year_fe := .GRP, by = .(make_model_fac, panel_year)]
 
 leaked_reform <- setdiff(unique(mm_fac_reform$state), STUDY_STATES)
 if (length(leaked_reform) > 0L)
@@ -1711,8 +1723,9 @@ m_lust_inspect <- lust_b_data[[1L]]$ind_mods$col2
 cat("\n")
 
 
+
 ################################################################################
-# B9: EVENT STUDY FIGURES
+# B9: EVENT STUDY FIGURES (THREE SPECIFICATIONS)
 ################################################################################
 
 cat("\n========================================\n")
@@ -1720,13 +1733,8 @@ cat("B9: EVENT STUDY FIGURES\n")
 cat("========================================\n\n")
 
 # ES sample: mm_fac_es (reform-CEM, verified non-NA make_model_fac).
-# FE: panel_id + panel_year (FE_ES). Cell-year FE is collinear with the
-# single-date event study indicators and cannot be included.
 # Weights: CEM weights. Mandate controls: always included.
-#
-# Main paper: any_closure (primary parallel trends test)
-# Appendix:   facility_exit, replacement_closure_year,
-#             permanent_closure_year, leak_year, lust_standalone
+# Note: Bootstrap pre-trend tests and BJS imputation dropped per configuration.
 
 es_specs <- list(
   list(stem   = "AnyClosure",
@@ -1756,126 +1764,68 @@ es_specs <- list(
        main   = FALSE)
 )
 
-build_es_fml <- function(depvar) {
+build_fml_sec1 <- function(depvar) {
+  as.formula(sprintf(
+    "%s ~ i(rel_year_bin, texas_treated, ref = -1) %s | %s",
+    depvar, MANDATE_CONTROLS_RHS, FE_ES2
+  ))
+}
+
+build_fml_sec2 <- function(depvar) {
+  as.formula(sprintf(
+    "%s ~ i(rel_year_bin, texas_treated, ref = -2) %s | %s",
+    depvar, MANDATE_CONTROLS_RHS, FE_ES
+  ))
+}
+
+build_fml_sec3 <- function(depvar) {
   as.formula(sprintf(
     "%s ~ i(rel_year_bin, texas_treated, ref = -1) %s | %s",
     depvar, MANDATE_CONTROLS_RHS, FE_ES
   ))
 }
 
-cat("B9.1: Fitting ES models on reform-CEM sample...\n")
+cat("B9.1: Fitting ES models across three specifications...\n")
 
-es_models <- lapply(es_specs, function(spec) {
+es_models_sec1 <- list()
+es_models_sec2 <- list()
+es_models_sec3 <- list()
+
+for (spec in es_specs) {
   log_step(sprintf("  ES (reform-CEM): %s", spec$stem))
-  feols(
-    build_es_fml(spec$depvar),
+  
+  # Section 1: ref = -1, panel_id + panel_year
+  es_models_sec1[[spec$stem]] <- feols(
+    build_fml_sec1(spec$depvar),
     data    = mm_fac_es,
     weights = ~cem_weight,
     cluster = ~state
   )
-})
-names(es_models) <- sapply(es_specs, `[[`, "stem")
-
-# Bootstrap pre-trend joint test for any_closure ES
-# We bootstrap each ES coefficient separately and report the
-# bootstrap p-value for the joint pre-period test as a supplement
-# to the Wald test already computed in B9.2.
-boot_es_pretrend <- lapply(
-  grep("rel_year_bin", names(coef(es_models[["AnyClosure"]])), value = TRUE),
-  function(param) {
-    run_boot_ols_score(
-      model = es_models[["AnyClosure"]],
-      param = param,
-      data  = mm_fac_es
-    )
-  }
-)
-names(boot_es_pretrend) <- grep(
-  "rel_year_bin", names(coef(es_models[["AnyClosure"]])), value = TRUE
-)
-# Save bootstrap p-values to CSV alongside ES coefficients
-boot_es_dt <- data.table(
-  term    = names(boot_es_pretrend),
-  p_crve  = sapply(boot_es_pretrend, function(b) {
-    ct  <- coeftable(es_models[["AnyClosure"]])
-    idx <- which(rownames(ct) == names(boot_es_pretrend)[1L])[1L]
-    ct[idx, "Pr(>|t|)"]
-  }),
-  p_boot  = sapply(boot_es_pretrend, `[[`, "p_boot"),
-  se_boot = sapply(boot_es_pretrend, `[[`, "se_boot"),
-  ci_lo   = sapply(boot_es_pretrend, `[[`, "ci_lo"),
-  ci_hi   = sapply(boot_es_pretrend, `[[`, "ci_hi")
-)
-fwrite(boot_es_dt,
-       file.path(OUTPUT_TABLES, "ES_AnyClosure_BootstrapPvals.csv"))
-
-# BJS imputation event study for any_closure
-# did2s::event_study() implements the BJS ES directly.
-es_bjs_any_closure <- tryCatch(
-  did2s::event_study(
-    data          = mm_fac_es,
-    yname         = "any_closure",
-    idname        = "panel_id",
-    tname         = "panel_year",
-    gname         = "panel_year",   # all treated in 1999
-    estimator     = "did2s",
-    cluster_var   = "state"
-  ),
-  error = function(e) {
-    warning(sprintf("BJS event_study failed: %s", e$message))
-    NULL
-  }
-)
-
-# Save BJS ES coefficients if estimation succeeded
-if (!is.null(es_bjs_any_closure)) {
-  bjs_coefs <- as.data.table(es_bjs_any_closure)
-  bjs_coefs[, spec := "BJS_imputation"]
-  fwrite(bjs_coefs,
-         file.path(OUTPUT_TABLES, "ES_AnyClosure_BJS.csv"))
-  log_step("Wrote: ES_AnyClosure_BJS.csv")
+  
+  # Section 2: ref = -2, panel_id + make_model_fac^panel_year
+  es_models_sec2[[spec$stem]] <- feols(
+    build_fml_sec2(spec$depvar),
+    data    = mm_fac_es,
+    weights = ~cem_weight,
+    cluster = ~state
+  )
+  
+  # Section 3: ref = -1, panel_id + make_model_fac^panel_year
+  es_models_sec3[[spec$stem]] <- feols(
+    build_fml_sec3(spec$depvar),
+    data    = mm_fac_es,
+    weights = ~cem_weight,
+    cluster = ~state
+  )
 }
-
-# ---- Static DiD wild cluster bootstrap consolidation ----
-# Bootstrap p-values were computed per-section alongside each primary fit
-# (boot_t1_col5, boot_t2_*, boot_t2b_*, boot_t3, boot_lust_a, boot_sa/ind in
-# lust_b_data). Consolidate them all into a single CSV for cross-table reference.
-log_step("Consolidating wild cluster bootstrap results across all tables...")
-boot_static <- list(
-  T1_AnyClosure   = boot_t1_col5,
-  T2_FacExit      = boot_t2_exit,
-  T2_Upgrade      = boot_t2_upgrade,
-  T2_Shrink       = boot_t2_shrink,
-  T2b_FacExit     = boot_t2b_exit,
-  T2b_Upgrade     = boot_t2b_upgrade,
-  T2b_Shrink      = boot_t2b_shrink,
-  LUSTA_LeakYear  = boot_lust_a
-)
-for (nm in names(t3_models)) {
-  boot_static[[paste0("T3_", nm)]] <- boot_t3[[nm]]
-}
-for (w in lust_b_data) {
-  win_nm <- gsub("[^A-Za-z0-9]", "", w$window)
-  boot_static[[paste0("LUSTB_SA_",  win_nm)]] <- w$boot_sa
-  boot_static[[paste0("LUSTB_IND_", win_nm)]] <- w$boot_ind
-}
-boot_static_dt <- rbindlist(lapply(names(boot_static), function(nm) {
-  b <- boot_static[[nm]]
-  data.table(spec = nm, p_boot = b$p_boot, se_boot = b$se_boot,
-             ci_lo = b$ci_lo, ci_hi = b$ci_hi, t_stat = b$t_stat)
-}))
-fwrite(boot_static_dt,
-       file.path(OUTPUT_TABLES, "StaticDiD_BootstrapPvals.csv"))
-log_step(sprintf("Wrote: StaticDiD_BootstrapPvals.csv (%d specs)",
-                 nrow(boot_static_dt)))
 
 # ---- B9.2: Pre-trend joint Wald tests ----
-cat("B9.2: Pre-trend joint Wald tests...\n")
+cat("B9.2: Pre-trend joint Wald tests (Section 2 reference baseline)...\n")
 
 pretrend_dt <- rbindlist(lapply(es_specs, function(spec)
-  run_pretrend_test(es_models[[spec$stem]], spec$stem, "reform_cem")))
+  run_pretrend_test(es_models_sec2[[spec$stem]], spec$stem, "sec2_ref_minus2")))
 
-log_step("Pre-trend F-tests (tau <= -2, ref = -1):")
+log_step("Pre-trend F-tests (tau <= -2, ref = -2) for Section 2 models:")
 for (i in seq_len(nrow(pretrend_dt))) {
   r <- pretrend_dt[i]
   log_step(sprintf("  %-22s  F = %6.3f  p = %.4f  (df = %d)",
@@ -1888,34 +1838,62 @@ fwrite(pretrend_dt, file.path(OUTPUT_TABLES, "ES_PreTrendTests.csv"))
 log_step("Wrote: ES_PreTrendTests.csv")
 
 # ---- B9.3: Save figures ----
-cat("B9.3: Saving ES figures...\n")
+cat("B9.3: Saving ES figures for all specifications...\n")
 
 for (spec in es_specs) {
-  ct  <- es_tidy(es_models[[spec$stem]])
-  fig <- es_ggplot(ct, ylab = spec$ylab, filename = NULL)$plot
   tag <- if (spec$main) "MainPaper" else "Appendix"
-  save_gg(fig,
+  
+  # Section 1
+  ct1  <- es_tidy(es_models_sec1[[spec$stem]], ref_year = -1L)
+  fig1 <- es_ggplot(ct1, ylab = spec$ylab, filename = NULL)$plot
+  save_gg(fig1,
           file.path(OUTPUT_FIGURES,
-                    sprintf("Figure_ES_%s_%s", spec$stem, tag)),
+                    sprintf("Figure_ES_Sec1_Ref-1_Naive_%s_%s", spec$stem, tag)),
           width = 10, height = 5.5)
-  log_step(sprintf("  Saved: Figure_ES_%s_%s", spec$stem, tag))
+          
+  # Section 2
+  ct2  <- es_tidy(es_models_sec2[[spec$stem]], ref_year = -2L)
+  fig2 <- es_ggplot(ct2, ylab = spec$ylab, filename = NULL)$plot
+  save_gg(fig2,
+          file.path(OUTPUT_FIGURES,
+                    sprintf("Figure_ES_Sec2_Ref-2_Cell_%s_%s", spec$stem, tag)),
+          width = 10, height = 5.5)
+          
+  # Section 3
+  ct3  <- es_tidy(es_models_sec3[[spec$stem]], ref_year = -1L)
+  fig3 <- es_ggplot(ct3, ylab = spec$ylab, filename = NULL)$plot
+  save_gg(fig3,
+          file.path(OUTPUT_FIGURES,
+                    sprintf("Figure_ES_Sec3_Ref-1_Cell_%s_%s", spec$stem, tag)),
+          width = 10, height = 5.5)
+          
+  log_step(sprintf("  Saved 3 variant figures for: %s", spec$stem))
 }
 
 # ---- B9.4: Coefficient CSV ----
 es_coefs_dt <- rbindlist(lapply(es_specs, function(spec) {
-  ct <- es_tidy(es_models[[spec$stem]])
-  ct[, `:=`(stem = spec$stem, depvar = spec$depvar,
-             main_paper = spec$main, sample = "reform_cem")]
-  ct
+  ct1 <- es_tidy(es_models_sec1[[spec$stem]], ref_year = -1L)
+  ct1[, `:=`(stem = spec$stem, depvar = spec$depvar,
+             main_paper = spec$main, sample = "sec1_ref-1_naive")]
+             
+  ct2 <- es_tidy(es_models_sec2[[spec$stem]], ref_year = -2L)
+  ct2[, `:=`(stem = spec$stem, depvar = spec$depvar,
+             main_paper = spec$main, sample = "sec2_ref-2_cell")]
+             
+  ct3 <- es_tidy(es_models_sec3[[spec$stem]], ref_year = -1L)
+  ct3[, `:=`(stem = spec$stem, depvar = spec$depvar,
+             main_paper = spec$main, sample = "sec3_ref-1_cell")]
+             
+  rbind(ct1, ct2, ct3)
 }), fill = TRUE)
-fwrite(es_coefs_dt, file.path(OUTPUT_TABLES, "ES_Coefficients.csv"))
-log_step(sprintf("Wrote: ES_Coefficients.csv (%s rows)", fmt_n(nrow(es_coefs_dt))))
+fwrite(es_coefs_dt, file.path(OUTPUT_TABLES, "ES_Coefficients_AllSpecs.csv"))
+log_step(sprintf("Wrote: ES_Coefficients_AllSpecs.csv (%s rows)", fmt_n(nrow(es_coefs_dt))))
 
-# Global assignments for B10
-m_es_any_closure <- es_models[["AnyClosure"]]
-m_es_exit        <- es_models[["FacilityExit"]]
-m_es_upgrade     <- es_models[["Upgrade"]]
-m_es_lust_back   <- es_models[["LUSTBackground"]]
+# Global assignments for B10 (Mapped to Section 2 to satisfy ref=-2 extraction constraints)
+m_es_any_closure <- es_models_sec2[["AnyClosure"]]
+m_es_exit        <- es_models_sec2[["FacilityExit"]]
+m_es_upgrade     <- es_models_sec2[["Upgrade"]]
+m_es_lust_back   <- es_models_sec2[["LUSTBackground"]]
 cat("\n")
 
 
@@ -1929,7 +1907,7 @@ cat("========================================\n\n")
 
 cat("B10.1: Defining HonestDiD input extraction...\n")
 
-extract_hd_inputs <- function(m, ref = -1L) {
+extract_hd_inputs <- function(m, ref = -2L) {
   b_full <- coef(m)
   V_full <- vcov(m, type = "clustered")
 
@@ -1958,7 +1936,7 @@ extract_hd_inputs <- function(m, ref = -1L) {
   sigma_raw <- V_es[all_idx, all_idx, drop = FALSE]
 
   ev        <- eigen(sigma_raw, symmetric = TRUE)
-  ev$values <- pmax(ev$values, 0)
+  ev$values <- pmax(ev$values, 0) 
   sigma_psd <- ev$vectors %*% diag(ev$values) %*% t(ev$vectors)
 
   max_pre_slope <- if (length(pre_idx) >= 2L)
