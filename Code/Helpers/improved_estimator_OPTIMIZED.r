@@ -3092,3 +3092,302 @@ generate_replacement_data <- function(N_facilities    = 1000L,
 if (!exists("%||%", mode = "function")) {
   `%||%` <- function(a, b) if (is.null(a)) b else a
 }
+
+
+# ==============================================================================
+# ==============================================================================
+# REPLACEMENT MODEL — 8-PARAMETER EXTENSION
+# ==============================================================================
+# ==============================================================================
+# Wall-specific (kappa_SW, kappa_DW, K_SW, K_DW) and regime-specific
+# (gamma_price_FF, gamma_price_RB, gamma_risk_FF, gamma_risk_RB).
+#
+# theta_raw = (kappa_SW, kappa_DW, K_log_SW, K_log_DW,
+#              gamma_price_FF, gamma_price_RB, gamma_risk_FF, gamma_risk_RB)
+#
+# All downstream solver code is identical to the 4-param version EXCEPT for
+# the flow utility, which is now state-varying via wall and regime indices.
+# We therefore reuse `invert_value_function_replacement` directly (it takes
+# U as input, not theta) and write thin _8p wrappers for the rest.
+# ==============================================================================
+
+
+create_estimation_config_replacement_8p <- function(beta = 0.95, sigma2 = 1.0,
+                                                    npl_iter = 200) {
+  list(
+    beta    = beta,
+    sigma2  = sigma2,
+    gamma_E = 0.5772156649,
+
+    tol_theta = 1e-5,
+    tol_P     = 1e-5,
+    max_npl_iter = npl_iter,
+
+    eps_prob    = 1e-12,
+    min_log_val = 1e-12,
+    v_clip      = 700,
+
+    # Bounds — duplicate the 4-param bounds onto each wall- or regime-specific param.
+    kappa_SW_bounds       = c(-200, 500),
+    kappa_DW_bounds       = c(-200, 500),
+    K_log_SW_bounds       = c(log(0.01), log(1000)),
+    K_log_DW_bounds       = c(log(0.01), log(1000)),
+    gamma_price_FF_bounds = c(-20, 5),
+    gamma_price_RB_bounds = c(-20, 5),
+    gamma_risk_FF_bounds  = c(-5, 10),
+    gamma_risk_RB_bounds  = c(-5, 10),
+
+    n_actions = 3L,
+    n_params  = 8L,
+
+    param_names = c("kappa_SW","kappa_DW","K_log_SW","K_log_DW",
+                    "gamma_price_FF","gamma_price_RB",
+                    "gamma_risk_FF","gamma_risk_RB"),
+
+    action_labels = c("maintain","exit","replace")
+  )
+}
+
+
+create_estimation_cache_replacement_8p <- function(primitives, obs_panel,
+                                                   config_4p, config_8p) {
+  # Build the standard cache via the 4-param helper, then add wall_idx and
+  # regime_idx (length-32 integer vectors) for state-varying flow utilities.
+  cache <- create_estimation_cache_replacement(primitives, obs_panel, config_4p)
+  cache$wall_idx   <- as.integer(cache$state_lut$w_state)     # 1 = SW, 2 = DW
+  cache$regime_idx <- as.integer(cache$state_lut$rho_state)   # 1 = FF, 2 = RB
+  stopifnot(length(cache$wall_idx)   == cache$n_states,
+            length(cache$regime_idx) == cache$n_states)
+  cache
+}
+
+
+flow_utilities_replacement_8p <- function(theta, cache) {
+  required <- c("kappa_SW","kappa_DW","K_log_SW","K_log_DW",
+                "gamma_price_FF","gamma_price_RB",
+                "gamma_risk_FF","gamma_risk_RB")
+  if (!all(required %in% names(theta))) {
+    stop("theta is missing one of: ", paste(required, collapse = ", "))
+  }
+  K_vec     <- ifelse(cache$wall_idx == 1L,
+                      exp(theta[["K_log_SW"]]), exp(theta[["K_log_DW"]]))
+  kappa_vec <- ifelse(cache$wall_idx == 1L,
+                      theta[["kappa_SW"]],   theta[["kappa_DW"]])
+  gp_vec <- ifelse(cache$regime_idx == 1L,
+                   theta[["gamma_price_FF"]], theta[["gamma_price_RB"]])
+  gr_vec <- ifelse(cache$regime_idx == 1L,
+                   theta[["gamma_risk_FF"]],  theta[["gamma_risk_RB"]])
+
+  u_M <- 1 + gp_vec * cache$P_vec - gr_vec * cache$hazard_loss
+  U <- cbind(maintain = u_M, exit = kappa_vec, replace = -K_vec)
+  U
+}
+
+
+update_ccps_replacement_8p <- function(theta, V, cache, config) {
+  sigma <- config$sigma2
+  beta  <- cache$beta
+
+  U  <- flow_utilities_replacement_8p(theta, cache)
+  v_M <- U[, "maintain"] + beta * as.numeric(cache$F_maintain %*% V)
+  v_E <- U[, "exit"]
+  v_R <- U[, "replace"]  + beta * as.numeric(cache$F_replace  %*% V)
+
+  v_mat <- cbind(maintain = v_M, exit = v_E, replace = v_R)
+  v_max <- pmax(v_M, v_E, v_R)
+  z     <- exp((v_mat - v_max) / sigma)
+  P     <- z / rowSums(z)
+  P[P < config$eps_prob] <- config$eps_prob
+  P <- P / rowSums(P)
+  colnames(P) <- c("maintain","exit","replace")
+  P
+}
+
+
+npl_likelihood_replacement_8p <- function(theta, P_fixed, cache, config) {
+  if (is.null(names(theta))) names(theta) <- config$param_names
+  sigma <- config$sigma2
+  beta  <- cache$beta
+
+  U <- flow_utilities_replacement_8p(theta, cache)
+  V <- tryCatch(
+    invert_value_function_replacement(P_fixed, U, cache, config),
+    error = function(e) rep(NA_real_, cache$n_states)
+  )
+  if (anyNA(V)) return(1e10)
+
+  v_M <- U[, "maintain"] + beta * as.numeric(cache$F_maintain %*% V)
+  v_E <- U[, "exit"]
+  v_R <- U[, "replace"]  + beta * as.numeric(cache$F_replace  %*% V)
+
+  v_mat <- cbind(v_M, v_E, v_R)
+  v_max <- pmax(v_M, v_E, v_R)
+  v_diff <- (v_mat - v_max) / sigma
+  cl <- config$v_clip
+  v_diff[v_diff >  cl] <-  cl
+  v_diff[v_diff < -cl] <- -cl
+  log_Z <- log(rowSums(exp(v_diff)))
+
+  log_P_state <- v_diff - log_Z
+  idx <- cbind(cache$s_obs, cache$a_obs)
+  ll  <- sum(log_P_state[idx])
+  if (!is.finite(ll)) return(1e10)
+  -ll
+}
+
+
+solve_equilibrium_policy_replacement_8p <- function(theta, cache, config,
+                                                    max_iter = 1000,
+                                                    tol = 1e-8) {
+  P <- matrix(1/3, cache$n_states, 3,
+              dimnames = list(NULL, c("maintain","exit","replace")))
+  converged <- FALSE
+  for (i in seq_len(max_iter)) {
+    U <- flow_utilities_replacement_8p(theta, cache)
+    V <- invert_value_function_replacement(P, U, cache, config)
+    P_new <- update_ccps_replacement_8p(theta, V, cache, config)
+    if (max(abs(P_new - P)) < tol) { converged <- TRUE; P <- P_new; break }
+    P <- P_new
+  }
+  U <- flow_utilities_replacement_8p(theta, cache)
+  V <- invert_value_function_replacement(P, U, cache, config)
+  list(P = P, V = V, converged = converged, n_iter = i)
+}
+
+
+npl_estimator_replacement_8p <- function(obs_panel,
+                                         primitives,
+                                         config_8p,
+                                         theta_init = NULL,
+                                         P_init     = NULL,
+                                         verbose    = TRUE) {
+
+  # Need a 4-param config to share with the cache builder (uses same
+  # numerical constants — gamma_E, eps_prob, etc.).
+  config_4p <- create_estimation_config_replacement(
+    beta = config_8p$beta, sigma2 = config_8p$sigma2,
+    npl_iter = config_8p$max_npl_iter)
+
+  if (verbose) {
+    cat("\n=== NPL ESTIMATOR — REPLACEMENT MODEL (8-Param spec) ===\n")
+    cat(sprintf("    sample = %s | n_obs = %s | n_facilities = %s\n",
+                primitives$sample_label %||% "?",
+                format(nrow(obs_panel), big.mark = ","),
+                format(data.table::uniqueN(obs_panel$panel_id), big.mark = ",")))
+  }
+
+  cache <- create_estimation_cache_replacement_8p(primitives, obs_panel,
+                                                   config_4p, config_8p)
+
+  if (is.null(theta_init)) {
+    # Default: duplicate of 4-param defaults
+    theta_init <- c(kappa_SW = 20, kappa_DW = 20,
+                    K_log_SW = log(20), K_log_DW = log(20),
+                    gamma_price_FF = -1.0, gamma_price_RB = -1.0,
+                    gamma_risk_FF  =  1.0, gamma_risk_RB  =  1.0)
+  }
+  if (is.null(names(theta_init))) names(theta_init) <- config_8p$param_names
+  theta_curr <- theta_init
+
+  if (is.null(P_init)) {
+    P <- make_P0_mat_3action(primitives$P0_mat, obs_panel,
+                             eps_prob = config_8p$eps_prob)
+    if (verbose) cat("    initial CCPs: split of primitives$P0_mat\n")
+  } else {
+    P <- P_init
+    if (verbose) cat("    initial CCPs: user-supplied\n")
+  }
+  stopifnot(nrow(P) == cache$n_states, ncol(P) == 3L)
+  if (is.null(colnames(P))) colnames(P) <- c("maintain","exit","replace")
+
+  pn <- config_8p$param_names
+  lower_b <- c(config_8p$kappa_SW_bounds[1],       config_8p$kappa_DW_bounds[1],
+               config_8p$K_log_SW_bounds[1],       config_8p$K_log_DW_bounds[1],
+               config_8p$gamma_price_FF_bounds[1], config_8p$gamma_price_RB_bounds[1],
+               config_8p$gamma_risk_FF_bounds[1],  config_8p$gamma_risk_RB_bounds[1])
+  upper_b <- c(config_8p$kappa_SW_bounds[2],       config_8p$kappa_DW_bounds[2],
+               config_8p$K_log_SW_bounds[2],       config_8p$K_log_DW_bounds[2],
+               config_8p$gamma_price_FF_bounds[2], config_8p$gamma_price_RB_bounds[2],
+               config_8p$gamma_risk_FF_bounds[2],  config_8p$gamma_risk_RB_bounds[2])
+
+  theta_path <- matrix(NA_real_, config_8p$max_npl_iter, config_8p$n_params,
+                       dimnames = list(NULL, pn))
+  ll_path    <- numeric(config_8p$max_npl_iter)
+  converged  <- FALSE
+
+  for (npl_iter in seq_len(config_8p$max_npl_iter)) {
+    theta_old <- theta_curr
+    theta_path[npl_iter, ] <- theta_curr
+
+    opt <- optim(
+      par     = theta_curr,
+      fn      = npl_likelihood_replacement_8p,
+      P_fixed = P, cache = cache, config = config_8p,
+      method  = "L-BFGS-B",
+      lower   = lower_b, upper = upper_b,
+      control = list(maxit = 300, factr = 1e8)
+    )
+    if (opt$convergence != 0 && verbose) {
+      warning(sprintf("    optim() returned code %d at NPL iter %d",
+                      opt$convergence, npl_iter))
+    }
+    theta_curr <- opt$par
+    names(theta_curr) <- pn
+    ll_path[npl_iter] <- -opt$value
+
+    U <- flow_utilities_replacement_8p(theta_curr, cache)
+    V <- invert_value_function_replacement(P, U, cache, config_8p)
+    P_new <- update_ccps_replacement_8p(theta_curr, V, cache, config_8p)
+    theta_diff <- max(abs(theta_curr - theta_old))
+    P_diff     <- max(abs(P_new - P))
+
+    if (verbose && (npl_iter %% 5 == 0 || npl_iter <= 3)) {
+      cat(sprintf("    iter %3d: kSW=%5.2f kDW=%5.2f KSW=%5.2f KDW=%5.2f gpFF=%5.2f gpRB=%5.2f grFF=%5.3f grRB=%5.3f | dTh=%.1e dP=%.1e LL=%.1f\n",
+        npl_iter,
+        theta_curr[["kappa_SW"]], theta_curr[["kappa_DW"]],
+        exp(theta_curr[["K_log_SW"]]), exp(theta_curr[["K_log_DW"]]),
+        theta_curr[["gamma_price_FF"]], theta_curr[["gamma_price_RB"]],
+        theta_curr[["gamma_risk_FF"]],  theta_curr[["gamma_risk_RB"]],
+        theta_diff, P_diff, ll_path[npl_iter]))
+    }
+    P <- P_new
+
+    if (theta_diff < config_8p$tol_theta && P_diff < config_8p$tol_P) {
+      converged <- TRUE
+      if (verbose) cat(sprintf("\n    *** CONVERGED at iter %d ***\n", npl_iter))
+      break
+    }
+  }
+  if (!converged && verbose) {
+    warning(sprintf("8-param NPL did not converge in %d iterations",
+                    config_8p$max_npl_iter))
+  }
+
+  U_final <- flow_utilities_replacement_8p(theta_curr, cache)
+  V_final <- invert_value_function_replacement(P, U_final, cache, config_8p)
+
+  theta_hat <- c(
+    kappa_SW       = unname(theta_curr[["kappa_SW"]]),
+    kappa_DW       = unname(theta_curr[["kappa_DW"]]),
+    K_SW           = exp(theta_curr[["K_log_SW"]]),
+    K_DW           = exp(theta_curr[["K_log_DW"]]),
+    gamma_price_FF = unname(theta_curr[["gamma_price_FF"]]),
+    gamma_price_RB = unname(theta_curr[["gamma_price_RB"]]),
+    gamma_risk_FF  = unname(theta_curr[["gamma_risk_FF"]]),
+    gamma_risk_RB  = unname(theta_curr[["gamma_risk_RB"]])
+  )
+
+  list(
+    theta_hat      = theta_hat,
+    theta_raw      = theta_curr,
+    P_hat          = P,
+    V_hat          = V_final,
+    converged      = converged,
+    n_iter         = npl_iter,
+    log_likelihood = ll_path[npl_iter],
+    ll_path        = ll_path[seq_len(npl_iter)],
+    theta_path     = theta_path[seq_len(npl_iter), , drop = FALSE],
+    cache          = cache,
+    config         = config_8p
+  )
+}
