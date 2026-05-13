@@ -1,4 +1,4 @@
 sample,n_fy,n_facilities,n_tx_fac,n_ctl_fac,n_cells,has_cem_weights,panel_start,panel_end
-full_incumbent,3573549,224380,47106,177274,,FALSE,1990,2018
-reform_cem_primary,2605863,105245,18914,86331,53,TRUE,1990,2018
-es_aligned,2605863,105245,18914,86331,53,TRUE,1990,2018
+full_incumbent,4652765,252670,54379,198291,,FALSE,1985,2018
+reform_cem_primary,3028719,105245,18914,86331,53,TRUE,1985,2018
+es_aligned,3028719,105245,18914,86331,53,TRUE,1985,2018

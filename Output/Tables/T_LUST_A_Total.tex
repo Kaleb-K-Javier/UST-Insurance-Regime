@@ -2,25 +2,26 @@
 \centering
 \caption{LUST Table A: Does the Reform Change the Rate of Leak Discoveries? Effect of the Texas Insurance Reform on Total LUST Incidence.}
 \label{tab:lust_a_total}
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
- & (1) Year FE & (2) Cell$\times$Yr & (3) 2D-Cell$\times$Yr \\
+ & (1) Year FE & (2) Cell$\times$Yr & (3) 2D-Cell$\times$Yr & (4) BJS \\
 \midrule
-TX $\times$ Post & -0.0107*** & -0.0113*** & -0.0108*** \\
-                  & (0.0030) & (0.0033) & (0.0031) \\
-$N$               & 2,605,863 & 2,605,834 & 2,605,863 \\
-Control mean      & \multicolumn{3}{c}{0.0193} \\
+TX $\times$ Post & -0.0120*** & -0.0124*** & -0.0120*** &    NANA \\
+                  & (0.0031) & (0.0033) & (0.0032) & (   NA) \\
+Bootstrap $p$ (col 2) & &   NA & \multicolumn{2}{c}{} \\
+$N$               & 3,028,719 & 3,028,689 & 3,028,719 & NA \\
+Control mean      & \multicolumn{4}{c}{0.0147} \\
 \midrule
-Facility FE            & Yes & Yes & Yes \\
-Year FE                & Yes & Yes & Yes \\
-Cell$\times$Year FE   & No  & 3D  & 2D  \\
-CEM weights            & Yes & Yes & Yes \\
-Mandate controls       & Yes & Yes & Yes \\
-Sample & \multicolumn{3}{c}{Reform-CEM matched} \\
+Facility FE            & Yes & Yes & Yes & -- \\
+Year FE                & Yes & Yes & Yes & -- \\
+Cell$\times$Year FE   & No  & 3D  & 2D  & -- \\
+CEM weights            & Yes & Yes & Yes & Yes \\
+Mandate controls       & Yes & Yes & Yes & Yes \\
+Sample & \multicolumn{4}{c}{Reform-CEM matched} \\
 \bottomrule
 \end{tabular}
 \begin{minipage}{\linewidth}
 \small
-\textit{Notes:} LPM coefficients. Dependent variable: Any Leak Discovery This Year (0/1). Total leak discovery includes leaks found through any channel (routine monitoring, complaints, and closure inspections). See LUST Table B for decomposition by discovery channel. Cluster-robust SEs by state (17 clusters). $^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.
+\textit{Notes:} LPM coefficients. Dependent variable: Any Leak Discovery This Year (0/1). Total leak discovery includes leaks found through any channel (routine monitoring, complaints, and closure inspections). See LUST Table B for decomposition by discovery channel. Col (4) reports the Borusyak, Jaravel, and Spiess (2024) two-stage imputation estimator. Bootstrap p-value for col (2) is from a wild cluster score bootstrap (Kline-Santos 2012) with Rademacher weights, B = 9999. Cluster-robust SEs by state (17 clusters). $^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.
 \end{minipage}
 \end{table}

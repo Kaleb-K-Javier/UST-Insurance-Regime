@@ -1,4 +1,4 @@
 outcome,stem,point_avg,se_avg,ci_lo_orig,ci_hi_orig,max_pre_slope,breakdown_rm,breakdown_sd,n_pre,n_post
-Any Tank Closure,AnyClosure,0.028222,0.005409,0.017621,0.038824,0.006572,0.3,0.0003,8,16
-Facility Exit,FacilityExit,0.009005,0.004056,0.001055,0.016955,0.000473,0.1,0.0001,8,16
-Background Leak Discovery,LUSTBackground,-0.000524,0.002137,-0.004712,0.003664,0.016029,0,0.0002,8,16
+Any Tank Closure,AnyClosure,0.026353,0.00496,0.016631,0.036075,0.007474,0.3,0.0002,11,16
+Facility Exit,FacilityExit,0.007606,0.003655,0.000441,0.01477,0.000392,0.1,0.0002,11,16
+Background Leak Discovery,LUSTBackground,-0.000391,0.002155,-0.004615,0.003832,0.01602,0,0.0003,11,16

@@ -2,45 +2,53 @@
 \centering
 \caption{LUST Table B: Background vs.\ Inspection-Triggered Leak Discoveries. Decomposition of LUST Incidence by Discovery Channel and Inspection Window Definition.}
 \label{tab:lust_b_decomp}
-\begin{tabular}{lcccc}
+\begin{tabular}{lccccc}
 \toprule
-Window & (1) Year FE & (2) Cell$\times$Yr & (3) 2D-Cell$\times$Yr & Ctrl Mean \\
+Window & (1) Year FE & (2) Cell$\times$Yr & (3) 2D-Cell$\times$Yr & (4) BJS & Ctrl Mean \\
 \midrule
-\multicolumn{5}{l}{\textit{Panel A: Background Leaks}} \\
-\multicolumn{5}{l}{\small\textit{Leak reported with no tank closure within the window. Reflects routine monitoring or complaint-driven discovery. }} \\
-\multicolumn{5}{l}{\small\textit{An increase here indicates more genuine operational failures or increased non-closure detection.}} \\[0.3em]
-Primary (0--60 day window) & -0.0065** & -0.0067** & -0.0065** & 0.0157 \\
- & (0.0024) & (0.0025) & (0.0025) &  \\[0.2em]
-Narrow (0--30 day window) & -0.0070** & -0.0072** & -0.0070** & 0.0163 \\
- & (0.0025) & (0.0026) & (0.0025) &  \\[0.2em]
-Regulatory (0--45 day window) & -0.0067** & -0.0069** & -0.0067** & 0.0159 \\
- & (0.0025) & (0.0025) & (0.0025) &  \\[0.2em]
-Wide (0--90 day window) & -0.0062** & -0.0063** & -0.0062** & 0.0154 \\
- & (0.0024) & (0.0025) & (0.0024) &  \\[0.2em]
+\multicolumn{6}{l}{\textit{Panel A: Background Leaks}} \\
+\multicolumn{6}{l}{\small\textit{Leak reported with no tank closure within the window. Reflects routine monitoring or complaint-driven discovery. }} \\
+\multicolumn{6}{l}{\small\textit{An increase here indicates more genuine operational failures or increased non-closure detection.}} \\[0.3em]
+Primary (0--60 day window) & -0.0073*** & -0.0075*** & -0.0073*** &    NANA & 0.0121 \\
+ & (0.0022) & (0.0022) & (0.0022) & (   NA) &  \\
+ \hspace{0.5em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.2em]
+Narrow (0--30 day window) & -0.0079*** & -0.0081*** & -0.0079*** &    NANA & 0.0125 \\
+ & (0.0023) & (0.0023) & (0.0023) & (   NA) &  \\
+ \hspace{0.5em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.2em]
+Regulatory (0--45 day window) & -0.0076*** & -0.0077*** & -0.0076*** &    NANA & 0.0123 \\
+ & (0.0022) & (0.0023) & (0.0022) & (   NA) &  \\
+ \hspace{0.5em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.2em]
+Wide (0--90 day window) & -0.0070*** & -0.0071*** & -0.0070*** &    NANA & 0.0119 \\
+ & (0.0021) & (0.0021) & (0.0021) & (   NA) &  \\
+ \hspace{0.5em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.2em]
 \midrule
-\multicolumn{5}{l}{\textit{Panel B: Inspection-Triggered Leaks}} \\
-\multicolumn{5}{l}{\small\textit{Leak reported within the window around a tank closure. Closures require regulatory inspection; inspections reveal }} \\
-\multicolumn{5}{l}{\small\textit{latent contamination that already existed. An increase here reflects faster discovery of pre-existing leaks -- an indirect environmental benefit.}} \\[0.3em]
-Primary (0--60 day window) & -0.0043** & -0.0048** & -0.0044** & 0.0037 \\
- & (0.0016) & (0.0017) & (0.0016) &  \\[0.2em]
-Narrow (0--30 day window) & -0.0038** & -0.0041** & -0.0038** & 0.0030 \\
- & (0.0014) & (0.0015) & (0.0014) &  \\[0.2em]
-Regulatory (0--45 day window) & -0.0041** & -0.0045** & -0.0042** & 0.0034 \\
- & (0.0015) & (0.0016) & (0.0015) &  \\[0.2em]
-Wide (0--90 day window) & -0.0047** & -0.0051** & -0.0047** & 0.0041 \\
- & (0.0018) & (0.0019) & (0.0018) &  \\[0.2em]
+\multicolumn{6}{l}{\textit{Panel B: Inspection-Triggered Leaks}} \\
+\multicolumn{6}{l}{\small\textit{Leak reported within the window around a tank closure. Closures require regulatory inspection; inspections reveal }} \\
+\multicolumn{6}{l}{\small\textit{latent contamination that already existed. An increase here reflects faster discovery of pre-existing leaks -- an indirect environmental benefit.}} \\[0.3em]
+Primary (0--60 day window) & -0.0048*** & -0.0051*** & -0.0048** &    NANA & 0.0026 \\
+ & (0.0016) & (0.0017) & (0.0017) & (   NA) &  \\
+ \hspace{0.5em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.2em]
+Narrow (0--30 day window) & -0.0041*** & -0.0044*** & -0.0041*** &    NANA & 0.0022 \\
+ & (0.0014) & (0.0015) & (0.0014) & (   NA) &  \\
+ \hspace{0.5em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.2em]
+Regulatory (0--45 day window) & -0.0045*** & -0.0048*** & -0.0045*** &    NANA & 0.0024 \\
+ & (0.0015) & (0.0016) & (0.0015) & (   NA) &  \\
+ \hspace{0.5em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.2em]
+Wide (0--90 day window) & -0.0052** & -0.0055** & -0.0052** &    NANA & 0.0029 \\
+ & (0.0018) & (0.0019) & (0.0018) & (   NA) &  \\
+ \hspace{0.5em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.2em]
 \midrule
-$N$ & \multicolumn{4}{c}{2,605,834} \\
-Facility FE            & Yes & Yes & Yes & \\
-Year FE                & Yes & Yes & Yes & \\
-Cell$\times$Year FE   & No  & 3D  & 2D  & \\
-CEM weights            & Yes & Yes & Yes & \\
-Mandate controls       & Yes & Yes & Yes & \\
-Sample & \multicolumn{4}{c}{Reform-CEM matched} \\
+$N$ & \multicolumn{5}{c}{3,028,689} \\
+Facility FE            & Yes & Yes & Yes & -- & \\
+Year FE                & Yes & Yes & Yes & -- & \\
+Cell$\times$Year FE   & No  & 3D  & 2D  & -- & \\
+CEM weights            & Yes & Yes & Yes & Yes & \\
+Mandate controls       & Yes & Yes & Yes & Yes & \\
+Sample & \multicolumn{5}{c}{Reform-CEM matched} \\
 \bottomrule
 \end{tabular}
 \begin{minipage}{\linewidth}
 \small
-\textit{Notes:} LPM coefficients. Each row reports estimates under a different window definition for classifying a leak report as inspection-triggered or background. The window is the number of days between a tank closure and a leak report at the same facility. Panel A leaks have no closure within the window; Panel B leaks have a closure within the window. The 60-day primary window is the main specification; 30-day, 45-day, and 90-day windows test sensitivity to the threshold. 3D Cell$\times$Year FE: make\_model\_fac $\times$ year. 2D Cell$\times$Year FE: fac\_wall$\times$fac\_fuel$\times$year. Cluster-robust SEs by state (17 clusters). $^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.
+\textit{Notes:} LPM coefficients. Each row reports estimates under a different window definition for classifying a leak report as inspection-triggered or background. The window is the number of days between a tank closure and a leak report at the same facility. Panel A leaks have no closure within the window; Panel B leaks have a closure within the window. The 60-day primary window is the main specification; 30-day, 45-day, and 90-day windows test sensitivity to the threshold. 3D Cell$\times$Year FE: make\_model\_fac $\times$ year. 2D Cell$\times$Year FE: fac\_wall$\times$fac\_fuel$\times$year. Col (4) reports the Borusyak, Jaravel, and Spiess (2024) two-stage imputation estimator. Bootstrap p-values for col (2) are from a wild cluster score bootstrap (Kline-Santos 2012) with Rademacher weights, B = 9999. Cluster-robust SEs by state (17 clusters). $^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.
 \end{minipage}
 \end{table}
