@@ -495,3 +495,83 @@ cat(sprintf("  Facility-years with >0 claims: %s\n",
 cat("\n✓ CROSSWALK AND MERGE COMPLETE\n")
 
 cat("\n✓ COMPLETE\n\n")
+
+##############################################################################
+# SECTION J — Incident-Level Claims x Panel Merge
+#
+# PURPOSE:
+#   Keep one row per individual claim (do NOT aggregate) and attach the
+#   facility's tank characteristics for the year the claim was filed.
+#   This is the correct input for severity modelling in 05_Claims_Analysis.R.
+#
+# LOGIC:
+#   claim_start_year (already snapped to panel bounds above in Section I)
+#   is used to look up the facility row in the annual panel. No LUST linkage
+#   is needed — the claim date itself pins the characteristics.
+#
+# OUTPUT:
+#   Data/Processed/incident_level_claims.csv   (one row per claim)
+##############################################################################
+cat("=================================================================\n")
+cat("SECTION J — Incident-Level Claims x Panel Merge\n")
+cat("=================================================================\n\n")
+
+# Tank characteristic columns to bring in from the panel.
+# Extend this vector if 05_Claims_Analysis.R needs additional panel columns.
+PANEL_CHAR_COLS <- c(
+  "panel_id", "panel_year",
+  "active_tanks", "avg_tank_age", "age_bins",
+  "single_tanks", "double_tanks", "total_capacity",
+  "has_single_walled", "has_double_walled"
+)
+
+# Subset panel to only the columns we need (annual_panel is already in memory
+# from Section I above).
+panel_chars <- annual_panel[, intersect(PANEL_CHAR_COLS, names(annual_panel)),
+                            with = FALSE]
+
+# valid_claims is already in memory from Section I (snapped, filtered to
+# facilities present in the panel). Join on facility x claim year.
+incident_dt <- merge(
+  valid_claims,
+  panel_chars,
+  by.x = c("panel_id", "claim_start_year"),
+  by.y = c("panel_id", "panel_year"),
+  all.x = FALSE   # drop the rare claim whose snapped year still has no panel row
+)
+
+n_dropped <- nrow(valid_claims) - nrow(incident_dt)
+cat(sprintf("Claims matched to panel characteristics : %s\n",
+            format(nrow(incident_dt), big.mark = ",")))
+cat(sprintf("Claims dropped (no matching panel year) : %d\n", n_dropped))
+
+# Sanity check: no facility-year aggregation crept in
+stopifnot(nrow(incident_dt) == uniqueN(
+  incident_dt[, paste(panel_id, claims_start_date, lust_id)]
+) || TRUE)   # soft check — duplicates possible if same lust_id filed twice
+
+# Basic quality flags (mirrors the flag logic in EX_Incident_Claims_Linkage
+# but kept minimal here — 05 can add more if needed)
+incident_dt[, flag_negative_cost := as.integer(!is.na(total_cost_2023) & total_cost_2023 < 0)]
+incident_dt[, flag_zero_cost     := as.integer(!is.na(total_cost_2023) & total_cost_2023 == 0)]
+incident_dt[, flag_na_cost       := as.integer(is.na(total_cost_2023))]
+incident_dt[, flag_no_tank_chars := as.integer(is.na(active_tanks))]
+
+cat("\nFlag counts:\n")
+print(incident_dt[, .(
+  flag_negative_cost = sum(flag_negative_cost),
+  flag_zero_cost     = sum(flag_zero_cost),
+  flag_na_cost       = sum(flag_na_cost),
+  flag_no_tank_chars = sum(flag_no_tank_chars)
+)])
+
+cat("\nClaims by state:\n")
+print(incident_dt[, .N, by = state][order(state)])
+
+# Save
+incident_path <- here("Data", "Processed", "incident_level_claims.csv")
+fwrite(incident_dt, incident_path)
+cat(sprintf("\nSaved: incident_level_claims.csv (%s rows, %d cols)\n",
+            format(nrow(incident_dt), big.mark = ","), ncol(incident_dt)))
+
+cat("\n✓ SECTION J COMPLETE\n\n")

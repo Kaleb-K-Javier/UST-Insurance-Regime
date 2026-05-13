@@ -711,14 +711,16 @@ cat("S11: TANK | BIRTH-COHORT | CEM + PSM\n")
 cat("========================================\n\n")
 
 # bc_tanks: ONE ROW PER TANK from study_tanks. Used both for matching AND
-# for KM curves in F11-F13. Restricted to install_yr_int 1970-1995 to
-# bound the calendar-time window for survival estimation.
+# for KM curves in F11-F13. Lower bound extended to 1950 to include all
+# pre-reform "existing tank" cohorts subject to the rolling Chapter 334
+# compliance schedule. Pre-1950 vintages excluded due to outlier ATTs and
+# negligible population weights (see att_table_complete diagnostics).
 
 bc_tanks <- study_tanks[
   !is.na(texas_treated) &
   state %in% STUDY_STATES &
   !is.na(tank_installed_date) &
-  install_yr_int %between% c(1985L, 2018L) &
+  install_yr_int %between% c(1950L, 2018L) &
   !is.na(mm_wall) & mm_wall != "Unknown-Wall" &
   !is.na(mm_fuel) & mm_fuel != "Unknown-Fuel" &
   !is.na(mm_capacity) & !is.na(mm_install_cohort),
@@ -753,8 +755,13 @@ bc_tanks[, `:=`(
                        levels = c("Texas", "Control States"))
 )]
 
-# 5-year vintage bins for KM facets (1970-2018, 10 bins)
+# 5-year vintage bins for KM facets (1950-2018, 14 bins)
+# Extended from 1970 to 1950 to match bc_tanks lower bound
 bc_tanks[, vintage5 := factor(fcase(
+  install_yr_int %between% c(1950L, 1954L), "1950-1954",
+  install_yr_int %between% c(1955L, 1959L), "1955-1959",
+  install_yr_int %between% c(1960L, 1964L), "1960-1964",
+  install_yr_int %between% c(1965L, 1969L), "1965-1969",
   install_yr_int %between% c(1970L, 1974L), "1970-1974",
   install_yr_int %between% c(1975L, 1979L), "1975-1979",
   install_yr_int %between% c(1980L, 1984L), "1980-1984",
@@ -766,7 +773,8 @@ bc_tanks[, vintage5 := factor(fcase(
   install_yr_int %between% c(2010L, 2014L), "2010-2014",
   install_yr_int %between% c(2015L, 2018L), "2015-2018",
   default = NA_character_
-), levels = c("1970-1974", "1975-1979", "1980-1984", "1985-1989", "1990-1994",
+), levels = c("1950-1954", "1955-1959", "1960-1964", "1965-1969",
+              "1970-1974", "1975-1979", "1980-1984", "1985-1989", "1990-1994",
               "1995-1999", "2000-2004", "2005-2009", "2010-2014", "2015-2018"))]
 
 log_step(sprintf("bc_tanks: %s tanks (%s TX, %s CTL)",

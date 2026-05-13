@@ -1379,6 +1379,14 @@ incumbents_birth_above <- incumbents_birth_es[above_median_age == 1L][,
   cem_w_norm := cem_weight / sum(cem_weight),
   by = texas_treated
 ]
+# Build saturated Cell-Year FE for the ES samples
+# This matches the FE structure used in mA3_fac_FE
+incumbents_birth_es[, cell_year_fe := .GRP, by = .(panel_year, make_model_noage)]
+incumbents_birth_below[, cell_year_fe := .GRP, by = .(panel_year, make_model_noage)]
+incumbents_birth_above[, cell_year_fe := .GRP, by = .(panel_year, make_model_noage)]
+
+# Optional: verify the variable exists
+if(!"cell_year_fe" %in% names(incumbents_birth_es)) stop("Failed to create cell_year_fe!")
 
 cat(sprintf("  incumbents_birth_es:    %s rows | %s tanks\n",
   fmt_n(nrow(incumbents_birth_es)),
@@ -1508,33 +1516,40 @@ cat("========================================\n\n")
 # =============================================================================
 
 log_step("Fitting Panels A-C...")
+# =============================================================================
+# 1. DATA PREP & CLEANING
+# =============================================================================
+log_step("Cleaning data and calculating population weights...")
 
-# ---- DATA OBJECTS: Pre-save filtered data, pass to both feols() and bootstrap ----
+# Filter junk years (222, 1800) and drop singletons immediately
 data_A <- drop_singletons(
-  panel_dt[install_yr_int < 1999L &!is.na(make_model_noage)],
-  "tank_panel_id")
-data_A
+  panel_dt[install_yr_int >= 1900 & install_yr_int < 1999L & !is.na(make_model_noage)],
+  "tank_panel_id"
+)
 
-# --- Wooldridge Mean-Centering for Population-Weighted ATT (Model A3) ---
-# Calculate true population shares of Texas tanks alive at the reform (1998)
+# Calculate Cell-Year FE (survives bootstrapping)
+data_A[, cell_year_fe := .GRP, by = .(panel_year, make_model_noage)]
+
+# Calculate true population shares for Texas (Alive in 1998)
 alive_tx_mask <- data_A$texas_treated == 1L & 
-                 data_A$install_yr_int < 1999L & 
                  data_A$tank_installed_date <= REFORM_DATE & 
                  (is.na(data_A$tank_closed_date) | data_A$tank_closed_date > REFORM_DATE)
 
-# Extract unique tanks to ensure accurate population counts
-tx_alive_tanks <- unique(data_A[alive_tx_mask,.(tank_panel_id, install_yr_int)])
-tx_shares <- tx_alive_tanks[,.(N =.N), by = install_yr_int]
+tx_alive_tanks <- unique(data_A[alive_tx_mask, .(tank_panel_id, install_yr_int)])
+tx_shares      <- tx_alive_tanks[, .(N = .N), by = install_yr_int]
 tx_shares[, pop_share := N / sum(N)]
 
-# Merge these true population shares into the estimation dataset
-data_A <- merge(data_A, tx_shares[,.(install_yr_int, pop_share)], 
+# Merge shares back into estimation data
+data_A <- merge(data_A, tx_shares[, .(install_yr_int, pop_share)], 
                 by = "install_yr_int", all.x = TRUE)
 data_A[is.na(pop_share), pop_share := 0]
 
-# Create centered interaction terms: did_term * (Vintage_Dummy - Vintage_Share)
-vintages <- unique(tx_shares$install_yr_int)
-vintages_to_interact <- vintages[-1] # Drop one vintage to avoid perfect multicollinearity
+# =============================================================================
+# 2. WOOLDRIDGE CENTERING (HTE SETUP)
+# =============================================================================
+# Identify Heaviest Cohort as Reference to stabilize the matrix
+ref_vintage <- tx_shares[which.max(pop_share), install_yr_int]
+vintages_to_interact <- setdiff(unique(tx_shares$install_yr_int), ref_vintage)
 
 cent_cols <- character(length(vintages_to_interact))
 for (i in seq_along(vintages_to_interact)) {
@@ -1542,53 +1557,98 @@ for (i in seq_along(vintages_to_interact)) {
   col_name <- paste0("did_cent_", v)
   cent_cols[i] <- col_name
   share_v <- tx_shares[install_yr_int == v, pop_share]
+  
+  # Create Centered Column: did_term * (Dummy_v - Share_v)
   data_A[, (col_name) := did_term * (as.integer(install_yr_int == v) - share_v)]
 }
-# ------------------------------------------------------------------------
 
-# Create cell_year_fe for all three data objects
-# This is an explicit integer group ID for panel_year x make_model_noage interaction.
-# It survives re-entrant calls to fixest::demean() inside the wild cluster bootstrap.
+# =============================================================================
+# 3. MODEL ESTIMATION (PANEL A)
+# =============================================================================
+log_step("Fitting Models...")
 
-data_A[, cell_year_fe := .GRP, by = .(panel_year, make_model_noage)]
+# Baseline & Rich FE
+mA1 <- feols(closure_event ~ did_term + mandate_release_det + mandate_spill_overfill + mandate_integrity | tank_panel_id + panel_year, data = data_A, cluster = ~state)
+mA1_fac_FE <- feols(closure_event ~ did_term + mandate_release_det + mandate_spill_overfill + mandate_integrity | panel_id + panel_year, data = data_A, cluster = ~state)
 
-data_B <- drop_singletons(
-  matched_tanks_birth_psm[install_yr_int < 1999L & psm_weight > 0],
-  "tank_panel_id")
-data_B[, cell_year_fe := .GRP, by = .(panel_year, make_model_noage)]
+mA2 <- feols(closure_event ~ did_term + mandate_release_det + mandate_spill_overfill + mandate_integrity | tank_panel_id + cell_year_fe, data = data_A, cluster = ~state)
+mA2_fac_FE <- feols(closure_event ~ did_term + mandate_release_det + mandate_spill_overfill + mandate_integrity | panel_id + cell_year_fe, data = data_A, cluster = ~state)
 
-data_C <- drop_singletons(
-  matched_tanks_birth_cem[install_yr_int < 1999L & cem_weight > 0],
-  "tank_panel_id")
-data_C[, cell_year_fe := .GRP, by = .(panel_year, make_model_noage)]
-
-
-# ---- PANEL A: Full incumbent panel, no matching ----
-
-mA1 <- feols(
-  closure_event ~ did_term +
-    mandate_release_det + mandate_spill_overfill + mandate_integrity |
-    tank_panel_id + panel_year,
-  data    = data_A,
-  cluster = ~state
-)
-
-mA2 <- feols(
-  closure_event ~ did_term +
-    mandate_release_det + mandate_spill_overfill + mandate_integrity |
-    tank_panel_id + cell_year_fe,
-  data    = data_A,
-  cluster = ~state
-)
-
-fml_A3 <- as.formula(paste(
-  "closure_event ~ did_term +", 
-  paste(cent_cols, collapse = " + "), 
-  "+ mandate_release_det + mandate_spill_overfill + mandate_integrity | tank_panel_id + cell_year_fe"
+# Model A3: Fully Saturated HTE (Wooldridge/Lin)
+fml_A3_fac_FE <- as.formula(paste(
+  "closure_event ~ did_term +", paste(cent_cols, collapse = " + "), 
+  "+ mandate_release_det + mandate_spill_overfill + mandate_integrity | panel_id + cell_year_fe"
 ))
+mA3_fac_FE <- feols(fml_A3_fac_FE, data = data_A, cluster = ~state)
 
-mA3 <- feols(fml_A3, data = data_A, cluster = ~state)
+# =============================================================================
+# 4. POST-ESTIMATION: RECOVER FULL ATT GRADIENT
+# =============================================================================
+log_step("Recovering full ATT gradient via Contrast Matrix...")
 
+coefs <- coef(mA3_fac_FE)
+v_mat <- vcov(mA3_fac_FE)
+param_names <- c("did_term", cent_cols)
+w_ref <- tx_shares[install_yr_int == ref_vintage, pop_share]
+
+# Build Contrast Matrix (C)
+C <- matrix(0, nrow = nrow(tx_shares), ncol = length(param_names))
+rownames(C) <- as.character(tx_shares$install_yr_int)
+colnames(C) <- param_names
+
+C[, "did_term"] <- 1  # All cohorts include the base ATT
+
+for (v in vintages_to_interact) {
+  term <- paste0("did_cent_", v)
+  C[as.character(v), term] <- 1  # Individual deviations
+  # Reference year absorbs weighted negative sum of all others
+  C[as.character(ref_vintage), term] <- -(tx_shares[install_yr_int == v, pop_share] / w_ref)
+}
+
+# Calculate Point Estimates & SEs
+att_estimates <- as.numeric(C %*% coefs[param_names])
+att_se <- sqrt(diag(C %*% v_mat[param_names, param_names] %*% t(C)))
+
+att_table_complete <- data.table(
+  install_yr_int = as.integer(rownames(C)),
+  cohort_ATT = att_estimates,
+  se = att_se,
+  pop_share = tx_shares$pop_share[match(as.integer(rownames(C)), tx_shares$install_yr_int)]
+)[, `:=`(ci_lower = cohort_ATT - 1.96*se, ci_upper = cohort_ATT + 1.96*se)]
+
+# =============================================================================
+# 5. VISUALIZATION (THE MONEY PLOT)
+# =============================================================================
+library(ggplot2); library(patchwork); library(scales)
+
+# Overlap Data for Histogram
+share_overlap <- data_A[install_yr_int >= 1950, .(N_tanks = uniqueN(tank_panel_id)), by = .(install_yr_int, texas_treated)]
+share_overlap[, group_share := N_tanks / sum(N_tanks), by = texas_treated]
+share_overlap[, group_label := ifelse(texas_treated == 1, "Texas (Treated)", "Control")]
+
+# Top Panel: Point Estimates
+p1 <- ggplot(att_table_complete[install_yr_int >= 1950], aes(x = install_yr_int, y = cohort_ATT)) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_hline(yintercept = coefs["did_term"], linetype = "dashed", color = "#d95f02") +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.4, color = "gray70") +
+  geom_point(aes(fill = cohort_ATT > 0), shape = 21, size = 1.8, color = "white") +
+  scale_fill_manual(values = c("TRUE" = "#1b9e77", "FALSE" = "#7570b3"), guide = "none") +
+  scale_y_continuous(limits = c(-0.15, 0.15)) + 
+  labs(title = "Risk-Based Pricing: Structural Cleansing Gradient", y = "$\Delta$ Pr(Closure)") +
+  theme_minimal() + theme(axis.title.x = element_blank(), axis.text.x = element_blank())
+
+# Bottom Panel: Common Support
+p2 <- ggplot(share_overlap, aes(x = install_yr_int, y = group_share, fill = group_label)) +
+  geom_col(position = "identity", alpha = 0.5, width = 1) +
+  scale_fill_manual(values = c("Texas (Treated)" = "#d95f02", "Control" = "gray40"), name = "Distribution") +
+  scale_y_continuous(labels = label_percent(), n.breaks = 3) +
+  scale_x_continuous(breaks = seq(1950, 1998, 5)) +
+  labs(x = "Vintage (Install Year)", y = "Market Share") +
+  theme_minimal() + theme(legend.position = "bottom")
+
+final_plot <- p1 / p2 + plot_layout(heights = c(2.5, 1))
+print(final_plot)
+ggsave(file.path(OUTPUT_FIGURES, "Structural_Cleansing_Plot.pdf"), final_plot, width = 10, height = 7)
 
 # ---- PANEL B: Birth-cohort PSM matched sample ----
 
@@ -2991,6 +3051,244 @@ cat("  Saved: F_VintageHTE_OLS_forest (PDF + PNG)\n\n")
 ################################################################################
 # === S8a: OLS EVENT STUDY MODELS + FIGURES ===
 ################################################################################
+# Use the matched ES data which actually has the cem_weight
+raw_trends_table <- incumbents_birth_es[panel_year >= 1985 & panel_year <= 2020, .(
+  n_tanks = .N,
+  # Raw average closure rate
+  raw_rate = mean(closure_event, na.rm = TRUE),
+  # Weighted average (this is what the regression 'sees')
+  weighted_rate = weighted.mean(closure_event, w = cem_weight, na.rm = TRUE)
+), by = .(panel_year, texas_treated)][order(panel_year, texas_treated)]
+
+# Pivot for comparison
+comparison_table <- dcast(
+  raw_trends_table, 
+  panel_year ~ texas_treated, 
+  value.var = c("weighted_rate", "n_tanks")
+)
+
+# Clean up names
+setnames(comparison_table, 
+         old = c("weighted_rate_0", "weighted_rate_1", "n_tanks_0", "n_tanks_1"),
+         new = c("control_rate", "texas_rate", "n_control", "n_texas"))
+
+# Calculate the gap
+comparison_table[, diff := texas_rate - control_rate]
+print(comparison_table[, .(panel_year, control_rate = round(control_rate, 4), 
+                           texas_rate = round(texas_rate, 4), 
+                           diff = round(diff, 4))])
+
+
+# =============================================================================
+# S5: STATIC DiD + S8: EVENT STUDY — UNIFIED SPECIFICATION
+#
+# Unit FE:     panel_id (facility)
+# Time FE:     cell_vintage_year_fe = panel_year x make_model_noage x install_yr_int
+#              Absorbs mandate controls by design — expected and correct.
+# Weights:     cem_weight (raw matchit) vs. unweighted — compared explicitly
+# Clustering:  state
+#
+# Samples:
+#   Full:    matched_tanks_birth_cem, install_yr_int < 1999L
+#   Donut:   Full minus panel_year 1998-1999
+#   Post88:  Full restricted to install_yr_int >= 1989L
+#
+# Output tables:
+#   Table 1: Static DiD  — weighted vs unweighted (3 samples x 2 = 6 cols)
+#   Table 2: Event Study — weighted vs unweighted (3 samples x 2 = 6 cols)
+# =============================================================================
+
+cat("========================================\n")
+cat("S5 + S8: STATIC DiD + EVENT STUDY\n")
+cat("========================================\n\n")
+
+# =============================================================================
+# 1. BUILD data_C AND SUBSAMPLES
+# =============================================================================
+log_step("Building data_C from matched_tanks_birth_cem...")
+
+data_C <- matched_tanks_birth_cem[
+  install_yr_int < 1999L &
+  cem_weight     >  0
+]
+
+cat(sprintf("  Facilities: %s | Tanks: %s | TX tanks: %s\n",
+  fmt_n(uniqueN(data_C$panel_id)),
+  fmt_n(uniqueN(data_C$tank_panel_id)),
+  fmt_n(uniqueN(data_C[texas_treated==1L]$tank_panel_id))))
+
+# Shared FEs
+data_C[, cell_vintage_year_fe := .GRP,
+  by = .(panel_year, make_model_noage, install_yr_int)]
+data_C[, rel_year := as.integer(panel_year) - 1998L]
+
+# Subsamples inherit FE and rel_year from data_C
+data_C_donut  <- data_C[!(panel_year %in% c(1998L, 1999L))]
+data_C_post88 <- data_C[install_yr_int >= 1989L]
+
+cat(sprintf("  Full:    %s rows\n", fmt_n(nrow(data_C))))
+cat(sprintf("  Donut:   %s rows\n", fmt_n(nrow(data_C_donut))))
+cat(sprintf("  Post-88: %s rows\n", fmt_n(nrow(data_C_post88))))
+
+# =============================================================================
+# 2. SHARED FORMULA
+# =============================================================================
+
+# Static — did_term
+did_fml <- closure_event ~ did_term +
+  mandate_release_det + mandate_spill_overfill + mandate_integrity |
+  panel_id + cell_vintage_year_fe
+
+# ES — dynamic, ref year as argument
+es_fml <- function(ref) as.formula(sprintf(
+  "closure_event ~ i(rel_year, texas_treated, ref = %dL) +
+   mandate_release_det + mandate_spill_overfill + mandate_integrity |
+   panel_id + cell_vintage_year_fe",
+  ref
+))
+
+# =============================================================================
+# 3. STATIC DiD: WEIGHTED vs UNWEIGHTED
+# =============================================================================
+log_step("Fitting static DiD — weighted and unweighted...")
+
+# Weighted (cem_weight)
+mC2_w       <- feols(did_fml, data=data_C,        weights=~cem_weight, cluster=~state)
+mC2_donut_w <- feols(did_fml, data=data_C_donut,  weights=~cem_weight, cluster=~state)
+mC2_p88_w   <- feols(did_fml, data=data_C_post88, weights=~cem_weight, cluster=~state)
+
+# Unweighted (same matched sample, no weights)
+mC2_uw       <- feols(did_fml, data=data_C,        cluster=~state)
+mC2_donut_uw <- feols(did_fml, data=data_C_donut,  cluster=~state)
+mC2_p88_uw   <- feols(did_fml, data=data_C_post88, cluster=~state)
+
+# =============================================================================
+# 4. EVENT STUDY: WEIGHTED vs UNWEIGHTED (ref=-1 primary, ref=-2 robustness)
+# =============================================================================
+log_step("Fitting event studies — weighted and unweighted...")
+
+# Weighted
+m_es_full_w    <- feols(es_fml(-1), data=data_C,        weights=~cem_weight, cluster=~state)
+m_es_donut_w   <- feols(es_fml(-1), data=data_C_donut,  weights=~cem_weight, cluster=~state)
+m_es_p88_w     <- feols(es_fml(-1), data=data_C_post88, weights=~cem_weight, cluster=~state)
+
+# Unweighted
+m_es_full_uw   <- feols(es_fml(-1), data=data_C,        cluster=~state)
+m_es_donut_uw  <- feols(es_fml(-1), data=data_C_donut,  cluster=~state)
+m_es_p88_uw    <- feols(es_fml(-1), data=data_C_post88, cluster=~state)
+
+# Ref=-2 robustness (weighted only — for appendix)
+m_es_full_w2   <- feols(es_fml(-2), data=data_C,        weights=~cem_weight, cluster=~state)
+m_es_donut_w2  <- feols(es_fml(-2), data=data_C_donut,  weights=~cem_weight, cluster=~state)
+m_es_p88_w2    <- feols(es_fml(-2), data=data_C_post88, weights=~cem_weight, cluster=~state)
+
+# =============================================================================
+# 5. COHERENCE CHECK
+# =============================================================================
+log_step("Coherence check: static did_term vs ES tau=0,1...")
+
+cat("\n--- Static DiD: did_term ---\n")
+cat(sprintf("  %-20s  Weighted: %.4f (%.4f)  |  Unweighted: %.4f (%.4f)\n",
+  "Full",    coef(mC2_w)["did_term"],       se(mC2_w)["did_term"],
+             coef(mC2_uw)["did_term"],      se(mC2_uw)["did_term"]))
+cat(sprintf("  %-20s  Weighted: %.4f (%.4f)  |  Unweighted: %.4f (%.4f)\n",
+  "Donut",   coef(mC2_donut_w)["did_term"], se(mC2_donut_w)["did_term"],
+             coef(mC2_donut_uw)["did_term"],se(mC2_donut_uw)["did_term"]))
+cat(sprintf("  %-20s  Weighted: %.4f (%.4f)  |  Unweighted: %.4f (%.4f)\n",
+  "Post-88", coef(mC2_p88_w)["did_term"],   se(mC2_p88_w)["did_term"],
+             coef(mC2_p88_uw)["did_term"],  se(mC2_p88_uw)["did_term"]))
+
+cat("\n--- ES tau=0 and tau=1 (ref=-1) ---\n")
+for(pair in list(
+  list(w=m_es_full_w,  uw=m_es_full_uw,  lbl="Full   "),
+  list(w=m_es_donut_w, uw=m_es_donut_uw, lbl="Donut  "),
+  list(w=m_es_p88_w,   uw=m_es_p88_uw,   lbl="Post-88")
+)) {
+  get_coef <- function(m, tau) {
+    b <- coef(m); s <- se(m)
+    nm <- grep(sprintf("rel_year::%d:", tau), names(b), value=TRUE)
+    c(b[nm], s[nm])
+  }
+  w0  <- get_coef(pair$w,  0); w1  <- get_coef(pair$w,  1)
+  uw0 <- get_coef(pair$uw, 0); uw1 <- get_coef(pair$uw, 1)
+  cat(sprintf("  %s  W:  tau0=%.4f(%.4f) tau1=%.4f(%.4f)\n",
+    pair$lbl, w0[1], w0[2], w1[1], w1[2]))
+  cat(sprintf("  %s  UW: tau0=%.4f(%.4f) tau1=%.4f(%.4f)\n",
+    pair$lbl, uw0[1], uw0[2], uw1[1], uw1[2]))
+}
+
+# =============================================================================
+# 6. OUTPUT TABLES
+# =============================================================================
+log_step("Writing output tables...")
+
+# --- Table 1: Static DiD ---
+# Columns: W-Full | UW-Full | W-Donut | UW-Donut | W-Post88 | UW-Post88
+etable(
+  mC2_w,       mC2_uw,
+  mC2_donut_w, mC2_donut_uw,
+  mC2_p88_w,   mC2_p88_uw,
+  headers = c(
+    "Full W", "Full UW",
+    "Donut W", "Donut UW",
+    "Post88 W", "Post88 UW"
+  ),
+  tex    = TRUE,
+  digits = 4,
+  title  = "Static DiD: Weighted vs Unweighted",
+  file   = file.path(OUTPUT_TABLES, "T1_Static_DiD.tex")
+)
+
+# --- Table 2: Event Study ---
+# Columns: W-Full | UW-Full | W-Donut | UW-Donut | W-Post88 | UW-Post88
+etable(
+  m_es_full_w,  m_es_full_uw,
+  m_es_donut_w, m_es_donut_uw,
+  m_es_p88_w,   m_es_p88_uw,
+  headers = c(
+    "Full W", "Full UW",
+    "Donut W", "Donut UW",
+    "Post88 W", "Post88 UW"
+  ),
+  tex    = TRUE,
+  digits = 4,
+  title  = "Event Study: Weighted vs Unweighted (ref = -1)",
+  file   = file.path(OUTPUT_TABLES, "T2_ES_Main.tex")
+)
+
+# --- Appendix: ref=-2 robustness (weighted only) ---
+etable(
+  m_es_full_w2, m_es_donut_w2, m_es_p88_w2,
+  headers = c("Full ref=-2", "Donut ref=-2", "Post88 ref=-2"),
+  tex    = TRUE,
+  digits = 4,
+  title  = "Event Study Robustness: ref = -2 (Weighted)",
+  file   = file.path(OUTPUT_TABLES, "T2_ES_Ref2_Appendix.tex")
+)
+
+# =============================================================================
+# 7. PLOTS
+# =============================================================================
+log_step("Generating ES plots...")
+
+# Main plots — weighted
+p_es_full_w   <- es_ggplot(m_es_full_w,  label="Full Sample — Weighted")
+p_es_donut_w  <- es_ggplot(m_es_donut_w, label="Donut — Weighted")
+p_es_p88_w    <- es_ggplot(m_es_p88_w,   label="Post-1988 Vintages — Weighted")
+
+save_gg(p_es_full_w,  "Fig_ES_Full_Weighted")
+save_gg(p_es_donut_w, "Fig_ES_Donut_Weighted")
+save_gg(p_es_p88_w,   "Fig_ES_Post88_Weighted")
+
+# Comparison plots — weighted vs unweighted overlaid
+# Requires es_ggplot to return data; adapt if your es_ggplot takes model list
+p_es_full_compare <- es_ggplot(
+  list(m_es_full_w, m_es_full_uw),
+  labels = c("Weighted", "Unweighted"),
+  label  = "Full Sample: Weighted vs Unweighted"
+)
+save_gg(p_es_full_compare, "Fig_ES_Full_WeightedVsUnweighted")
+
 
 #### S8a OLS Event Study Models + Figures ####
 
@@ -3034,6 +3332,104 @@ m_es_trends <- feols(
   cluster = ~state
 )
 
+# (M2_Updated) Saturated ES to match mA3 identifying assumptions
+m_es_saturated <- feols(
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year, texas_treated, ref = -1L) + %s | 
+     tank_panel_id + cell_year_fe", # Uses Facility FE + Saturated Cell-Year FE
+    MANDATE_RHS)),
+  data    = drop_singletons(incumbents_birth_es, "tank_panel_id"),
+  weights = ~cem_w_norm,
+  cluster = ~state
+)
+
+m_es_saturated_fac_FE <- feols(
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year, texas_treated, ref = -1L) + %s | 
+     panel_id + cell_year_fe", # Uses Facility FE + Saturated Cell-Year FE
+    MANDATE_RHS)),
+  data    = drop_singletons(incumbents_birth_es, "panel_id"),
+  weights = ~cem_w_norm,
+  cluster = ~state
+)
+
+
+
+# (M2_Updated) Saturated ES to match mA3 identifying assumptions
+m_es_saturated_1998_ref <- feols(
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year, texas_treated, ref = 0L) + %s | 
+     tank_panel_id + cell_year_fe", # Uses Facility FE + Saturated Cell-Year FE
+    MANDATE_RHS)),
+  data    = drop_singletons(incumbents_birth_es, "tank_panel_id"),
+  weights = ~cem_w_norm,
+  cluster = ~state
+)
+
+m_es_saturated_fac_FE_1998_ref <- feols(
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year, texas_treated, ref = 0L) + %s | 
+     panel_id + cell_year_fe", # Uses Facility FE + Saturated Cell-Year FE
+    MANDATE_RHS)),
+  data    = drop_singletons(incumbents_birth_es, "panel_id"),
+  weights = ~cem_w_norm,
+  cluster = ~state
+)
+
+etable(m_es_saturated,m_es_saturated_fac_FE,m_es_saturated_1998_ref,m_es_saturated_fac_FE_1998_ref) # Compare to confirm equivalence of 1997 vs. 1998 reference
+# =============================================================================
+# DONUT EVENT STUDIES: Sensitivity Analysis
+# Sample: Excludes 1998 & 1999 | Reference: 1997 (-1L)
+# =============================================================================
+
+# 1. Prepare the Donut Data
+# We filter FIRST, then drop singletons to ensure valid within-group variation
+data_es_donut <- incumbents_birth_es[!(panel_year %in% c(1998, 1999))]
+
+# ------------------------------------------------------------------------
+# Model 1: Tank FE Donut (m_es_tank_donut)
+# ------------------------------------------------------------------------
+# This tests if individual tanks had diverging pre-trends relative to 1997.
+m_es_tank_donut <- feols(
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year, texas_treated, ref = -1L) + %s | 
+     tank_panel_id + cell_year_fe", 
+    MANDATE_RHS)),
+  data    = drop_singletons(data_es_donut, "tank_panel_id"),
+  weights = ~cem_w_norm,
+  cluster = ~state
+)
+
+# ------------------------------------------------------------------------
+# Model 2: Facility FE Donut (m_es_fac_donut)
+# ------------------------------------------------------------------------
+# This is the "Gold Standard" check for mA3. It tests for pre-trends
+# WITHIN the facility, mirroring your primary identification strategy.
+m_es_fac_donut <- feols(
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year, texas_treated, ref = -1L) + %s | 
+     panel_id + cell_year_fe", 
+    MANDATE_RHS)),
+  data    = drop_singletons(data_es_donut, "panel_id"),
+  weights = ~cem_w_norm,
+  cluster = ~state
+)
+
+etable(m_es_saturated,m_es_saturated_fac_FE,m_es_tank_donut,m_es_fac_donut,m_es_saturated_1998_ref,m_es_saturated_fac_FE_1998_ref) # Compare to confirm equivalence of saturated vs. trends spec
+
+
+m_es_trends2 <- feols(
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year, texas_treated, ref = -1L) + %s |
+       tank_panel_id + panel_year + make_model_noage[panel_year]",
+    MANDATE_RHS)),
+  dataingletons(
+              incumbents_birth_es,
+              "tank_panel_id"),
+  weights = ~cem_w_norm,
+  cluster = ~state
+)
+
 # (M3) Below-median age subsample
 m_es_below_med <- feols(
   as.formula(sprintf(
@@ -3042,7 +3438,7 @@ m_es_below_med <- feols(
     MANDATE_RHS)),
   data    = drop_singletons(
               incumbents_birth_below,
-              "tank_panel_id"),
+                  = drop_s"tank_panel_id"),
   weights = ~cem_w_norm,
   cluster = ~state
 )
@@ -3174,6 +3570,186 @@ m_es_post88 <- feols(
 )
 
 cat("  Robustness ES models fitted (8 additional specs).\n\n")
+# Version A: matches mC1 (baseline static)
+m_es_v1 <- feols(closure_event ~ i(rel_year, texas_treated, ref=-1L) + 
+                   mandate_release_det + mandate_spill_overfill + mandate_integrity |
+                   panel_id + panel_year,
+                 data = incumbents_birth_es, weights = ~cem_w_norm, cluster = ~state)
+
+# Version B: matches mC2 (rich static) — THIS is your pre-trends test
+m_es_v2 <- feols(closure_event ~ i(rel_year, texas_treated, ref=-1L) + 
+                   mandate_release_det + mandate_spill_overfill + mandate_integrity |
+                   panel_id + cell_year_fe,
+                 data = incumbents_birth_es, weights = ~cem_w_norm, cluster = ~state)
+
+# Version C: your current cohort_tech_year_fe — present as vintage-trend robustness
+m_es_v3 <- feols(closure_event ~ i(rel_year, texas_treated, ref=-1L) + 
+                   mandate_release_det + mandate_spill_overfill + mandate_integrity |
+                   panel_id + cohort_tech_year_fe,
+                 data = incumbents_birth_es, weights = ~cem_w_norm, cluster = ~state)
+
+etable(m_es_v1, m_es_v2, m_es_v3,file = file.path(OUTPUT_TABLES, "T_ES_OLS_Sensitivity.tex")) # Compare to confirm equivalence of vintage-trend vs. saturated cell-year FE
+
+# ============================================================
+# FIRST: Diagnose the matching coverage problem
+# ============================================================
+
+cat("=== FULL vintage coverage check (pre-89, TX treated) ===\n")
+cat("\n-- In raw panel (before matching): --\n")
+print(
+  panel_dt[texas_treated == 1L & 
+           install_yr_int >= 1950L & 
+           install_yr_int <= 1988L &
+           install_yr_int >= 1900L,
+    .(n_tanks = uniqueN(tank_panel_id)),
+    by = install_yr_int
+  ][order(install_yr_int)]
+)
+
+cat("\n-- In matched CEM frame (incumbents_birth_es): --\n")
+print(
+  incumbents_birth_es[texas_treated == 1L &
+                      install_yr_int >= 1950L &
+                      install_yr_int <= 1988L,
+    .(n_tanks = uniqueN(tank_panel_id)),
+    by = install_yr_int
+  ][order(install_yr_int)]
+)
+
+# ============================================================
+# Self-contained formulas (don't rely on session state)
+# ============================================================
+
+fml_cell_yr <- as.formula(
+  "closure_event ~ i(rel_year, texas_treated, ref = -1L) +
+   mandate_release_det + mandate_spill_overfill + mandate_integrity |
+   panel_id + cell_year_fe"
+)
+
+fml_cty <- as.formula(
+  "closure_event ~ i(rel_year, texas_treated, ref = -1L) +
+   mandate_release_det + mandate_spill_overfill + mandate_integrity |
+   panel_id + cohort_tech_year_fe"
+)
+
+# ============================================================
+# Pre-89 clean sample — restrict to what actually has
+# TX treated coverage after matching
+# ============================================================
+
+incumbents_birth_pre89_clean <- incumbents_birth_es[
+  install_yr_int >= 1950L &
+  install_yr_int <= 1988L
+][,
+  cem_w_norm := cem_weight / sum(cem_weight),
+  by = texas_treated
+]
+
+incumbents_birth_pre89_clean[, cohort_tech_year_fe := .GRP,
+  by = .(panel_year, install_yr_int, make_model_noage)]
+
+incumbents_birth_pre89_clean[, cell_year_fe := .GRP,
+  by = .(panel_year, make_model_noage)]
+
+# Post-88 (already exists, rebuild FEs cleanly)
+incumbents_birth_post88[,
+  cem_w_norm := cem_weight / sum(cem_weight),
+  by = texas_treated
+]
+incumbents_birth_post88[, cohort_tech_year_fe := .GRP,
+  by = .(panel_year, install_yr_int, make_model_noage)]
+incumbents_birth_post88[, cell_year_fe := .GRP,
+  by = .(panel_year, make_model_noage)]
+
+# ============================================================
+# Fit models
+# ============================================================
+
+m_es_pre89_v2 <- feols(fml_cell_yr,
+  data = incumbents_birth_pre89_clean,
+  weights = ~cem_w_norm, cluster = ~state)
+
+m_es_pre89_v3 <- feols(fml_cty,
+  data = incumbents_birth_pre89_clean,
+  weights = ~cem_w_norm, cluster = ~state)
+
+m_es_post88_v2 <- feols(fml_cell_yr,
+  data = incumbents_birth_post88,
+  weights = ~cem_w_norm, cluster = ~state)
+
+m_es_post88_v3 <- feols(fml_cty,
+  data = incumbents_birth_post88,
+  weights = ~cem_w_norm, cluster = ~state)
+
+etable(
+  m_es_pre89_v2, m_es_pre89_v3,
+  m_es_post88_v2, m_es_post88_v3,
+  headers = c(
+    "Pre-89 cell×yr", "Pre-89 cohort×tech×yr",
+    "Post-88 cell×yr", "Post-88 cohort×tech×yr"
+  )
+)
+
+
+# ============================================================
+# UNWEIGHTED ES: Full pre-reform vintage range (1950-1988)
+# Purpose: diagnostic to see whether pre-trend violations
+# survive once 1950-1984 tanks are included, BEFORE re-running
+# CEM matching. No CEM weights — straight OLS with FEs only.
+# ============================================================
+
+# Build sample directly from panel_dt
+pre89_unweighted <- panel_dt[
+  install_yr_int >= 1950L &
+  install_yr_int <= 1988L &
+  !is.na(make_model_noage)
+][, rel_year := as.integer(panel_year) - 1998L]
+
+# Build FEs
+pre89_unweighted[, cell_year_fe := .GRP,
+  by = .(panel_year, make_model_noage)]
+
+pre89_unweighted[, cohort_tech_year_fe := .GRP,
+  by = .(panel_year, install_yr_int, make_model_noage)]
+
+cat(sprintf("pre89_unweighted: %s rows | %s tanks | TX=%s\n",
+  fmt_n(nrow(pre89_unweighted)),
+  fmt_n(uniqueN(pre89_unweighted$tank_panel_id)),
+  fmt_n(uniqueN(pre89_unweighted[texas_treated==1L]$tank_panel_id))))
+
+# Vintage coverage check — confirm 1950-1984 TX tanks now present
+print(
+  pre89_unweighted[texas_treated == 1L,
+    .(n_tanks = uniqueN(tank_panel_id)),
+    by = install_yr_int
+  ][order(install_yr_int)]
+)
+
+# ============================================================
+# FIT — no weights argument
+# ============================================================
+
+m_es_pre89_uw_v2 <- feols(
+  closure_event ~ i(rel_year, texas_treated, ref = -1L) +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity |
+    panel_id + cell_year_fe,
+  data    = pre89_unweighted,
+  cluster = ~state
+)
+
+m_es_pre89_uw_v3 <- feols(
+  closure_event ~ i(rel_year, texas_treated, ref = -1L) +
+    mandate_release_det + mandate_spill_overfill + mandate_integrity |
+    panel_id + cohort_tech_year_fe,
+  data    = pre89_unweighted,
+  cluster = ~state
+)
+
+etable(
+  m_es_pre89_uw_v2, m_es_pre89_uw_v3,
+  headers = c("1950-1988 unweighted cell×yr",
+              "1950-1988 unweighted cohort×tech×yr")
+)
 
 
 # =============================================================================
