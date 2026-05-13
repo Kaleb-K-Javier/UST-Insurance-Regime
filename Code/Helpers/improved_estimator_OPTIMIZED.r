@@ -3391,3 +3391,728 @@ npl_estimator_replacement_8p <- function(obs_panel,
     config         = config_8p
   )
 }
+
+
+
+
+# ==============================================================================
+# REPLACEMENT MODEL — 8-PARAM + CONTROL-STATE FIXED EFFECTS (24 params total)
+# ==============================================================================
+# Study states (per project memory + obs panel inspection):
+#   TX (treated; RB regime under observed sample) — no FE applied
+#   17 control states; AR is the base (alpha = 0); 16 free alpha_* params
+#
+# theta_raw_24 = (8 structural from 8p) + (16 alpha params)
+# Equilibrium VFI is structural-only (no FEs); FE enters only the obs-level
+# Maintain utility, absorbing across-state-mean Maintain-rate confounders.
+# ==============================================================================
+
+CONTROL_STATES <- c("AR","CO","ID","KS","KY","LA","MA","MD","ME","MN",
+                    "MO","NC","OH","OK","SD","TN","VA")
+STUDY_STATES   <- c("TX", CONTROL_STATES)
+FE_BASE_STATE  <- "AR"   # alpha_AR = 0
+FE_FREE_STATES <- setdiff(CONTROL_STATES, FE_BASE_STATE)
+FE_PARAM_NAMES <- paste0("alpha_", FE_FREE_STATES)
+N_FE_PARAMS    <- length(FE_PARAM_NAMES)
+
+
+create_estimation_config_replacement_8p_fe <- function(beta = 0.95, sigma2 = 1.0,
+                                                       npl_iter = 200) {
+  cfg <- create_estimation_config_replacement_8p(beta, sigma2, npl_iter)
+  cfg$alpha_bounds <- c(-5, 5)
+  cfg$n_params <- 8L + N_FE_PARAMS
+  cfg$param_names <- c(cfg$param_names, FE_PARAM_NAMES)
+  cfg$fe_free_states <- FE_FREE_STATES
+  cfg$fe_base_state  <- FE_BASE_STATE
+  cfg
+}
+
+
+# state_fe_idx[i] in 0..length(STUDY_STATES); 0 = TX (no FE).
+# Otherwise the integer is the index into a fe_vec of length n_control_states
+# whose first element is the base (= 0) and the rest map to FE_FREE_STATES in
+# the order given by FE_FREE_STATES.
+create_estimation_cache_replacement_8p_fe <- function(primitives, obs_panel,
+                                                       config_4p, config_8p) {
+  cache <- create_estimation_cache_replacement_8p(primitives, obs_panel,
+                                                  config_4p, config_8p)
+  st_obs <- as.character(obs_panel$state)
+  unknown <- setdiff(unique(st_obs), STUDY_STATES)
+  if (length(unknown) > 0L) {
+    stop("State codes in obs panel not in STUDY_STATES: ",
+         paste(unknown, collapse = ", "))
+  }
+  # 0 = TX (no FE); 1 = base AR (alpha=0); 2..(1+N_FE_PARAMS) = FE_FREE_STATES
+  fe_idx <- integer(length(st_obs))
+  fe_idx[st_obs == "TX"]            <- 0L
+  fe_idx[st_obs == FE_BASE_STATE]   <- 1L
+  for (k in seq_along(FE_FREE_STATES)) {
+    fe_idx[st_obs == FE_FREE_STATES[k]] <- k + 1L
+  }
+  cache$state_fe_idx <- fe_idx
+  cache$fe_free_states <- FE_FREE_STATES
+  cache$fe_base_state  <- FE_BASE_STATE
+  cache
+}
+
+
+npl_likelihood_replacement_8p_fe <- function(theta, P_fixed, cache, config) {
+
+  if (is.null(names(theta))) names(theta) <- config$param_names
+  sigma <- config$sigma2
+  beta  <- cache$beta
+
+  # Structural utilities (no FE -> equilibrium remains structural)
+  U_state <- flow_utilities_replacement_8p(theta, cache)
+  V <- tryCatch(
+    invert_value_function_replacement(P_fixed, U_state, cache, config),
+    error = function(e) rep(NA_real_, cache$n_states)
+  )
+  if (anyNA(V)) return(1e10)
+
+  v_M_state <- U_state[, "maintain"] + beta * as.numeric(cache$F_maintain %*% V)
+  v_E_state <- U_state[, "exit"]
+  v_R_state <- U_state[, "replace"]  + beta * as.numeric(cache$F_replace  %*% V)
+
+  # Build FE vector indexed 0..(1+N_FE_PARAMS).
+  # idx 0 => TX (no FE); we map via fe_idx + 1 with a leading 0 so a fe_idx=0
+  # row picks up the leading 0.
+  free_alpha <- vapply(cache$fe_free_states,
+                       function(s) theta[[paste0("alpha_", s)]],
+                       numeric(1))
+  fe_vec_full <- c(0, 0, free_alpha)   # length 2 + N_FE = 18 by default
+  # cache$state_fe_idx in 0..(N_FE_PARAMS+1); we shift by +1 to index into fe_vec_full
+  fe_obs <- fe_vec_full[cache$state_fe_idx + 1L]
+
+  v_M_obs <- v_M_state[cache$s_obs] + fe_obs
+  v_E_obs <- v_E_state[cache$s_obs]
+  v_R_obs <- v_R_state[cache$s_obs]
+  v_max   <- pmax(v_M_obs, v_E_obs, v_R_obs)
+
+  diff_M <- (v_M_obs - v_max) / sigma
+  diff_E <- (v_E_obs - v_max) / sigma
+  diff_R <- (v_R_obs - v_max) / sigma
+  cl <- config$v_clip
+  diff_M[diff_M >  cl] <-  cl; diff_M[diff_M < -cl] <- -cl
+  diff_E[diff_E >  cl] <-  cl; diff_E[diff_E < -cl] <- -cl
+  diff_R[diff_R >  cl] <-  cl; diff_R[diff_R < -cl] <- -cl
+
+  log_Z <- log(exp(diff_M) + exp(diff_E) + exp(diff_R))
+  a_obs <- cache$a_obs
+  v_chosen_diff <- ifelse(a_obs == 1L, diff_M,
+                  ifelse(a_obs == 2L, diff_E, diff_R))
+  ll <- sum(v_chosen_diff - log_Z)
+  if (!is.finite(ll)) return(1e10)
+  -ll
+}
+
+
+npl_estimator_replacement_8p_fe <- function(obs_panel,
+                                            primitives,
+                                            config_8p_fe,
+                                            theta_init = NULL,
+                                            P_init     = NULL,
+                                            verbose    = TRUE) {
+
+  config_4p <- create_estimation_config_replacement(
+    beta = config_8p_fe$beta, sigma2 = config_8p_fe$sigma2,
+    npl_iter = config_8p_fe$max_npl_iter)
+
+  if (verbose) {
+    cat(sprintf("\n=== NPL ESTIMATOR — REPLACEMENT MODEL (8p + %d state FE) ===\n",
+                N_FE_PARAMS))
+    cat(sprintf("    sample = %s | n_obs = %s | n_facilities = %s\n",
+                primitives$sample_label %||% "?",
+                format(nrow(obs_panel), big.mark = ","),
+                format(data.table::uniqueN(obs_panel$panel_id), big.mark = ",")))
+  }
+
+  cache <- create_estimation_cache_replacement_8p_fe(primitives, obs_panel,
+                                                      config_4p, config_8p_fe)
+
+  if (is.null(theta_init)) {
+    theta_init <- c(kappa_SW = 20, kappa_DW = 20,
+                    K_log_SW = log(20), K_log_DW = log(20),
+                    gamma_price_FF = -1.0, gamma_price_RB = -1.0,
+                    gamma_risk_FF = 1.0, gamma_risk_RB = 1.0,
+                    setNames(rep(0, N_FE_PARAMS), FE_PARAM_NAMES))
+  }
+  if (is.null(names(theta_init))) names(theta_init) <- config_8p_fe$param_names
+  theta_curr <- theta_init
+
+  if (is.null(P_init)) {
+    P <- make_P0_mat_3action(primitives$P0_mat, obs_panel,
+                             eps_prob = config_8p_fe$eps_prob)
+    if (verbose) cat("    initial CCPs: split of primitives$P0_mat\n")
+  } else P <- P_init
+
+  pn <- config_8p_fe$param_names
+  lower_b <- c(config_8p_fe$kappa_SW_bounds[1], config_8p_fe$kappa_DW_bounds[1],
+               config_8p_fe$K_log_SW_bounds[1], config_8p_fe$K_log_DW_bounds[1],
+               config_8p_fe$gamma_price_FF_bounds[1], config_8p_fe$gamma_price_RB_bounds[1],
+               config_8p_fe$gamma_risk_FF_bounds[1],  config_8p_fe$gamma_risk_RB_bounds[1],
+               rep(config_8p_fe$alpha_bounds[1], N_FE_PARAMS))
+  upper_b <- c(config_8p_fe$kappa_SW_bounds[2], config_8p_fe$kappa_DW_bounds[2],
+               config_8p_fe$K_log_SW_bounds[2], config_8p_fe$K_log_DW_bounds[2],
+               config_8p_fe$gamma_price_FF_bounds[2], config_8p_fe$gamma_price_RB_bounds[2],
+               config_8p_fe$gamma_risk_FF_bounds[2],  config_8p_fe$gamma_risk_RB_bounds[2],
+               rep(config_8p_fe$alpha_bounds[2], N_FE_PARAMS))
+
+  theta_path <- matrix(NA_real_, config_8p_fe$max_npl_iter, config_8p_fe$n_params,
+                       dimnames = list(NULL, pn))
+  ll_path <- numeric(config_8p_fe$max_npl_iter); converged <- FALSE
+
+  for (npl_iter in seq_len(config_8p_fe$max_npl_iter)) {
+    theta_old <- theta_curr
+    theta_path[npl_iter, ] <- theta_curr
+
+    opt <- optim(par = theta_curr, fn = npl_likelihood_replacement_8p_fe,
+                 P_fixed = P, cache = cache, config = config_8p_fe,
+                 method = "L-BFGS-B", lower = lower_b, upper = upper_b,
+                 control = list(maxit = 30, factr = 1e12))
+    if (opt$convergence != 0 && verbose) {
+      warning(sprintf("    optim() code %d at iter %d", opt$convergence, npl_iter))
+    }
+    theta_curr <- opt$par; names(theta_curr) <- pn
+    ll_path[npl_iter] <- -opt$value
+
+    U <- flow_utilities_replacement_8p(theta_curr, cache)
+    V <- invert_value_function_replacement(P, U, cache, config_8p_fe)
+    P_new <- update_ccps_replacement_8p(theta_curr, V, cache, config_8p_fe)
+    theta_diff <- max(abs(theta_curr - theta_old))
+    P_diff <- max(abs(P_new - P))
+
+    if (verbose && (npl_iter %% 5 == 0 || npl_iter <= 3)) {
+      cat(sprintf("    iter %3d: gpFF=%6.2f gpRB=%6.2f grFF=%5.3f grRB=%5.3f kSW=%5.2f kDW=%5.2f | dTh=%.1e dP=%.1e LL=%.1f\n",
+        npl_iter, theta_curr[["gamma_price_FF"]], theta_curr[["gamma_price_RB"]],
+        theta_curr[["gamma_risk_FF"]],  theta_curr[["gamma_risk_RB"]],
+        theta_curr[["kappa_SW"]], theta_curr[["kappa_DW"]],
+        theta_diff, P_diff, ll_path[npl_iter]))
+    }
+    P <- P_new
+    if (theta_diff < config_8p_fe$tol_theta && P_diff < config_8p_fe$tol_P) {
+      converged <- TRUE
+      if (verbose) cat(sprintf("\n    *** CONVERGED at iter %d ***\n", npl_iter))
+      break
+    }
+  }
+
+  U_final <- flow_utilities_replacement_8p(theta_curr, cache)
+  V_final <- invert_value_function_replacement(P, U_final, cache, config_8p_fe)
+
+  theta_hat <- c(
+    kappa_SW = unname(theta_curr[["kappa_SW"]]),
+    kappa_DW = unname(theta_curr[["kappa_DW"]]),
+    K_SW = exp(theta_curr[["K_log_SW"]]),
+    K_DW = exp(theta_curr[["K_log_DW"]]),
+    gamma_price_FF = unname(theta_curr[["gamma_price_FF"]]),
+    gamma_price_RB = unname(theta_curr[["gamma_price_RB"]]),
+    gamma_risk_FF  = unname(theta_curr[["gamma_risk_FF"]]),
+    gamma_risk_RB  = unname(theta_curr[["gamma_risk_RB"]]))
+  for (s in FE_FREE_STATES) {
+    theta_hat[paste0("alpha_", s)] <- unname(theta_curr[[paste0("alpha_", s)]])
+  }
+
+  list(theta_hat = theta_hat, theta_raw = theta_curr,
+       P_hat = P, V_hat = V_final,
+       converged = converged, n_iter = npl_iter,
+       log_likelihood = ll_path[npl_iter],
+       ll_path = ll_path[seq_len(npl_iter)],
+       theta_path = theta_path[seq_len(npl_iter), , drop = FALSE],
+       cache = cache, config = config_8p_fe)
+}
+
+
+# ==============================================================================
+# APPEND (2026-05-08): 8p Replacement + nuisance FE for ALL 17 control states
+# ------------------------------------------------------------------------------
+# • Maintain-only FE: alpha enters uM only (not exit/replace)
+# • Aggregated likelihood by (sidx, graw, action) — O(32×18) evals
+# • Geo-weighted CCP update: sum_g w(g|s) * softmax(vM+alpha_g, vE, vR)
+# • TX FE fixed at 0; estimate alpha for each of the 17 control states
+# • alpha does NOT enter Bellman inversion / equilibrium mapping (Option B)
+# • PR/PE ratio does not vary with geo g conditional on state s — intentional
+#   restriction to keep gamma parameters stable.
+# ==============================================================================
+
+suppressPackageStartupMessages({
+  library(data.table)
+  library(Matrix)
+  library(here)
+})
+
+if (!exists("%||%", mode = "function")) {
+  `%||%` <- function(a, b) if (!is.null(a)) a else b
+}
+
+# ------------------------------------------------------------------------------
+# FE STATE LISTS (authoritative — overrides earlier 5-FE / AR-base definitions)
+# ------------------------------------------------------------------------------
+CONTROLSTATES <- c(
+  "AR", "CO", "ID", "KS", "KY",
+  "LA", "MA", "MD", "ME", "MN", "MO", "NC",
+  "OH", "OK", "SD", "TN", "VA"
+)
+STUDYSTATES    <- c("TX", CONTROLSTATES)
+FETXSTATE      <- "TX"
+FEPARAMNAMES   <- paste0("alpha", CONTROLSTATES)   # alphaAR..alphaVA (17 params)
+NFEPARAMS      <- length(FEPARAMNAMES)              # 17
+
+# ------------------------------------------------------------------------------
+# Recompile cpp_engine.cpp so the new exports are available
+# ------------------------------------------------------------------------------
+.try_source_cpp_engine <- function() {
+  if (!requireNamespace("Rcpp", quietly = TRUE)) return(invisible(FALSE))
+  cpppath <- tryCatch(here::here("Code", "Helpers", "cpp_engine.cpp"),
+                      error = function(e) NULL)
+  if (is.null(cpppath) || !file.exists(cpppath)) return(invisible(FALSE))
+  ok <- TRUE
+  tryCatch(Rcpp::sourceCpp(cpppath),
+           error = function(e) {
+             ok <<- FALSE
+             warning("Failed to compile cpp_engine.cpp: ", conditionMessage(e))
+           })
+  invisible(ok)
+}
+.try_source_cpp_engine()
+
+# ------------------------------------------------------------------------------
+# Stable logsumexp for 3 alternatives (R fallback)
+# ------------------------------------------------------------------------------
+.logsumexp3 <- function(a, b, c) {
+  m <- pmax(a, pmax(b, c))
+  m + log(exp(a - m) + exp(b - m) + exp(c - m))
+}
+
+# ------------------------------------------------------------------------------
+# Build aggregated counts by (sidx, graw) and geo-weight matrix w(g|s)
+#
+# feweightsource = "controls" : weight matrix uses controls-only observations
+#                               for FF (rho=1) states; all-sample for RB.
+# feweightsource = "all"      : use all-sample everywhere.
+#
+# Required obs_panel columns: sidx (1..32), state (in STUDYSTATES),
+#                              yit (0=maintain, 1=not-maintain), Ireplace
+# ------------------------------------------------------------------------------
+.build_counts_weights_8p_fe <- function(obs_panel, primitives,
+                                        feweightsource = c("controls", "all")) {
+  feweightsource <- match.arg(feweightsource)
+  dt <- data.table::as.data.table(obs_panel)
+
+  stopifnot(all(c("sidx", "state", "yit", "Ireplace") %in% names(dt)))
+
+  # action index: 1=maintain, 2=exit, 3=replace
+  dt[, aidx := data.table::fifelse(
+    yit == 0L, 1L,
+    data.table::fifelse(!is.na(Ireplace) & Ireplace == 1L, 3L, 2L)
+  )]
+
+  # graw mapping: 0=TX; 1..17 in CONTROLSTATES order
+  mctrl <- match(dt$state, CONTROLSTATES)
+  dt[, graw := data.table::fifelse(
+    state == FETXSTATE, 0L,
+    data.table::fifelse(!is.na(mctrl), as.integer(mctrl), NA_integer_)
+  )]
+
+  if (anyNA(dt$graw)) {
+    bad <- unique(dt[is.na(graw), state])
+    stop("States in obs_panel not in STUDYSTATES: ", paste(bad, collapse = ", "))
+  }
+
+  # aggregate counts by (sidx, graw)
+  counts <- dt[, .(
+    nM = sum(aidx == 1L),
+    nE = sum(aidx == 2L),
+    nR = sum(aidx == 3L),
+    nT = .N
+  ), by = .(sidx, graw)]
+
+  S       <- 32L
+  Grawmax <- 17L
+  grid    <- data.table::CJ(sidx = 1:S, graw = 0:Grawmax)
+  counts  <- merge(grid, counts, by = c("sidx", "graw"), all.x = TRUE)
+  for (v in c("nM", "nE", "nR", "nT")) {
+    counts[is.na(get(v)), (v) := 0L]
+  }
+  data.table::setorder(counts, sidx, graw)
+
+  # rho_state for FF vs RB weight-source logic (1=FF, 2=RB)
+  rho <- NULL
+  if (!is.null(primitives$statelut) && "rhostate" %in% names(primitives$statelut)) {
+    rho <- primitives$statelut$rhostate
+  } else if (!is.null(primitives$state_lut) && "rho_state" %in% names(primitives$state_lut)) {
+    rho <- primitives$state_lut$rho_state
+  } else {
+    rho <- rep(1L, S)  # fallback: treat all as FF
+  }
+
+  # weight matrix 32 x 18 (column j corresponds to graw = j-1, R 1-indexed)
+  wsg <- matrix(0.0, nrow = S, ncol = Grawmax + 1L)
+
+  countsc <- NULL
+  if (feweightsource == "controls") {
+    dtc    <- dt[state != FETXSTATE]
+    ctmp   <- dtc[, .(nT = .N), by = .(sidx, graw)]
+    ctmp   <- merge(grid, ctmp, by = c("sidx", "graw"), all.x = TRUE)
+    ctmp[is.na(nT), nT := 0L]
+    data.table::setorder(ctmp, sidx, graw)
+    countsc <- ctmp
+  }
+
+  for (s in seq_len(S)) {
+    use_controls <- (feweightsource == "controls") && (rho[s] == 1L)
+    src <- if (use_controls) countsc else counts
+    nTvec <- src[sidx == s, nT]
+    denom <- sum(nTvec)
+    if (denom > 0) {
+      wsg[s, ] <- nTvec / denom
+    } else {
+      # no observations for this state: all weight on TX (graw=0)
+      wsg[s, ]    <- 0.0
+      wsg[s, 1L]  <- 1.0
+    }
+  }
+
+  stopifnot(nrow(wsg) == 32L, ncol(wsg) == 18L)
+  stopifnot(all(abs(rowSums(wsg) - 1.0) < 1e-8))
+
+  list(countsdt = counts, wsg = wsg)
+}
+
+# ------------------------------------------------------------------------------
+# Build alphacpp vector (length 18, R-indexed 1..18)
+#   alphacpp[1]  = 0       (graw=0, TX, fixed)
+#   alphacpp[j+1] = alpha for CONTROLSTATES[j], j=1..17
+# C++ accesses as alphacpp[g] (0-based), so alphacpp[graw+1] in R.
+# ------------------------------------------------------------------------------
+.alphacpp_from_theta <- function(thetaraw) {
+  a       <- numeric(18L)
+  a[1L]   <- 0.0   # TX fixed at 0
+  for (j in seq_along(CONTROLSTATES)) {
+    nm <- paste0("alpha", CONTROLSTATES[j])
+    if (is.null(thetaraw[[nm]])) stop("Missing FE param: ", nm)
+    a[j + 1L] <- thetaraw[[nm]]
+  }
+  a
+}
+
+# ------------------------------------------------------------------------------
+# Transition matrix accessors
+# ------------------------------------------------------------------------------
+.get_F_mats <- function(cache) {
+  FM <- cache$Fmaintain %||% cache$F_maintain %||% cache$FM %||% cache$F0
+  FE <- cache$Fexit     %||% cache$F_exit     %||% cache$FE %||% cache$F1
+  FR <- cache$Freplace  %||% cache$F_replace  %||% cache$FR %||% cache$F2
+  if (is.null(FM) || is.null(FR))
+    stop("Missing transition matrices in cache. Need F_maintain + F_replace.")
+  list(FM = FM, FE = FE, FR = FR)
+}
+
+# ------------------------------------------------------------------------------
+# Compute v-indices (vM, vE, vR) given structural theta + fixed P
+# Uses existing flow utility + inversion functions from the base 8p model.
+# ------------------------------------------------------------------------------
+.compute_v_indices_8p <- function(thetastruct, P, cache, config) {
+  U  <- flow_utilities_replacement_8p(thetastruct, cache)
+  V  <- invert_value_function_replacement(P, U, cache, config)
+  Fs <- .get_F_mats(cache)
+  beta <- config$beta
+  vM <- as.numeric(U[, "maintain"] + beta * (Fs$FM %*% V))
+  vE <- as.numeric(U[, "exit"])
+  vR <- as.numeric(U[, "replace"]  + beta * (Fs$FR %*% V))
+  list(U = U, V = V, vM = vM, vE = vE, vR = vR)
+}
+
+# ------------------------------------------------------------------------------
+# FE config creator — full 17-control version
+# ------------------------------------------------------------------------------
+create_estimation_config_replacement_8p_fe <- function(
+    beta              = 0.95,
+    sigma2            = 1.0,
+    npl_iter          = 200,
+    feweightsource    = c("controls", "all"),
+    ccp_damping_lambda = 0.6,
+    epsprob           = 1e-12,
+    alphabounds       = c(-20, 20),
+    tol_theta         = 1e-5,
+    tol_P             = 1e-5) {
+
+  feweightsource <- match.arg(feweightsource)
+
+  # Start from the base 8p config to inherit all numerical constants + bounds
+  cfg_8p <- create_estimation_config_replacement_8p(beta = beta,
+                                                    sigma2 = sigma2,
+                                                    npl_iter = npl_iter)
+
+  cfg <- cfg_8p
+  cfg$feweightsource     <- feweightsource
+  cfg$ccp_damping_lambda <- ccp_damping_lambda
+  cfg$epsprob            <- epsprob
+  cfg$alpha_bounds       <- alphabounds      # kept for back-compat with old code
+  cfg$alphabounds        <- alphabounds
+  cfg$tol_theta          <- tol_theta
+  cfg$tol_P              <- tol_P
+  cfg$max_npl_iter       <- npl_iter
+  cfg$struct_param_names <- c("kappa_SW", "kappa_DW", "K_log_SW", "K_log_DW",
+                               "gamma_price_FF", "gamma_price_RB",
+                               "gamma_risk_FF",  "gamma_risk_RB")
+  cfg$fe_param_names     <- FEPARAMNAMES
+  cfg$n_params           <- 8L + NFEPARAMS   # 25
+  cfg$param_names        <- c(cfg$struct_param_names, cfg$fe_param_names)
+  cfg
+}
+
+# ------------------------------------------------------------------------------
+# Aggregated FE negative log-likelihood (maintain-only FE)
+#   uM(s,g) = vM(s) + alpha_g;  uE = vE(s);  uR = vR(s)
+# Iterates over <= 576 aggregated (sidx, graw) rows.
+# ------------------------------------------------------------------------------
+npl_likelihood_replacement_8p_fe <- function(thetaraw, Pfixed, cache, config) {
+  if (is.null(names(thetaraw))) names(thetaraw) <- config$param_names
+
+  thetastruct <- thetaraw[config$struct_param_names]
+  v           <- .compute_v_indices_8p(thetastruct, Pfixed, cache, config)
+  alphacpp    <- .alphacpp_from_theta(thetaraw)
+
+  counts <- cache$countsdt8pfe
+  stopifnot(!is.null(counts))
+
+  # Prefer compiled C++ path
+  if (exists("nll_replacement8pfe_counts_cpp", mode = "function")) {
+    return(nll_replacement8pfe_counts_cpp(
+      sidx     = counts$sidx,
+      graw     = counts$graw,
+      nM       = counts$nM,
+      nE       = counts$nE,
+      nR       = counts$nR,
+      vM       = v$vM,
+      vE       = v$vE,
+      vR       = v$vR,
+      alphacpp = alphacpp,
+      epsprob  = config$epsprob
+    ))
+  }
+
+  # R fallback
+  ll     <- 0.0
+  logeps <- log(config$epsprob)
+  for (i in seq_len(nrow(counts))) {
+    s  <- counts$sidx[i]
+    g  <- counts$graw[i]
+    nm <- counts$nM[i]; ne <- counts$nE[i]; nr <- counts$nR[i]
+    if (nm + ne + nr == 0L) next
+
+    uM  <- v$vM[s] + alphacpp[g + 1L]   # R is 1-indexed; graw+1 gives correct slot
+    uE  <- v$vE[s]
+    uR  <- v$vR[s]
+    lse <- .logsumexp3(uM, uE, uR)
+    lpM <- uM - lse; lpE <- uE - lse; lpR <- uR - lse
+    lpM <- max(lpM, logeps); lpE <- max(lpE, logeps); lpR <- max(lpR, logeps)
+    ll  <- ll + nm * lpM + ne * lpE + nr * lpR
+  }
+  -ll
+}
+
+# ------------------------------------------------------------------------------
+# Geo-weighted CCP update (maintain-only FE)
+#   Pnew(s,.) = sum_g w(g|s) * softmax(vM(s)+alpha_g, vE(s), vR(s))
+# Then apply damping: P <- (1-lam)*Pold + lam*Pnew
+# ------------------------------------------------------------------------------
+.update_ccps_geoweighted_8p_fe <- function(thetaraw, Pold, cache, config) {
+  thetastruct <- thetaraw[config$struct_param_names]
+  v           <- .compute_v_indices_8p(thetastruct, Pold, cache, config)
+  alphacpp    <- .alphacpp_from_theta(thetaraw)
+  wsg         <- cache$wsg8pfe
+
+  # Prefer compiled C++ path
+  if (exists("update_ccps_geoweighted_cpp", mode = "function")) {
+    Pnew <- update_ccps_geoweighted_cpp(
+      vM       = v$vM,
+      vE       = v$vE,
+      vR       = v$vR,
+      alphacpp = alphacpp,
+      wsg      = wsg,
+      epsprob  = config$epsprob
+    )
+  } else {
+    # R fallback
+    S    <- 32L
+    G    <- 18L
+    Pnew <- matrix(0.0, nrow = S, ncol = 3)
+    colnames(Pnew) <- c("maintain", "exit", "replace")
+    eps  <- config$epsprob
+    for (s in seq_len(S)) {
+      pmix <- c(0.0, 0.0, 0.0)
+      for (g in 0:(G - 1L)) {
+        w <- wsg[s, g + 1L]
+        if (w <= 0.0) next
+        uM  <- v$vM[s] + alphacpp[g + 1L]
+        uE  <- v$vE[s]
+        uR  <- v$vR[s]
+        lse <- .logsumexp3(uM, uE, uR)
+        p   <- exp(c(uM - lse, uE - lse, uR - lse))
+        p   <- pmax(p, eps)
+        p   <- p / sum(p)
+        pmix <- pmix + w * p
+      }
+      pmix        <- pmax(pmix, eps)
+      Pnew[s, ]   <- pmix / sum(pmix)
+    }
+  }
+
+  # CCP damping
+  lam <- config$ccp_damping_lambda %||% 1.0
+  if (is.finite(lam) && lam < 1.0) {
+    Pnew <- (1.0 - lam) * Pold + lam * Pnew
+    Pnew <- Pnew / rowSums(Pnew)
+  }
+  Pnew
+}
+
+# ------------------------------------------------------------------------------
+# NPL estimator for 8p + ALL-17-controls FE
+# ------------------------------------------------------------------------------
+npl_estimator_replacement_8p_fe <- function(obs_panel,
+                                            primitives,
+                                            config_8p_fe,
+                                            theta_init,
+                                            verbose = TRUE) {
+  stopifnot(!is.null(names(theta_init)))
+
+  # Build cache from primitives; augment with aggregated counts + weights
+  cache <- primitives
+  cw    <- .build_counts_weights_8p_fe(obs_panel, primitives,
+                                       config_8p_fe$feweightsource)
+  cache$countsdt8pfe <- cw$countsdt
+  cache$wsg8pfe      <- cw$wsg
+
+  # Also build the standard replacement cache (for vM/vE/vR computation)
+  config_4p  <- create_estimation_config_replacement(
+    beta = config_8p_fe$beta, sigma2 = config_8p_fe$sigma2,
+    npl_iter = config_8p_fe$max_npl_iter)
+  std_cache  <- create_estimation_cache_replacement_8p(primitives, obs_panel,
+                                                       config_4p, config_8p_fe)
+  # Merge std_cache fields needed by .compute_v_indices_8p into cache
+  for (nm in names(std_cache)) {
+    if (is.null(cache[[nm]])) cache[[nm]] <- std_cache[[nm]]
+  }
+  # Ensure F_maintain and F_replace are present under canonical names
+  if (is.null(cache$F_maintain)) cache$F_maintain <- std_cache$F_maintain
+  if (is.null(cache$F_replace))  cache$F_replace  <- std_cache$F_replace
+
+  # Initialise P from structural equilibrium if possible, else uniform
+  thetastruct_init <- theta_init[config_8p_fe$struct_param_names]
+  P <- NULL
+  if (exists("solve_equilibrium_policy_replacement_8p", mode = "function")) {
+    eq0 <- tryCatch(
+      solve_equilibrium_policy_replacement_8p(thetastruct_init, cache,
+                                              config_8p_fe,
+                                              max_iter = 500, tol = 1e-7),
+      error = function(e) NULL)
+    if (!is.null(eq0) && isTRUE(eq0$converged)) P <- eq0$P
+  }
+  if (is.null(P)) {
+    P <- matrix(1/3, nrow = 32L, ncol = 3L)
+    colnames(P) <- c("maintain", "exit", "replace")
+  }
+
+  pn      <- config_8p_fe$param_names
+  stopifnot(all(pn %in% names(theta_init)))
+  theta   <- theta_init[pn]
+
+  # Bounds: structural params unbounded (inherit from config); alphas bounded
+  lower <- setNames(rep(-Inf, length(pn)), pn)
+  upper <- setNames(rep( Inf, length(pn)), pn)
+  lower[config_8p_fe$fe_param_names] <- config_8p_fe$alphabounds[1]
+  upper[config_8p_fe$fe_param_names] <- config_8p_fe$alphabounds[2]
+  # Also apply structural bounds from config
+  lower["kappa_SW"]       <- config_8p_fe$kappa_SW_bounds[1]
+  upper["kappa_SW"]       <- config_8p_fe$kappa_SW_bounds[2]
+  lower["kappa_DW"]       <- config_8p_fe$kappa_DW_bounds[1]
+  upper["kappa_DW"]       <- config_8p_fe$kappa_DW_bounds[2]
+  lower["K_log_SW"]       <- config_8p_fe$K_log_SW_bounds[1]
+  upper["K_log_SW"]       <- config_8p_fe$K_log_SW_bounds[2]
+  lower["K_log_DW"]       <- config_8p_fe$K_log_DW_bounds[1]
+  upper["K_log_DW"]       <- config_8p_fe$K_log_DW_bounds[2]
+  lower["gamma_price_FF"] <- config_8p_fe$gamma_price_FF_bounds[1]
+  upper["gamma_price_FF"] <- config_8p_fe$gamma_price_FF_bounds[2]
+  lower["gamma_price_RB"] <- config_8p_fe$gamma_price_RB_bounds[1]
+  upper["gamma_price_RB"] <- config_8p_fe$gamma_price_RB_bounds[2]
+  lower["gamma_risk_FF"]  <- config_8p_fe$gamma_risk_FF_bounds[1]
+  upper["gamma_risk_FF"]  <- config_8p_fe$gamma_risk_FF_bounds[2]
+  lower["gamma_risk_RB"]  <- config_8p_fe$gamma_risk_RB_bounds[1]
+  upper["gamma_risk_RB"]  <- config_8p_fe$gamma_risk_RB_bounds[2]
+
+  ll_path   <- numeric(0)
+  converged <- FALSE
+
+  for (it in seq_len(config_8p_fe$max_npl_iter)) {
+    if (verbose) cat(sprintf("\n[NPL 8p+FE] iter %d\n", it))
+
+    opt <- optim(
+      par    = theta,
+      fn     = function(x) {
+        names(x) <- pn
+        npl_likelihood_replacement_8p_fe(x, P, cache, config_8p_fe)
+      },
+      method  = "L-BFGS-B",
+      lower   = lower,
+      upper   = upper,
+      control = list(maxit = 200, factr = 1e8)
+    )
+    theta_new        <- opt$par
+    names(theta_new) <- pn
+
+    Pnew   <- .update_ccps_geoweighted_8p_fe(theta_new, P, cache, config_8p_fe)
+    dtheta <- max(abs(theta_new - theta))
+    dP     <- max(abs(Pnew - P))
+    ll     <- -opt$value
+    ll_path <- c(ll_path, ll)
+
+    if (verbose) cat(sprintf(
+      "  logLik=%.3f  max|dtheta|=%.3e  max|dP|=%.3e\n", ll, dtheta, dP))
+
+    theta <- theta_new
+    P     <- Pnew
+
+    if (dtheta < config_8p_fe$tol_theta && dP < config_8p_fe$tol_P) {
+      converged <- TRUE
+      break
+    }
+  }
+  if (verbose && !converged)
+    warning("8p+FE NPL did not converge in ", config_8p_fe$max_npl_iter, " iterations")
+
+  # Final V under converged theta
+  thetastruct_fin <- theta[config_8p_fe$struct_param_names]
+  U_fin <- flow_utilities_replacement_8p(thetastruct_fin, cache)
+  V_fin <- invert_value_function_replacement(P, U_fin, cache, config_8p_fe)
+
+  # theta_hat: structural on natural scale, FE on raw scale
+  theta_hat <- c(
+    kappa_SW       = unname(theta[["kappa_SW"]]),
+    kappa_DW       = unname(theta[["kappa_DW"]]),
+    K_SW           = exp(theta[["K_log_SW"]]),
+    K_DW           = exp(theta[["K_log_DW"]]),
+    gamma_price_FF = unname(theta[["gamma_price_FF"]]),
+    gamma_price_RB = unname(theta[["gamma_price_RB"]]),
+    gamma_risk_FF  = unname(theta[["gamma_risk_FF"]]),
+    gamma_risk_RB  = unname(theta[["gamma_risk_RB"]])
+  )
+  for (s in CONTROLSTATES) {
+    theta_hat[paste0("alpha", s)] <- unname(theta[[paste0("alpha", s)]])
+  }
+
+  list(
+    theta_raw      = theta,
+    theta_hat      = theta_hat,
+    Phat           = P,
+    V_hat          = V_fin,
+    cache          = cache,
+    config         = config_8p_fe,
+    converged      = converged,
+    logLik_path    = ll_path,
+    logLik         = tail(ll_path, 1L),
+    log_likelihood = tail(ll_path, 1L)   # alias for back-compat
+  )
+}

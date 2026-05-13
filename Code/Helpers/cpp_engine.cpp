@@ -333,3 +333,121 @@ List check_matrix_sparsity(const NumericMatrix& M) {
     Named("use_sparse") = use_sparse
   );
 }
+// ==============================================================================
+// APPEND (2026-05-08): 8p+FE aggregated likelihood + geo-weighted CCP update
+// Maintain-only FE: alpha enters uM only.
+// graw mapping: 0=TX, 1..17=CONTROLSTATES order.
+// FE does NOT enter Bellman inversion/equilibrium mapping (Option B nuisance FE).
+// ==============================================================================
+
+inline double logsumexp3cpp(double a, double b, double c) {
+  double m = std::max(a, std::max(b, c));
+  return m + std::log(std::exp(a - m) + std::exp(b - m) + std::exp(c - m));
+}
+
+// [[Rcpp::export]]
+double nll_replacement8pfe_counts_cpp(const Rcpp::IntegerVector& sidx,
+                                      const Rcpp::IntegerVector& graw,
+                                      const Rcpp::IntegerVector& nM,
+                                      const Rcpp::IntegerVector& nE,
+                                      const Rcpp::IntegerVector& nR,
+                                      const Rcpp::NumericVector& vM,
+                                      const Rcpp::NumericVector& vE,
+                                      const Rcpp::NumericVector& vR,
+                                      const Rcpp::NumericVector& alphacpp,
+                                      const double epsprob = 1e-12) {
+  // Inputs:
+  // - sidx: 1-based state indices (1..32)
+  // - graw: 0..17 geo index (0=TX, 1..17=CONTROLSTATES in canonical order)
+  // - alphacpp: length 18, R-indexed: alphacpp[0]=TX(=0), alphacpp[1]=alphaAR, ..., alphacpp[17]=alphaVA
+  // Note: R passes as 1-based vector; C++ accesses 0-based, so alphacpp[g] corresponds to R alphacpp[g+1].
+  // Maintain-only FE: uM = vM[s] + alphacpp[g]; uE = vE[s]; uR = vR[s].
+
+  const int N = sidx.size();
+  double ll = 0.0;
+  const double logeps = std::log(epsprob);
+
+  for (int i = 0; i < N; i++) {
+    const int s = sidx[i] - 1;  // convert to 0-based
+    const int g = graw[i];       // already 0..17
+    const int nm = nM[i], ne = nE[i], nr = nR[i];
+    if (nm + ne + nr == 0) continue;
+
+    const double uM = vM[s] + alphacpp[g];  // maintain shift only
+    const double uE = vE[s];
+    const double uR = vR[s];
+
+    const double lse = logsumexp3cpp(uM, uE, uR);
+    double lpM = uM - lse;
+    double lpE = uE - lse;
+    double lpR = uR - lse;
+
+    // clip log-probabilities at floor
+    if (lpM < logeps) lpM = logeps;
+    if (lpE < logeps) lpE = logeps;
+    if (lpR < logeps) lpR = logeps;
+
+    ll += (double)nm * lpM + (double)ne * lpE + (double)nr * lpR;
+  }
+
+  return -ll;
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericMatrix update_ccps_geoweighted_cpp(const Rcpp::NumericVector& vM,
+                                                const Rcpp::NumericVector& vE,
+                                                const Rcpp::NumericVector& vR,
+                                                const Rcpp::NumericVector& alphacpp,
+                                                const Rcpp::NumericMatrix& wsg,
+                                                const double epsprob = 1e-12) {
+  // Returns Pnew (32x3): Pnew(s,.) = sum_g w(g|s) * softmax(vM(s)+alpha_g, vE(s), vR(s))
+  // Maintain-only FE.
+  // wsg: R matrix [32 x 18], rows sum to 1. Column j corresponds to graw = j-1 (R is 1-indexed).
+  // alphacpp: length 18 in R; C++ 0-based: alphacpp[0]=TX(=0), alphacpp[1..17]=controls.
+
+  const int S = vM.size();        // 32
+  const int G = alphacpp.size();  // 18
+
+  Rcpp::NumericMatrix Pnew(S, 3);
+
+  for (int s = 0; s < S; s++) {
+    double pm = 0.0, pe = 0.0, pr = 0.0;
+
+    for (int g = 0; g < G; g++) {
+      const double w = wsg(s, g);  // wsg is 0-based in C++
+      if (w <= 0.0) continue;
+
+      const double uM = vM[s] + alphacpp[g];
+      const double uE = vE[s];
+      const double uR = vR[s];
+
+      const double lse = logsumexp3cpp(uM, uE, uR);
+      double pM = std::exp(uM - lse);
+      double pE = std::exp(uE - lse);
+      double pR = std::exp(uR - lse);
+
+      // clip + renormalize for this g
+      pM = std::max(pM, epsprob);
+      pE = std::max(pE, epsprob);
+      pR = std::max(pR, epsprob);
+      const double den = pM + pE + pR;
+      pM /= den; pE /= den; pR /= den;
+
+      pm += w * pM;
+      pe += w * pE;
+      pr += w * pR;
+    }
+
+    // final clip + renorm per state
+    pm = std::max(pm, epsprob);
+    pe = std::max(pe, epsprob);
+    pr = std::max(pr, epsprob);
+    const double den = pm + pe + pr;
+    Pnew(s, 0) = pm / den;
+    Pnew(s, 1) = pe / den;
+    Pnew(s, 2) = pr / den;
+  }
+
+  Rcpp::colnames(Pnew) = Rcpp::CharacterVector::create("maintain", "exit", "replace");
+  return Pnew;
+}

@@ -1,0 +1,374 @@
+---
+title: "Universal DiD Analysis: Texas UST Insurance Reform"
+subtitle: "Multi-Model Estimation with Mechanism Decomposition"
+author: "Kaleb K."
+theme-bg-color: "0D2D52"
+format:
+  beamer:
+    template: "my-template.tex"
+    keep-tex: true
+    aspectratio: 169
+    pdf-engine: xelatex
+    standalone: true
+    output-file: "04_Risk_Based_Pricing_and_USTs.pdf"
+    variables:
+      graphics: true
+      tables: true
+    default-image-extension: pdf
+---
+
+## Goals for Today's Talk
+
+\BerkeleyLightMode
+
+**1. Toy Model: Is the Focus Right?**
+
+- Does the simple framework clearly capture the behavior I can measure (tank closures)?
+- Thoughts on how to sharpen the premium $\rightarrow$ closure mechanism?
+
+**2. Structural Model: What's Missing?**
+
+- Is the DDC setup complete, or are key state variables/parameters omitted?
+- **Specific question:** How do I incorporate Marcus (2021) health externalities without estimating damages myself? Just use their estimates as inputs?
+- Best ways to push this forward?
+
+---
+
+## Event Study: Empirical Specification
+
+\BerkeleyLightMode
+
+\begin{assumptionbox}{Dynamic Treatment Effects}
+$$Y_{it} = \sum_{\tau \neq \tau_{ref}} \beta_\tau (\text{Texas}_i \times \mathbb{I}(t = \tau)) + \gamma X_{it} + \alpha_i + \delta_{ct} + \varepsilon_{it}$$
+\end{assumptionbox}
+
+- $Y_{it}$: Any Tank Closure (0/1)
+- $\text{Texas}_i \times \mathbb{I}(t = \tau)$: Event-time indicators, 1999 reform
+- $X_{it}$: Mandate controls (Release Detection, Spill/Overfill)
+- $\alpha_i$: Facility FE; $\quad$ $\delta_{ct}$: Cell $\times$ Year FE $\;$ (Cell = wall $\times$ fuel $\times$ age bin)
+
+**Identification:** $\delta_{ct}$ relaxes parallel trends to **within-cell**, restricting the counterfactual to facilities with identical technological vintage and risk profile.
+
+---
+
+## 
+
+\BerkeleyLightMode
+
+\hidefootersection
+
+```{=latex}
+\begin{layout-full-figure}
+```
+![](//ucbare2.are.berkeley.edu/kalebkja/ust_ins_move_to_github/Output/Figures/Figure_ES_Sec1_Ref-1_Naive_AnyClosure_MainPaper.pdf){width=100%}
+```{=latex}
+\end{layout-full-figure}
+```
+
+\showfootersection
+
+---
+
+## 
+
+\BerkeleyLightMode
+
+\hidefootersection
+
+```{=latex}
+\begin{layout-full-figure}
+```
+![](//ucbare2.are.berkeley.edu/kalebkja/ust_ins_move_to_github/Output/Figures/Figure_ES_Sec2_Ref-2_Cell_AnyClosure_MainPaper.pdf){width=100%}
+```{=latex}
+\end{layout-full-figure}
+```
+
+\showfootersection
+
+---
+
+## 
+
+\BerkeleyLightMode
+
+\hidefootersection
+
+```{=latex}
+\begin{layout-full-figure}
+```
+![](//ucbare2.are.berkeley.edu/kalebkja/ust_ins_move_to_github/Output/Figures/Figure_ES_Sec3_Ref-1_Cell_AnyClosure_MainPaper.pdf){width=100%}
+```{=latex}
+\end{layout-full-figure}
+```
+
+\showfootersection
+
+---
+
+## Static DiD: Extensive Margin (Any Closure)
+
+\BerkeleyLightMode
+
+\begin{assumptionbox}{Baseline Static Specification}
+$$Y_{it} = \beta^{DiD} (\text{Texas}_i \times \text{Post}_t) + \gamma X_{it} + \alpha_i + \delta_{ct} + \varepsilon_{it}$$
+\end{assumptionbox}
+
+- $Y_{it}$: Any Tank Closure (0/1)
+- $\text{Texas}_i \times \text{Post}_t$: Binary treatment ($t \geq 1999$)
+- $\alpha_i$, $\delta_{ct}$, $X_{it}$: Facility FE, Cell $\times$ Year FE, mandate controls
+
+**Identification:** $\beta^{DiD}$ estimates the average closure probability shift; $\delta_{ct}$ absorbs endogenous retirement waves from RCRA deadlines hitting specific tank vintages.
+
+---
+
+## 
+
+\BerkeleyLightMode
+
+```{=latex}
+\begin{layout-dense}
+\input{//ucbare2.are.berkeley.edu/kalebkja/ust_ins_move_to_github/Output/Tables/T1_AnyClosure.tex}
+\end{layout-dense}
+```
+
+---
+
+## Closure Composition: What Do Firms Do When They Close?
+
+\BerkeleyLightMode
+
+\begin{assumptionbox}{Descriptive Conditional Specification}
+$$\mathbb{E}[Y_{it}^k \mid \text{Closure}_{it} = 1] = \beta_k (\text{Texas}_i \times \text{Post}_t) + \gamma X_{it} + \alpha_i + \delta_{ct}$$
+\end{assumptionbox}
+
+- $Y_{it}^k \in \{\text{Exit}, \text{Upgrade}, \text{Shrink}\}$: Closure type, conditional on closing
+- $\beta_k$: **Descriptive only** — conditions on the endogenous decision to close
+
+**Note:** $\delta_{ct}$ ensures compositional shifts aren't driven by aging single-wall cohorts retiring on schedule.
+
+---
+
+## 
+
+\BerkeleyLightMode
+
+```{=latex}
+\begin{layout-dense}
+\input{//ucbare2.are.berkeley.edu/kalebkja/ust_ins_move_to_github/Output/Tables/T2b_ClosureConditional.tex}
+\end{layout-dense}
+```
+
+---
+
+## Portfolio Capital Dynamics: How Does the Stock Change?
+
+\BerkeleyLightMode
+
+\begin{assumptionbox}{Descriptive Portfolio Outcomes (unconditional)}
+$$Y_{it}^{port} = \beta^{port} (\text{Texas}_i \times \text{Post}_t) + \gamma X_{it} + \alpha_i + \delta_{ct} + \varepsilon_{it}$$
+\end{assumptionbox}
+
+- $Y_{it}^{port}$: Net tank change, total capacity change, $\text{pct\_sw}$ (single-wall share)
+- **Unconditional** — unlike Table 2b, does not condition on closing
+
+**Note:** $\beta^{port}$ describes the net shift in aggregate capital stock; $\delta_{ct}$ absorbs cohort-driven retirement trends within tank vintage $\times$ year cells.
+
+---
+
+## 
+
+\BerkeleyLightMode
+
+```{=latex}
+\begin{layout-dense}
+\input{//ucbare2.are.berkeley.edu/kalebkja/ust_ins_move_to_github/Output/Tables/T3_Portfolio.tex}
+\end{layout-dense}
+```
+
+## DiD: Leak Discovery Incidence (LUST)
+
+\BerkeleyLightMode
+
+\begin{assumptionbox}{Total and Decomposed LUST Incidence}
+$$\text{Leak}_{it}^m = \beta^m (\text{Texas}_i \times \text{Post}_t) + \gamma X_{it} + \alpha_i + \delta_{ct} + \varepsilon_{it}$$
+\end{assumptionbox}
+
+- $\text{Leak}_{it}^{total}$: Any leak discovery in year $t$
+- $\text{Leak}_{it}^{back}$: Background leak (routine monitoring)
+- $\text{Leak}_{it}^{inspect}$: Inspection-triggered (within $X$ days of closure)
+
+**Identification:** $\delta_{ct}$ absorbs age-driven failure rates; $\beta^{back}$ vs. $\beta^{inspect}$ isolates whether the reform accelerates *discovery* of latent contamination versus altering the true failure rate.
+
+---
+
+## 
+
+\BerkeleyLightMode
+
+```{=latex}
+\begin{layout-dense}
+\input{//ucbare2.are.berkeley.edu/kalebkja/ust_ins_move_to_github/Output/Tables/T_LUST_A_Total.tex}
+\end{layout-dense}
+```
+
+---
+
+## 
+
+\BerkeleyLightMode
+
+```{=latex}
+\begin{layout-dense}
+\input{//ucbare2.are.berkeley.edu/kalebkja/ust_ins_move_to_github/Output/Tables/T_LUST_B_Decomp.tex}
+\end{layout-dense}
+```
+
+---
+
+## 
+
+\BerkeleyMode
+
+::: {.layout-statement}
+Dynamic Optimal Stopping Model
+:::
+
+---
+
+## Model Setup
+
+\BerkeleyLightMode
+
+\begin{assumptionbox}{Value Function}
+$$V(s_t) = \max_{d_t \in \{0, 1, 2\}} \left[ \pi(s_t, d_t) + \beta \mathbb{E}[V(s_{t+1}) \mid s_t, d_t] \right]$$
+\end{assumptionbox}
+
+**Choice Set ($d_t$):**
+
+- $d_t = 0$: **Continue** — status quo utility, stochastic age transition
+- $d_t = 1$: **Retrofit** — incur fixed cost $K_R$, reset regulatory state
+- $d_t = 2$: **Exit** — claim terminal scrap value $K_E$, permanent absorption
+
+---
+
+## 4-Parameter Baseline: State Space & Bellman Equation
+
+\BerkeleyLightMode
+
+\begin{assumptionbox}{Dynamic Programming Framework — Homogeneous Costs}
+$$V(s_t) = \max_{d_t \in \{0, 1, 2\}} \left[ u(s_t, d_t) + \beta \int V(s_{t+1}) dP(s_{t+1} \mid s_t, d_t) \right]$$
+\end{assumptionbox}
+
+**State Space:** $s_t = (a_t, \epsilon_t)$ — tank age and i.i.d. Type I EV profitability shock.
+
+Identical compliance cost structures assumed across all facilities.
+
+---
+
+## 4-Parameter Baseline: Utility Specification
+
+\BerkeleyLightMode
+
+::: {.layout-statement}
+$\theta = (\alpha, \gamma, K_R, K_E)$
+:::
+
+- **Continue ($d_t = 0$):** $u = \alpha - \gamma a_t + \epsilon_{0t}$ $\quad$ *(base profit, age penalty)*
+- **Retrofit ($d_t = 1$):** $u = \alpha - K_R + \epsilon_{1t}$ $\quad$ *(fixed upgrade cost, resets $a_{t+1}=0$)*
+- **Exit ($d_t = 2$):** $u = K_E + \epsilon_{2t}$ $\quad$ *(terminal scrap value, absorbing)*
+
+---
+
+## 4-Parameter Baseline: Transition & Likelihood
+
+\BerkeleyLightMode
+
+**Transitions:** Continue $\Rightarrow a_t+1$; $\;$ Retrofit $\Rightarrow a=0$; $\;$ Exit $\Rightarrow$ absorbing.
+
+$$P(d_t \mid a_t ; \theta) = \frac{\exp(v(a_t, d_t))}{\sum_{j=0}^{2} \exp(v(a_t, j))}$$
+
+Conditional independence of $\epsilon_t$ yields closed-form logistic choice probabilities. MLE over observed panel of facility actions.
+
+---
+
+## Identification: 4-Parameter Baseline
+
+\BerkeleyLightMode
+
+::: {.layout-statement}
+Baseline Identification Strategy
+:::
+
+- **Age Gradient:** Cross-sectional variation in tank age at the time of the policy shock.
+- **Deadline Proximity:** Sharp discontinuity in exit/retrofit hazard rates preceding the 1998 EPA deadline.
+- **Assumption:** Homogeneous compliance costs across all incumbent facilities.
+
+---
+
+## 4-Parameter Model Estimates
+
+\BerkeleyLightMode
+
+```{=latex}
+\begin{layout-dense}
+\input{../../Output/Tables/04f_Theta_Table_AM_SE.tex}
+\end{layout-dense}
+```
+
+---
+
+## 8-Parameter Heterogeneity: Expanded State Space
+
+\BerkeleyLightMode
+
+\begin{assumptionbox}{Relaxes uniform compliance costs across wall type and fuel regime}
+$$V(a_t, W_i, R_i) = \max_{d_t} \left[ u(a_t, W_i, R_i, d_t) + \beta \mathbb{E}[V(a_{t+1}, W_i, R_i) \mid a_t, d_t] \right]$$
+\end{assumptionbox}
+
+**Expanded State:** $s_t = (a_t, W_i, R_i, \epsilon_t)$
+
+- $W_i \in \{\text{SW}, \text{DW}\}$: Tank wall type (single-wall vs. double-wall)
+- $R_i \in \{\text{FF}, \text{RB}\}$: Fuel regime (fossil fuel vs. reformulated blend)
+
+---
+
+## 8-Parameter Heterogeneity: Utility Specification
+
+\BerkeleyLightMode
+
+::: {.layout-statement}
+$\theta_{het} = (\kappa_{\mathrm{SW}}, \kappa_{\mathrm{DW}}, K_{\mathrm{SW}}, K_{\mathrm{DW}}, \gamma_{\mathrm{price,FF}}, \gamma_{\mathrm{price,RB}}, \gamma_{\mathrm{risk,FF}}, \gamma_{\mathrm{risk,RB}})$
+:::
+
+- **Continue ($d_t = 0$):** $u = -\gamma_{\mathrm{price},R_i} \cdot p_t - \gamma_{\mathrm{risk},R_i} \cdot a_t + \epsilon_{0t}$ $\quad$ *(price and risk sensitivity by fuel regime)*
+- **Retrofit ($d_t = 1$):** $u = -K_{W_i} + \epsilon_{1t}$ $\quad$ *(upgrade cost by wall type)*
+- **Exit ($d_t = 2$):** $u = \kappa_{W_i} + \epsilon_{2t}$ $\quad$ *(scrap value by wall type)*
+
+---
+
+## Identification: 8-Parameter Heterogeneity
+
+\BerkeleyLightMode
+
+::: {.layout-statement}
+Heterogeneous Identification Strategy
+:::
+
+- **$\kappa_{\mathrm{SW}}$ vs. $\kappa_{\mathrm{DW}}$:** Exit scrap values differ by wall type — single-wall faces higher remediation liability on exit.
+- **$K_{\mathrm{SW}}$ vs. $K_{\mathrm{DW}}$:** Retrofit costs differ by wall type — upgrading SW infrastructure is more capital-intensive.
+- **$\gamma_{\mathrm{price},FF}$ vs. $\gamma_{\mathrm{price},RB}$:** Price sensitivity identified by differential premium exposure across fuel regimes.
+- **$\gamma_{\mathrm{risk},FF}$ vs. $\gamma_{\mathrm{risk},RB}$:** Risk/age penalty identified by divergence in age-driven closure hazards across regimes.
+
+**Punchline:** Decomposes whether reform response was driven by wall-type capital costs or fuel-regime risk pricing.
+
+---
+
+## 8-Parameter Model Estimates
+
+\BerkeleyLightMode
+
+```{=latex}
+\begin{layout-dense}
+\input{../../Output/Tables/04h_Theta_Table_8param_AM_SE.tex}
+\end{layout-dense}
+```
