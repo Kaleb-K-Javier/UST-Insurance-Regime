@@ -1,4 +1,9 @@
 make_model_fac,panel_year,n_total,has_both,sample
+All-SW|Mixed-Or-Other|5-9yr,1985,2721,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|5-9yr,1986,2739,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|5-9yr,1987,2790,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|5-9yr,1988,2752,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|5-9yr,1989,2753,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|5-9yr,1991,4805,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|5-9yr,1992,5391,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|5-9yr,1993,5917,1,Full incumbent (no CEM)
@@ -27,6 +32,11 @@ All-SW|Mixed-Or-Other|5-9yr,2015,4814,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|5-9yr,2016,4748,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|5-9yr,2017,4661,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|5-9yr,2018,4594,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|0-4yr,1985,2706,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|0-4yr,1986,2748,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|0-4yr,1987,2813,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|0-4yr,1988,2829,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|0-4yr,1989,2833,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|0-4yr,1990,2829,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|0-4yr,1991,2816,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|0-4yr,1992,2786,1,Full incumbent (no CEM)
@@ -76,6 +86,8 @@ All-DW|Diesel-Only|5-9yr,2012,735,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|5-9yr,2013,727,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|5-9yr,2014,709,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|5-9yr,2015,699,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|10-14yr,1988,10893,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|10-14yr,1989,10893,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|10-14yr,1990,10893,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|10-14yr,1991,10893,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|10-14yr,1992,10893,1,Full incumbent (no CEM)
@@ -111,6 +123,11 @@ All-SW|Mixed-Or-Other|0-4yr,2015,5396,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|0-4yr,2016,5329,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|0-4yr,2017,5272,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|0-4yr,2018,5218,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|15-19yr,1985,5375,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|15-19yr,1986,5375,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|15-19yr,1987,5375,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|15-19yr,1988,5375,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|15-19yr,1989,5375,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|15-19yr,1990,5375,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|15-19yr,1991,5375,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|15-19yr,1992,5375,1,Full incumbent (no CEM)
@@ -140,6 +157,10 @@ All-SW|Gasoline-Only|15-19yr,2015,3332,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|15-19yr,2016,3283,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|15-19yr,2017,3239,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|15-19yr,2018,3201,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|10-14yr,1986,3513,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|10-14yr,1987,4859,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|10-14yr,1988,5933,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|10-14yr,1989,5933,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|10-14yr,1990,5933,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|10-14yr,1991,5933,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|10-14yr,1992,5933,1,Full incumbent (no CEM)
@@ -161,6 +182,9 @@ All-SW|Gasoline-Only|10-14yr,2007,4417,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|10-14yr,2008,4261,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|10-14yr,2009,4128,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|10-14yr,2010,4007,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|10-14yr,1985,4636,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|10-14yr,1986,6674,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|10-14yr,1987,9042,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|5-9yr,1990,2295,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|5-9yr,1991,2800,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|5-9yr,1992,3110,1,Full incumbent (no CEM)
@@ -190,6 +214,11 @@ All-SW|Gasoline-Only|5-9yr,2015,2349,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|5-9yr,2016,2330,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|5-9yr,2017,2301,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|5-9yr,2018,2262,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|25yr+,1985,10044,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|25yr+,1986,10044,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|25yr+,1987,10044,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|25yr+,1988,10044,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|25yr+,1989,10045,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|25yr+,1990,10046,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|25yr+,1991,10046,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|25yr+,1992,10046,1,Full incumbent (no CEM)
@@ -209,6 +238,11 @@ All-SW|Gasoline-Only|25yr+,2005,7837,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|25yr+,2006,7702,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|25yr+,2007,7566,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|25yr+,2008,7403,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|10-14yr,1985,218,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|10-14yr,1986,266,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|10-14yr,1987,318,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|10-14yr,1988,379,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|10-14yr,1989,379,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|10-14yr,1990,379,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|10-14yr,1991,379,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|10-14yr,1992,379,1,Full incumbent (no CEM)
@@ -248,6 +282,16 @@ All-SW|Gasoline-Only|25yr+,2015,6822,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|25yr+,2016,6782,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|25yr+,2017,6725,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|25yr+,2018,6667,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|5-9yr,1985,1606,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|5-9yr,1986,1612,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|5-9yr,1987,1622,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|5-9yr,1988,1620,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|5-9yr,1989,1608,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|20-24yr,1985,4731,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|20-24yr,1986,4731,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|20-24yr,1987,4731,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|20-24yr,1988,4731,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|20-24yr,1989,4731,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|20-24yr,1990,4731,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|20-24yr,1991,4731,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|20-24yr,1992,4731,1,Full incumbent (no CEM)
@@ -277,6 +321,11 @@ All-SW|Gasoline-Only|20-24yr,2015,3019,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|20-24yr,2016,2991,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|20-24yr,2017,2975,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|20-24yr,2018,2954,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|0-4yr,1985,1713,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|0-4yr,1986,1733,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|0-4yr,1987,1753,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|0-4yr,1988,1757,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|0-4yr,1989,1757,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|0-4yr,1990,1740,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|0-4yr,1991,1724,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|0-4yr,1992,1697,1,Full incumbent (no CEM)
@@ -306,6 +355,11 @@ All-SW|Gasoline-Only|0-4yr,2015,2977,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|0-4yr,2016,2941,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|0-4yr,2017,2913,1,Full incumbent (no CEM)
 All-SW|Gasoline-Only|0-4yr,2018,2880,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|15-19yr,1985,8213,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|15-19yr,1986,8213,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|15-19yr,1987,8213,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|15-19yr,1988,8213,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|15-19yr,1989,8213,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|15-19yr,1990,8213,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|15-19yr,1991,8213,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|15-19yr,1992,8213,1,Full incumbent (no CEM)
@@ -335,6 +389,11 @@ All-SW|Mixed-Or-Other|15-19yr,2015,5847,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|15-19yr,2016,5764,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|15-19yr,2017,5679,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|15-19yr,2018,5575,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|25yr+,1985,13977,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|25yr+,1986,13977,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|25yr+,1987,13975,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|25yr+,1988,13977,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|25yr+,1989,13977,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|25yr+,1990,13978,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|25yr+,1991,13979,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|25yr+,1992,13979,1,Full incumbent (no CEM)
@@ -347,6 +406,11 @@ All-SW|Mixed-Or-Other|25yr+,1998,13979,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|25yr+,1999,13942,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|25yr+,2000,12944,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|5-9yr,1990,4024,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|20-24yr,1985,5782,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|20-24yr,1986,5782,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|20-24yr,1987,5782,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|20-24yr,1988,5782,1,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|20-24yr,1989,5782,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|20-24yr,1990,5782,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|20-24yr,1991,5782,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|20-24yr,1992,5782,1,Full incumbent (no CEM)
@@ -394,6 +458,11 @@ All-SW|Mixed-Or-Other|25yr+,2015,10130,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|25yr+,2016,10053,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|25yr+,2017,9946,1,Full incumbent (no CEM)
 All-SW|Mixed-Or-Other|25yr+,2018,9843,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|25yr+,1985,1623,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|25yr+,1986,1623,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|25yr+,1987,1623,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|25yr+,1988,1623,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|25yr+,1989,1623,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|25yr+,1990,1623,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|25yr+,1991,1623,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|25yr+,1992,1623,1,Full incumbent (no CEM)
@@ -423,6 +492,11 @@ All-SW|Diesel-Only|25yr+,2015,1294,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|25yr+,2016,1291,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|25yr+,2017,1284,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|25yr+,2018,1277,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|0-4yr,1985,1009,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|0-4yr,1986,1027,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|0-4yr,1987,1036,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|0-4yr,1988,1039,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|0-4yr,1989,1042,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|0-4yr,1990,1039,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|0-4yr,1991,1033,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|0-4yr,1992,1025,1,Full incumbent (no CEM)
@@ -452,6 +526,11 @@ All-DW|Gasoline-Only|0-4yr,2015,1666,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|0-4yr,2016,1646,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|0-4yr,2017,1619,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|0-4yr,2018,1599,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|5-9yr,1985,1237,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|5-9yr,1986,1247,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|5-9yr,1987,1265,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|5-9yr,1988,1262,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|5-9yr,1989,1262,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|5-9yr,1990,1569,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|5-9yr,1991,1805,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|5-9yr,1992,2034,1,Full incumbent (no CEM)
@@ -481,6 +560,11 @@ All-DW|Mixed-Or-Other|5-9yr,2015,1848,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|5-9yr,2016,1816,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|5-9yr,2017,1784,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|5-9yr,2018,1758,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|0-4yr,1985,1235,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|0-4yr,1986,1256,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|0-4yr,1987,1272,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|0-4yr,1988,1282,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|0-4yr,1989,1280,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|0-4yr,1990,1271,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|0-4yr,1991,1256,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|0-4yr,1992,1249,1,Full incumbent (no CEM)
@@ -547,6 +631,11 @@ All-DW|Gasoline-Only|5-9yr,2015,942,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|5-9yr,2016,922,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|5-9yr,2017,892,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|5-9yr,2018,874,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|15-19yr,1985,302,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|15-19yr,1986,302,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|15-19yr,1987,302,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|15-19yr,1988,302,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|15-19yr,1989,302,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|15-19yr,1990,302,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|15-19yr,1991,302,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|15-19yr,1992,302,1,Full incumbent (no CEM)
@@ -576,6 +665,11 @@ Mixed|Mixed-Or-Other|15-19yr,2015,266,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|15-19yr,2016,264,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|15-19yr,2017,263,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|15-19yr,2018,260,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|20-24yr,1985,1055,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|20-24yr,1986,1055,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|20-24yr,1987,1055,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|20-24yr,1988,1055,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|20-24yr,1989,1055,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|20-24yr,1990,1055,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|20-24yr,1991,1055,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|20-24yr,1992,1055,1,Full incumbent (no CEM)
@@ -598,6 +692,10 @@ All-SW|Diesel-Only|20-24yr,2008,775,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|20-24yr,2009,766,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|20-24yr,2010,753,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|20-24yr,2011,741,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|10-14yr,1986,994,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|10-14yr,1987,1333,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|10-14yr,1988,1675,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|10-14yr,1989,1675,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|10-14yr,1990,1675,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|10-14yr,1991,1675,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|10-14yr,1992,1675,1,Full incumbent (no CEM)
@@ -627,6 +725,11 @@ All-SW|Diesel-Only|10-14yr,2015,992,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|10-14yr,2016,975,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|10-14yr,2017,956,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|10-14yr,2018,933,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|15-19yr,1985,1414,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|15-19yr,1986,1414,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|15-19yr,1987,1414,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|15-19yr,1988,1414,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|15-19yr,1989,1414,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|15-19yr,1990,1414,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|15-19yr,1991,1414,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|15-19yr,1992,1414,1,Full incumbent (no CEM)
@@ -637,6 +740,11 @@ All-SW|Diesel-Only|15-19yr,1996,1414,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|15-19yr,1997,1414,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|15-19yr,1998,1414,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|15-19yr,1999,1396,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|5-9yr,1985,433,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|5-9yr,1986,437,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|5-9yr,1987,447,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|5-9yr,1988,449,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|5-9yr,1989,447,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|5-9yr,1990,666,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|5-9yr,1991,835,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|5-9yr,1992,942,1,Full incumbent (no CEM)
@@ -674,6 +782,11 @@ All-SW|Diesel-Only|15-19yr,2004,1033,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|15-19yr,2005,1008,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|15-19yr,2006,986,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|15-19yr,2007,970,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|0-4yr,1985,411,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|0-4yr,1986,422,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|0-4yr,1987,434,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|0-4yr,1988,436,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|0-4yr,1989,440,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|0-4yr,1990,444,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|0-4yr,1991,441,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|0-4yr,1992,441,1,Full incumbent (no CEM)
@@ -702,6 +815,7 @@ All-SW|Diesel-Only|0-4yr,2014,640,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|0-4yr,2015,629,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|0-4yr,2016,621,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|0-4yr,2017,607,1,Full incumbent (no CEM)
+All-SW|Gasoline-Only|10-14yr,1985,2400,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|0-4yr,1990,464,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|0-4yr,1991,463,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|0-4yr,1992,460,1,Full incumbent (no CEM)
@@ -731,6 +845,11 @@ All-DW|Diesel-Only|0-4yr,2015,732,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|0-4yr,2016,724,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|0-4yr,2017,715,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|0-4yr,2018,703,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|15-19yr,1985,46,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|15-19yr,1986,46,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|15-19yr,1987,46,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|15-19yr,1988,46,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|15-19yr,1989,46,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|15-19yr,1990,46,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|15-19yr,1991,46,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|15-19yr,1992,46,1,Full incumbent (no CEM)
@@ -760,6 +879,13 @@ Mixed|Gasoline-Only|15-19yr,2015,37,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|15-19yr,2016,36,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|15-19yr,2017,36,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|15-19yr,2018,36,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|0-4yr,1986,445,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|0-4yr,1987,455,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|0-4yr,1988,460,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|0-4yr,1989,465,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|0-4yr,1985,435,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|10-14yr,1988,374,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|10-14yr,1989,374,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|10-14yr,1990,374,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|10-14yr,1991,374,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|10-14yr,1992,374,1,Full incumbent (no CEM)
@@ -810,6 +936,9 @@ Mixed|Mixed-Or-Other|5-9yr,2011,189,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|5-9yr,2012,189,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|5-9yr,2013,187,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|5-9yr,2014,183,1,Full incumbent (no CEM)
+All-SW|Diesel-Only|10-14yr,1985,665,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|10-14yr,1988,261,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|10-14yr,1989,261,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|10-14yr,1990,261,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|10-14yr,1991,261,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|10-14yr,1992,261,1,Full incumbent (no CEM)
@@ -846,6 +975,12 @@ All-SW|Diesel-Only|20-24yr,2015,718,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|20-24yr,2016,714,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|20-24yr,2017,710,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|20-24yr,2018,705,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|10-14yr,1987,179,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|0-4yr,1985,49,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|0-4yr,1986,49,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|0-4yr,1987,49,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|0-4yr,1988,50,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|0-4yr,1989,50,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|0-4yr,1990,50,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|0-4yr,1991,50,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|0-4yr,1992,51,1,Full incumbent (no CEM)
@@ -875,6 +1010,16 @@ Mixed|Mixed-Or-Other|0-4yr,2015,109,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|0-4yr,2016,109,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|0-4yr,2017,107,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|0-4yr,2018,107,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|5-9yr,1985,771,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|5-9yr,1986,782,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|5-9yr,1987,787,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|5-9yr,1988,786,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|5-9yr,1989,786,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|5-9yr,1985,123,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|5-9yr,1986,123,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|5-9yr,1987,124,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|5-9yr,1988,124,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|5-9yr,1989,123,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|5-9yr,1990,155,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|5-9yr,2015,181,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|5-9yr,2016,178,1,Full incumbent (no CEM)
@@ -892,9 +1037,22 @@ All-SW|Diesel-Only|15-19yr,2016,841,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|15-19yr,2017,828,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|15-19yr,2018,823,1,Full incumbent (no CEM)
 All-SW|Diesel-Only|0-4yr,2018,597,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|5-9yr,1985,473,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|5-9yr,1986,477,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|5-9yr,1987,481,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|5-9yr,1988,485,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|5-9yr,1989,482,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|5-9yr,2016,682,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|5-9yr,2017,659,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|5-9yr,2018,641,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|10-14yr,1985,156,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|10-14yr,1986,198,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|10-14yr,1987,266,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|25yr+,1985,573,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|25yr+,1986,573,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|25yr+,1987,573,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|25yr+,1988,573,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|25yr+,1989,573,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|25yr+,1990,573,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|25yr+,1991,573,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|25yr+,1992,573,1,Full incumbent (no CEM)
@@ -924,6 +1082,8 @@ Mixed|Mixed-Or-Other|25yr+,2015,439,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|25yr+,2016,435,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|25yr+,2017,433,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|25yr+,2018,431,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|10-14yr,1988,751,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|10-14yr,1989,751,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|10-14yr,1990,751,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|10-14yr,1991,751,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|10-14yr,1992,751,1,Full incumbent (no CEM)
@@ -949,6 +1109,11 @@ All-DW|Mixed-Or-Other|10-14yr,2011,609,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|10-14yr,2012,603,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|10-14yr,2013,595,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|10-14yr,2014,585,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|10-14yr,1985,27,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|10-14yr,1986,33,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|10-14yr,1987,40,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|10-14yr,1988,49,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|10-14yr,1989,49,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|10-14yr,1990,49,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|10-14yr,1991,49,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|10-14yr,1992,49,1,Full incumbent (no CEM)
@@ -978,6 +1143,12 @@ Mixed|Gasoline-Only|10-14yr,2015,32,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|10-14yr,2016,32,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|10-14yr,2017,30,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|10-14yr,2018,28,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|10-14yr,1987,551,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|20-24yr,1985,58,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|20-24yr,1986,58,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|20-24yr,1987,58,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|20-24yr,1988,58,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|20-24yr,1989,58,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|20-24yr,1990,58,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|20-24yr,1991,58,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|20-24yr,1992,58,1,Full incumbent (no CEM)
@@ -1007,10 +1178,18 @@ All-DW|Mixed-Or-Other|20-24yr,2015,45,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|20-24yr,2016,45,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|20-24yr,2017,45,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|20-24yr,2018,43,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|10-14yr,1986,129,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|10-14yr,2015,574,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|10-14yr,2016,564,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|10-14yr,2017,557,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|10-14yr,2018,546,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|10-14yr,1985,302,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|10-14yr,1986,397,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|25yr+,1985,95,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|25yr+,1986,95,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|25yr+,1987,95,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|25yr+,1988,95,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|25yr+,1989,95,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|25yr+,1990,95,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|25yr+,1991,95,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|25yr+,1992,95,1,Full incumbent (no CEM)
@@ -1040,6 +1219,11 @@ All-DW|Mixed-Or-Other|25yr+,2015,55,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|25yr+,2016,55,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|25yr+,2017,55,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|25yr+,2018,55,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|20-24yr,1985,34,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|20-24yr,1986,34,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|20-24yr,1987,34,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|20-24yr,1988,34,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|20-24yr,1989,34,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|20-24yr,1990,34,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|20-24yr,1991,34,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|20-24yr,1992,34,1,Full incumbent (no CEM)
@@ -1052,6 +1236,11 @@ All-DW|Gasoline-Only|20-24yr,1998,34,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|10-14yr,2016,251,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|10-14yr,2017,242,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|10-14yr,2018,234,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|25yr+,1985,90,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|25yr+,1986,90,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|25yr+,1987,90,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|25yr+,1988,90,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|25yr+,1989,90,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|25yr+,1990,90,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|25yr+,1991,90,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|25yr+,1992,90,1,Full incumbent (no CEM)
@@ -1081,6 +1270,11 @@ Mixed|Gasoline-Only|25yr+,2015,60,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|25yr+,2016,59,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|25yr+,2017,58,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|25yr+,2018,58,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|20-24yr,1985,17,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|20-24yr,1986,17,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|20-24yr,1987,17,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|20-24yr,1988,17,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|20-24yr,1989,17,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|20-24yr,1990,17,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|20-24yr,1991,17,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|20-24yr,1992,17,1,Full incumbent (no CEM)
@@ -1110,6 +1304,11 @@ All-DW|Diesel-Only|20-24yr,2015,14,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|20-24yr,2016,14,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|20-24yr,2017,14,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|20-24yr,2018,13,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|15-19yr,1985,117,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|15-19yr,1986,117,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|15-19yr,1987,117,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|15-19yr,1988,117,1,Full incumbent (no CEM)
+All-DW|Mixed-Or-Other|15-19yr,1989,117,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|15-19yr,1990,117,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|15-19yr,1991,117,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|15-19yr,1992,117,1,Full incumbent (no CEM)
@@ -1139,6 +1338,11 @@ All-DW|Mixed-Or-Other|15-19yr,2015,95,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|15-19yr,2016,95,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|15-19yr,2017,93,1,Full incumbent (no CEM)
 All-DW|Mixed-Or-Other|15-19yr,2018,88,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|0-4yr,1985,11,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|0-4yr,1986,11,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|0-4yr,1987,11,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|0-4yr,1988,10,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|0-4yr,1989,10,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|0-4yr,1990,10,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|0-4yr,1991,10,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|0-4yr,1992,9,1,Full incumbent (no CEM)
@@ -1168,6 +1372,11 @@ Mixed|Gasoline-Only|0-4yr,2015,29,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|0-4yr,2016,29,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|0-4yr,2017,29,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|0-4yr,2018,28,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|5-9yr,1985,9,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|5-9yr,1986,9,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|5-9yr,1987,9,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|5-9yr,1988,9,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|5-9yr,1989,9,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|5-9yr,1990,13,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|5-9yr,1991,15,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|5-9yr,1992,16,0,Full incumbent (no CEM)
@@ -1197,6 +1406,11 @@ Mixed|Diesel-Only|5-9yr,2015,17,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|5-9yr,2016,17,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|5-9yr,2017,17,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|5-9yr,2018,17,0,Full incumbent (no CEM)
+All-DW|Gasoline-Only|25yr+,1985,75,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|25yr+,1986,75,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|25yr+,1987,75,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|25yr+,1988,75,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|25yr+,1989,75,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|25yr+,1990,75,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|25yr+,1991,75,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|25yr+,1992,75,1,Full incumbent (no CEM)
@@ -1226,6 +1440,11 @@ All-DW|Gasoline-Only|25yr+,2015,54,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|25yr+,2016,54,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|25yr+,2017,53,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|25yr+,2018,53,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|20-24yr,1985,188,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|20-24yr,1986,188,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|20-24yr,1987,188,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|20-24yr,1988,188,1,Full incumbent (no CEM)
+Mixed|Mixed-Or-Other|20-24yr,1989,188,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|20-24yr,1990,188,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|20-24yr,1991,188,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|20-24yr,1992,188,1,Full incumbent (no CEM)
@@ -1255,6 +1474,11 @@ Mixed|Mixed-Or-Other|20-24yr,2015,161,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|20-24yr,2016,158,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|20-24yr,2017,157,1,Full incumbent (no CEM)
 Mixed|Mixed-Or-Other|20-24yr,2018,157,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|5-9yr,1985,12,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|5-9yr,1986,12,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|5-9yr,1987,12,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|5-9yr,1988,12,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|5-9yr,1989,12,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|5-9yr,1990,17,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|5-9yr,1991,20,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|5-9yr,1992,23,1,Full incumbent (no CEM)
@@ -1284,6 +1508,12 @@ Mixed|Gasoline-Only|5-9yr,2015,19,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|5-9yr,2016,19,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|5-9yr,2017,18,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|5-9yr,2018,17,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|10-14yr,1985,98,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|10-14yr,1985,5,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|10-14yr,1986,12,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|10-14yr,1987,13,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|10-14yr,1988,15,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|10-14yr,1989,15,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|10-14yr,1990,15,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|10-14yr,1991,15,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|10-14yr,1992,15,0,Full incumbent (no CEM)
@@ -1313,6 +1543,11 @@ Mixed|Diesel-Only|10-14yr,2015,14,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|10-14yr,2016,14,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|10-14yr,2017,14,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|10-14yr,2018,14,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|15-19yr,1985,24,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|15-19yr,1986,24,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|15-19yr,1987,24,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|15-19yr,1988,24,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|15-19yr,1989,24,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|15-19yr,1990,24,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|15-19yr,1991,24,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|15-19yr,1992,24,1,Full incumbent (no CEM)
@@ -1342,6 +1577,11 @@ Mixed|Diesel-Only|15-19yr,2015,21,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|15-19yr,2016,21,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|15-19yr,2017,21,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|15-19yr,2018,21,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|20-24yr,1985,15,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|20-24yr,1986,15,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|20-24yr,1987,15,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|20-24yr,1988,15,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|20-24yr,1989,15,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|20-24yr,1990,15,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|20-24yr,1991,15,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|20-24yr,1992,15,0,Full incumbent (no CEM)
@@ -1371,6 +1611,11 @@ Mixed|Diesel-Only|20-24yr,2015,14,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|20-24yr,2016,14,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|20-24yr,2017,14,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|20-24yr,2018,14,0,Full incumbent (no CEM)
+Mixed|Gasoline-Only|20-24yr,1985,24,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|20-24yr,1986,24,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|20-24yr,1987,24,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|20-24yr,1988,24,1,Full incumbent (no CEM)
+Mixed|Gasoline-Only|20-24yr,1989,24,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|20-24yr,1990,24,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|20-24yr,1991,24,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|20-24yr,1992,24,1,Full incumbent (no CEM)
@@ -1400,6 +1645,11 @@ Mixed|Gasoline-Only|20-24yr,2015,21,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|20-24yr,2016,21,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|20-24yr,2017,21,1,Full incumbent (no CEM)
 Mixed|Gasoline-Only|20-24yr,2018,21,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|15-19yr,1985,47,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|15-19yr,1986,47,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|15-19yr,1987,47,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|15-19yr,1988,47,1,Full incumbent (no CEM)
+All-DW|Gasoline-Only|15-19yr,1989,47,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|15-19yr,1990,47,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|15-19yr,1991,47,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|15-19yr,1992,47,1,Full incumbent (no CEM)
@@ -1449,6 +1699,11 @@ All-DW|Gasoline-Only|20-24yr,2015,22,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|20-24yr,2016,22,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|20-24yr,2017,21,1,Full incumbent (no CEM)
 All-DW|Gasoline-Only|20-24yr,2018,21,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|25yr+,1985,30,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|25yr+,1986,30,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|25yr+,1987,30,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|25yr+,1988,30,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|25yr+,1989,30,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|25yr+,1990,30,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|25yr+,1991,30,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|25yr+,1992,30,1,Full incumbent (no CEM)
@@ -1463,6 +1718,11 @@ Mixed|Diesel-Only|25yr+,2000,30,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|25yr+,2001,30,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|25yr+,2002,30,1,Full incumbent (no CEM)
 Mixed|Diesel-Only|25yr+,2003,30,1,Full incumbent (no CEM)
+Mixed|Diesel-Only|0-4yr,1985,2,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|0-4yr,1986,2,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|0-4yr,1987,2,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|0-4yr,1988,2,0,Full incumbent (no CEM)
+Mixed|Diesel-Only|0-4yr,1989,2,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|0-4yr,1990,2,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|0-4yr,1991,2,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|0-4yr,1992,2,0,Full incumbent (no CEM)
@@ -1492,6 +1752,11 @@ Mixed|Diesel-Only|0-4yr,2015,2,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|0-4yr,2016,2,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|0-4yr,2017,2,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|0-4yr,2018,2,0,Full incumbent (no CEM)
+All-DW|Diesel-Only|25yr+,1985,15,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|25yr+,1986,15,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|25yr+,1987,15,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|25yr+,1988,15,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|25yr+,1989,15,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|25yr+,1990,15,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|25yr+,1991,15,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|25yr+,1992,15,1,Full incumbent (no CEM)
@@ -1504,6 +1769,11 @@ All-DW|Diesel-Only|25yr+,1998,15,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|25yr+,1999,15,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|25yr+,2000,14,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|25yr+,2001,13,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|15-19yr,1985,30,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|15-19yr,1986,30,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|15-19yr,1987,30,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|15-19yr,1988,30,1,Full incumbent (no CEM)
+All-DW|Diesel-Only|15-19yr,1989,30,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|15-19yr,1990,30,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|15-19yr,1991,30,1,Full incumbent (no CEM)
 All-DW|Diesel-Only|15-19yr,1992,30,1,Full incumbent (no CEM)
@@ -1565,6 +1835,11 @@ Mixed|Diesel-Only|25yr+,2015,29,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|25yr+,2016,29,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|25yr+,2017,29,0,Full incumbent (no CEM)
 Mixed|Diesel-Only|25yr+,2018,29,0,Full incumbent (no CEM)
+All-SW|Mixed-Or-Other|5-9yr,1985,2721,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|5-9yr,1986,2739,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|5-9yr,1987,2790,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|5-9yr,1988,2752,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|5-9yr,1989,2753,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|5-9yr,1991,4805,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|5-9yr,1992,5391,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|5-9yr,1993,5917,1,Reform-CEM primary
@@ -1593,6 +1868,11 @@ All-SW|Mixed-Or-Other|5-9yr,2015,4814,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|5-9yr,2016,4748,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|5-9yr,2017,4661,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|5-9yr,2018,4594,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|0-4yr,1985,2706,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|0-4yr,1986,2748,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|0-4yr,1987,2813,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|0-4yr,1988,2829,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|0-4yr,1989,2833,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|0-4yr,1990,2829,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|0-4yr,1991,2816,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|0-4yr,1992,2786,1,Reform-CEM primary
@@ -1642,6 +1922,8 @@ All-DW|Diesel-Only|5-9yr,2012,733,1,Reform-CEM primary
 All-DW|Diesel-Only|5-9yr,2013,725,1,Reform-CEM primary
 All-DW|Diesel-Only|5-9yr,2014,707,1,Reform-CEM primary
 All-DW|Diesel-Only|5-9yr,2015,697,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|10-14yr,1988,10893,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|10-14yr,1989,10893,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|10-14yr,1990,10893,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|10-14yr,1991,10893,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|10-14yr,1992,10893,1,Reform-CEM primary
@@ -1677,6 +1959,11 @@ All-SW|Mixed-Or-Other|0-4yr,2015,5396,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|0-4yr,2016,5329,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|0-4yr,2017,5272,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|0-4yr,2018,5218,1,Reform-CEM primary
+All-SW|Gasoline-Only|15-19yr,1985,5375,1,Reform-CEM primary
+All-SW|Gasoline-Only|15-19yr,1986,5375,1,Reform-CEM primary
+All-SW|Gasoline-Only|15-19yr,1987,5375,1,Reform-CEM primary
+All-SW|Gasoline-Only|15-19yr,1988,5375,1,Reform-CEM primary
+All-SW|Gasoline-Only|15-19yr,1989,5375,1,Reform-CEM primary
 All-SW|Gasoline-Only|15-19yr,1990,5375,1,Reform-CEM primary
 All-SW|Gasoline-Only|15-19yr,1991,5375,1,Reform-CEM primary
 All-SW|Gasoline-Only|15-19yr,1992,5375,1,Reform-CEM primary
@@ -1706,6 +1993,10 @@ All-SW|Gasoline-Only|15-19yr,2015,3332,1,Reform-CEM primary
 All-SW|Gasoline-Only|15-19yr,2016,3283,1,Reform-CEM primary
 All-SW|Gasoline-Only|15-19yr,2017,3239,1,Reform-CEM primary
 All-SW|Gasoline-Only|15-19yr,2018,3201,1,Reform-CEM primary
+All-SW|Gasoline-Only|10-14yr,1986,3513,1,Reform-CEM primary
+All-SW|Gasoline-Only|10-14yr,1987,4859,1,Reform-CEM primary
+All-SW|Gasoline-Only|10-14yr,1988,5933,1,Reform-CEM primary
+All-SW|Gasoline-Only|10-14yr,1989,5933,1,Reform-CEM primary
 All-SW|Gasoline-Only|10-14yr,1990,5933,1,Reform-CEM primary
 All-SW|Gasoline-Only|10-14yr,1991,5933,1,Reform-CEM primary
 All-SW|Gasoline-Only|10-14yr,1992,5933,1,Reform-CEM primary
@@ -1727,6 +2018,9 @@ All-SW|Gasoline-Only|10-14yr,2007,4417,1,Reform-CEM primary
 All-SW|Gasoline-Only|10-14yr,2008,4261,1,Reform-CEM primary
 All-SW|Gasoline-Only|10-14yr,2009,4128,1,Reform-CEM primary
 All-SW|Gasoline-Only|10-14yr,2010,4007,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|10-14yr,1985,4636,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|10-14yr,1986,6674,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|10-14yr,1987,9042,1,Reform-CEM primary
 All-SW|Gasoline-Only|5-9yr,1990,2295,1,Reform-CEM primary
 All-SW|Gasoline-Only|5-9yr,1991,2800,1,Reform-CEM primary
 All-SW|Gasoline-Only|5-9yr,1992,3110,1,Reform-CEM primary
@@ -1756,6 +2050,11 @@ All-SW|Gasoline-Only|5-9yr,2015,2349,1,Reform-CEM primary
 All-SW|Gasoline-Only|5-9yr,2016,2330,1,Reform-CEM primary
 All-SW|Gasoline-Only|5-9yr,2017,2301,1,Reform-CEM primary
 All-SW|Gasoline-Only|5-9yr,2018,2262,1,Reform-CEM primary
+All-SW|Gasoline-Only|25yr+,1985,10044,1,Reform-CEM primary
+All-SW|Gasoline-Only|25yr+,1986,10044,1,Reform-CEM primary
+All-SW|Gasoline-Only|25yr+,1987,10044,1,Reform-CEM primary
+All-SW|Gasoline-Only|25yr+,1988,10044,1,Reform-CEM primary
+All-SW|Gasoline-Only|25yr+,1989,10045,1,Reform-CEM primary
 All-SW|Gasoline-Only|25yr+,1990,10046,1,Reform-CEM primary
 All-SW|Gasoline-Only|25yr+,1991,10046,1,Reform-CEM primary
 All-SW|Gasoline-Only|25yr+,1992,10046,1,Reform-CEM primary
@@ -1775,6 +2074,11 @@ All-SW|Gasoline-Only|25yr+,2005,7837,1,Reform-CEM primary
 All-SW|Gasoline-Only|25yr+,2006,7702,1,Reform-CEM primary
 All-SW|Gasoline-Only|25yr+,2007,7566,1,Reform-CEM primary
 All-SW|Gasoline-Only|25yr+,2008,7403,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|10-14yr,1985,216,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|10-14yr,1986,264,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|10-14yr,1987,313,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|10-14yr,1988,373,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|10-14yr,1989,373,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|10-14yr,1990,373,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|10-14yr,1991,373,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|10-14yr,1992,373,1,Reform-CEM primary
@@ -1814,6 +2118,16 @@ All-SW|Gasoline-Only|25yr+,2015,6822,1,Reform-CEM primary
 All-SW|Gasoline-Only|25yr+,2016,6782,1,Reform-CEM primary
 All-SW|Gasoline-Only|25yr+,2017,6725,1,Reform-CEM primary
 All-SW|Gasoline-Only|25yr+,2018,6667,1,Reform-CEM primary
+All-SW|Gasoline-Only|5-9yr,1985,1606,1,Reform-CEM primary
+All-SW|Gasoline-Only|5-9yr,1986,1612,1,Reform-CEM primary
+All-SW|Gasoline-Only|5-9yr,1987,1622,1,Reform-CEM primary
+All-SW|Gasoline-Only|5-9yr,1988,1620,1,Reform-CEM primary
+All-SW|Gasoline-Only|5-9yr,1989,1608,1,Reform-CEM primary
+All-SW|Gasoline-Only|20-24yr,1985,4722,1,Reform-CEM primary
+All-SW|Gasoline-Only|20-24yr,1986,4722,1,Reform-CEM primary
+All-SW|Gasoline-Only|20-24yr,1987,4722,1,Reform-CEM primary
+All-SW|Gasoline-Only|20-24yr,1988,4722,1,Reform-CEM primary
+All-SW|Gasoline-Only|20-24yr,1989,4722,1,Reform-CEM primary
 All-SW|Gasoline-Only|20-24yr,1990,4722,1,Reform-CEM primary
 All-SW|Gasoline-Only|20-24yr,1991,4722,1,Reform-CEM primary
 All-SW|Gasoline-Only|20-24yr,1992,4722,1,Reform-CEM primary
@@ -1843,6 +2157,11 @@ All-SW|Gasoline-Only|20-24yr,2015,3011,1,Reform-CEM primary
 All-SW|Gasoline-Only|20-24yr,2016,2983,1,Reform-CEM primary
 All-SW|Gasoline-Only|20-24yr,2017,2967,1,Reform-CEM primary
 All-SW|Gasoline-Only|20-24yr,2018,2946,1,Reform-CEM primary
+All-SW|Gasoline-Only|0-4yr,1985,1713,1,Reform-CEM primary
+All-SW|Gasoline-Only|0-4yr,1986,1733,1,Reform-CEM primary
+All-SW|Gasoline-Only|0-4yr,1987,1753,1,Reform-CEM primary
+All-SW|Gasoline-Only|0-4yr,1988,1757,1,Reform-CEM primary
+All-SW|Gasoline-Only|0-4yr,1989,1757,1,Reform-CEM primary
 All-SW|Gasoline-Only|0-4yr,1990,1740,1,Reform-CEM primary
 All-SW|Gasoline-Only|0-4yr,1991,1724,1,Reform-CEM primary
 All-SW|Gasoline-Only|0-4yr,1992,1697,1,Reform-CEM primary
@@ -1872,6 +2191,11 @@ All-SW|Gasoline-Only|0-4yr,2015,2977,1,Reform-CEM primary
 All-SW|Gasoline-Only|0-4yr,2016,2941,1,Reform-CEM primary
 All-SW|Gasoline-Only|0-4yr,2017,2913,1,Reform-CEM primary
 All-SW|Gasoline-Only|0-4yr,2018,2880,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|15-19yr,1985,8213,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|15-19yr,1986,8213,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|15-19yr,1987,8213,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|15-19yr,1988,8213,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|15-19yr,1989,8213,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|15-19yr,1990,8213,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|15-19yr,1991,8213,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|15-19yr,1992,8213,1,Reform-CEM primary
@@ -1901,6 +2225,11 @@ All-SW|Mixed-Or-Other|15-19yr,2015,5847,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|15-19yr,2016,5764,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|15-19yr,2017,5679,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|15-19yr,2018,5575,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|25yr+,1985,13977,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|25yr+,1986,13977,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|25yr+,1987,13975,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|25yr+,1988,13977,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|25yr+,1989,13977,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|25yr+,1990,13978,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|25yr+,1991,13979,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|25yr+,1992,13979,1,Reform-CEM primary
@@ -1913,6 +2242,11 @@ All-SW|Mixed-Or-Other|25yr+,1998,13979,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|25yr+,1999,13942,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|25yr+,2000,12944,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|5-9yr,1990,4024,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|20-24yr,1985,5782,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|20-24yr,1986,5782,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|20-24yr,1987,5782,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|20-24yr,1988,5782,1,Reform-CEM primary
+All-SW|Mixed-Or-Other|20-24yr,1989,5782,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|20-24yr,1990,5782,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|20-24yr,1991,5782,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|20-24yr,1992,5782,1,Reform-CEM primary
@@ -1960,6 +2294,11 @@ All-SW|Mixed-Or-Other|25yr+,2015,10130,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|25yr+,2016,10053,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|25yr+,2017,9946,1,Reform-CEM primary
 All-SW|Mixed-Or-Other|25yr+,2018,9843,1,Reform-CEM primary
+All-SW|Diesel-Only|25yr+,1985,1579,1,Reform-CEM primary
+All-SW|Diesel-Only|25yr+,1986,1579,1,Reform-CEM primary
+All-SW|Diesel-Only|25yr+,1987,1579,1,Reform-CEM primary
+All-SW|Diesel-Only|25yr+,1988,1579,1,Reform-CEM primary
+All-SW|Diesel-Only|25yr+,1989,1579,1,Reform-CEM primary
 All-SW|Diesel-Only|25yr+,1990,1579,1,Reform-CEM primary
 All-SW|Diesel-Only|25yr+,1991,1579,1,Reform-CEM primary
 All-SW|Diesel-Only|25yr+,1992,1579,1,Reform-CEM primary
@@ -1989,6 +2328,11 @@ All-SW|Diesel-Only|25yr+,2015,1257,1,Reform-CEM primary
 All-SW|Diesel-Only|25yr+,2016,1254,1,Reform-CEM primary
 All-SW|Diesel-Only|25yr+,2017,1247,1,Reform-CEM primary
 All-SW|Diesel-Only|25yr+,2018,1240,1,Reform-CEM primary
+All-DW|Gasoline-Only|0-4yr,1985,1003,1,Reform-CEM primary
+All-DW|Gasoline-Only|0-4yr,1986,1021,1,Reform-CEM primary
+All-DW|Gasoline-Only|0-4yr,1987,1030,1,Reform-CEM primary
+All-DW|Gasoline-Only|0-4yr,1988,1033,1,Reform-CEM primary
+All-DW|Gasoline-Only|0-4yr,1989,1036,1,Reform-CEM primary
 All-DW|Gasoline-Only|0-4yr,1990,1033,1,Reform-CEM primary
 All-DW|Gasoline-Only|0-4yr,1991,1027,1,Reform-CEM primary
 All-DW|Gasoline-Only|0-4yr,1992,1019,1,Reform-CEM primary
@@ -2018,6 +2362,11 @@ All-DW|Gasoline-Only|0-4yr,2015,1661,1,Reform-CEM primary
 All-DW|Gasoline-Only|0-4yr,2016,1641,1,Reform-CEM primary
 All-DW|Gasoline-Only|0-4yr,2017,1614,1,Reform-CEM primary
 All-DW|Gasoline-Only|0-4yr,2018,1594,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|5-9yr,1985,1228,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|5-9yr,1986,1238,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|5-9yr,1987,1256,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|5-9yr,1988,1253,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|5-9yr,1989,1253,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|5-9yr,1990,1554,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|5-9yr,1991,1785,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|5-9yr,1992,2012,1,Reform-CEM primary
@@ -2047,6 +2396,11 @@ All-DW|Mixed-Or-Other|5-9yr,2015,1827,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|5-9yr,2016,1795,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|5-9yr,2017,1763,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|5-9yr,2018,1738,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|0-4yr,1985,1235,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|0-4yr,1986,1256,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|0-4yr,1987,1272,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|0-4yr,1988,1282,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|0-4yr,1989,1280,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|0-4yr,1990,1271,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|0-4yr,1991,1256,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|0-4yr,1992,1249,1,Reform-CEM primary
@@ -2113,6 +2467,11 @@ All-DW|Gasoline-Only|5-9yr,2015,942,1,Reform-CEM primary
 All-DW|Gasoline-Only|5-9yr,2016,922,1,Reform-CEM primary
 All-DW|Gasoline-Only|5-9yr,2017,892,1,Reform-CEM primary
 All-DW|Gasoline-Only|5-9yr,2018,874,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|15-19yr,1985,294,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|15-19yr,1986,294,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|15-19yr,1987,294,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|15-19yr,1988,294,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|15-19yr,1989,294,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|15-19yr,1990,294,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|15-19yr,1991,294,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|15-19yr,1992,294,1,Reform-CEM primary
@@ -2142,6 +2501,11 @@ Mixed|Mixed-Or-Other|15-19yr,2015,258,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|15-19yr,2016,256,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|15-19yr,2017,255,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|15-19yr,2018,252,1,Reform-CEM primary
+All-SW|Diesel-Only|20-24yr,1985,1043,1,Reform-CEM primary
+All-SW|Diesel-Only|20-24yr,1986,1043,1,Reform-CEM primary
+All-SW|Diesel-Only|20-24yr,1987,1043,1,Reform-CEM primary
+All-SW|Diesel-Only|20-24yr,1988,1043,1,Reform-CEM primary
+All-SW|Diesel-Only|20-24yr,1989,1043,1,Reform-CEM primary
 All-SW|Diesel-Only|20-24yr,1990,1043,1,Reform-CEM primary
 All-SW|Diesel-Only|20-24yr,1991,1043,1,Reform-CEM primary
 All-SW|Diesel-Only|20-24yr,1992,1043,1,Reform-CEM primary
@@ -2164,6 +2528,10 @@ All-SW|Diesel-Only|20-24yr,2008,764,1,Reform-CEM primary
 All-SW|Diesel-Only|20-24yr,2009,755,1,Reform-CEM primary
 All-SW|Diesel-Only|20-24yr,2010,742,1,Reform-CEM primary
 All-SW|Diesel-Only|20-24yr,2011,730,1,Reform-CEM primary
+All-SW|Diesel-Only|10-14yr,1986,994,1,Reform-CEM primary
+All-SW|Diesel-Only|10-14yr,1987,1333,1,Reform-CEM primary
+All-SW|Diesel-Only|10-14yr,1988,1675,1,Reform-CEM primary
+All-SW|Diesel-Only|10-14yr,1989,1675,1,Reform-CEM primary
 All-SW|Diesel-Only|10-14yr,1990,1675,1,Reform-CEM primary
 All-SW|Diesel-Only|10-14yr,1991,1675,1,Reform-CEM primary
 All-SW|Diesel-Only|10-14yr,1992,1675,1,Reform-CEM primary
@@ -2193,6 +2561,11 @@ All-SW|Diesel-Only|10-14yr,2015,992,1,Reform-CEM primary
 All-SW|Diesel-Only|10-14yr,2016,975,1,Reform-CEM primary
 All-SW|Diesel-Only|10-14yr,2017,956,1,Reform-CEM primary
 All-SW|Diesel-Only|10-14yr,2018,933,1,Reform-CEM primary
+All-SW|Diesel-Only|15-19yr,1985,1412,1,Reform-CEM primary
+All-SW|Diesel-Only|15-19yr,1986,1412,1,Reform-CEM primary
+All-SW|Diesel-Only|15-19yr,1987,1412,1,Reform-CEM primary
+All-SW|Diesel-Only|15-19yr,1988,1412,1,Reform-CEM primary
+All-SW|Diesel-Only|15-19yr,1989,1412,1,Reform-CEM primary
 All-SW|Diesel-Only|15-19yr,1990,1412,1,Reform-CEM primary
 All-SW|Diesel-Only|15-19yr,1991,1412,1,Reform-CEM primary
 All-SW|Diesel-Only|15-19yr,1992,1412,1,Reform-CEM primary
@@ -2203,6 +2576,11 @@ All-SW|Diesel-Only|15-19yr,1996,1412,1,Reform-CEM primary
 All-SW|Diesel-Only|15-19yr,1997,1412,1,Reform-CEM primary
 All-SW|Diesel-Only|15-19yr,1998,1412,1,Reform-CEM primary
 All-SW|Diesel-Only|15-19yr,1999,1394,1,Reform-CEM primary
+All-SW|Diesel-Only|5-9yr,1985,431,1,Reform-CEM primary
+All-SW|Diesel-Only|5-9yr,1986,435,1,Reform-CEM primary
+All-SW|Diesel-Only|5-9yr,1987,445,1,Reform-CEM primary
+All-SW|Diesel-Only|5-9yr,1988,447,1,Reform-CEM primary
+All-SW|Diesel-Only|5-9yr,1989,445,1,Reform-CEM primary
 All-SW|Diesel-Only|5-9yr,1990,660,1,Reform-CEM primary
 All-SW|Diesel-Only|5-9yr,1991,828,1,Reform-CEM primary
 All-SW|Diesel-Only|5-9yr,1992,935,1,Reform-CEM primary
@@ -2240,6 +2618,11 @@ All-SW|Diesel-Only|15-19yr,2004,1031,1,Reform-CEM primary
 All-SW|Diesel-Only|15-19yr,2005,1006,1,Reform-CEM primary
 All-SW|Diesel-Only|15-19yr,2006,984,1,Reform-CEM primary
 All-SW|Diesel-Only|15-19yr,2007,968,1,Reform-CEM primary
+All-SW|Diesel-Only|0-4yr,1985,411,1,Reform-CEM primary
+All-SW|Diesel-Only|0-4yr,1986,422,1,Reform-CEM primary
+All-SW|Diesel-Only|0-4yr,1987,434,1,Reform-CEM primary
+All-SW|Diesel-Only|0-4yr,1988,436,1,Reform-CEM primary
+All-SW|Diesel-Only|0-4yr,1989,440,1,Reform-CEM primary
 All-SW|Diesel-Only|0-4yr,1990,444,1,Reform-CEM primary
 All-SW|Diesel-Only|0-4yr,1991,441,1,Reform-CEM primary
 All-SW|Diesel-Only|0-4yr,1992,441,1,Reform-CEM primary
@@ -2268,6 +2651,7 @@ All-SW|Diesel-Only|0-4yr,2014,640,1,Reform-CEM primary
 All-SW|Diesel-Only|0-4yr,2015,629,1,Reform-CEM primary
 All-SW|Diesel-Only|0-4yr,2016,621,1,Reform-CEM primary
 All-SW|Diesel-Only|0-4yr,2017,607,1,Reform-CEM primary
+All-SW|Gasoline-Only|10-14yr,1985,2400,1,Reform-CEM primary
 All-DW|Diesel-Only|0-4yr,1990,463,1,Reform-CEM primary
 All-DW|Diesel-Only|0-4yr,1991,462,1,Reform-CEM primary
 All-DW|Diesel-Only|0-4yr,1992,459,1,Reform-CEM primary
@@ -2297,6 +2681,11 @@ All-DW|Diesel-Only|0-4yr,2015,727,1,Reform-CEM primary
 All-DW|Diesel-Only|0-4yr,2016,719,1,Reform-CEM primary
 All-DW|Diesel-Only|0-4yr,2017,710,1,Reform-CEM primary
 All-DW|Diesel-Only|0-4yr,2018,698,1,Reform-CEM primary
+Mixed|Gasoline-Only|15-19yr,1985,38,1,Reform-CEM primary
+Mixed|Gasoline-Only|15-19yr,1986,38,1,Reform-CEM primary
+Mixed|Gasoline-Only|15-19yr,1987,38,1,Reform-CEM primary
+Mixed|Gasoline-Only|15-19yr,1988,38,1,Reform-CEM primary
+Mixed|Gasoline-Only|15-19yr,1989,38,1,Reform-CEM primary
 Mixed|Gasoline-Only|15-19yr,1990,38,1,Reform-CEM primary
 Mixed|Gasoline-Only|15-19yr,1991,38,1,Reform-CEM primary
 Mixed|Gasoline-Only|15-19yr,1992,38,1,Reform-CEM primary
@@ -2326,6 +2715,13 @@ Mixed|Gasoline-Only|15-19yr,2015,30,1,Reform-CEM primary
 Mixed|Gasoline-Only|15-19yr,2016,30,1,Reform-CEM primary
 Mixed|Gasoline-Only|15-19yr,2017,30,1,Reform-CEM primary
 Mixed|Gasoline-Only|15-19yr,2018,30,1,Reform-CEM primary
+All-DW|Diesel-Only|0-4yr,1986,444,1,Reform-CEM primary
+All-DW|Diesel-Only|0-4yr,1987,454,1,Reform-CEM primary
+All-DW|Diesel-Only|0-4yr,1988,459,1,Reform-CEM primary
+All-DW|Diesel-Only|0-4yr,1989,464,1,Reform-CEM primary
+All-DW|Diesel-Only|0-4yr,1985,434,1,Reform-CEM primary
+All-DW|Gasoline-Only|10-14yr,1988,374,1,Reform-CEM primary
+All-DW|Gasoline-Only|10-14yr,1989,374,1,Reform-CEM primary
 All-DW|Gasoline-Only|10-14yr,1990,374,1,Reform-CEM primary
 All-DW|Gasoline-Only|10-14yr,1991,374,1,Reform-CEM primary
 All-DW|Gasoline-Only|10-14yr,1992,374,1,Reform-CEM primary
@@ -2376,6 +2772,9 @@ Mixed|Mixed-Or-Other|5-9yr,2011,186,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|5-9yr,2012,186,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|5-9yr,2013,184,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|5-9yr,2014,181,1,Reform-CEM primary
+All-SW|Diesel-Only|10-14yr,1985,665,1,Reform-CEM primary
+All-DW|Diesel-Only|10-14yr,1988,257,1,Reform-CEM primary
+All-DW|Diesel-Only|10-14yr,1989,257,1,Reform-CEM primary
 All-DW|Diesel-Only|10-14yr,1990,257,1,Reform-CEM primary
 All-DW|Diesel-Only|10-14yr,1991,257,1,Reform-CEM primary
 All-DW|Diesel-Only|10-14yr,1992,257,1,Reform-CEM primary
@@ -2412,6 +2811,12 @@ All-SW|Diesel-Only|20-24yr,2015,707,1,Reform-CEM primary
 All-SW|Diesel-Only|20-24yr,2016,703,1,Reform-CEM primary
 All-SW|Diesel-Only|20-24yr,2017,699,1,Reform-CEM primary
 All-SW|Diesel-Only|20-24yr,2018,694,1,Reform-CEM primary
+All-DW|Diesel-Only|10-14yr,1987,175,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|0-4yr,1985,47,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|0-4yr,1986,47,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|0-4yr,1987,47,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|0-4yr,1988,48,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|0-4yr,1989,48,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|0-4yr,1990,48,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|0-4yr,1991,48,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|0-4yr,1992,49,1,Reform-CEM primary
@@ -2441,6 +2846,16 @@ Mixed|Mixed-Or-Other|0-4yr,2015,104,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|0-4yr,2016,104,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|0-4yr,2017,102,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|0-4yr,2018,102,1,Reform-CEM primary
+All-DW|Gasoline-Only|5-9yr,1985,771,1,Reform-CEM primary
+All-DW|Gasoline-Only|5-9yr,1986,782,1,Reform-CEM primary
+All-DW|Gasoline-Only|5-9yr,1987,787,1,Reform-CEM primary
+All-DW|Gasoline-Only|5-9yr,1988,786,1,Reform-CEM primary
+All-DW|Gasoline-Only|5-9yr,1989,786,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|5-9yr,1985,120,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|5-9yr,1986,120,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|5-9yr,1987,121,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|5-9yr,1988,121,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|5-9yr,1989,120,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|5-9yr,1990,152,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|5-9yr,2015,179,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|5-9yr,2016,176,1,Reform-CEM primary
@@ -2458,9 +2873,22 @@ All-SW|Diesel-Only|15-19yr,2016,839,1,Reform-CEM primary
 All-SW|Diesel-Only|15-19yr,2017,826,1,Reform-CEM primary
 All-SW|Diesel-Only|15-19yr,2018,821,1,Reform-CEM primary
 All-SW|Diesel-Only|0-4yr,2018,597,1,Reform-CEM primary
+All-DW|Diesel-Only|5-9yr,1985,473,1,Reform-CEM primary
+All-DW|Diesel-Only|5-9yr,1986,477,1,Reform-CEM primary
+All-DW|Diesel-Only|5-9yr,1987,481,1,Reform-CEM primary
+All-DW|Diesel-Only|5-9yr,1988,485,1,Reform-CEM primary
+All-DW|Diesel-Only|5-9yr,1989,482,1,Reform-CEM primary
 All-DW|Diesel-Only|5-9yr,2016,680,1,Reform-CEM primary
 All-DW|Diesel-Only|5-9yr,2017,657,1,Reform-CEM primary
 All-DW|Diesel-Only|5-9yr,2018,639,1,Reform-CEM primary
+All-DW|Gasoline-Only|10-14yr,1985,156,1,Reform-CEM primary
+All-DW|Gasoline-Only|10-14yr,1986,198,1,Reform-CEM primary
+All-DW|Gasoline-Only|10-14yr,1987,266,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|25yr+,1985,558,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|25yr+,1986,558,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|25yr+,1987,558,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|25yr+,1988,558,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|25yr+,1989,558,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|25yr+,1990,558,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|25yr+,1991,558,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|25yr+,1992,558,1,Reform-CEM primary
@@ -2490,6 +2918,8 @@ Mixed|Mixed-Or-Other|25yr+,2015,424,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|25yr+,2016,420,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|25yr+,2017,418,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|25yr+,2018,416,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|10-14yr,1988,751,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|10-14yr,1989,751,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|10-14yr,1990,751,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|10-14yr,1991,751,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|10-14yr,1992,751,1,Reform-CEM primary
@@ -2515,6 +2945,11 @@ All-DW|Mixed-Or-Other|10-14yr,2011,609,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|10-14yr,2012,603,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|10-14yr,2013,595,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|10-14yr,2014,585,1,Reform-CEM primary
+Mixed|Gasoline-Only|10-14yr,1985,27,1,Reform-CEM primary
+Mixed|Gasoline-Only|10-14yr,1986,33,1,Reform-CEM primary
+Mixed|Gasoline-Only|10-14yr,1987,40,1,Reform-CEM primary
+Mixed|Gasoline-Only|10-14yr,1988,49,1,Reform-CEM primary
+Mixed|Gasoline-Only|10-14yr,1989,49,1,Reform-CEM primary
 Mixed|Gasoline-Only|10-14yr,1990,49,1,Reform-CEM primary
 Mixed|Gasoline-Only|10-14yr,1991,49,1,Reform-CEM primary
 Mixed|Gasoline-Only|10-14yr,1992,49,1,Reform-CEM primary
@@ -2544,6 +2979,12 @@ Mixed|Gasoline-Only|10-14yr,2015,32,1,Reform-CEM primary
 Mixed|Gasoline-Only|10-14yr,2016,32,1,Reform-CEM primary
 Mixed|Gasoline-Only|10-14yr,2017,30,1,Reform-CEM primary
 Mixed|Gasoline-Only|10-14yr,2018,28,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|10-14yr,1987,551,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|20-24yr,1985,57,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|20-24yr,1986,57,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|20-24yr,1987,57,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|20-24yr,1988,57,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|20-24yr,1989,57,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|20-24yr,1990,57,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|20-24yr,1991,57,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|20-24yr,1992,57,1,Reform-CEM primary
@@ -2573,10 +3014,18 @@ All-DW|Mixed-Or-Other|20-24yr,2015,44,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|20-24yr,2016,44,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|20-24yr,2017,44,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|20-24yr,2018,42,1,Reform-CEM primary
+All-DW|Diesel-Only|10-14yr,1986,126,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|10-14yr,2015,574,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|10-14yr,2016,564,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|10-14yr,2017,557,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|10-14yr,2018,546,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|10-14yr,1985,302,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|10-14yr,1986,397,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|25yr+,1985,92,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|25yr+,1986,92,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|25yr+,1987,92,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|25yr+,1988,92,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|25yr+,1989,92,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|25yr+,1990,92,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|25yr+,1991,92,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|25yr+,1992,92,1,Reform-CEM primary
@@ -2606,6 +3055,11 @@ All-DW|Mixed-Or-Other|25yr+,2015,52,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|25yr+,2016,52,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|25yr+,2017,52,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|25yr+,2018,52,1,Reform-CEM primary
+All-DW|Gasoline-Only|20-24yr,1985,33,1,Reform-CEM primary
+All-DW|Gasoline-Only|20-24yr,1986,33,1,Reform-CEM primary
+All-DW|Gasoline-Only|20-24yr,1987,33,1,Reform-CEM primary
+All-DW|Gasoline-Only|20-24yr,1988,33,1,Reform-CEM primary
+All-DW|Gasoline-Only|20-24yr,1989,33,1,Reform-CEM primary
 All-DW|Gasoline-Only|20-24yr,1990,33,1,Reform-CEM primary
 All-DW|Gasoline-Only|20-24yr,1991,33,1,Reform-CEM primary
 All-DW|Gasoline-Only|20-24yr,1992,33,1,Reform-CEM primary
@@ -2618,6 +3072,11 @@ All-DW|Gasoline-Only|20-24yr,1998,33,1,Reform-CEM primary
 All-DW|Gasoline-Only|10-14yr,2016,251,1,Reform-CEM primary
 All-DW|Gasoline-Only|10-14yr,2017,242,1,Reform-CEM primary
 All-DW|Gasoline-Only|10-14yr,2018,234,1,Reform-CEM primary
+Mixed|Gasoline-Only|25yr+,1985,41,1,Reform-CEM primary
+Mixed|Gasoline-Only|25yr+,1986,41,1,Reform-CEM primary
+Mixed|Gasoline-Only|25yr+,1987,41,1,Reform-CEM primary
+Mixed|Gasoline-Only|25yr+,1988,41,1,Reform-CEM primary
+Mixed|Gasoline-Only|25yr+,1989,41,1,Reform-CEM primary
 Mixed|Gasoline-Only|25yr+,1990,41,1,Reform-CEM primary
 Mixed|Gasoline-Only|25yr+,1991,41,1,Reform-CEM primary
 Mixed|Gasoline-Only|25yr+,1992,41,1,Reform-CEM primary
@@ -2647,6 +3106,11 @@ Mixed|Gasoline-Only|25yr+,2015,28,1,Reform-CEM primary
 Mixed|Gasoline-Only|25yr+,2016,27,1,Reform-CEM primary
 Mixed|Gasoline-Only|25yr+,2017,26,1,Reform-CEM primary
 Mixed|Gasoline-Only|25yr+,2018,26,1,Reform-CEM primary
+All-DW|Diesel-Only|20-24yr,1985,17,1,Reform-CEM primary
+All-DW|Diesel-Only|20-24yr,1986,17,1,Reform-CEM primary
+All-DW|Diesel-Only|20-24yr,1987,17,1,Reform-CEM primary
+All-DW|Diesel-Only|20-24yr,1988,17,1,Reform-CEM primary
+All-DW|Diesel-Only|20-24yr,1989,17,1,Reform-CEM primary
 All-DW|Diesel-Only|20-24yr,1990,17,1,Reform-CEM primary
 All-DW|Diesel-Only|20-24yr,1991,17,1,Reform-CEM primary
 All-DW|Diesel-Only|20-24yr,1992,17,1,Reform-CEM primary
@@ -2676,6 +3140,11 @@ All-DW|Diesel-Only|20-24yr,2015,14,1,Reform-CEM primary
 All-DW|Diesel-Only|20-24yr,2016,14,1,Reform-CEM primary
 All-DW|Diesel-Only|20-24yr,2017,14,1,Reform-CEM primary
 All-DW|Diesel-Only|20-24yr,2018,13,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|15-19yr,1985,113,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|15-19yr,1986,113,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|15-19yr,1987,113,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|15-19yr,1988,113,1,Reform-CEM primary
+All-DW|Mixed-Or-Other|15-19yr,1989,113,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|15-19yr,1990,113,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|15-19yr,1991,113,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|15-19yr,1992,113,1,Reform-CEM primary
@@ -2705,6 +3174,11 @@ All-DW|Mixed-Or-Other|15-19yr,2015,92,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|15-19yr,2016,92,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|15-19yr,2017,90,1,Reform-CEM primary
 All-DW|Mixed-Or-Other|15-19yr,2018,85,1,Reform-CEM primary
+Mixed|Gasoline-Only|0-4yr,1985,10,1,Reform-CEM primary
+Mixed|Gasoline-Only|0-4yr,1986,10,1,Reform-CEM primary
+Mixed|Gasoline-Only|0-4yr,1987,10,1,Reform-CEM primary
+Mixed|Gasoline-Only|0-4yr,1988,9,1,Reform-CEM primary
+Mixed|Gasoline-Only|0-4yr,1989,9,1,Reform-CEM primary
 Mixed|Gasoline-Only|0-4yr,1990,9,1,Reform-CEM primary
 Mixed|Gasoline-Only|0-4yr,1991,9,1,Reform-CEM primary
 Mixed|Gasoline-Only|0-4yr,1992,8,1,Reform-CEM primary
@@ -2734,6 +3208,11 @@ Mixed|Gasoline-Only|0-4yr,2015,26,1,Reform-CEM primary
 Mixed|Gasoline-Only|0-4yr,2016,26,1,Reform-CEM primary
 Mixed|Gasoline-Only|0-4yr,2017,26,1,Reform-CEM primary
 Mixed|Gasoline-Only|0-4yr,2018,25,1,Reform-CEM primary
+All-DW|Gasoline-Only|25yr+,1985,75,1,Reform-CEM primary
+All-DW|Gasoline-Only|25yr+,1986,75,1,Reform-CEM primary
+All-DW|Gasoline-Only|25yr+,1987,75,1,Reform-CEM primary
+All-DW|Gasoline-Only|25yr+,1988,75,1,Reform-CEM primary
+All-DW|Gasoline-Only|25yr+,1989,75,1,Reform-CEM primary
 All-DW|Gasoline-Only|25yr+,1990,75,1,Reform-CEM primary
 All-DW|Gasoline-Only|25yr+,1991,75,1,Reform-CEM primary
 All-DW|Gasoline-Only|25yr+,1992,75,1,Reform-CEM primary
@@ -2763,6 +3242,11 @@ All-DW|Gasoline-Only|25yr+,2015,54,1,Reform-CEM primary
 All-DW|Gasoline-Only|25yr+,2016,54,1,Reform-CEM primary
 All-DW|Gasoline-Only|25yr+,2017,53,1,Reform-CEM primary
 All-DW|Gasoline-Only|25yr+,2018,53,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|20-24yr,1985,187,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|20-24yr,1986,187,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|20-24yr,1987,187,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|20-24yr,1988,187,1,Reform-CEM primary
+Mixed|Mixed-Or-Other|20-24yr,1989,187,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|20-24yr,1990,187,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|20-24yr,1991,187,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|20-24yr,1992,187,1,Reform-CEM primary
@@ -2792,6 +3276,11 @@ Mixed|Mixed-Or-Other|20-24yr,2015,160,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|20-24yr,2016,157,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|20-24yr,2017,156,1,Reform-CEM primary
 Mixed|Mixed-Or-Other|20-24yr,2018,156,1,Reform-CEM primary
+Mixed|Gasoline-Only|5-9yr,1985,11,1,Reform-CEM primary
+Mixed|Gasoline-Only|5-9yr,1986,11,1,Reform-CEM primary
+Mixed|Gasoline-Only|5-9yr,1987,11,1,Reform-CEM primary
+Mixed|Gasoline-Only|5-9yr,1988,11,1,Reform-CEM primary
+Mixed|Gasoline-Only|5-9yr,1989,11,1,Reform-CEM primary
 Mixed|Gasoline-Only|5-9yr,1990,15,1,Reform-CEM primary
 Mixed|Gasoline-Only|5-9yr,1991,17,1,Reform-CEM primary
 Mixed|Gasoline-Only|5-9yr,1992,19,1,Reform-CEM primary
@@ -2821,6 +3310,12 @@ Mixed|Gasoline-Only|5-9yr,2015,15,1,Reform-CEM primary
 Mixed|Gasoline-Only|5-9yr,2016,15,1,Reform-CEM primary
 Mixed|Gasoline-Only|5-9yr,2017,14,1,Reform-CEM primary
 Mixed|Gasoline-Only|5-9yr,2018,13,1,Reform-CEM primary
+All-DW|Diesel-Only|10-14yr,1985,96,1,Reform-CEM primary
+Mixed|Diesel-Only|20-24yr,1985,5,0,Reform-CEM primary
+Mixed|Diesel-Only|20-24yr,1986,5,0,Reform-CEM primary
+Mixed|Diesel-Only|20-24yr,1987,5,0,Reform-CEM primary
+Mixed|Diesel-Only|20-24yr,1988,5,0,Reform-CEM primary
+Mixed|Diesel-Only|20-24yr,1989,5,0,Reform-CEM primary
 Mixed|Diesel-Only|20-24yr,1990,5,0,Reform-CEM primary
 Mixed|Diesel-Only|20-24yr,1991,5,0,Reform-CEM primary
 Mixed|Diesel-Only|20-24yr,1992,5,0,Reform-CEM primary
@@ -2850,6 +3345,11 @@ Mixed|Diesel-Only|20-24yr,2015,5,0,Reform-CEM primary
 Mixed|Diesel-Only|20-24yr,2016,5,0,Reform-CEM primary
 Mixed|Diesel-Only|20-24yr,2017,5,0,Reform-CEM primary
 Mixed|Diesel-Only|20-24yr,2018,5,0,Reform-CEM primary
+Mixed|Gasoline-Only|20-24yr,1985,23,1,Reform-CEM primary
+Mixed|Gasoline-Only|20-24yr,1986,23,1,Reform-CEM primary
+Mixed|Gasoline-Only|20-24yr,1987,23,1,Reform-CEM primary
+Mixed|Gasoline-Only|20-24yr,1988,23,1,Reform-CEM primary
+Mixed|Gasoline-Only|20-24yr,1989,23,1,Reform-CEM primary
 Mixed|Gasoline-Only|20-24yr,1990,23,1,Reform-CEM primary
 Mixed|Gasoline-Only|20-24yr,1991,23,1,Reform-CEM primary
 Mixed|Gasoline-Only|20-24yr,1992,23,1,Reform-CEM primary
@@ -2879,6 +3379,11 @@ Mixed|Gasoline-Only|20-24yr,2015,20,1,Reform-CEM primary
 Mixed|Gasoline-Only|20-24yr,2016,20,1,Reform-CEM primary
 Mixed|Gasoline-Only|20-24yr,2017,20,1,Reform-CEM primary
 Mixed|Gasoline-Only|20-24yr,2018,20,1,Reform-CEM primary
+All-DW|Gasoline-Only|15-19yr,1985,47,1,Reform-CEM primary
+All-DW|Gasoline-Only|15-19yr,1986,47,1,Reform-CEM primary
+All-DW|Gasoline-Only|15-19yr,1987,47,1,Reform-CEM primary
+All-DW|Gasoline-Only|15-19yr,1988,47,1,Reform-CEM primary
+All-DW|Gasoline-Only|15-19yr,1989,47,1,Reform-CEM primary
 All-DW|Gasoline-Only|15-19yr,1990,47,1,Reform-CEM primary
 All-DW|Gasoline-Only|15-19yr,1991,47,1,Reform-CEM primary
 All-DW|Gasoline-Only|15-19yr,1992,47,1,Reform-CEM primary
@@ -2928,6 +3433,11 @@ All-DW|Gasoline-Only|20-24yr,2015,21,1,Reform-CEM primary
 All-DW|Gasoline-Only|20-24yr,2016,21,1,Reform-CEM primary
 All-DW|Gasoline-Only|20-24yr,2017,20,1,Reform-CEM primary
 All-DW|Gasoline-Only|20-24yr,2018,20,1,Reform-CEM primary
+Mixed|Diesel-Only|25yr+,1985,22,1,Reform-CEM primary
+Mixed|Diesel-Only|25yr+,1986,22,1,Reform-CEM primary
+Mixed|Diesel-Only|25yr+,1987,22,1,Reform-CEM primary
+Mixed|Diesel-Only|25yr+,1988,22,1,Reform-CEM primary
+Mixed|Diesel-Only|25yr+,1989,22,1,Reform-CEM primary
 Mixed|Diesel-Only|25yr+,1990,22,1,Reform-CEM primary
 Mixed|Diesel-Only|25yr+,1991,22,1,Reform-CEM primary
 Mixed|Diesel-Only|25yr+,1992,22,1,Reform-CEM primary
@@ -2942,6 +3452,11 @@ Mixed|Diesel-Only|25yr+,2000,22,1,Reform-CEM primary
 Mixed|Diesel-Only|25yr+,2001,22,1,Reform-CEM primary
 Mixed|Diesel-Only|25yr+,2002,22,1,Reform-CEM primary
 Mixed|Diesel-Only|25yr+,2003,22,1,Reform-CEM primary
+All-DW|Diesel-Only|25yr+,1985,12,1,Reform-CEM primary
+All-DW|Diesel-Only|25yr+,1986,12,1,Reform-CEM primary
+All-DW|Diesel-Only|25yr+,1987,12,1,Reform-CEM primary
+All-DW|Diesel-Only|25yr+,1988,12,1,Reform-CEM primary
+All-DW|Diesel-Only|25yr+,1989,12,1,Reform-CEM primary
 All-DW|Diesel-Only|25yr+,1990,12,1,Reform-CEM primary
 All-DW|Diesel-Only|25yr+,1991,12,1,Reform-CEM primary
 All-DW|Diesel-Only|25yr+,1992,12,1,Reform-CEM primary
@@ -2954,6 +3469,11 @@ All-DW|Diesel-Only|25yr+,1998,12,1,Reform-CEM primary
 All-DW|Diesel-Only|25yr+,1999,12,1,Reform-CEM primary
 All-DW|Diesel-Only|25yr+,2000,11,1,Reform-CEM primary
 All-DW|Diesel-Only|25yr+,2001,10,1,Reform-CEM primary
+All-DW|Diesel-Only|15-19yr,1985,30,1,Reform-CEM primary
+All-DW|Diesel-Only|15-19yr,1986,30,1,Reform-CEM primary
+All-DW|Diesel-Only|15-19yr,1987,30,1,Reform-CEM primary
+All-DW|Diesel-Only|15-19yr,1988,30,1,Reform-CEM primary
+All-DW|Diesel-Only|15-19yr,1989,30,1,Reform-CEM primary
 All-DW|Diesel-Only|15-19yr,1990,30,1,Reform-CEM primary
 All-DW|Diesel-Only|15-19yr,1991,30,1,Reform-CEM primary
 All-DW|Diesel-Only|15-19yr,1992,30,1,Reform-CEM primary
@@ -2983,6 +3503,11 @@ All-DW|Diesel-Only|15-19yr,2015,21,1,Reform-CEM primary
 All-DW|Diesel-Only|15-19yr,2016,21,1,Reform-CEM primary
 All-DW|Diesel-Only|15-19yr,2017,20,1,Reform-CEM primary
 All-DW|Diesel-Only|15-19yr,2018,20,1,Reform-CEM primary
+Mixed|Diesel-Only|15-19yr,1985,3,1,Reform-CEM primary
+Mixed|Diesel-Only|15-19yr,1986,3,1,Reform-CEM primary
+Mixed|Diesel-Only|15-19yr,1987,3,1,Reform-CEM primary
+Mixed|Diesel-Only|15-19yr,1988,3,1,Reform-CEM primary
+Mixed|Diesel-Only|15-19yr,1989,3,1,Reform-CEM primary
 Mixed|Diesel-Only|15-19yr,1990,3,1,Reform-CEM primary
 Mixed|Diesel-Only|15-19yr,1991,3,1,Reform-CEM primary
 Mixed|Diesel-Only|15-19yr,1992,3,1,Reform-CEM primary
@@ -3028,6 +3553,10 @@ Mixed|Diesel-Only|25yr+,2015,21,0,Reform-CEM primary
 Mixed|Diesel-Only|25yr+,2016,21,0,Reform-CEM primary
 Mixed|Diesel-Only|25yr+,2017,21,0,Reform-CEM primary
 Mixed|Diesel-Only|25yr+,2018,21,0,Reform-CEM primary
+Mixed|Diesel-Only|10-14yr,1986,1,0,Reform-CEM primary
+Mixed|Diesel-Only|10-14yr,1987,2,0,Reform-CEM primary
+Mixed|Diesel-Only|10-14yr,1988,2,0,Reform-CEM primary
+Mixed|Diesel-Only|10-14yr,1989,2,0,Reform-CEM primary
 Mixed|Diesel-Only|10-14yr,1990,2,0,Reform-CEM primary
 Mixed|Diesel-Only|10-14yr,1991,2,0,Reform-CEM primary
 Mixed|Diesel-Only|10-14yr,1992,2,0,Reform-CEM primary

@@ -1,19 +1,19 @@
 outcome,wall,is_ref,est,se,ci_lo,ci_hi,p,stars,outcome_f
-Any Tank Closure,All-DW,TRUE,-0.003194,0.004263,-0.01155,0.005161,0.4537,"",Any Tank Closure
-Any Tank Closure,Mixed,FALSE,-0.004897,0.006619,-0.017871,0.008077,0.4594,"",Any Tank Closure
-Any Tank Closure,All-SW,FALSE,0.015331,0.005142,0.005253,0.025409,0.0029,***,Any Tank Closure
-Facility Exit,All-DW,TRUE,0.004119,0.004198,-0.00411,0.012348,0.3266,"",Facility Exit
-Facility Exit,Mixed,FALSE,0.011175,0.003626,0.004068,0.018282,0.0021,***,Facility Exit
-Facility Exit,All-SW,FALSE,0.013795,0.005034,0.003928,0.023662,0.0061,***,Facility Exit
-Tank Upgrade,All-DW,TRUE,0.000132,0.001503,-0.002814,0.003079,0.9298,"",Tank Upgrade
-Tank Upgrade,Mixed,FALSE,-0.013591,0.005762,-0.024885,-0.002297,0.0183,**,Tank Upgrade
-Tank Upgrade,All-SW,FALSE,0.001526,0.000845,-0.000131,0.003182,0.071,*,Tank Upgrade
-Tank Stock Reduction,All-DW,TRUE,-0.003483,0.005055,-0.013391,0.006426,0.4909,"",Tank Stock Reduction
-Tank Stock Reduction,Mixed,FALSE,0.007245,0.004532,-0.001637,0.016128,0.1099,"",Tank Stock Reduction
-Tank Stock Reduction,All-SW,FALSE,0.013701,0.004893,0.00411,0.023292,0.0051,***,Tank Stock Reduction
-Total Leak Discovery,All-DW,TRUE,-0.003605,0.003613,-0.010687,0.003477,0.3184,"",Total Leak Discovery
-Total Leak Discovery,Mixed,FALSE,-0.012121,0.004187,-0.020327,-0.003915,0.0038,***,Total Leak Discovery
-Total Leak Discovery,All-SW,FALSE,-0.012274,0.003543,-0.019219,-0.00533,0.0005,***,Total Leak Discovery
-Background Leak Discovery,All-DW,TRUE,-0.006173,0.004044,-0.014099,0.001753,0.1269,"",Background Leak Discovery
-Background Leak Discovery,Mixed,FALSE,-0.009793,0.004739,-0.019082,-0.000504,0.0388,**,Background Leak Discovery
-Background Leak Discovery,All-SW,FALSE,-0.006656,0.00255,-0.011653,-0.001659,0.009,***,Background Leak Discovery
+Any Tank Closure,All-DW,TRUE,-0.001323,0.002737,-0.006687,0.004042,0.6289,"",Any Tank Closure
+Any Tank Closure,Mixed,FALSE,-0.003897,0.005745,-0.015158,0.007363,0.4975,"",Any Tank Closure
+Any Tank Closure,All-SW,FALSE,0.014058,0.004974,0.00431,0.023807,0.0047,***,Any Tank Closure
+Facility Exit,All-DW,TRUE,0.003879,0.003912,-0.003788,0.011547,0.3214,"",Facility Exit
+Facility Exit,Mixed,FALSE,0.010231,0.00337,0.003627,0.016836,0.0024,***,Facility Exit
+Facility Exit,All-SW,FALSE,0.012463,0.004519,0.003605,0.02132,0.0058,***,Facility Exit
+Tank Upgrade,All-DW,TRUE,0.000088,0.001467,-0.002787,0.002963,0.9521,"",Tank Upgrade
+Tank Upgrade,Mixed,FALSE,-0.012541,0.004833,-0.022015,-0.003067,0.0095,***,Tank Upgrade
+Tank Upgrade,All-SW,FALSE,0.002085,0.00095,0.000224,0.003946,0.0281,**,Tank Upgrade
+Tank Stock Reduction,All-DW,TRUE,-0.001002,0.003792,-0.008433,0.00643,0.7916,"",Tank Stock Reduction
+Tank Stock Reduction,Mixed,FALSE,0.007988,0.004112,-0.000071,0.016046,0.0521,*,Tank Stock Reduction
+Tank Stock Reduction,All-SW,FALSE,0.012008,0.00456,0.003071,0.020945,0.0085,***,Tank Stock Reduction
+Total Leak Discovery,All-DW,TRUE,-0.006871,0.003173,-0.013089,-0.000652,0.0303,**,Total Leak Discovery
+Total Leak Discovery,Mixed,FALSE,-0.014659,0.004237,-0.022964,-0.006354,0.0005,***,Total Leak Discovery
+Total Leak Discovery,All-SW,FALSE,-0.013075,0.003478,-0.019893,-0.006258,0.0002,***,Total Leak Discovery
+Background Leak Discovery,All-DW,TRUE,-0.008023,0.003943,-0.015751,-0.000296,0.0418,**,Background Leak Discovery
+Background Leak Discovery,Mixed,FALSE,-0.010732,0.004095,-0.018758,-0.002705,0.0088,***,Background Leak Discovery
+Background Leak Discovery,All-SW,FALSE,-0.007345,0.002203,-0.011663,-0.003026,0.0009,***,Background Leak Discovery

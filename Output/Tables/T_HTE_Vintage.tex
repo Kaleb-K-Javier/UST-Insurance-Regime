@@ -1,0 +1,35 @@
+\begin{table}[htbp]
+\centering
+\caption{Heterogeneous Treatment Effects by Tank Vintage at Reform: Mandate-Exposed (Pre-1989) vs.\ Mandate-Exempt (All-Post-1989) Facilities.}
+\label{tab:hte_vintage}
+\begin{tabular}{lcccc}
+\toprule
+ & Pre-1989 & All-Post-1989 & Difference & Diff $p$ \\
+ & (mandate-exposed) & (mandate-exempt) & (post -- pre) & \\
+\midrule
+Any Tank Closure & 0.0121*** & 0.0109** & -0.0012 & 0.723 \\
+ & (0.0046) & (0.0043) & (0.0034) &  \\[0.3em]
+Facility Exit & 0.0127*** & -0.0019 & -0.0146*** & 0.000 \\
+ & (0.0043) & (0.0027) & (0.0027) &  \\[0.3em]
+Tank Upgrade & 0.0009 & 0.0095*** & 0.0086*** & 0.000 \\
+ & (0.0010) & (0.0014) & (0.0012) &  \\[0.3em]
+Tank Stock Reduction & 0.0113*** & 0.0016 & -0.0096*** & 0.000 \\
+ & (0.0043) & (0.0033) & (0.0027) &  \\[0.3em]
+Total Leak Discovery & -0.0130*** & -0.0064*** & 0.0066*** & 0.002 \\
+ & (0.0034) & (0.0024) & (0.0022) &  \\[0.3em]
+Background Leak Discovery & -0.0079*** & -0.0028 & 0.0051*** & 0.005 \\
+ & (0.0023) & (0.0018) & (0.0018) &  \\[0.3em]
+\midrule
+$N$ (fac-years) & \multicolumn{4}{c}{3,026,100} \\
+$N$ facilities  & 89,711 & 15,439 & \multicolumn{2}{c}{} \\
+Cell$\times$Year FE & \multicolumn{4}{c}{3D (make\_model\_fac $\times$ year)} \\
+CEM weights          & \multicolumn{4}{c}{Yes} \\
+Mandate controls     & \multicolumn{4}{c}{Yes} \\
+Sample               & \multicolumn{4}{c}{Reform-CEM, vintage-classified} \\
+\bottomrule
+\end{tabular}
+\begin{minipage}{\linewidth}
+\small
+\textit{Notes:} LPM coefficients from a single regression per outcome with a treatment $\times$ vintage interaction. \textit{Pre-1989}: facility had at least one tank installed in 1988 or earlier (\texttt{had\_pre1989\_tanks} $= 1$). These tanks are subject to the federal UST mandates: release detection (1989--1993), spill/overfill prevention (Dec 1994), and tank integrity (Dec 1998). \textit{All-Post-1989}: every tank at the facility was installed in 1990 or later (\texttt{all\_post1989} $= 1$); these tanks are exempt from the retrofit mandates above. The Pre-1989 column reports the ATT for mandate-exposed facilities (ref). The All-Post-1989 column reports the ATT for mandate-exempt facilities. The Difference column reports the interaction coefficient (mandate-exempt minus mandate-exposed); a non-zero value indicates that mandate exposure amplifies or substitutes for the insurance-reform channel. Cluster-robust SEs by state. $^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.
+\end{minipage}
+\end{table}

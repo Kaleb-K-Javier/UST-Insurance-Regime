@@ -3,37 +3,44 @@
 \caption{Table 3: What Do Replacements Do to the Portfolio? Effect of the Texas Insurance Reform on Facility Portfolio Composition.}
 \label{tab:t3_portfolio}
 \resizebox{\textwidth}{!}{
-\begin{tabular}{lcccc}
+\begin{tabular}{lccccc}
 \toprule
-Outcome & (1) Year FE & (2) Cell$\times$Yr & (3) 2D-Cell$\times$Yr & Ctrl Mean \\
+Outcome & (1) Year FE & (2) Cell$\times$Yr & (3) 2D-Cell$\times$Yr & (4) BJS & Ctrl Mean \\
 \midrule
-SW Tank Removed, DW Tank Installed (0/1) & 0.0018*** & 0.0012* & 0.0016** & 0.0030 \\
- & (0.0005) & (0.0006) & (0.0007) &  \\[0.3em]
-Any DW Tank Installed This Year (0/1) & 0.0006 & -0.0009 & -0.0004 & 0.0138 \\
- & (0.0026) & (0.0010) & (0.0012) &  \\[0.3em]
-Net Change in Tank Count (continuous) & -0.0314*** & -0.0260** & -0.0304*** & -0.0263 \\
- & (0.0094) & (0.0119) & (0.0101) &  \\[0.3em]
-Change in Total Capacity, gallons (continuous) & -316.0850*** & -288.3101*** & -308.6747*** & -98.2379 \\
- & (60.7569) & (67.9809) & (61.9043) &  \\[0.3em]
-Single-Wall Tanks at End of Year (continuous) & -0.0502 & -0.0675 & -0.0550 & 2.6410 \\
- & (0.0548) & (0.0478) & (0.0494) &  \\[0.3em]
-Double-Wall Tanks at End of Year (continuous) & -0.0364 & -0.0203 & -0.0301** & 0.1955 \\
- & (0.0250) & (0.0137) & (0.0138) &  \\[0.3em]
-Share of Portfolio That Is Single-Wall (0--1) & -0.0047 & -0.0110 & -0.0078 & 0.9082 \\
- & (0.0108) & (0.0076) & (0.0076) &  \\[0.3em]
+SW Tank Removed, DW Tank Installed (0/1) & 0.0015*** & 0.0012* & 0.0014** &    NANA & 0.0021 \\
+ & (0.0003) & (0.0006) & (0.0006) & (   NA) &  \\
+ \hspace{1em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.3em]
+Any DW Tank Installed This Year (0/1) & 0.0002 & -0.0007 & -0.0007 &    NANA & 0.0106 \\
+ & (0.0025) & (0.0009) & (0.0008) & (   NA) &  \\
+ \hspace{1em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.3em]
+Net Change in Tank Count (continuous) & -0.0266** & -0.0224* & -0.0254** &    NANA & -0.0158 \\
+ & (0.0098) & (0.0118) & (0.0104) & (   NA) &  \\
+ \hspace{1em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.3em]
+Change in Total Capacity, gallons (continuous) & -3148.2278 & -3501.1598 & -3363.6344 &    NANA & -1057.0965 \\
+ & (2949.4909) & (3364.9906) & (3198.0114) & (   NA) &  \\
+ \hspace{1em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.3em]
+Single-Wall Tanks at End of Year (continuous) & -0.0604 & -0.0821 & -0.0703 &    NANA & 2.7307 \\
+ & (0.0656) & (0.0546) & (0.0592) & (   NA) &  \\
+ \hspace{1em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.3em]
+Double-Wall Tanks at End of Year (continuous) & -0.0438 & -0.0227 & -0.0326** &    NANA & 0.1450 \\
+ & (0.0357) & (0.0149) & (0.0151) & (   NA) &  \\
+ \hspace{1em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.3em]
+Share of Portfolio That Is Single-Wall (0--1) & -0.0005 & -0.0088 & -0.0050 &    NANA & 0.9242 \\
+ & (0.0125) & (0.0075) & (0.0078) & (   NA) &  \\
+ \hspace{1em}\textit{boot $p$ (col 2)} & &   NA & \multicolumn{2}{c}{} &  \\[0.3em]
 \midrule
-$N$ & \multicolumn{4}{c}{2,605,834} \\
-Facility FE            & Yes & Yes & Yes & \\
-Year FE                & Yes & Yes & Yes & \\
-Cell$\times$Year FE   & No  & 3D  & 2D  & \\
-CEM weights            & Yes & Yes & Yes & \\
-Mandate controls       & Yes & Yes & Yes & \\
-Sample & \multicolumn{4}{c}{Reform-CEM matched, all facility-years} \\
+$N$ & \multicolumn{5}{c}{3,028,689} \\
+Facility FE            & Yes & Yes & Yes & -- & \\
+Year FE                & Yes & Yes & Yes & -- & \\
+Cell$\times$Year FE   & No  & 3D  & 2D  & -- & \\
+CEM weights            & Yes & Yes & Yes & Yes & \\
+Mandate controls       & Yes & Yes & Yes & Yes & \\
+Sample & \multicolumn{5}{c}{Reform-CEM matched, all facility-years} \\
 \bottomrule
 \end{tabular}
 }
 \begin{minipage}{\linewidth}
 \small
-\textit{Notes:} OLS coefficients. Unconditional estimates on all reform-CEM facility-years. Binary outcomes (rows 1--2) estimated by LPM; continuous outcomes (rows 3--7) by OLS. The reform shifts portfolio composition through the replacement channel documented in Table 2 Panel B, but these regressions do not condition on replacement occurring and are causally interpretable. 3D Cell$\times$Year FE: make\_model\_fac (wall$\times$fuel$\times$age) $\times$ year. 2D Cell$\times$Year FE: fac\_wall$\times$fac\_fuel$\times$year (robustness: drops age bin from cell definition). Cluster-robust SEs by state (17 clusters). $^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.
+\textit{Notes:} OLS coefficients. Unconditional estimates on all reform-CEM facility-years. Binary outcomes (rows 1--2) estimated by LPM; continuous outcomes (rows 3--7) by OLS. The reform shifts portfolio composition through the replacement channel documented in Table 2 Panel B, but these regressions do not condition on replacement occurring and are causally interpretable. 3D Cell$\times$Year FE: make\_model\_fac (wall$\times$fuel$\times$age) $\times$ year. 2D Cell$\times$Year FE: fac\_wall$\times$fac\_fuel$\times$year (robustness: drops age bin from cell definition). Col (4) reports the Borusyak, Jaravel, and Spiess (2024) two-stage imputation estimator. Bootstrap p-values for col (2) are from a wild cluster score bootstrap (Kline-Santos 2012) with Rademacher weights, B = 9999. Cluster-robust SEs by state (17 clusters). $^{*}p<0.10$, $^{**}p<0.05$, $^{***}p<0.01$.
 \end{minipage}
 \end{table}

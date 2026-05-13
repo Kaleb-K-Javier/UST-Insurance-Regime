@@ -1,7 +1,8 @@
 outcome,col,sample,fe,beta,se,p,stars,n,ctrl_mean
-any_closure,col1,full_incumbent,naive,0.016265,0.00484,0.0037,***,3559551,0.032588
-any_closure,col2,full_incumbent,naive+mand,0.016254,0.004781,0.0034,***,3559551,0.032588
-any_closure,col3,full_incumbent,primary_nomatch,0.014737,0.004924,0.0082,***,2614051,0.032588
-any_closure,col4,reform_cem,naive_cem,0.015921,0.003535,0.0003,***,2605863,0.032588
-any_closure,col5,reform_cem,primary,0.012963,0.00466,0.0128,**,2605834,0.032588
-any_closure,col6,reform_cem,fe3dim,0.015849,0.004182,0.0015,***,2605863,0.032588
+any_closure,col1,full_incumbent,naive,0.013877,0.00502,0.0133,**,4650240,0.026456
+any_closure,col2,full_incumbent,naive+mand,0.013998,0.004715,0.0086,***,4650240,0.026456
+any_closure,col3,full_incumbent,primary_nomatch,0.013664,0.004795,0.0111,**,3038178,0.026456
+any_closure,col4,reform_cem,naive_cem,0.013972,0.003543,0.001,***,3028719,0.026456
+any_closure,col5,reform_cem,primary,0.012131,0.004505,0.0154,**,3028689,0.026456
+any_closure,col6,reform_cem,fe3dim,0.01403,0.003992,0.0027,***,3028719,0.026456
+any_closure,col7,reform_cem,bjs_imputation,,,,,,0.026456

@@ -1,7 +1,7 @@
 label,sample,n_pre_coefs,F_stat,p_val
-AnyClosure,reform_cem,8,6.06,0
-FacilityExit,reform_cem,8,21.922,0
-Upgrade,reform_cem,8,21.427,0
-Shrink,reform_cem,8,4.531,0
-LUSTTotal,reform_cem,8,81.207,0
-LUSTBackground,reform_cem,8,58.134,0
+AnyClosure,sec2_ref_minus2,10,13.343,0
+FacilityExit,sec2_ref_minus2,10,55.756,0
+Upgrade,sec2_ref_minus2,10,19.129,0
+Shrink,sec2_ref_minus2,10,21.459,0
+LUSTTotal,sec2_ref_minus2,10,260.157,0
+LUSTBackground,sec2_ref_minus2,10,162.412,0

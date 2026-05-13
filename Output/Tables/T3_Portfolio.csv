@@ -1,22 +1,29 @@
 outcome,row_label,col,beta,se,p,stars,n,ctrl_mean
-single_to_double_year,"SW Tank Removed, DW Tank Installed (0/1)",col1,0.001793,0.00051,0.0027,***,2605863,0.00304
-single_to_double_year,"SW Tank Removed, DW Tank Installed (0/1)",col2,0.001161,0.000634,0.0846,*,2605834,0.00304
-single_to_double_year,"SW Tank Removed, DW Tank Installed (0/1)",col3,0.001571,0.00069,0.036,**,2605863,0.00304
-double_walled_installed_year,Any DW Tank Installed This Year (0/1),col1,0.000584,0.002642,0.8276,"",2605863,0.013784
-double_walled_installed_year,Any DW Tank Installed This Year (0/1),col2,-0.000911,0.000965,0.3584,"",2605834,0.013784
-double_walled_installed_year,Any DW Tank Installed This Year (0/1),col3,-0.00041,0.001239,0.7446,"",2605863,0.013784
-net_tank_change,Net Change in Tank Count (continuous),col1,-0.031395,0.009357,0.0038,***,2590296,-0.026329
-net_tank_change,Net Change in Tank Count (continuous),col2,-0.025955,0.011897,0.0435,**,2590268,-0.026329
-net_tank_change,Net Change in Tank Count (continuous),col3,-0.030368,0.010112,0.008,***,2590296,-0.026329
-capacity_change_year,"Change in Total Capacity, gallons (continuous)",col1,-316.085001,60.756893,0.0001,***,2590296,-98.2379
-capacity_change_year,"Change in Total Capacity, gallons (continuous)",col2,-288.310127,67.980873,0.0006,***,2590268,-98.2379
-capacity_change_year,"Change in Total Capacity, gallons (continuous)",col3,-308.674698,61.904348,0.0001,***,2590296,-98.2379
-n_sw_eoy,Single-Wall Tanks at End of Year (continuous),col1,-0.050163,0.054753,0.3724,"",2605863,2.641027
-n_sw_eoy,Single-Wall Tanks at End of Year (continuous),col2,-0.067541,0.047828,0.1759,"",2605834,2.641027
-n_sw_eoy,Single-Wall Tanks at End of Year (continuous),col3,-0.055007,0.049358,0.2806,"",2605863,2.641027
-n_dw_eoy,Double-Wall Tanks at End of Year (continuous),col1,-0.036363,0.024956,0.1633,"",2605863,0.195535
-n_dw_eoy,Double-Wall Tanks at End of Year (continuous),col2,-0.020285,0.013675,0.1563,"",2605834,0.195535
-n_dw_eoy,Double-Wall Tanks at End of Year (continuous),col3,-0.030129,0.01381,0.0435,**,2605863,0.195535
-pct_sw,Share of Portfolio That Is Single-Wall (0--1),col1,-0.004735,0.010807,0.6668,"",2605863,0.908173
-pct_sw,Share of Portfolio That Is Single-Wall (0--1),col2,-0.011046,0.00757,0.1627,"",2605834,0.908173
-pct_sw,Share of Portfolio That Is Single-Wall (0--1),col3,-0.007789,0.007613,0.3206,"",2605863,0.908173
+single_to_double_year,"SW Tank Removed, DW Tank Installed (0/1)",col1,0.001521,0.000335,0.0003,***,3028719,0.002127
+single_to_double_year,"SW Tank Removed, DW Tank Installed (0/1)",col2,0.001155,0.000568,0.0581,*,3028689,0.002127
+single_to_double_year,"SW Tank Removed, DW Tank Installed (0/1)",col3,0.001393,0.000587,0.0297,**,3028719,0.002127
+single_to_double_year,"SW Tank Removed, DW Tank Installed (0/1)",col4,,,,,,0.002127
+double_walled_installed_year,Any DW Tank Installed This Year (0/1),col1,0.000225,0.002494,0.9293,"",3028719,0.010633
+double_walled_installed_year,Any DW Tank Installed This Year (0/1),col2,-0.000703,0.000879,0.4346,"",3028689,0.010633
+double_walled_installed_year,Any DW Tank Installed This Year (0/1),col3,-0.000651,0.000827,0.4421,"",3028719,0.010633
+double_walled_installed_year,Any DW Tank Installed This Year (0/1),col4,,,,,,0.010633
+net_tank_change,Net Change in Tank Count (continuous),col1,-0.026591,0.009777,0.0146,**,2923453,-0.015817
+net_tank_change,Net Change in Tank Count (continuous),col2,-0.022381,0.011792,0.0748,*,2923424,-0.015817
+net_tank_change,Net Change in Tank Count (continuous),col3,-0.02544,0.010447,0.0262,**,2923453,-0.015817
+net_tank_change,Net Change in Tank Count (continuous),col4,,,,,,-0.015817
+capacity_change_year,"Change in Total Capacity, gallons (continuous)",col1,-3148.227786,2949.490949,0.3007,"",2923453,-1057.096481
+capacity_change_year,"Change in Total Capacity, gallons (continuous)",col2,-3501.159805,3364.990612,0.3127,"",2923424,-1057.096481
+capacity_change_year,"Change in Total Capacity, gallons (continuous)",col3,-3363.634435,3198.011351,0.3076,"",2923453,-1057.096481
+capacity_change_year,"Change in Total Capacity, gallons (continuous)",col4,,,,,,-1057.096481
+n_sw_eoy,Single-Wall Tanks at End of Year (continuous),col1,-0.060372,0.065644,0.3706,"",3028719,2.730716
+n_sw_eoy,Single-Wall Tanks at End of Year (continuous),col2,-0.082129,0.05461,0.151,"",3028689,2.730716
+n_sw_eoy,Single-Wall Tanks at End of Year (continuous),col3,-0.070255,0.059153,0.2513,"",3028719,2.730716
+n_sw_eoy,Single-Wall Tanks at End of Year (continuous),col4,,,,,,2.730716
+n_dw_eoy,Double-Wall Tanks at End of Year (continuous),col1,-0.04375,0.035708,0.2372,"",3028719,0.145043
+n_dw_eoy,Double-Wall Tanks at End of Year (continuous),col2,-0.022725,0.014934,0.1465,"",3028689,0.145043
+n_dw_eoy,Double-Wall Tanks at End of Year (continuous),col3,-0.032576,0.015124,0.0459,**,3028719,0.145043
+n_dw_eoy,Double-Wall Tanks at End of Year (continuous),col4,,,,,,0.145043
+pct_sw,Share of Portfolio That Is Single-Wall (0--1),col1,-0.00049,0.012495,0.9692,"",3028719,0.924159
+pct_sw,Share of Portfolio That Is Single-Wall (0--1),col2,-0.008779,0.007542,0.2605,"",3028689,0.924159
+pct_sw,Share of Portfolio That Is Single-Wall (0--1),col3,-0.005046,0.007807,0.5266,"",3028719,0.924159
+pct_sw,Share of Portfolio That Is Single-Wall (0--1),col4,,,,,,0.924159

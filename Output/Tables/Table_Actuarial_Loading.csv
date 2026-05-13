@@ -1,0 +1,2 @@
+spearman_premium_vs_hazard,spearman_premium_vs_el,pearson_r_premium_vs_el,lambda_ols_pertank,lambda_mean_pertank,lambda_median_pertank,spearman_rho_facility,n_cells,premium_period,scope,note
+0.983,0.983,0.942,0.386,0.519,0.52,-0.833,9,2006-2014 (P1 baseline),Single-walled facilities only; TX Mid-Continent,"Main alignment: premium vs TX-estimated leak hazard (risk-signal transmission). Backup: premium vs constructed per-tank EL, where L_hat is a 6-state donor curve (no TX claim data). Loading factor is descriptive only — interpret as direction, not pricing adequacy."
