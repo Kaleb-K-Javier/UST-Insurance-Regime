@@ -1,0 +1,101 @@
+Warning message:
+package 'data.table' was built under R version 4.5.3 
+
+✓ model_b_estimator.R loaded
+  Key functions:
+    - create_estimation_config_model_b()
+    - npl_estimator_model_b()
+    - generate_model_b_data()
+    - test_model_b_estimation()
+
+
+✓ improved_estimator_FINAL.r loaded
+=================================================================
+04c: Replacement-model NPL estimation (observed + extended)
+=================================================================
+
+[1/3] Loading samples...
+[observed] primitives <- C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Estimation_Results/DCM_Primitives_Replacement_observed.rds
+             obs panel  <- C:/Users/kaleb/Documents/ust_ins_move_to_github/Data/Analysis/dcm_obs_panel_observed.csv
+             rows = 2,282,735 | facilities = 139,493 | replace share = 11.8%
+[extended] primitives <- C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Estimation_Results/DCM_Primitives_Replacement_extended.rds
+             obs panel  <- C:/Users/kaleb/Documents/ust_ins_move_to_github/Data/Analysis/dcm_obs_panel_extended.csv
+             rows = 2,428,673 | facilities = 144,249 | replace share = 11.9%
+
+[2/3] Running NPL estimator on each sample...
+
+--- Estimating: observed (TX 2006+, controls 1999+) ---
+
+=== NPL ESTIMATOR — REPLACEMENT MODEL (Option A, 4-Param) ===
+    sample = observed (TX 2006+, controls 1999+) | n_obs = 2,282,735 | n_facilities = 139,493
+    initial CCPs: split of primitives$P0_mat
+    iter   1: kappa= 25.906 K=   5.207 gP= 0.085 gR= 0.193 | dTh=5.9e+00 dP=2.3e-02 LL=-269271.0
+    iter   2: kappa= 26.125 K=   5.178 gP=-0.294 gR= 0.164 | dTh=3.8e-01 dP=3.9e-03 LL=-268478.0
+    iter   3: kappa= 26.122 K=   5.177 gP=-0.293 gR= 0.164 | dTh=3.0e-03 dP=1.6e-04 LL=-268481.4
+    iter   5: kappa= 26.122 K=   5.178 gP=-0.293 gR= 0.164 | dTh=5.8e-05 dP=7.5e-06 LL=-268481.4
+    iter  10: kappa= 26.122 K=   5.178 gP=-0.293 gR= 0.164 | dTh=6.7e-06 dP=1.2e-06 LL=-268481.4
+
+    *** CONVERGED at iter 10 ***
+    theta_hat: kappa_exit=26.1222 K=5.1779 gP=-0.2932 gR=0.1644
+    elapsed: 71.5 sec
+
+--- Estimating: extended (TX 1999+ engine-imputed, controls 1999+) ---
+
+=== NPL ESTIMATOR — REPLACEMENT MODEL (Option A, 4-Param) ===
+    sample = extended (TX 1999+ with engine-imputed pre-2006, controls 1999+) | n_obs = 2,428,673 | n_facilities = 144,249
+    initial CCPs: split of primitives$P0_mat
+    iter   1: kappa= 25.560 K=   5.208 gP=-0.842 gR= 0.207 | dTh=5.6e+00 dP=2.5e-02 LL=-296229.2
+    iter   2: kappa= 25.818 K=   5.171 gP=-1.141 gR= 0.176 | dTh=3.0e-01 dP=3.9e-03 LL=-295360.0
+    iter   3: kappa= 25.815 K=   5.170 gP=-1.141 gR= 0.176 | dTh=3.0e-03 dP=1.6e-04 LL=-295362.6
+    iter   5: kappa= 25.815 K=   5.170 gP=-1.141 gR= 0.176 | dTh=5.3e-05 dP=7.8e-06 LL=-295362.6
+
+    *** CONVERGED at iter 9 ***
+    theta_hat: kappa_exit=25.8150 K=5.1706 gP=-1.1411 gR=0.1764
+    elapsed: 52.7 sec
+
+[3/3] Comparison and sanity checks
+
+--- Theta comparison: observed vs extended ---
+     sample converged n_iter   log_lik kappa_exit      K gamma_price gamma_risk
+     <char>    <lgcl>  <int>     <num>      <num>  <num>       <num>      <num>
+1: observed      TRUE     10 -268481.4    26.1222 5.1779     -0.2932     0.1644
+2: extended      TRUE      9 -295362.6    25.8150 5.1706     -1.1411     0.1764
+
+  WARNING: large shift detected between samples — possible composition
+           issue from engine-imputed pre-2006 TX premiums.
+$kappa_exit
+[1] FALSE
+
+$gamma_price
+[1] TRUE
+
+
+--- Sanity A1: absorbing-only sub-sample (drop Replace obs) ---
+    dropped 6,210 of 2,282,735 rows (0.3%)
+
+--- Estimating: absorbing-only (Replace obs dropped) ---
+
+=== NPL ESTIMATOR — REPLACEMENT MODEL (Option A, 4-Param) ===
+    sample = observed (TX 2006+, controls 1999+) | n_obs = 2,276,525 | n_facilities = 139,461
+    initial CCPs: split of primitives$P0_mat
+    iter   1: kappa= 24.734 K=  20.002 gP=-0.126 gR= 0.326 | dTh=4.7e+00 dP=1.6e-02 LL=-222801.8
+    iter   2: kappa= 24.825 K=  20.006 gP=-0.183 gR= 0.317 | dTh=9.1e-02 dP=6.6e-04 LL=-222798.4
+    iter   3: kappa= 24.825 K=  20.006 gP=-0.183 gR= 0.317 | dTh=6.4e-07 dP=3.0e-06 LL=-222798.3
+
+    *** CONVERGED at iter 3 ***
+    theta_hat: kappa_exit=24.8245 K=20.0059 gP=-0.1826 gR=0.3165
+    elapsed: 21.5 sec
+           sample converged n_iter   log_lik kappa_exit       K gamma_price
+           <char>    <lgcl>  <int>     <num>      <num>   <num>       <num>
+1: absorbing-only      TRUE      3 -222798.3    24.8245 20.0059     -0.1826
+   gamma_risk
+        <num>
+1:     0.3165
+
+Saved:
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Estimation_Results/Model_Replacement_Estimates_observed.rds 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Estimation_Results/Model_Replacement_Estimates_extended.rds 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Estimation_Results/Model_Replacement_Estimates_absorbing.rds 
+
+04c complete.
+EXIT=0

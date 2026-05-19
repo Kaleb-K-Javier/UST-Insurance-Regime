@@ -1,0 +1,17 @@
+Warning messages:
+1: package 'grf' was built under R version 4.5.3 
+2: package 'glmnet' was built under R version 4.5.3 
+3: package 'doParallel' was built under R version 4.5.3 
+4: package 'foreach' was built under R version 4.5.3 
+5: package 'iterators' was built under R version 4.5.3 
+6: package 'PRROC' was built under R version 4.5.3 
+7: package 'rlang' was built under R version 4.5.3 
+8: package 'pROC' was built under R version 4.5.3 
+9: package 'patchwork' was built under R version 4.5.3 
+Models active:   GRF=FALSE  ELNET=TRUE
+Primary model:   ELNET
+Test mode (GRF): TRUE
+
+=== 01n: Observable Risk — Actuarial Validation ===
+
+Loading: Z:/ust_ins_move_to_github/Data/Processed/facility_leak_behavior_annual.csv

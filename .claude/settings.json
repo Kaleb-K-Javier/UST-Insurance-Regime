@@ -1,0 +1,51 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -Command \"$date = Get-Date -Format 'yyyyMMdd_HHmmss'; $path = '.claude/HANDOFF.md'; $content = \\\"`n=== AUTO-CHECKPOINT: Pre-compaction $date ===`nContext approaching limit — state saved before compaction.`nResume: Load CLAUDE.md and this HANDOFF.md.`n==========================`n\\\"; Add-Content -Path $path -Value $content; Write-Host 'Checkpoint saved to .claude/HANDOFF.md'\""
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(Rscript *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "WebFetch",
+      "WebSearch",
+      "Agent",
+      "TodoWrite",
+      "AskUserQuestion",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "EnterPlanMode",
+      "EnterWorktree",
+      "ExitPlanMode",
+      "ExitWorktree",
+      "LSP",
+      "NotebookEdit",
+      "ReadMcpResourceTool",
+      "ListMcpResourcesTool",
+      "SendMessage",
+      "Skill",
+      "TaskCreate",
+      "TaskGet",
+      "TaskList",
+      "TaskOutput",
+      "TaskStop",
+      "TaskUpdate",
+      "TeamCreate",
+      "TeamDelete",
+      "ToolSearch"
+    ]
+  }
+}

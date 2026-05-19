@@ -1,0 +1,12 @@
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lrrrrrrrr}
+\hline
+Model & $k$ & $N$ & $\log L$ & AIC & BIC & LR vs nested & df & $p$-value \\
+\hline
+4-param & 4 & 2,282,735 & -268,481 & 536,971 & 537,021 & -- & -- & -- \\
+8-param & 8 & 2,282,735 & -261,770 & 523,557 & 523,658 & 13,422 & 4 & 0 \\
+8-param+FE & 25 & 2,282,735 & -251,613 & 503,277 & 503,593 & 20,314 & 17 & 0 \\
+\hline
+\multicolumn{9}{l}{\footnotesize LR tests: 8p vs 4p, then 8p+FE vs 8p.}
+\end{tabular}
+}

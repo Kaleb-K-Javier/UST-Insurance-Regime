@@ -1,0 +1,49 @@
+=================================================================
+04a: All-TX Mid-Continent premium imputation, 1999 onwards
+=================================================================
+
+[1/5] Loading raw tank snapshot and assembling static tank table...
+Warning message:
+ 1 failed to parse. 
+  Tanks: 217,725 | facilities: 56,624
+[2/5] Building synthetic facility-month panel 1999 onwards...
+  Tanks with INSTALL_DATE: 217,724
+  Years in panel: 32 (1999 to 2030)
+    [5/32] year=2003  rows=889,235
+    [10/32] year=2008  rows=867,506
+    [15/32] year=2013  rows=867,015
+    [20/32] year=2018  rows=934,995
+    [25/32] year=2023  rows=1,010,802
+  Total tank-months: 25,602,315
+[3/5] Tagging era and applying engines...
+    era_2006: 13,460,846 rows
+    era_2014: 4,323,160 rows
+    era_2019: 2,144,800 rows
+    era_2021: 5,673,509 rows
+[4/5] Aggregating to facility-year...
+  Facility-years: 568,589 | unique facilities: 31,471
+[5/5] Writing output...
+  Saved: C:/Users/kaleb/Documents/ust_ins_move_to_github/Data/Analysis/tx_midcont_premium_all_1999_onwards.csv
+  rows = 568,589
+
+Mean facility-year premium by era (USD):
+   source_era      N mean_base median_base mean_per_tank
+       <char>  <int>     <num>       <num>         <num>
+1:   era_2006 322619       943         743           266
+2:   era_2014  96359      1383        1328           354
+3:   era_2019  37993      1516        1425           375
+4:   era_2021 111618      1722        1558           404
+
+Mean facility-year premium by year (1999-onwards selected):
+   panel_year     N mean_base median_base
+        <num> <int>     <num>       <num>
+1:       1999 24928       694         478
+2:       2002 22739       816         584
+3:       2005 21756       916         708
+4:       2008 20579      1028         867
+5:       2014 19449      1271        1168
+6:       2019 18952      1497        1416
+7:       2021 18831      1594        1451
+8:       2024 18670      1752        1587
+
+04a complete.

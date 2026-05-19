@@ -1,0 +1,70 @@
+
+Attaching package: 'fixest'
+
+The following object is masked from 'package:scales':
+
+    pvalue
+
+Warning message:
+package 'fixest' was built under R version 4.5.3 
+Warning message:
+package 'marginaleffects' was built under R version 4.5.3 
+here() starts at C:/Users/kaleb/Documents/ust_ins_move_to_github
+=================================================================
+05_Claims_Analysis.R — Cleanup Cost Distributions & Correlates
+=================================================================
+
+Claims for figures: 12,541 rows across 6 states
+✓ Saved Figure: Figure_cost_distribution_pooled (.png + .pdf)
+✓ Saved Figure: Figure_cost_distribution_by_state (.png + .pdf)
+
+--- Running Descriptive Correlates ---
+Regression sample: 8,493 claim-year observations
+✓ Saved Claim Count Decomposition Table (Appendix)
+NOTE: 579 observations removed because of NA values (RHS: 579).
+NOTE: 579 observations removed because of NA values (RHS: 579).
+NOTE: 579 observations removed because of NA values (RHS: 579).
+NOTES: 579 observations removed because of NA values (RHS: 579).
+       0/2 fixed-effect singletons were removed (2 observations).
+✓ Saved Table: Table_Claims_Regression_Main.tex
+
+Rows used by m4: 7,912
+Duan smearing factor: 2.6227
+  (>1 indicates right-skewed residuals on log scale, as expected)
+Predicted cost summary (2023 USD):
+    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+   21880   253913   393038   450356   582959 10406553 
+Saved: dcm_state_loss_levels.csv (32 cells)
+Warning message:
+In rows_m4 & !is.na(wall_binary) :
+  longer object length is not a multiple of shorter object length
+Saved: dcm_loss_binary_wall.csv (16 cells)
+
+  Cell-mean expected costs (binary wall, 2023 USD):
+    age_bins   wall_binary    L_hat n_claims
+      <fctr>        <char>   <char>    <int>
+ 1:      0-5 Double-Walled $394,580      404
+ 2:      0-5 Single-Walled $722,046      343
+ 3:     5-10 Double-Walled $335,249      166
+ 4:     5-10 Single-Walled $692,932      404
+ 5:    10-15 Double-Walled $266,609      182
+ 6:    10-15 Single-Walled $517,884      876
+ 7:    15-20 Double-Walled $227,414      132
+ 8:    15-20 Single-Walled $504,113     1116
+ 9:    20-25 Double-Walled $170,308      129
+10:    20-25 Single-Walled $487,738     1101
+11:    25-30 Double-Walled $152,345       67
+12:    25-30 Single-Walled $420,016      741
+13:    30-35 Double-Walled $213,683       30
+14:    30-35 Single-Walled $356,818      399
+15:      35+ Double-Walled $317,908        4
+16:      35+ Single-Walled $312,040      357
+NOTES: 579 observations removed because of NA values (RHS: 579).
+       0/2 fixed-effect singletons were removed (2 observations).
+Warning message:
+The `newdata` data frame has 199 columns. This can slow down computation and increase memory costs. Please supply a data frame with fewer columns to the `newdata` argument, or set `options('marginaleffects_safe'=FALSE)` to silence this warning. 
+Warning message:
+The `newdata` data frame has 199 columns. This can slow down computation and increase memory costs. Please supply a data frame with fewer columns to the `newdata` argument, or set `options('marginaleffects_safe'=FALSE)` to silence this warning. 
+✓ Saved Figure: Figure_Claims_Marginal_Effects_PanelB (.png + .pdf)
+
+✓ 05_Claims_Analysis.R COMPLETE

@@ -1,0 +1,11 @@
+Warning messages:
+1: package 'data.table' was built under R version 4.5.3 
+2: package 'fixest' was built under R version 4.5.3 
+3: package 'ggplot2' was built under R version 4.5.3 
+4: package 'patchwork' was built under R version 4.5.3 
+=== 02c: enriched conditional-on-closing DiD ===
+Reading panel from: Z:/ust_ins_move_to_github/Data/Analysis/facility_panel.csv
+Error in fread(PANEL_PATH, select = c("panel_id", "state", "panel_year",  : 
+  File 'Z:/ust_ins_move_to_github/Data/Analysis/facility_panel.csv' does not exist or is non-readable. getwd()=='C:/Users/kaleb/Documents/ust_ins_move_to_github'
+Calls: fread -> stopf -> raise_condition -> signal
+Execution halted

@@ -1,0 +1,18 @@
+\begin{tabular}{lcccc}
+\toprule
+Outcome & (1) Year FE & (2) Cell$\times$Yr & (3) 2D-Cell$\times$Yr & Ctrl Mean \\
+\midrule
+Total leak discovery (0/1)        & $-0.0120$\textsuperscript{***} & $-0.0124$\textsuperscript{***} & $-0.0120$\textsuperscript{***} & 0.0147 \\
+                                  & (0.0031)                       & (0.0033)                       & (0.0032)                       &        \\[0.25em]
+\multicolumn{5}{l}{\textit{Decomposition (0--60 day window):}} \\
+\hspace{0.5em} Background          & $-0.0073$\textsuperscript{***} & $-0.0075$\textsuperscript{***} & $-0.0073$\textsuperscript{***} & 0.0121 \\
+                                  & (0.0022)                       & (0.0022)                       & (0.0022)                       &        \\
+\hspace{0.5em} Inspection-triggered & $-0.0048$\textsuperscript{***} & $-0.0051$\textsuperscript{***} & $-0.0048$\textsuperscript{**}  & 0.0026 \\
+                                  & (0.0016)                       & (0.0017)                       & (0.0017)                       &        \\
+\midrule
+$N$                  & \multicolumn{4}{c}{3{,}028{,}689}            \\
+Facility FE          & Yes      & Yes      & Yes      &              \\
+Cell$\times$Year FE  & ---      & 3D       & 2D       &              \\
+Sample               & \multicolumn{4}{c}{Reform-CEM, mandate controls, SE clustered by state (17)} \\
+\bottomrule
+\end{tabular}

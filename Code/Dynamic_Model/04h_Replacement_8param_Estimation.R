@@ -24,6 +24,28 @@ suppressPackageStartupMessages({
   library(ggplot2);    library(gridExtra)
 })
 
+.SCRIPT_BASENAME <- "04h"
+.log_path <- here::here(
+  "logs",
+  paste0(.SCRIPT_BASENAME, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".log"))
+dir.create(dirname(.log_path), recursive = TRUE, showWarnings = FALSE)
+.log <- file(.log_path, open = "wt")
+sink(.log, type = "output"); sink(.log, type = "message", append = TRUE)
+on.exit({ sink(type = "output"); sink(type = "message"); close(.log) }, add = TRUE)
+cat(sprintf("LOG START %s\nScript: %s\nR: %s\nWD: %s\n\n",
+    .log_path, .SCRIPT_BASENAME, R.version.string, getwd()))
+
+# ============================================================================
+# SAMPLE GATES — flip to TRUE to enable a sample branch.
+# extended_2000plus is currently FALSE because its upstream prereqs
+# (DCM_Primitives_Replacement_extended_2000plus.rds and
+#  Model_Replacement_Estimates_extended_2000plus.rds) are produced by 04f,
+# which is not part of Ticket 001's pipeline. Flip to TRUE once 04f outputs
+# exist locally or on Z.
+# ============================================================================
+RUN_OBSERVED          <- TRUE
+RUN_EXTENDED_2000PLUS <- FALSE
+
 source(here::here("Code", "Helpers", "improved_estimator_OPTIMIZED.r"))
 
 OUT_FIT <- here::here("Output", "Estimation_Results")
@@ -49,17 +71,19 @@ cat("======================================================================\n")
 # ---- 1. Load primitives + obs panels + 4-param fits (for theta_init) ------
 prims_obs   <- readRDS(parent_in("Output", "Estimation_Results",
                                  "DCM_Primitives_Replacement_observed.rds"))
-prims_e2k   <- readRDS(file.path(OUT_FIT,
-                                 "DCM_Primitives_Replacement_extended_2000plus.rds"))
 obs_obs     <- fread(parent_in("Data", "Analysis",
                                "dcm_obs_panel_observed.csv"))
-obs_e2k     <- fread(parent_in("Data", "Analysis",
-                               "dcm_obs_panel_extended.csv"))[panel_year >= 2000L]
-
 fit_4p_obs  <- readRDS(file.path(OUT_FIT,
                                  "Model_Replacement_Estimates_observed.rds"))
-fit_4p_e2k  <- readRDS(file.path(OUT_FIT,
-                                 "Model_Replacement_Estimates_extended_2000plus.rds"))
+
+if (RUN_EXTENDED_2000PLUS) {
+  prims_e2k  <- readRDS(file.path(OUT_FIT,
+                                  "DCM_Primitives_Replacement_extended_2000plus.rds"))
+  obs_e2k    <- fread(parent_in("Data", "Analysis",
+                                "dcm_obs_panel_extended.csv"))[panel_year >= 2000L]
+  fit_4p_e2k <- readRDS(file.path(OUT_FIT,
+                                  "Model_Replacement_Estimates_extended_2000plus.rds"))
+}
 
 
 # ---- 2. theta_init for 8-param: copy from 4-param fit (duplicate) ---------
@@ -92,16 +116,18 @@ fit_8p_obs <- npl_estimator_replacement_8p(
 saveRDS(fit_8p_obs,
         file.path(OUT_FIT, "Model_Replacement_8param_observed.rds"))
 
-cat("\n[3b] 8-param fit on EXTENDED_2000plus sample\n")
-fit_8p_e2k <- npl_estimator_replacement_8p(
-  obs_panel  = obs_e2k,
-  primitives = prims_e2k,
-  config_8p  = config_8p,
-  theta_init = build_theta_init_from_4p(fit_4p_e2k),
-  verbose    = TRUE
-)
-saveRDS(fit_8p_e2k,
-        file.path(OUT_FIT, "Model_Replacement_8param_extended_2000plus.rds"))
+if (RUN_EXTENDED_2000PLUS) {
+  cat("\n[3b] 8-param fit on EXTENDED_2000plus sample\n")
+  fit_8p_e2k <- npl_estimator_replacement_8p(
+    obs_panel  = obs_e2k,
+    primitives = prims_e2k,
+    config_8p  = config_8p,
+    theta_init = build_theta_init_from_4p(fit_4p_e2k),
+    verbose    = TRUE
+  )
+  saveRDS(fit_8p_e2k,
+          file.path(OUT_FIT, "Model_Replacement_8param_extended_2000plus.rds"))
+}
 
 
 # ---- 4. AM-2002 SEs via profile-likelihood Hessian (custom finite diff) ---
@@ -158,7 +184,9 @@ compute_am_se_8p <- function(fit, label) {
 }
 
 am_obs <- compute_am_se_8p(fit_8p_obs, "observed")
-am_e2k <- compute_am_se_8p(fit_8p_e2k, "extended_2000plus")
+if (RUN_EXTENDED_2000PLUS) {
+  am_e2k <- compute_am_se_8p(fit_8p_e2k, "extended_2000plus")
+}
 
 
 # ---- 5. Build SE table with 95% CIs ---------------------------------------
@@ -183,66 +211,89 @@ build_row <- function(fit, am, label) {
     n_obs           = fit$cache$n_obs
   )
 }
-se_tab <- rbindlist(list(
-  build_row(fit_8p_obs, am_obs, "observed (TX 2006+, controls 1999+)"),
-  build_row(fit_8p_e2k, am_e2k, "extended_2000plus (TX + controls 2000+)")
-))
+rows <- list()
+if (RUN_OBSERVED) {
+  rows[["observed"]] <- build_row(fit_8p_obs, am_obs,
+                                  "observed (TX 2006+, controls 1999+)")
+}
+if (RUN_EXTENDED_2000PLUS) {
+  rows[["extended_2000plus"]] <- build_row(fit_8p_e2k, am_e2k,
+                                           "extended_2000plus (TX + controls 2000+)")
+}
+se_tab <- rbindlist(rows)
 print(se_tab)
 fwrite(se_tab, file.path(OUT_TAB, "04h_Theta_Table_8param_AM_SE.csv"))
 
 
-# Build LaTeX table with AM SEs in (parentheses) and 95% CIs in [brackets]
+# Build LaTeX table with AM SEs in (parentheses) and 95% CIs in [brackets].
+# Sample columns are conditional on RUN_OBSERVED / RUN_EXTENDED_2000PLUS.
 fmt_d <- function(x) formatC(round(x), format = "d", big.mark = ",")
-push_d <- function(label, p_o, se_o, p_e, se_e) {
+cell_d <- function(p, se) {
   z <- qnorm(0.975)
-  c(sprintf("%s & \\$%s & \\$%s \\\\", label, fmt_d(p_o), fmt_d(p_e)),
-    sprintf("        & (\\$%s) & (\\$%s) \\\\", fmt_d(se_o), fmt_d(se_e)),
-    sprintf("        & [\\$%s, \\$%s] & [\\$%s, \\$%s] \\\\",
-            fmt_d(p_o - z * se_o), fmt_d(p_o + z * se_o),
-            fmt_d(p_e - z * se_e), fmt_d(p_e + z * se_e)))
+  c(sprintf("\\$%s", fmt_d(p)),
+    sprintf("(\\$%s)", fmt_d(se)),
+    sprintf("[\\$%s, \\$%s]", fmt_d(p - z * se), fmt_d(p + z * se)))
 }
-push_n <- function(label, p_o, se_o, p_e, se_e) {
+cell_n <- function(p, se) {
   z <- qnorm(0.975)
-  c(sprintf("%s & %.3f & %.3f \\\\", label, p_o, p_e),
-    sprintf("        & (%.3f) & (%.3f) \\\\", se_o, se_e),
-    sprintf("        & [%.3f, %.3f] & [%.3f, %.3f] \\\\",
-            p_o - z * se_o, p_o + z * se_o,
-            p_e - z * se_e, p_e + z * se_e))
+  c(sprintf("%.3f", p),
+    sprintf("(%.3f)", se),
+    sprintf("[%.3f, %.3f]", p - z * se, p + z * se))
 }
-o <- se_tab[1L]; e <- se_tab[2L]
+push <- function(label, cell_fn, get_p, get_se) {
+  cols <- list()
+  if (RUN_OBSERVED)          cols[["o"]] <- cell_fn(get_p(o), get_se(o))
+  if (RUN_EXTENDED_2000PLUS) cols[["e"]] <- cell_fn(get_p(e), get_se(e))
+  c(sprintf("%s & %s \\\\", label,
+            paste(sapply(cols, `[`, 1), collapse = " & ")),
+    sprintf("        & %s \\\\",
+            paste(sapply(cols, `[`, 2), collapse = " & ")),
+    sprintf("        & %s \\\\",
+            paste(sapply(cols, `[`, 3), collapse = " & ")))
+}
+o <- if (RUN_OBSERVED)          se_tab[sample == "observed (TX 2006+, controls 1999+)"]   else NULL
+e <- if (RUN_EXTENDED_2000PLUS) se_tab[sample == "extended_2000plus (TX + controls 2000+)"] else NULL
+
+n_samp     <- as.integer(RUN_OBSERVED) + as.integer(RUN_EXTENDED_2000PLUS)
+col_spec   <- paste0("l", paste(rep("c", n_samp), collapse = ""))
+hdr_titles <- c(if (RUN_OBSERVED) "Observed (headline)" else NULL,
+                if (RUN_EXTENDED_2000PLUS) "Extended (2000+)" else NULL)
+hdr_sub    <- c(if (RUN_OBSERVED) "TX 2006+, controls 1999+" else NULL,
+                if (RUN_EXTENDED_2000PLUS) "TX 2000+, controls 2000+" else NULL)
+ll_cells   <- c(if (RUN_OBSERVED) formatC(round(o$log_lik), format = "d", big.mark = ",") else NULL,
+                if (RUN_EXTENDED_2000PLUS) formatC(round(e$log_lik), format = "d", big.mark = ",") else NULL)
+n_cells    <- c(if (RUN_OBSERVED) formatC(o$n_obs, format = "d", big.mark = ",") else NULL,
+                if (RUN_EXTENDED_2000PLUS) formatC(e$n_obs, format = "d", big.mark = ",") else NULL)
+
 tex <- c(
   "% Auto-generated by 04h_Replacement_8param_Estimation.R",
   "% AM (2002) profile-likelihood SEs in parentheses; 95% Wald CIs in brackets.",
   "% Bootstrap SEs and MC robustness on 8-param spec deferred.",
-  "\\begin{tabular}{lcc}", "\\hline",
-  " & Observed (headline) & Extended (2000+) \\\\",
-  " & TX 2006+, controls 1999+ & TX 2000+, controls 2000+ \\\\",
+  sprintf("\\begin{tabular}{%s}", col_spec), "\\hline",
+  sprintf(" & %s \\\\", paste(hdr_titles, collapse = " & ")),
+  sprintf(" & %s \\\\", paste(hdr_sub,    collapse = " & ")),
   "\\hline",
-  push_d("$\\kappa_{\\mathrm{SW}}$", o$kappa_SW * SCALE_FACTOR, o$SE_kappa_SW * SCALE_FACTOR,
-                                       e$kappa_SW * SCALE_FACTOR, e$SE_kappa_SW * SCALE_FACTOR),
-  push_d("$\\kappa_{\\mathrm{DW}}$", o$kappa_DW * SCALE_FACTOR, o$SE_kappa_DW * SCALE_FACTOR,
-                                       e$kappa_DW * SCALE_FACTOR, e$SE_kappa_DW * SCALE_FACTOR),
-  push_d("$K_{\\mathrm{SW}}$", o$K_SW * SCALE_FACTOR, o$SE_K_SW * SCALE_FACTOR,
-                                  e$K_SW * SCALE_FACTOR, e$SE_K_SW * SCALE_FACTOR),
-  push_d("$K_{\\mathrm{DW}}$", o$K_DW * SCALE_FACTOR, o$SE_K_DW * SCALE_FACTOR,
-                                  e$K_DW * SCALE_FACTOR, e$SE_K_DW * SCALE_FACTOR),
-  push_n("$\\gamma_{\\mathrm{price,FF}}$", o$gamma_price_FF, o$SE_gamma_pF,
-                                            e$gamma_price_FF, e$SE_gamma_pF),
-  push_n("$\\gamma_{\\mathrm{price,RB}}$", o$gamma_price_RB, o$SE_gamma_pR,
-                                            e$gamma_price_RB, e$SE_gamma_pR),
-  push_n("$\\gamma_{\\mathrm{risk,FF}}$",  o$gamma_risk_FF,  o$SE_gamma_rF,
-                                            e$gamma_risk_FF,  e$SE_gamma_rF),
-  push_n("$\\gamma_{\\mathrm{risk,RB}}$",  o$gamma_risk_RB,  o$SE_gamma_rR,
-                                            e$gamma_risk_RB,  e$SE_gamma_rR),
+  push("$\\kappa_{\\mathrm{SW}}$", cell_d,
+       function(d) d$kappa_SW * SCALE_FACTOR, function(d) d$SE_kappa_SW * SCALE_FACTOR),
+  push("$\\kappa_{\\mathrm{DW}}$", cell_d,
+       function(d) d$kappa_DW * SCALE_FACTOR, function(d) d$SE_kappa_DW * SCALE_FACTOR),
+  push("$K_{\\mathrm{SW}}$", cell_d,
+       function(d) d$K_SW * SCALE_FACTOR, function(d) d$SE_K_SW * SCALE_FACTOR),
+  push("$K_{\\mathrm{DW}}$", cell_d,
+       function(d) d$K_DW * SCALE_FACTOR, function(d) d$SE_K_DW * SCALE_FACTOR),
+  push("$\\gamma_{\\mathrm{price,FF}}$", cell_n,
+       function(d) d$gamma_price_FF, function(d) d$SE_gamma_pF),
+  push("$\\gamma_{\\mathrm{price,RB}}$", cell_n,
+       function(d) d$gamma_price_RB, function(d) d$SE_gamma_pR),
+  push("$\\gamma_{\\mathrm{risk,FF}}$",  cell_n,
+       function(d) d$gamma_risk_FF, function(d) d$SE_gamma_rF),
+  push("$\\gamma_{\\mathrm{risk,RB}}$",  cell_n,
+       function(d) d$gamma_risk_RB, function(d) d$SE_gamma_rR),
   "\\hline",
-  sprintf("$\\log L$ & %s & %s \\\\",
-          formatC(round(o$log_lik), format = "d", big.mark = ","),
-          formatC(round(e$log_lik), format = "d", big.mark = ",")),
-  sprintf("$N$ obs  & %s & %s \\\\",
-          formatC(o$n_obs, format = "d", big.mark = ","),
-          formatC(e$n_obs, format = "d", big.mark = ",")),
+  sprintf("$\\log L$ & %s \\\\", paste(ll_cells, collapse = " & ")),
+  sprintf("$N$ obs  & %s \\\\", paste(n_cells,  collapse = " & ")),
   "\\hline",
-  "\\multicolumn{3}{l}{\\footnotesize Point estimates with AM (2002)",
+  sprintf("\\multicolumn{%d}{l}{\\footnotesize Point estimates with AM (2002)", n_samp + 1L),
   "  profile-likelihood SEs in parentheses and 95\\% CIs in brackets.",
   "  MC robustness battery on 8-param spec deferred.}",
   "\\end{tabular}"
@@ -344,33 +395,54 @@ plot_one_wall(cell_wide[wall == "DW"], "Double-Walled",
 
 
 # ---- 8. Comparison vs 4-param (LL improvement, RMSE reduction) ------------
-ll_compare <- data.table(
-  spec    = c("4-param", "8-param"),
-  log_lik_obs  = c(fit_4p_obs$log_likelihood, fit_8p_obs$log_likelihood),
-  log_lik_e2k  = c(fit_4p_e2k$log_likelihood, fit_8p_e2k$log_likelihood)
-)
-ll_compare[, LR_obs := 2 * (log_lik_obs[2] - log_lik_obs[1])]
-ll_compare[, LR_e2k := 2 * (log_lik_e2k[2] - log_lik_e2k[1])]
+ll_compare <- data.table(spec = c("4-param", "8-param"))
+if (RUN_OBSERVED) {
+  ll_compare[, log_lik_obs := c(fit_4p_obs$log_likelihood,
+                                fit_8p_obs$log_likelihood)]
+  ll_compare[, LR_obs      := 2 * (log_lik_obs[2] - log_lik_obs[1])]
+}
+if (RUN_EXTENDED_2000PLUS) {
+  ll_compare[, log_lik_e2k := c(fit_4p_e2k$log_likelihood,
+                                fit_8p_e2k$log_likelihood)]
+  ll_compare[, LR_e2k      := 2 * (log_lik_e2k[2] - log_lik_e2k[1])]
+}
 cat("\n[8] Likelihood comparison (4-param vs 8-param):\n")
 print(ll_compare)
 fwrite(ll_compare, file.path(OUT_TAB, "04h_LL_Compare_4p_vs_8p.csv"))
 # LR test: 4 extra params, chi-sq(4) critical at 0.05 = 9.49
 cat(sprintf("\n  LR test (chi-sq(4) crit at 0.05 = 9.49):\n"))
-cat(sprintf("    observed:           LR = %.1f\n", unique(ll_compare$LR_obs)))
-cat(sprintf("    extended_2000plus:  LR = %.1f\n", unique(ll_compare$LR_e2k)))
+if (RUN_OBSERVED) {
+  cat(sprintf("    observed:           LR = %.1f\n", unique(ll_compare$LR_obs)))
+}
+if (RUN_EXTENDED_2000PLUS) {
+  cat(sprintf("    extended_2000plus:  LR = %.1f\n", unique(ll_compare$LR_e2k)))
+}
 
 
 # ---- 9. Summary ------------------------------------------------------------
+if (RUN_OBSERVED) {
+  stopifnot(file.exists(file.path(OUT_FIT,
+    "Model_Replacement_8param_observed.rds")))
+}
+
 cat("\n--- 04h SUMMARY ---\n")
-cat("8-param theta_hat (observed):\n")
-print(round(fit_8p_obs$theta_hat, 4))
-cat("\n8-param theta_hat (extended_2000plus):\n")
-print(round(fit_8p_e2k$theta_hat, 4))
+if (RUN_OBSERVED) {
+  cat("8-param theta_hat (observed):\n")
+  print(round(fit_8p_obs$theta_hat, 4))
+}
+if (RUN_EXTENDED_2000PLUS) {
+  cat("\n8-param theta_hat (extended_2000plus):\n")
+  print(round(fit_8p_e2k$theta_hat, 4))
+}
 
 cat("\nSaved:\n")
-for (f in c(
-  file.path(OUT_FIT, "Model_Replacement_8param_observed.rds"),
-  file.path(OUT_FIT, "Model_Replacement_8param_extended_2000plus.rds"),
+saved_files <- c(
+  if (RUN_OBSERVED)
+    file.path(OUT_FIT, "Model_Replacement_8param_observed.rds")
+  else NULL,
+  if (RUN_EXTENDED_2000PLUS)
+    file.path(OUT_FIT, "Model_Replacement_8param_extended_2000plus.rds")
+  else NULL,
   file.path(OUT_TAB, "04h_Theta_Table_8param_AM_SE.csv"),
   file.path(OUT_TAB, "04h_Theta_Table_8param_AM_SE.tex"),
   file.path(OUT_TAB, "04h_8param_PerCell_Fit_Wide.csv"),
@@ -378,6 +450,7 @@ for (f in c(
   file.path(OUT_TAB, "04h_LL_Compare_4p_vs_8p.csv"),
   file.path(OUT_FIG, "04h_8param_Fit_SW.png"),
   file.path(OUT_FIG, "04h_8param_Fit_DW.png")
-)) cat("  ", f, "\n")
+)
+for (f in saved_files) cat("  ", f, "\n")
 
 cat("\n04h complete.\n")

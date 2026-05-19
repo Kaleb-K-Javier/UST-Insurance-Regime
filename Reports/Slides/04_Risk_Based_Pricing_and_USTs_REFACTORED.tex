@@ -339,37 +339,67 @@ Behavior in Hazardous Industries}
 
 \frame{\titlepage}
 
-\begin{frame}
-\end{frame}
-
 \begin{frame}{Motivation}
 \phantomsection\label{motivation}
 \BerkeleyLightMode
 
+\textbf{Underground Storage Tanks (USTs) are the largest source of
+groundwater contamination in the U.S.}
+
 \begin{itemize}
 \tightlist
 \item
-  USTs sit beneath \(\sim 500{,}000\) U.S. facilities and are the
-  leading source of groundwater contamination (EPA, 2024); mean cleanup
-  \(\sim\$420{,}000\)
+  \(\sim 500{,}000\) tanks beneath the country's gas stations; a
+  confirmed release becomes a \textbf{Leaking UST (LUST)} event with
+  mean cleanup \(\sim\$420{,}000\) (EPA, 2024)
 \item
-  Strict liability internalizes damages \emph{only} when
-  \(P_i \propto \text{Risk}_i\) (Shavell, 1982). \textbf{38 states
-  charge a flat fee} \(\bar P\): zero marginal cost of aging
+  Federal law mandates liability insurance to internalize remediation
+  costs. Shavell (1982): strict liability disciplines owners \emph{only}
+  when \(P_i \propto \text{Risk}_i\)
 \item
-  Upgrading wall construction is irreversible: SW \(\to\) DW requires
-  full tank replacement (\(\sim 60\)--\(90\%\) premium; GAO, 1987)
+  \textbf{38 states charge a uniform premium} \(\bar P\) regardless of
+  age, wall type, or fuel --- zero marginal cost of aging on the
+  operator's bottom line
+\item
+  Upgrading wall construction is irreversible and expensive: single
+  \(\to\) double-wall requires full tank replacement
+  (\(\sim 60\)--\(90\%\) premium; GAO, 1987). Operators face a price
+  signal \emph{and} a sticky technology
 \end{itemize}
 
 \vfill
 
-\textbf{Question.} Does replacing flat-premium public insurance with
-risk-based private coverage induce firms to internalize environmental
-damages?
+\textbf{Research Question.} Does replacing uniform-premium public
+insurance with risk-based private coverage induce firms to internalize
+environmental damages?
 \end{frame}
 
-\begin{frame}{Today's Punchline}
-\phantomsection\label{todays-punchline}
+\begin{frame}{Empirical Strategy}
+\phantomsection\label{empirical-strategy}
+\BerkeleyLightMode
+
+\begin{itemize}
+\item
+  \textbf{Quasi-experiment.} Dec 1998: TX closes its uniform-premium
+  fund; operators forced into the risk-rated private market.
+\item
+  \textbf{Sample.} TX + 17 control states (a subset of the 38
+  uniform-premium states with usable admin data); \(\sim 9.8\)M
+  tank-years.
+\item
+  \textbf{Reduced form.} DiD with facility FE and cell\(\times\)year FE.
+\item
+  \textbf{Structural.} Dynamic discrete choice (maintain / exit /
+  replace) estimated by NPL; recovers
+  \((\kappa, K, \gamma_p, \gamma_r)\).
+\item
+  \textbf{Counterfactuals.} Subsidy, Pigouvian, mandate. Welfare \(=\)
+  firm surplus \(-\) damage PV \(-\) outlay PV.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Main Findings}
+\phantomsection\label{main-findings}
 \BerkeleyLightMode
 
 \textbf{Reduced form} \emph{(alive-at-reform sample, \(N \approx 9.8\)M
@@ -392,39 +422,18 @@ tank-years)}
   volume unchanged
 \end{itemize}
 
-\textbf{Structural (4-parameter DDC)}
+\textbf{Structural (4-parameter DDC)} \emph{(in units of annual revenue
+\(R\), with \(R \approx \$10\)k as a calibration anchor)}
 
 \begin{itemize}
 \tightlist
 \item
-  \(\hat\kappa = \$261\)k, \(\hat K = \$52\)k, \(\hat\gamma_p = -0.29\),
-  \(\hat\gamma_r = 0.16\)
+  \(\hat\kappa \approx 26\,R,\; \hat K \approx 5\,R,\; \hat\gamma_p = -0.29,\; \hat\gamma_r = 0.16\)
 \item
   All three counterfactuals (Subsidy / Pigouvian / Mandate at age 25+)
   reduce social welfare at \(E = \$17\)k (Marcus, 2021); optimal \(K\)
   subsidy \(s^* \approx 10\%\), far below 50\%
 \end{itemize}
-\end{frame}
-
-\begin{frame}{What I Do}
-\phantomsection\label{what-i-do}
-\BerkeleyLightMode
-
-\textbf{Reduced form.} Difference-in-differences exploiting the 1999 TX
-insurance reform on a 17-state CEM-matched panel; facility FE \(+\)
-cell\(\times\)year FE absorb the 1998 EPA-deadline spike \emph{within}
-tank-vintage cells. Active-at-treatment sample restriction.
-
-\textbf{Structural.} Dynamic discrete-choice model: maintain / exit /
-replace. Recovers \((\kappa, K, \gamma_p, \gamma_r)\) via Nested
-Pseudo-Likelihood (Aguirregabiria \& Mira, 2007).
-
-\textbf{Counterfactuals.} \(K\) subsidy, Pigouvian surcharge
-\(h(a)\cdot E\), and an age-based mandated-closure rule. Welfare \(=\)
-firm surplus \(-\) external damage PV \(-\) govt outlay PV.
-\end{frame}
-
-\begin{frame}
 \end{frame}
 
 \begin{frame}{}
@@ -436,95 +445,202 @@ firm surplus \(-\) external damage PV \(-\) govt outlay PV.
 \end{center}
 \end{frame}
 
-\begin{frame}{A Dynamic Decision: Maintain or Close}
-\phantomsection\label{a-dynamic-decision-maintain-or-close}
+\begin{frame}{The Agent's Decision}
+\phantomsection\label{the-agents-decision}
 \BerkeleyLightMode
 
-Each period \(t\), the facility chooses
+\textbf{The Choice.} Each period \(t\), the facility chooses
 \(d_t \in \{\text{Maintain}, \text{Close}\}\).
 
-\textbf{Flow utility (Maintain):} \(u(a) = R - C_j(a)\) --- revenue net
-of insurance premium under regime \(j\).
+\textbf{The Trade-off.}
 
-\textbf{Bellman:}
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Maintain:} Earn net revenue, pay insurance premiums.
+\item
+  \textbf{Close:} Exit and recover scrap value \(\kappa\) (liquidity of
+  land).
+\end{itemize}
+
+\textbf{Flow Utility (Maintain).}
 
 \[
-V(a) = \max \Bigl\{\, \underbrace{u(a) + \beta\, \mathbb{E}[V(a') \mid a]}_{\text{continuation}}, \;\; \underbrace{\kappa}_{\text{scrap}}\,\Bigr\}
+u(a) = \underbrace{R}_{\text{Net Revenue}} - \underbrace{C_j(a)}_{\text{Insurance Premium}}
 \]
 
-\textbf{Stopping rule:} close if \(V_{\text{cont}}(a) < \kappa\).
-
-\emph{Assumption --- full coverage:} environmental risk enters as an
-\emph{ex-ante} premium cost, not an \emph{ex-post} shock.
+\emph{Simplifying assumption (full coverage):} environmental risk enters
+as an \emph{ex-ante} premium cost, not an \emph{ex-post} shock.
 \end{frame}
 
-\begin{frame}{Three Regimes, Three Exit Ages}
-\phantomsection\label{three-regimes-three-exit-ages}
+\begin{frame}{The Dynamic Problem}
+\phantomsection\label{the-dynamic-problem}
 \BerkeleyLightMode
 
-\textbf{Flat-fee pooling (FF) --- 38 states.} ; \(C(a) = \bar P\), so
-\(\partial C / \partial a = 0\). No private incentive to close as the
-tank ages.
+\textbf{Bellman equation.}
 
-\textbf{Risk-based pricing (RB) --- Texas post-1999.} ;
-\(C(a) = \lambda \cdot h(a) \cdot L\), so
-\(\partial C / \partial a > 0\). Premium rises with the leak hazard.
+\[
+V(a) = \max \Bigl\{\, \underbrace{u(a) + \beta\, \mathbb{E}[V(a') \mid a]}_{\text{value of maintaining}}, \;\; \underbrace{\kappa}_{\text{scrap value}}\,\Bigr\}
+\]
 
-\textbf{Social optimum (SOC).} ;
-\(u_{\text{SOC}}(a) = R - h(a)\cdot(L + E)\). Planner internalizes both
-remediation \(L\) and unpriced health damages \(E\) (contamination is
-unobservable; Marcus 2021).
+\textbf{Continuation value.} The value of keeping the tank active today
+to preserve the option of operating tomorrow:
+
+\[
+V_{\text{cont}}(a) = u(a) + \beta\, \mathbb{E}[V(a') \mid a]
+\]
+
+\textbf{Optimal stopping rule.} Close if
+\(V_{\text{cont}}(a) < \kappa\).
+\end{frame}
+
+\begin{frame}{The Policy Lever: Insurance Regimes}
+\phantomsection\label{the-policy-lever-insurance-regimes}
+\BerkeleyLightMode
+
+\textbf{1. Uniform Premium Pooling (\(F\)) --- 38 states.}
+
+\begin{itemize}
+\tightlist
+\item
+  Premium: constant \(\bar P\), regardless of age or risk.
+\item
+  Marginal cost of aging: \(\;\partial C / \partial a = 0\). No
+  incentive to close aging tanks.
+\end{itemize}
+
+\textbf{2. Risk-Based Pricing (\(RB\)) --- Texas post-1999.}
+
+\begin{itemize}
+\tightlist
+\item
+  Premium: rises with the leak hazard,
+  \(C(a) = \lambda \cdot h(a) \cdot L\).
+\item
+  Marginal cost of aging: \(\;\partial C / \partial a > 0\). Aging tanks
+  become increasingly costly.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{What's the First Best?}
+\phantomsection\label{whats-the-first-best}
+\BerkeleyLightMode
+
+\textbf{Social planner's objective.} Internalize remediation costs
+(\(L\)) \emph{and} health externalities (\(E\)):
+
+\[
+u_{\text{SOC}}(a) = R - h(a) \cdot (\underbrace{L}_{\text{Remediation}} + \underbrace{E}_{\text{Health}})
+\]
+
+\textbf{Why risk-based pricing falls short.}
+
+\begin{itemize}
+\tightlist
+\item
+  Actuarial premiums reflect insurer claims data \(\rightarrow\) only
+  remediation costs (\(L\))
+\item
+  Health damages (\(E\)) generate no third-party claims: contamination
+  is unobservable (Marcus, 2021)
+\item
+  \(\Rightarrow\) Even fair risk-based pricing leaves \(E\) externalized
+\end{itemize}
+
+\textbf{Implication.} \(V_{\text{RB}}(a) > V_{\text{SOC}}(a)\) --- RBP
+induces \emph{some} closures, but not enough.
+\end{frame}
+
+\begin{frame}{Three Facts to Keep in Mind}
+\phantomsection\label{three-facts-to-keep-in-mind}
+\BerkeleyLightMode
+
+\textbf{1. Asset depreciation.} Rising leak risk drives tank value
+strictly down in age (\(V'(a) < 0\)). The regime determines whether
+private incentives align with this social decay.
+
+\textbf{2. Inefficient retention (Uniform Premium).} Static costs
+\(\bar P\) imply zero marginal cost of aging. Firms ignore risk and
+retain assets longest: \(a^*_{\text{UP}}\).
+
+\textbf{3. Partial correction (Risk-Based).} Rising premiums \(h(a)\,L\)
+imply positive marginal cost of aging. Closure accelerates to
+\(a^*_{\text{RB}}\), but still \(> a^*_{\text{SOC}}\) due to unpriced
+health damages.
 
 \begin{center}
 \Large
-$a^*_{\text{SOC}} \;<\; a^*_{\text{RB}} \;<\; a^*_{\text{FF}}$
+$a^*_{\text{SOC}} \;<\; a^*_{\text{RB}} \;<\; a^*_{\text{UP}}$
 \end{center}
+\end{frame}
 
-RBP closes the gap \emph{partially}. The residual wedge
-\(a^*_{\text{RB}} - a^*_{\text{SOC}}\) is driven by the unpriced
-externality \(E\).
+\begin{frame}{Social Optimum Exit Threshold}
+\phantomsection\label{social-optimum-exit-threshold}
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Slide_Fig_2_SOC_Exit.pdf}
+\end{center}
+\end{frame}
+
+\begin{frame}{Risk-Based vs.~Social Optimum}
+\phantomsection\label{risk-based-vs.-social-optimum}
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Slide_Fig_3_SOC_RB_Comparison.pdf}
+\end{center}
+\end{frame}
+
+\begin{frame}{Uniform Premium vs.~Social Optimum}
+\phantomsection\label{uniform-premium-vs.-social-optimum}
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Slide_Fig_5_SOC_FF_Comparison.pdf}
+\end{center}
 \end{frame}
 
 \begin{frame}{Deadweight Loss Across Regimes}
 \phantomsection\label{deadweight-loss-across-regimes}
-\LightMode
+\BerkeleyLightMode
 
-\hidefootersection
-
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.85\textwidth]{../../Output/Figures/Slide_Fig_7_Combined_DWL.pdf}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Slide_Fig_7_Combined_DWL.pdf}
 \end{center}
-
-\showfootersection
 \end{frame}
 
-\begin{frame}
+\begin{frame}{}
+\phantomsection\label{section-1}
+\BerkeleyMode
+
+\begin{center}
+\Huge \textbf{Data \& Descriptive Evidence}
+\end{center}
 \end{frame}
 
 \begin{frame}{FR Compliance: TX is a Private-Insurance Market}
 \phantomsection\label{fr-compliance-tx-is-a-private-insurance-market}
-\LightMode
+\BerkeleyLightMode
 
-\hidefootersection
-
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.80\textwidth]{../../Output/Figures/FigureA_TX_FR_Coverage_Composition.pdf}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/FigureA_TX_FR_Coverage_Composition.pdf}
 \end{center}
-
-\showfootersection
 \end{frame}
 
 \begin{frame}{Market Structure: Concentrated and Stable}
 \phantomsection\label{market-structure-concentrated-and-stable}
-\LightMode
+\BerkeleyLightMode
 
-\hidefootersection
-
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.85\textwidth]{../../Output/Figures/Figure_TX_FR_Top5_Dominance_HHI.pdf}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_TX_FR_Top5_Dominance_HHI.pdf}
 \end{center}
-
-\showfootersection
 \end{frame}
 
 \begin{frame}{Premium Construction}
@@ -556,15 +672,12 @@ characteristics.
 
 \begin{frame}{Premium Levels: Texas vs.~Control States}
 \phantomsection\label{premium-levels-texas-vs.-control-states}
-\LightMode
+\BerkeleyLightMode
 
-\hidefootersection
-
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.78\textwidth]{../../Output/Figures/04e_Premium_by_Year_Treatment.png}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/04e_Premium_by_Year_Treatment.png}
 \end{center}
-
-\showfootersection
 \end{frame}
 
 \begin{frame}{Risk Prediction: Setup}
@@ -595,91 +708,96 @@ panel:
   event rate
 \end{itemize}
 
-\textbf{Sample.} 3.93M pre-treatment facility-years, 27\{,\}455
+\textbf{Sample.} 3.93M pre-treatment facility-years; \(27{,}455\)
 confirmed first-release events.
 
 \(\hat h(x)\) feeds the next figure and the structural-model hazard
 \(h(a_t, W_i)\).
 \end{frame}
 
-\begin{frame}{We Can Predict Risk: Age and Wall Type Drive Hazard}
-\phantomsection\label{we-can-predict-risk-age-and-wall-type-drive-hazard}
-\LightMode
+\begin{frame}{Single-Walled Tanks Drive the Age--Hazard Gradient}
+\phantomsection\label{single-walled-tanks-drive-the-agehazard-gradient}
+\BerkeleyLightMode
 
-\hidefootersection
-
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.82\textwidth]{../../Output/Figures/Figure_CV_CellRisk.png}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_CV_CellRisk.png}
 \end{center}
 
-\showfootersection
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[cell-gof][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Goodness of fit $\rightarrow$}%
+};
+\end{tikzpicture}
 \end{frame}
 
 \begin{frame}{Premiums Track the Risk We Can Predict}
 \phantomsection\label{premiums-track-the-risk-we-can-predict}
-\LightMode
+\BerkeleyLightMode
 
-\hidefootersection
-
+\vspace{0.1cm}
 \begin{center}
-\includegraphics[width=0.70\textwidth]{../../Output/Figures/Figure_Premium_vs_Hazard_Raw.png}
+\includegraphics[height=0.80\textheight,keepaspectratio]{../../Output/Figures/Figure_Premium_vs_Hazard_Raw.png}
 \end{center}
 
-\showfootersection
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[premium-vs-el][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Predicted per-tank EL $\rightarrow$}%
+};
+\end{tikzpicture}
 \end{frame}
 
 \begin{frame}{Cleanup Cost Distribution}
 \phantomsection\label{cleanup-cost-distribution}
-\LightMode
+\BerkeleyLightMode
 
-\hidefootersection
-
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.78\textwidth]{../../Output/Figures/Figure_cost_distribution_pooled.png}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_cost_distribution_pooled.png}
 \end{center}
-
-\showfootersection
-\end{frame}
-
-\begin{frame}
 \end{frame}
 
 \begin{frame}{}
-\phantomsection\label{section-1}
+\phantomsection\label{section-2}
+\BerkeleyMode
+
+\begin{center}
+\Huge \textbf{Reduced Form Evidence}
+\end{center}
+\end{frame}
+
+\begin{frame}{Sample Descriptive Statistics}
+\phantomsection\label{sample-descriptive-statistics}
 \BerkeleyLightMode
 
-\vspace{0.4cm}
+\vspace{0.15cm}
 \begin{center}
+\scriptsize
 \input{../../Output/Tables/T_Desc_Stats_Slide.tex}
 \end{center}
 \end{frame}
 
-\begin{frame}{Sample and Specification}
-\phantomsection\label{sample-and-specification}
+\begin{frame}{Estimating Sample and Specification}
+\phantomsection\label{estimating-sample-and-specification}
 \BerkeleyLightMode
 
-\textbf{Sample.} Tank-year panel; alive-at-reform restriction
-\(A_f = 1\) (facility had \(\geq 1\) open tank on Dec 22, 1998). 18
-study states (TX + 17 control); CEM-matched on portfolio at reform.
-\(N \approx 9.8\)M tank-years.
-
 \textbf{Static DiD.}
-\[Y_{it} = \beta\,(\text{Texas}_{f(i)} \times \text{Post}_t) + \alpha_i + \delta_{ct} + \varepsilon_{it}\]
 
-\textbf{Event study} (replace \(\text{Post}_t\) with the full set of
-\(\mathbf{1}[t-1998=\tau]\) interactions, \(\tau \neq -1\)).
+\[Y_{it} \;=\; \beta\,(\text{Texas}_{f(i)} \times \text{Post}_t) \;+\; \alpha_i \;+\; \delta_{ct} \;+\; \varepsilon_{it}\]
+
+\textbf{Event study.}
+
+\[Y_{it} \;=\; \sum_{\tau \neq -1} \beta_\tau \cdot \bigl(\text{Texas}_{f(i)} \times \mathbf{1}[t - 1998 = \tau]\bigr) \;+\; \alpha_i \;+\; \delta_{ct} \;+\; \varepsilon_{it}\]
 
 \begin{itemize}
 \tightlist
 \item
-  \(\alpha_i\): facility FE. \(\delta_{ct}\): cell\(\times\)year FE;
+  \(\alpha_i\): facility FE. \(\delta_{ct}\): cell\(\times\)year FE with
   \(c = \{\text{wall}\times\text{fuel}\times\text{capacity}\times\text{install cohort}\}\)
 \item
-  \(\beta\) is the ATT on annual closure probability, averaged over
-  \textbf{Texas tanks at facilities active on Dec 22, 1998}
-\item
-  \emph{Identifying assumption:} conditional parallel trends within the
-  cell\(\times\)year FE. SEs clustered by state.
+  \emph{Identifying variation:} within a single tank-vintage cell, in
+  the same calendar year, \(\beta\) is the change in the
+  Texas-vs-control closure-rate gap before vs.~after Dec 22, 1998
 \end{itemize}
 \end{frame}
 
@@ -699,72 +817,71 @@ study states (TX + 17 control); CEM-matched on portfolio at reform.
 \textit{Cols add facility FE, then cell$\times$year FE. Col (3) is the headline.}
 \end{frame}
 
-\begin{frame}{Event Study: Pre-Trends Flat, Sharp Jump at \(\tau = 0\)}
-\phantomsection\label{event-study-pre-trends-flat-sharp-jump-at-tau-0}
-\LightMode
+\begin{frame}{Dynamic Closure Response in Texas}
+\phantomsection\label{dynamic-closure-response-in-texas}
+\BerkeleyLightMode
 
-\hidefootersection
-
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.85\textwidth]{../../Output/Figures/Fig_ES_Full.pdf}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Fig_ES_Full.pdf}
 \end{center}
-
-\showfootersection
 \end{frame}
 
 \begin{frame}{Heterogeneity: Pre-89 Vintage Drives the Effect}
 \phantomsection\label{heterogeneity-pre-89-vintage-drives-the-effect}
 \BerkeleyLightMode
 
-\vspace{0.4cm}
+\vspace{0.15cm}
 \begin{center}
+\scriptsize
 \input{../../Output/Tables/T_HTE_DiD_Vintage.tex}
 \end{center}
 
-\vfill
+\centering\small
 
-\centering
+\textit{Pre-89 ATT $= \hat\beta_0 + \hat\beta_1 \approx +3.1$ pp; post-88 ATT $= \hat\beta_0 \approx +0.6$ pp.}
 
-\textit{Pre-89 ATT $= \hat\beta_0 + \hat\beta_1 \approx +3.1$ pp; post-88 ATT $= \hat\beta_0 \approx +0.6$ pp. Differential $\hat\beta_1$ is $5\times$ post-88 base.}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[vintage-forest][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{ATT by install year $\rightarrow$}%
+};
+\end{tikzpicture}
 \end{frame}
 
 \begin{frame}{LUST Discovery: Both Channels Fall}
 \phantomsection\label{lust-discovery-both-channels-fall}
 \BerkeleyLightMode
 
-\vspace{0.4cm}
+\vspace{0.15cm}
 \begin{center}
+\scriptsize
 \input{../../Output/Tables/T_LUST_Incumbent_Slide.tex}
 \end{center}
 
-\vfill
-
-\centering
-
-\textit{Caveat: LUST event-study pre-trend not flat (TX leaks converging down pre-1998 due to mandate compliance). Static coefficient partly reflects that trend; see appendix ES.}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[lust-es][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{LUST event study $\rightarrow$}%
+};
+\end{tikzpicture}
 \end{frame}
 
 \begin{frame}{What Closing Firms Do: Composition Shifts to Replacement}
 \phantomsection\label{what-closing-firms-do-composition-shifts-to-replacement}
 \BerkeleyLightMode
 
-\vspace{0.4cm}
+\vspace{0.1cm}
 \begin{center}
+\scriptsize
 \input{../../Output/Tables/T2b_Enriched_Slide.tex}
 \end{center}
 
-\vfill
-
-\centering
+\centering\small
 
 \textit{Conditional on closing (sample is endogenous). Headline: replacement margin nearly doubles ($+53\%$ relative); aggregate exit volume flat.}
 \end{frame}
 
-\begin{frame}
-\end{frame}
-
 \begin{frame}{}
-\phantomsection\label{section-2}
+\phantomsection\label{section-3}
 \BerkeleyMode
 
 \begin{center}
@@ -780,7 +897,9 @@ study states (TX + 17 control); CEM-matched on portfolio at reform.
 \(\times\) 2 wall types \(\times\) 2 regimes \(= 36\) states. Actions:
 maintain / exit / replace.
 
-\textbf{Flow utility} (numeraire \(R = \$10\)k/yr).
+\textbf{Flow utility} (annual net revenue \(R\) normalized to 1;
+\emph{not directly observed} --- the model identifies \(\theta\) in
+units of \(R\)).
 
 \begin{align*}
 u^m(s) &= 1 - \gamma_p\, p_t - \gamma_r\, h(a_t)\, L \\
@@ -813,29 +932,73 @@ Each parameter is identified by a distinct moment in the choice data:
   \(\gamma_p\): cross-cell response of choice shares to premium
   variation in \((a, W, R)\)
 \item
-  \(\gamma_r\): divergence in age-closure hazard between FF and RB
-  regimes
+  \(\gamma_r\): divergence in age-closure hazard between uniform-premium
+  and risk-based regimes
 \end{itemize}
 
 NPL (Aguirregabiria \& Mira 2007); AM-2002 profile-likelihood SEs.
+\end{frame}
+
+\begin{frame}{Structural Estimating Sample}
+\phantomsection\label{structural-estimating-sample}
+\BerkeleyLightMode
+
+\textbf{Unit of observation.} Facility-year. One row per facility per
+year, 1999--2018.
+
+\textbf{Sample.} Texas facilities, post-reform period. The structural
+model fits the \emph{equilibrium} of the risk-based regime --- TX is the
+regime that's actually priced.
+
+\begin{itemize}
+\tightlist
+\item
+  Roughly 26k TX incumbent facilities over 20 years \(\approx\) 520k
+  facility-years
+\item
+  After dropping rows with missing premium or hazard inputs: \(\approx\)
+  430k facility-years
+\item
+  Choices observed: maintain / exit / replace; mapped onto 32 state
+  cells \((a, W, R)\)
+\item
+  Premiums \(p_t\) from Mid-Continent rate-filing reconstruction;
+  hazards \(h(a_t)\) from the first-release-prediction model
+\end{itemize}
 \end{frame}
 
 \begin{frame}{Parameter Estimates}
 \phantomsection\label{parameter-estimates}
 \BerkeleyLightMode
 
-\vspace{0.4cm}
+\vspace{0.3cm}
 \begin{center}
 \input{../../Output/Tables/04f_Theta_Table_AM_SE.tex}
 \end{center}
+\end{frame}
 
-\vfill
+\begin{frame}{Estimates in Economic Terms}
+\phantomsection\label{estimates-in-economic-terms}
+\BerkeleyLightMode
 
-\centering
+\textit{Reminder: all parameters are in units of annual net revenue $R$. Dollar translations below use a calibration anchor of $R \approx \$10$k/yr per facility }
 
-\textit{$\hat\kappa = \$261$k $\approx 26\times$ annual revenue (land-value liquidation range).
-$\hat K = \$52$k $\approx 5\times$ revenue (tank-replacement cost).
-$\hat\gamma_p = -0.29$: 1\% of revenue in extra premium $\approx$ 0.3\% drop in continuation value.}
+\begin{itemize}
+\item
+  \textbf{\(\hat\kappa \approx 26\,R\)} (about \$261k under the
+  calibration). Net scrap value when a facility exits; large in absolute
+  terms, consistent with land-value liquidation net of remediation
+  liability.
+\item
+  \textbf{\(\hat K \approx 5\,R\)} (about \$52k). Replacement cost for a
+  new double-walled tank; in line with industry estimates.
+\item
+  \textbf{\(\hat\gamma_p = -0.29\).} a one-unit (\(\approx 1\,R\))
+  increase in premium reduces the maintain-flow value by 0.29 units.
+\item
+  \textbf{\(\hat\gamma_r = 0.16\).} The point estimate is small relative
+  to a fully-internalized benchmark (\(\gamma_r = 1\)).
+\end{itemize}
 \end{frame}
 
 \begin{frame}{Counterfactual Policy Scenarios}
@@ -861,22 +1024,21 @@ Mechanism
 \bottomrule\noalign{}
 \end{longtable}
 
-\textbf{Procedure.} Re-solve Bellman at \(\theta^{CF}\) via NPL; compute
-QSD; integrate welfare \(=\) firm surplus \(-\) external damage PV \(-\)
-govt outlay PV.
+\textbf{What we do for each policy.} Recompute firms' optimal choices
+under the new price/cost regime, let the fleet settle into its long-run
+age-and-wall distribution, then add up the present-value impact on three
+groups: firms (operating profits), the environment (avoided cleanup and
+health damages), and the government (subsidies paid out).
 \end{frame}
 
 \begin{frame}{Welfare Decomposition}
 \phantomsection\label{welfare-decomposition}
-\LightMode
+\BerkeleyLightMode
 
-\hidefootersection
-
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.72\textwidth]{../../Output/Figures/04j_4p_Welfare_BarChart.pdf}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/04j_4p_Welfare_BarChart.pdf}
 \end{center}
-
-\showfootersection
 \end{frame}
 
 \begin{frame}{Counterfactual Welfare Summary}
@@ -921,88 +1083,70 @@ govt outlay PV.
 
 \begin{frame}{Appendix: ATT by Installation Vintage}
 \phantomsection\label{appendix-att-by-installation-vintage}
-\LightMode
-
-\hidefootersection
+\BerkeleyLightMode
 
 \hypertarget{vintage-forest}{}
 
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.80\textwidth]{../../Output/Figures/Fig_Vintage_Forest.pdf}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Fig_Vintage_Forest.pdf}
 \end{center}
-
-\showfootersection
 \end{frame}
 
 \begin{frame}{Appendix: Cell-Level Goodness of Fit}
 \phantomsection\label{appendix-cell-level-goodness-of-fit}
-\LightMode
-
-\hidefootersection
+\BerkeleyLightMode
 
 \hypertarget{cell-gof}{}
 
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.80\textwidth]{../../Output/Figures/Figure_CV_CellRisk_GoF.png}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_CV_CellRisk_GoF.png}
 \end{center}
-
-\showfootersection
 \end{frame}
 
 \begin{frame}{Appendix: Premium vs.~Per-Tank Expected Loss}
 \phantomsection\label{appendix-premium-vs.-per-tank-expected-loss}
-\LightMode
-
-\hidefootersection
+\BerkeleyLightMode
 
 \hypertarget{premium-vs-el}{}
 
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.72\textwidth]{../../Output/Figures/Figure_Premium_vs_EL_Raw.png}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_Premium_vs_EL_Raw.png}
 \end{center}
-
-\showfootersection
 \end{frame}
 
 \begin{frame}{Appendix: LUST Event Study --- Total Leak Discovery}
 \phantomsection\label{appendix-lust-event-study-total-leak-discovery}
-\LightMode
-
-\hidefootersection
+\BerkeleyLightMode
 
 \hypertarget{lust-es}{}
 
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.80\textwidth]{../../Output/Figures/Fig_ES_LUST_Total.pdf}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/Fig_ES_LUST_Total.pdf}
 \end{center}
-
-\showfootersection
 \end{frame}
 
 \begin{frame}{Appendix: LUST Event Study --- Decomposition}
 \phantomsection\label{appendix-lust-event-study-decomposition}
-\LightMode
+\BerkeleyLightMode
 
-\hidefootersection
-
+\vspace{0.1cm}
 \begin{center}
-\includegraphics[width=0.55\textwidth]{../../Output/Figures/Fig_ES_LUST_Combined.pdf}
+\includegraphics[height=0.80\textheight,keepaspectratio]{../../Output/Figures/Fig_ES_LUST_Combined.pdf}
 \end{center}
-
-\showfootersection
 \end{frame}
 
 \begin{frame}{Appendix: Subsidy Curve}
 \phantomsection\label{appendix-subsidy-curve}
-\LightMode
+\BerkeleyLightMode
 
-\hidefootersection
-
+\vspace{0.2cm}
 \begin{center}
-\includegraphics[width=0.85\textwidth]{../../Output/Figures/04j_4p_Subsidy_Curve.pdf}
+\includegraphics[height=0.78\textheight,keepaspectratio]{../../Output/Figures/04j_4p_Subsidy_Curve.pdf}
 \end{center}
-
-\showfootersection
 \end{frame}
 
 \end{document}

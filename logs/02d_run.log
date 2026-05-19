@@ -1,0 +1,15 @@
+Warning message:
+package 'data.table' was built under R version 4.5.3 
+Reading facility_panel.csv from Z (selected columns)...
+  snapshot rows: 140,289  (TX=25,985, ctrl=114,304)
+
+Descriptive stats (Dec 1998 stock, incumbents):
+  Texas facilities: 25,985
+  Ctrl  facilities: 114,304
+  Mean tanks/fac:  TX 2.78  ctrl 2.74
+  SW share (tank-weighted): TX 89.1%  ctrl 89.5%
+  Mean tank age: TX 15.3  ctrl 18.1
+  Mean capacity (gal): TX 22,585  ctrl 62,405
+  Gasoline share: TX 66.1%  ctrl 75.4%
+
+Saved: C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/T_Desc_Stats_Slide.tex

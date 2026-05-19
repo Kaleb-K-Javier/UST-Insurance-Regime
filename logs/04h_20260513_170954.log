@@ -1,0 +1,105 @@
+LOG START C:/Users/kaleb/Documents/ust_ins_move_to_github/logs/04h_20260513_170954.log
+Script: 04h
+R: R version 4.5.2 (2025-10-31 ucrt)
+WD: C:/Users/kaleb/Documents/ust_ins_move_to_github
+
+
+✓ model_b_estimator.R loaded
+  Key functions:
+    - create_estimation_config_model_b()
+    - npl_estimator_model_b()
+    - generate_model_b_data()
+    - test_model_b_estimation()
+
+
+✓ improved_estimator_FINAL.r loaded
+======================================================================
+04h: 8-parameter replacement DCM fit on observed + extended_2000+
+======================================================================
+
+[3a] 8-param fit on OBSERVED sample
+
+=== NPL ESTIMATOR — REPLACEMENT MODEL (8-Param spec) ===
+    sample = observed (TX 2006+, controls 1999+) | n_obs = 2,282,735 | n_facilities = 139,493
+    initial CCPs: split of primitives$P0_mat
+    iter   1: kSW=23.64 kDW=21.14 KSW= 5.80 KDW= 4.36 gpFF=-14.25 gpRB=-7.69 grFF=0.072 grRB=-0.107 | dTh=1.4e+01 dP=2.4e-02 LL=-261797.3
+    iter   2: kSW=23.68 kDW=21.20 KSW= 5.81 KDW= 4.33 gpFF=-14.28 gpRB=-7.67 grFF=0.068 grRB=-0.096 | dTh=5.4e-02 dP=2.9e-03 LL=-261772.6
+    iter   3: kSW=23.69 kDW=21.18 KSW= 5.81 KDW= 4.34 gpFF=-14.28 gpRB=-7.66 grFF=0.067 grRB=-0.096 | dTh=1.5e-02 dP=2.9e-04 LL=-261772.0
+    iter   5: kSW=23.68 kDW=21.18 KSW= 5.81 KDW= 4.33 gpFF=-14.38 gpRB=-7.48 grFF=0.065 grRB=-0.083 | dTh=1.7e-05 dP=7.0e-06 LL=-261770.3
+
+    *** CONVERGED at iter 6 ***
+
+[4] AM-SE for observed ...
+    elapsed 13.5 sec
+                                sample kappa_SW SE_kappa_SW kappa_DW
+                                <char>    <num>       <num>    <num>
+1: observed (TX 2006+, controls 1999+) 23.67949  0.07158229 21.17751
+   SE_kappa_DW     K_SW    SE_K_SW     K_DW    SE_K_DW K_log_SW SE_K_log_SW
+         <num>    <num>      <num>    <num>      <num>    <num>       <num>
+1:  0.08555238 5.808541 0.02118138 4.330089 0.02437303 1.759329 0.003646592
+   K_log_DW SE_K_log_DW gamma_price_FF SE_gamma_pF gamma_price_RB SE_gamma_pR
+      <num>       <num>          <num>       <num>          <num>       <num>
+1: 1.465588  0.00562876      -14.38246   0.2931519      -7.484577   0.1512174
+   gamma_risk_FF SE_gamma_rF gamma_risk_RB SE_gamma_rR   log_lik   n_obs
+           <num>       <num>         <num>       <num>     <num>   <int>
+1:    0.06519995 0.005011361   -0.08275109 0.008730324 -261770.3 2282735
+      wall regime   action N_cells total_n weighted_RMSE weighted_mean_residual
+    <char> <char>   <char>   <int>   <int>         <num>                  <num>
+ 1:     DW     FF     Exit       8  351597  0.0016967000          -6.489498e-05
+ 2:     DW     RB     Exit       8   78616  0.0017613032           2.368580e-04
+ 3:     SW     FF     Exit       8 1656628  0.0022656242           4.772895e-05
+ 4:     SW     RB     Exit       8  195894  0.0055793044          -4.178697e-04
+ 5:     DW     FF Maintain       8  351597  0.0053732705           3.080314e-04
+ 6:     DW     RB Maintain       8   78616  0.0077283294          -1.400010e-03
+ 7:     SW     FF Maintain       8 1656628  0.0019262650          -2.891831e-05
+ 8:     SW     RB Maintain       8  195894  0.0056252794           2.657399e-04
+ 9:     DW     FF  Replace       8  351597  0.0037750507          -2.431119e-04
+10:     DW     RB  Replace       8   78616  0.0063706161           1.165821e-03
+11:     SW     FF  Replace       8 1656628  0.0009046914          -1.881064e-05
+12:     SW     RB  Replace       8  195894  0.0005108989           1.540105e-04
+    max_abs_residual
+               <num>
+ 1:          0.00532
+ 2:          0.00497
+ 3:          0.00792
+ 4:          0.01475
+ 5:          0.01818
+ 6:          0.01421
+ 7:          0.00598
+ 8:          0.01516
+ 9:          0.01286
+10:          0.01192
+11:          0.00194
+12:          0.00077
+
+[7] Per-wall fit figures (8-param) ...
+    saved: C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/04h_8param_Fit_SW.png
+    saved: C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/04h_8param_Fit_DW.png
+
+[8] Likelihood comparison (4-param vs 8-param):
+      spec log_lik_obs   LR_obs
+    <char>       <num>    <num>
+1: 4-param   -268481.4 13422.23
+2: 8-param   -261770.3 13422.23
+
+  LR test (chi-sq(4) crit at 0.05 = 9.49):
+    observed:           LR = 13422.2
+
+--- 04h SUMMARY ---
+8-param theta_hat (observed):
+      kappa_SW       kappa_DW           K_SW           K_DW gamma_price_FF 
+       23.6795        21.1775         5.8085         4.3301       -14.3825 
+gamma_price_RB  gamma_risk_FF  gamma_risk_RB 
+       -7.4846         0.0652        -0.0828 
+
+Saved:
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Estimation_Results/Model_Replacement_8param_observed.rds 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04h_Theta_Table_8param_AM_SE.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04h_Theta_Table_8param_AM_SE.tex 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04h_8param_PerCell_Fit_Wide.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04h_8param_FitQuality_byWallRegimeAction.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04h_LL_Compare_4p_vs_8p.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/04h_8param_Fit_SW.png 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/04h_8param_Fit_DW.png 
+
+04h complete.

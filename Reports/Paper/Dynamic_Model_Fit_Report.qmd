@@ -1,0 +1,312 @@
+---
+title: "Dynamic Replacement Model: Fit Summary across 4p, 8p, and 8p+FE Specifications"
+author: "Kaleb Javier"
+date: "`r Sys.Date()`"
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    linestretch: 1.15
+    toc: true
+    number-sections: true
+    keep-tex: true
+    fig-cap-location: top
+    include-in-header:
+      text: |
+        \usepackage{amsmath}
+        \usepackage{amssymb}
+        \usepackage{booktabs}
+        \usepackage{float}
+        \usepackage{longtable}
+        \usepackage{graphicx}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.pos = "H"
+)
+library(data.table)
+library(knitr)
+library(kableExtra)
+library(here)
+```
+
+# Introduction {#sec-intro}
+
+This report summarizes the in-sample fit of the dynamic structural replacement
+model under three nested specifications, each estimated by Aguirregabiria-Mira
+NPL on the observed UST panel ($N = 2{,}282{,}735$ tank-year observations):
+
+1. **4-parameter** — a single $(\kappa, K, \gamma_{\text{price}}, \gamma_{\text{risk}})$
+   block, pooled across wall and regime.
+2. **8-parameter** — the same primitives split by wall type (SW/DW) and
+   insurance regime (FF/RB): 4 cost parameters and 4 price/risk slopes.
+3. **8-parameter + state fixed effects** — the 8p structural specification
+   augmented with 17 state-level intercepts $\alpha_g$ that enter the
+   measurement equation (not the agent's equilibrium) for the 17 control
+   states; Texas is the baseline ($\alpha_{\text{TX}} \equiv 0$).
+
+The report is organized for direct visual and statistical comparison:
+@sec-params reports the three parameter tables and the FE alphas;
+@sec-comparison reports the three-way information-criteria and likelihood-ratio
+table; @sec-fit reports model-implied vs. empirical action shares at the
+$(\text{wall} \times \text{regime} \times \text{age bin})$ cell level for each
+specification, with figures produced by a single shared plotting routine to
+guarantee structural parity. Per-cell numerical fit tables are in @sec-appendix.
+
+All artifacts are produced by `Code/Dynamic_Model/04k_Fit_Report_Artifacts.R`
+from saved fit objects under `Output/Estimation_Results/`. No estimation is
+re-run in the production of this report.
+
+
+# Parameter Estimates {#sec-params}
+
+## 4-parameter specification {#sec-params-4p}
+
+@tbl-theta-4p reports point estimates with AM (2002) profile-likelihood
+standard errors and 95% Wald confidence intervals.
+
+```{r tbl-theta-4p, results="asis"}
+#| label: tbl-theta-4p
+#| tbl-cap: "4-parameter NPL estimates: pooled $\\kappa$, $K$, $\\gamma_{\\text{price}}$, $\\gamma_{\\text{risk}}$."
+cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
+cat(readLines(here("Output", "Tables", "04g_Theta_Table_AM_with_CIs.tex")),
+    sep = "\n")
+cat("\n}\n\\end{center}\n")
+```
+
+## 8-parameter specification {#sec-params-8p}
+
+@tbl-theta-8p splits $\kappa$ and $K$ by wall type (SW/DW) and the price/risk
+slopes by insurance regime (FF/RB).
+
+```{r tbl-theta-8p, results="asis"}
+#| label: tbl-theta-8p
+#| tbl-cap: "8-parameter NPL estimates: $\\kappa$ and $K$ split by wall (SW/DW); $\\gamma_{\\text{price}}$ and $\\gamma_{\\text{risk}}$ split by regime (FF/RB)."
+cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
+cat(readLines(here("Output", "Tables", "04h_Theta_Table_8param_AM_SE.tex")),
+    sep = "\n")
+cat("\n}\n\\end{center}\n")
+```
+
+## 8-parameter + state fixed effects {#sec-params-8pfe}
+
+@tbl-theta-8pfe reports the 8-structural-parameter block from the joint
+$(\theta, \alpha)$ estimation. The 17 state fixed effects are reported
+separately in @tbl-fe-alphas.
+
+```{r tbl-theta-8pfe, results="asis"}
+#| label: tbl-theta-8pfe
+#| tbl-cap: "8-parameter + FE NPL estimates: structural parameters from the joint $(\\theta, \\alpha)$ fit. The 17 state fixed effects $\\alpha_g$ are reported separately in @tbl-fe-alphas (omitted here to avoid duplication)."
+lns <- readLines(here("Output", "Tables", "04i_Theta_Table_8paramFE_AM_SE.tex"))
+lns <- lns[!grepl("\\\\alpha_", lns)]
+cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
+cat(lns, sep = "\n")
+cat("\n}\n\\end{center}\n")
+```
+
+### State fixed-effect coefficients {#sec-params-fe-alphas}
+
+The state fixed effects $\alpha_g$ enter the measurement equation (the
+likelihood) only — they shift the model-implied probability of *Maintain*
+in state $g$ relative to the TX baseline. They do **not** enter the agent's
+equilibrium value function during counterfactual re-solves, per the
+"Semantic 2" convention adopted in this codebase.
+
+```{r tbl-fe-alphas, results="asis"}
+#| label: tbl-fe-alphas
+#| tbl-cap: "State fixed-effect coefficients $\\hat\\alpha_g$ from the 8p+FE specification. Texas is the baseline ($\\alpha_{\\text{TX}} \\equiv 0$); standard errors in parentheses."
+cat("\\begin{center}\n")
+cat(readLines(here("Output", "Tables", "04k_FE_Alphas_Compact.tex")),
+    sep = "\n")
+cat("\n\\end{center}\n")
+```
+
+*Note on extreme estimates.* The Missouri ($\hat\alpha_{\text{MO}} = 8.18$,
+SE $0.77$) and South Dakota ($\hat\alpha_{\text{SD}} = 2.27$, SE $0.08$)
+coefficients are substantially larger than the other 15 control-state alphas,
+which span roughly $[-1.4,\, +0.8]$. Both are statistically distinguishable
+from zero and reflect near-zero observed *Exit* and *Replace* activity in those
+state-year cells relative to the TX baseline; they are not numerical artifacts.
+
+
+# Model Comparison {#sec-comparison}
+
+@tbl-comparison reports log-likelihood, information criteria, and nested
+likelihood-ratio tests across the three specifications. All three are fit
+on the same observed sample, so the comparison is direct.
+
+```{r tbl-comparison, results="asis"}
+#| label: tbl-comparison
+#| tbl-cap: "Three-way nested model comparison. AIC $= -2\\log L + 2k$; BIC $= -2\\log L + k\\log N$. Likelihood-ratio tests: 8p vs 4p ($\\Delta k = 4$), 8p+FE vs 8p ($\\Delta k = 17$). Both LR statistics are far in the tail of their reference $\\chi^2$ distributions, with $p$-values numerically zero."
+cat("\\begin{center}\n")
+cat(readLines(here("Output", "Tables", "04k_Model_Comparison_3way.tex")),
+    sep = "\n")
+cat("\n\\end{center}\n")
+```
+
+Both nested restrictions are rejected at any conventional level. AIC and
+BIC agree on the ranking 4p $\succ$ 8p $\succ$ 8p+FE (lower is better),
+with the BIC penalty large enough to make 8p+FE still preferred despite
+the 17 additional parameters.
+
+
+# Goodness of Fit: Model-Implied vs. Empirical Cell Shares {#sec-fit}
+
+This section reports the model-implied conditional choice probability
+$\hat P(\text{action} \mid \text{state})$ at the converged $\hat\theta$
+alongside the empirical action share in each $(\text{wall} \times \text{regime}
+\times \text{age bin})$ cell. Empirical shares are computed by direct cell
+aggregation on the observed panel. Model-implied shares are read from the
+NPL-converged $\hat P$ matrix saved in each fit object. For the 8p+FE
+specification, $\hat P$ is the alpha-augmented, $g$-marginalized measurement
+probability (the same object the NPL outer loop uses for its CCP update).
+
+Each model has two figures (one per wall type), each with three facets
+(Maintain / Exit / Replace) and two colored lines (FF / RB regime). All six
+figures are produced by a single shared plotting routine so visual
+comparability across specifications is structural.
+
+## 4-parameter fit {#sec-fit-4p}
+
+```{r fig-fit-4p-sw}
+#| label: fig-fit-4p-sw
+#| fig-cap: "4-parameter fit, Single-Walled tanks. Lines are model-implied $\\hat P(\\text{action} \\mid \\text{state})$; open circles are empirical cell shares with area proportional to cell sample size."
+#| fig-width: 7
+#| fig-height: 2.8
+knitr::include_graphics(here("Output", "Figures", "04k_Fit_4param_SW.png"))
+```
+
+```{r fig-fit-4p-dw}
+#| label: fig-fit-4p-dw
+#| fig-cap: "4-parameter fit, Double-Walled tanks. Same construction as @fig-fit-4p-sw."
+#| fig-width: 7
+#| fig-height: 2.8
+knitr::include_graphics(here("Output", "Figures", "04k_Fit_4param_DW.png"))
+```
+
+```{r tbl-fitq-4p}
+#| label: tbl-fitq-4p
+#| tbl-cap: "4-parameter weighted-RMSE summary of model-vs-empirical residuals by wall, regime, and action. Residual $=$ empirical $-$ model share; weights are cell sample size."
+fq4 <- fread(here("Output", "Tables", "04g_Fit_Quality_byWallRegimeAction.csv"))
+kable(fq4, format = "latex", booktabs = TRUE, digits = 5,
+      align = c("l","l","l", rep("r", ncol(fq4) - 3L))) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 9)
+```
+
+## 8-parameter fit {#sec-fit-8p}
+
+```{r fig-fit-8p-sw}
+#| label: fig-fit-8p-sw
+#| fig-cap: "8-parameter fit, Single-Walled tanks. Same construction as @fig-fit-4p-sw."
+#| fig-width: 7
+#| fig-height: 2.8
+knitr::include_graphics(here("Output", "Figures", "04k_Fit_8param_SW.png"))
+```
+
+```{r fig-fit-8p-dw}
+#| label: fig-fit-8p-dw
+#| fig-cap: "8-parameter fit, Double-Walled tanks. Same construction as @fig-fit-4p-sw."
+#| fig-width: 7
+#| fig-height: 2.8
+knitr::include_graphics(here("Output", "Figures", "04k_Fit_8param_DW.png"))
+```
+
+```{r tbl-fitq-8p}
+#| label: tbl-fitq-8p
+#| tbl-cap: "8-parameter weighted-RMSE summary by wall, regime, and action. Same construction as @tbl-fitq-4p."
+fq8 <- fread(here("Output", "Tables", "04h_8param_FitQuality_byWallRegimeAction.csv"))
+kable(fq8, format = "latex", booktabs = TRUE, digits = 5,
+      align = c("l","l","l", rep("r", ncol(fq8) - 3L))) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 9)
+```
+
+## 8-parameter + FE fit {#sec-fit-8pfe}
+
+```{r fig-fit-8pfe-sw}
+#| label: fig-fit-8pfe-sw
+#| fig-cap: "8-parameter + FE fit, Single-Walled tanks. Model-implied probabilities marginalize the per-$g$ choice probability over the empirical state composition $w_g(s)$. Same plot construction as @fig-fit-4p-sw."
+#| fig-width: 7
+#| fig-height: 2.8
+knitr::include_graphics(here("Output", "Figures", "04k_Fit_8paramFE_SW.png"))
+```
+
+```{r fig-fit-8pfe-dw}
+#| label: fig-fit-8pfe-dw
+#| fig-cap: "8-parameter + FE fit, Double-Walled tanks. Same construction as @fig-fit-8pfe-sw."
+#| fig-width: 7
+#| fig-height: 2.8
+knitr::include_graphics(here("Output", "Figures", "04k_Fit_8paramFE_DW.png"))
+```
+
+```{r tbl-fitq-8pfe}
+#| label: tbl-fitq-8pfe
+#| tbl-cap: "8-parameter + FE weighted-RMSE summary by wall, regime, and action. Same construction as @tbl-fitq-4p."
+fqfe <- fread(here("Output", "Tables", "04k_FitQuality_8paramFE_byWallRegimeAction.csv"))
+kable(fqfe, format = "latex", booktabs = TRUE, digits = 5,
+      align = c("l","l","l", rep("r", ncol(fqfe) - 3L))) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 9)
+```
+
+
+# Appendix: Per-cell fit numbers {#sec-appendix}
+
+The following three tables report the full 32-row cell-level fit numbers
+for each specification. Columns: `Reg` (regime: FF/RB), `Wall` (SW/DW),
+`Age` (5-year bin), `N` (cell sample size), and for each of the three
+actions $a \in \{M, E, R\}$, `mod_a` $= \hat P_a(s)$ (model-implied),
+`emp_a` (empirical share), and `res_a` $=$ `emp_a` $-$ `mod_a` (residual).
+
+```{r appendix-prep, include=FALSE}
+.prep_appendix <- function(path) {
+  dt <- fread(path)
+  dt <- dt[, .(regime, wall, age_label, n_cell,
+               model_maintain, emp_maintain, res_maintain,
+               model_exit,     emp_exit,     res_exit,
+               model_replace,  emp_replace,  res_replace)]
+  setnames(dt,
+    c("regime","wall","age_label","n_cell",
+      "model_maintain","emp_maintain","res_maintain",
+      "model_exit",    "emp_exit",    "res_exit",
+      "model_replace", "emp_replace", "res_replace"),
+    c("Reg","Wall","Age","N",
+      "mod_M","emp_M","res_M",
+      "mod_E","emp_E","res_E",
+      "mod_R","emp_R","res_R"))
+  dt
+}
+.render_appendix <- function(dt) {
+  kable(dt, format = "latex", booktabs = TRUE, longtable = TRUE,
+        digits = 4,
+        align = c("l","l","l","r", rep("r", 9))) |>
+    kable_styling(latex_options = c("repeat_header"), font_size = 8)
+}
+```
+
+## 4-parameter {#sec-appendix-4p}
+
+```{r tbl-appendix-4p}
+#| label: tbl-appendix-4p
+#| tbl-cap: "4-parameter per-cell fit: model-implied probability, empirical share, and residual by state cell."
+.render_appendix(.prep_appendix(here("Output", "Tables", "04g_Per_Cell_Fit_Numbers_Wide.csv")))
+```
+
+## 8-parameter {#sec-appendix-8p}
+
+```{r tbl-appendix-8p}
+#| label: tbl-appendix-8p
+#| tbl-cap: "8-parameter per-cell fit. Same construction as @tbl-appendix-4p."
+.render_appendix(.prep_appendix(here("Output", "Tables", "04h_8param_PerCell_Fit_Wide.csv")))
+```
+
+## 8-parameter + FE {#sec-appendix-8pfe}
+
+```{r tbl-appendix-8pfe}
+#| label: tbl-appendix-8pfe
+#| tbl-cap: "8-parameter + FE per-cell fit. Same construction as @tbl-appendix-4p."
+.render_appendix(.prep_appendix(here("Output", "Tables", "04k_PerCell_Fit_8paramFE_Wide.csv")))
+```

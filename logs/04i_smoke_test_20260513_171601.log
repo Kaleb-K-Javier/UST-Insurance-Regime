@@ -1,0 +1,28 @@
+LOG START C:/Users/kaleb/Documents/ust_ins_move_to_github/logs/04i_smoke_test_20260513_171601.log
+Script: 04i_smoke_test
+R: R version 4.5.2 (2025-10-31 ucrt)
+WD: C:/Users/kaleb/Documents/ust_ins_move_to_github
+
+
+✓ model_b_estimator.R loaded
+  Key functions:
+    - create_estimation_config_model_b()
+    - npl_estimator_model_b()
+    - generate_model_b_data()
+    - test_model_b_estimation()
+
+
+✓ improved_estimator_FINAL.r loaded
+[smoke 1/9] cpp_engine functions available
+[smoke 2/9] loaded primitives + obs panel (n_obs=2282735)
+[smoke 3/9] cfg built: n_params=25, FE names match
+[smoke 4/9] cache built: wsg 32x18, counts 576 unique (sidx,graw)
+[smoke 5/9] theta_init_fe constructed (length 25, alphas = 0)
+[smoke 6/9] eq solved: converged=TRUE, P rowsum max-dev=1.11e-16
+[smoke 7/9] nll0 = 261770.297
+[smoke 8/9] CCP update: dim 32x3, rowsum max-dev=1.11e-16, max|dP|=9.99e-16
+
+[smoke 9/9] ALL CHECKS PASSED
+            nll0 = 261770.297
+            cfg$n_params = 25, theta_init_fe length = 25
+            04i_smoke_test complete.

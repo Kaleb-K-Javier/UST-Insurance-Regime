@@ -1,0 +1,365 @@
+LOG START C:/Users/kaleb/Documents/ust_ins_move_to_github/logs/04i_20260513_210930.log
+Script: 04i
+R: R version 4.5.2 (2025-10-31 ucrt)
+WD: C:/Users/kaleb/Documents/ust_ins_move_to_github
+
+
+✓ model_b_estimator.R loaded
+  Key functions:
+    - create_estimation_config_model_b()
+    - npl_estimator_model_b()
+    - generate_model_b_data()
+    - test_model_b_estimation()
+
+
+✓ improved_estimator_FINAL.r loaded
+======================================================================
+04i: 8-param + 17 control-state FE + 03-style SOCIAL welfare A/B/C/D
+======================================================================
+
+[2] 8p + 17-control FE fit on OBSERVED sample
+
+[NPL 8p+FE] iter 1
+  logLik=-251631.880  max|dtheta|=7.893e+00  max|dP|=4.801e-03
+
+[NPL 8p+FE] iter 2
+  logLik=-251614.483  max|dtheta|=1.238e+00  max|dP|=2.269e-03
+
+[NPL 8p+FE] iter 3
+  logLik=-251614.155  max|dtheta|=8.088e-03  max|dP|=8.838e-04
+
+[NPL 8p+FE] iter 4
+  logLik=-251614.003  max|dtheta|=4.912e-03  max|dP|=3.704e-04
+
+[NPL 8p+FE] iter 5
+  logLik=-251614.001  max|dtheta|=2.217e-05  max|dP|=1.561e-04
+
+[NPL 8p+FE] iter 6
+  logLik=-251613.997  max|dtheta|=3.150e-04  max|dP|=6.153e-05
+
+[NPL 8p+FE] iter 7
+  logLik=-251613.969  max|dtheta|=2.658e-04  max|dP|=2.335e-05
+
+[NPL 8p+FE] iter 8
+  logLik=-251613.970  max|dtheta|=1.346e-04  max|dP|=9.225e-06
+
+[NPL 8p+FE] iter 9
+  logLik=-251613.964  max|dtheta|=3.170e-05  max|dP|=3.737e-06
+
+[NPL 8p+FE] iter 10
+  logLik=-251613.964  max|dtheta|=1.433e-05  max|dP|=2.345e-06
+
+[NPL 8p+FE] iter 11
+  logLik=-251613.963  max|dtheta|=1.248e-04  max|dP|=5.248e-06
+
+[NPL 8p+FE] iter 12
+  logLik=-251613.957  max|dtheta|=3.843e-05  max|dP|=2.420e-06
+
+[NPL 8p+FE] iter 13
+  logLik=-251613.958  max|dtheta|=1.463e-05  max|dP|=2.490e-06
+
+[NPL 8p+FE] iter 14
+  logLik=-251613.958  max|dtheta|=1.185e-04  max|dP|=4.945e-06
+
+[NPL 8p+FE] iter 15
+  logLik=-251613.952  max|dtheta|=3.599e-05  max|dP|=2.281e-06
+
+[NPL 8p+FE] iter 16
+  logLik=-251613.953  max|dtheta|=1.414e-05  max|dP|=2.392e-06
+
+[NPL 8p+FE] iter 17
+  logLik=-251613.953  max|dtheta|=1.144e-04  max|dP|=4.784e-06
+
+[NPL 8p+FE] iter 18
+  logLik=-251613.947  max|dtheta|=3.404e-05  max|dP|=2.218e-06
+
+[NPL 8p+FE] iter 19
+  logLik=-251613.948  max|dtheta|=1.362e-05  max|dP|=2.313e-06
+
+[NPL 8p+FE] iter 20
+  logLik=-251613.948  max|dtheta|=1.099e-04  max|dP|=4.608e-06
+
+[NPL 8p+FE] iter 21
+  logLik=-251613.943  max|dtheta|=3.207e-05  max|dP|=2.123e-06
+
+[NPL 8p+FE] iter 22
+  logLik=-251613.944  max|dtheta|=1.323e-05  max|dP|=2.239e-06
+
+[NPL 8p+FE] iter 23
+  logLik=-251613.944  max|dtheta|=1.062e-04  max|dP|=4.465e-06
+
+[NPL 8p+FE] iter 24
+  logLik=-251613.939  max|dtheta|=3.049e-05  max|dP|=2.052e-06
+
+[NPL 8p+FE] iter 25
+  logLik=-251613.940  max|dtheta|=1.287e-05  max|dP|=2.176e-06
+
+[NPL 8p+FE] iter 26
+  logLik=-251613.940  max|dtheta|=1.029e-04  max|dP|=4.337e-06
+
+[NPL 8p+FE] iter 27
+  logLik=-251613.936  max|dtheta|=2.955e-05  max|dP|=1.986e-06
+
+[NPL 8p+FE] iter 28
+  logLik=-251613.937  max|dtheta|=1.254e-05  max|dP|=2.112e-06
+
+[NPL 8p+FE] iter 29
+  logLik=-251613.937  max|dtheta|=9.984e-05  max|dP|=4.223e-06
+
+[NPL 8p+FE] iter 30
+  logLik=-251613.932  max|dtheta|=2.874e-05  max|dP|=1.933e-06
+
+[NPL 8p+FE] iter 31
+  logLik=-251613.933  max|dtheta|=1.224e-05  max|dP|=2.047e-06
+
+[NPL 8p+FE] iter 32
+  logLik=-251613.933  max|dtheta|=9.704e-05  max|dP|=4.118e-06
+
+[NPL 8p+FE] iter 33
+  logLik=-251613.929  max|dtheta|=2.804e-05  max|dP|=1.888e-06
+
+[NPL 8p+FE] iter 34
+  logLik=-251613.930  max|dtheta|=1.199e-05  max|dP|=1.996e-06
+
+[NPL 8p+FE] iter 35
+  logLik=-251613.930  max|dtheta|=9.457e-05  max|dP|=4.024e-06
+
+[NPL 8p+FE] iter 36
+  logLik=-251613.926  max|dtheta|=2.740e-05  max|dP|=1.848e-06
+
+[NPL 8p+FE] iter 37
+  logLik=-251613.926  max|dtheta|=1.175e-05  max|dP|=1.948e-06
+
+[NPL 8p+FE] iter 38
+  logLik=-251613.926  max|dtheta|=1.017e-04  max|dP|=4.163e-06
+
+[NPL 8p+FE] iter 39
+  logLik=-251613.922  max|dtheta|=2.781e-05  max|dP|=1.862e-06
+
+[NPL 8p+FE] iter 40
+  logLik=-251613.923  max|dtheta|=1.198e-05  max|dP|=2.023e-06
+
+[NPL 8p+FE] iter 41
+  logLik=-251613.923  max|dtheta|=1.015e-04  max|dP|=4.094e-06
+
+[NPL 8p+FE] iter 42
+  logLik=-251613.919  max|dtheta|=2.739e-05  max|dP|=1.842e-06
+
+[NPL 8p+FE] iter 43
+  logLik=-251613.920  max|dtheta|=1.185e-05  max|dP|=2.005e-06
+
+[NPL 8p+FE] iter 44
+  logLik=-251613.920  max|dtheta|=1.106e-04  max|dP|=4.265e-06
+
+[NPL 8p+FE] iter 45
+  logLik=-251613.915  max|dtheta|=2.801e-05  max|dP|=1.871e-06
+
+[NPL 8p+FE] iter 46
+  logLik=-251613.916  max|dtheta|=1.204e-05  max|dP|=2.041e-06
+
+[NPL 8p+FE] iter 47
+  logLik=-251613.916  max|dtheta|=1.496e-04  max|dP|=4.997e-06
+
+[NPL 8p+FE] iter 48
+  logLik=-251613.910  max|dtheta|=3.334e-05  max|dP|=2.071e-06
+
+[NPL 8p+FE] iter 49
+  logLik=-251613.911  max|dtheta|=1.308e-05  max|dP|=2.241e-06
+
+[NPL 8p+FE] iter 50
+  logLik=-251613.351  max|dtheta|=6.069e-02  max|dP|=1.577e-04
+
+[NPL 8p+FE] iter 51
+  logLik=-251613.300  max|dtheta|=1.827e-05  max|dP|=6.270e-05
+
+[NPL 8p+FE] iter 52
+  logLik=-251613.280  max|dtheta|=3.826e-05  max|dP|=2.388e-05
+
+[NPL 8p+FE] iter 53
+  logLik=-251613.269  max|dtheta|=1.673e-05  max|dP|=9.503e-06
+
+[NPL 8p+FE] iter 54
+  logLik=-251613.266  max|dtheta|=1.066e-05  max|dP|=3.754e-06
+
+[NPL 8p+FE] iter 55
+  logLik=-251613.265  max|dtheta|=6.132e-06  max|dP|=1.462e-06
+
+[E1] Validation assertions passed.
+
+[3] AM-2002 profile-likelihood Hessian (25 params)
+    elapsed 14.3 sec
+         parameter     estimate      SE_raw        CI_lo        CI_hi
+            <char>        <num>       <num>        <num>        <num>
+ 1:       kappa_SW  24.67064193 0.081066145  24.51175521  24.82952866
+ 2:       kappa_DW  21.92644322 0.092543387  21.74506151  22.10782493
+ 3:           K_SW   5.53312807 0.036212326   5.46215322   5.60410292
+ 4:           K_DW   4.30511313 0.035941525   4.23466904   4.37555723
+ 5: gamma_price_FF -11.08795289 0.342784631 -11.75979842 -10.41610736
+ 6: gamma_price_RB  -6.50555193 0.163306723  -6.82562723  -6.18547663
+ 7:  gamma_risk_FF   0.08797807 0.005336700   0.07751833   0.09843781
+ 8:  gamma_risk_RB  -0.11981999 0.008897574  -0.13725892  -0.10238107
+ 9:        alphaAR   0.09533526 0.040480923   0.01599411   0.17467642
+10:        alphaCO   0.06390320 0.041674069  -0.01777648   0.14558287
+11:        alphaID  -0.11430639 0.048773289  -0.20990028  -0.01871250
+12:        alphaKS   0.47802541 0.043269481   0.39321879   0.56283204
+13:        alphaKY  -0.12409030 0.038384685  -0.19932290  -0.04885770
+14:        alphaLA  -0.44881706 0.037399539  -0.52211881  -0.37551532
+15:        alphaMA  -0.41506878 0.039112981  -0.49172881  -0.33840874
+16:        alphaMD  -0.35997577 0.037096899  -0.43268436  -0.28726719
+17:        alphaME  -1.39307675 0.041724238  -1.47485475  -1.31129874
+18:        alphaMN   0.29004781 0.040230265   0.21119794   0.36889768
+19:        alphaMO   8.18144821 0.774006192   6.66442395   9.69847247
+20:        alphaNC   0.57219911 0.038414893   0.49690730   0.64749092
+21:        alphaOH   0.06424740 0.037315918  -0.00889046   0.13738525
+22:        alphaOK   0.15139883 0.039015771   0.07492932   0.22786833
+23:        alphaSD   2.26877632 0.082575058   2.10693218   2.43062046
+24:        alphaTN   0.18712624 0.038051039   0.11254757   0.26170491
+25:        alphaVA   0.80345278 0.038565795   0.72786521   0.87904035
+         parameter     estimate      SE_raw        CI_lo        CI_hi
+            <char>        <num>       <num>        <num>        <num>
+
+[4] FE table written.
+     state   param       alpha
+    <char>  <char>       <num>
+ 1:     AR alphaAR  0.09533526
+ 2:     CO alphaCO  0.06390320
+ 3:     ID alphaID -0.11430639
+ 4:     KS alphaKS  0.47802541
+ 5:     KY alphaKY -0.12409030
+ 6:     LA alphaLA -0.44881706
+ 7:     MA alphaMA -0.41506878
+ 8:     MD alphaMD -0.35997577
+ 9:     ME alphaME -1.39307675
+10:     MN alphaMN  0.29004781
+11:     MO alphaMO  8.18144821
+12:     NC alphaNC  0.57219911
+13:     OH alphaOH  0.06424740
+14:     OK alphaOK  0.15139883
+15:     SD alphaSD  2.26877632
+16:     TN alphaTN  0.18712624
+17:     VA alphaVA  0.80345278
+
+[5] Welfare counterfactuals A/B/C/D with E in {HEALTH_ONLY=$17K, HEALTH_PLUS_UNMEASURED=$50K}
+Warning messages:
+1: Pigouvian CF B did not raise social welfare at E_label=HEALTH_ONLY: SW_B=27.793957 < SW_base=27.795925 
+2: Pigouvian CF B did not raise social welfare at E_label=HEALTH_PLUS_UNMEASURED: SW_B=27.117293 < SW_base=27.122180 
+Key: <counterfactual>
+             counterfactual total_n pop_weighted_dV pop_weighted_dP_M
+                     <char>   <int>           <num>             <num>
+1:            A_TX_stays_FF 2282735     -0.25636845     -0.0130803472
+2: B_Pigouvian_internalizeE 2282735     -0.01743558     -0.0004956243
+3:      C_KSW_subsidy_50pct 2282735      0.32369571     -0.0154688147
+4:            D_K_tax_50pct 2282735     -0.04042015      0.0019717563
+   pop_weighted_dP_E pop_weighted_dP_R d_leak_cost_per_facyear
+               <num>             <num>                   <num>
+1:      0.0131102053     -3.006647e-05           -0.0056154458
+2:      0.0004902102      5.134665e-06           -0.0002221863
+3:     -0.0081111571      2.357788e-02           -0.0067455002
+4:      0.0007018256     -2.675366e-03            0.0006720325
+   baseline_leak_cost
+                <num>
+1:          0.3868146
+2:          0.3868146
+3:          0.3868146
+4:          0.3868146
+            param no_FE_estimate with_FE_estimate
+           <char>          <num>            <num>
+1: gamma_price_FF   -14.38245567     -11.08795289
+2: gamma_price_RB    -7.48457685      -6.50555193
+3:  gamma_risk_FF     0.06519995       0.08797807
+4:  gamma_risk_RB    -0.08275109      -0.11981999
+5:       kappa_SW    23.67948633      24.67064193
+6:       kappa_DW    21.17751080      21.92644322
+7:           K_SW     5.80854097       5.53312807
+8:           K_DW     4.33008877       4.30511313
+
+--- 04i SUMMARY ---
+25-param theta_hat (observed, 8p + 17-control FE):
+      kappa_SW       kappa_DW           K_SW           K_DW gamma_price_FF 
+       24.6706        21.9264         5.5331         4.3051       -11.0880 
+gamma_price_RB  gamma_risk_FF  gamma_risk_RB        alphaAR        alphaCO 
+       -6.5056         0.0880        -0.1198         0.0953         0.0639 
+       alphaID        alphaKS        alphaKY        alphaLA        alphaMA 
+       -0.1143         0.4780        -0.1241        -0.4488        -0.4151 
+       alphaMD        alphaME        alphaMN        alphaMO        alphaNC 
+       -0.3600        -1.3931         0.2900         8.1814         0.5722 
+       alphaOH        alphaOK        alphaSD        alphaTN        alphaVA 
+        0.0642         0.1514         2.2688         0.1871         0.8035 
+
+Log L: -2.516e+05  (8p alone: -2.618e+05)
+
+Social welfare aggregates (model units; 1 unit = $10K):
+                   E_label E_dollars                 Scenario Converged
+                    <char>     <num>                   <char>    <lgcl>
+ 1:            HEALTH_ONLY     17000                 BASELINE      TRUE
+ 2:            HEALTH_ONLY     17000            A_TX_stays_FF      TRUE
+ 3:            HEALTH_ONLY     17000 B_Pigouvian_internalizeE      TRUE
+ 4:            HEALTH_ONLY     17000      C_KSW_subsidy_50pct      TRUE
+ 5:            HEALTH_ONLY     17000            D_K_tax_50pct      TRUE
+ 6: HEALTH_PLUS_UNMEASURED     50000                 BASELINE      TRUE
+ 7: HEALTH_PLUS_UNMEASURED     50000            A_TX_stays_FF      TRUE
+ 8: HEALTH_PLUS_UNMEASURED     50000 B_Pigouvian_internalizeE      TRUE
+ 9: HEALTH_PLUS_UNMEASURED     50000      C_KSW_subsidy_50pct      TRUE
+10: HEALTH_PLUS_UNMEASURED     50000            D_K_tax_50pct      TRUE
+       AvgP_M     AvgP_E       AvgP_R ExpPrivateLossFlow ExpExternalDamFlow
+        <num>      <num>        <num>              <num>              <num>
+ 1: 0.9784577 0.01912191 0.0024203787          0.3430666        0.017354038
+ 2: 0.9675353 0.03007157 0.0023931178          0.3281006        0.016660462
+ 3: 0.9781190 0.01946081 0.0024202074          0.3429479        0.017342909
+ 4: 0.9607011 0.01528114 0.0240177187          0.2799041        0.008917539
+ 5: 0.9811396 0.01862537 0.0002350368          0.3459054        0.019411336
+ 6: 0.9784577 0.01912191 0.0024203787          0.3430666        0.051041287
+ 7: 0.9675353 0.03007157 0.0023931178          0.3281006        0.049001359
+ 8: 0.9774401 0.02013986 0.0024200011          0.3426826        0.050935965
+ 9: 0.9607011 0.01528114 0.0240177187          0.2799041        0.026228056
+10: 0.9811396 0.01862537 0.0002350368          0.3459054        0.057092164
+    FirmSurplusPerceived FirmSurplusReal SocialWelfare GovtCostImplied
+                   <num>           <num>         <num>           <num>
+ 1:             28.87768        28.14301      27.79593       0.7346696
+ 2:             28.62327        28.04370      27.71049       0.5795691
+ 3:             28.86116        28.14082      27.79396       0.7203435
+ 4:             29.06277        27.27092      27.09257       1.7918565
+ 5:             28.85554        28.13880      27.75057       0.7167449
+ 6:             28.87768        28.14301      27.12218       0.7346696
+ 7:             28.62327        28.04370      27.06367       0.5795691
+ 8:             28.82958        28.13601      27.11729       0.6935654
+ 9:             29.06277        27.27092      26.74636       1.7918565
+10:             28.85554        28.13880      26.99696       0.7167449
+
+Welfare (per-cell, pop-weighted) aggregates:
+Key: <counterfactual>
+             counterfactual total_n pop_weighted_dV pop_weighted_dP_M
+                     <char>   <int>           <num>             <num>
+1:            A_TX_stays_FF 2282735     -0.25636845     -0.0130803472
+2: B_Pigouvian_internalizeE 2282735     -0.01743558     -0.0004956243
+3:      C_KSW_subsidy_50pct 2282735      0.32369571     -0.0154688147
+4:            D_K_tax_50pct 2282735     -0.04042015      0.0019717563
+   pop_weighted_dP_E pop_weighted_dP_R d_leak_cost_per_facyear
+               <num>             <num>                   <num>
+1:      0.0131102053     -3.006647e-05           -0.0056154458
+2:      0.0004902102      5.134665e-06           -0.0002221863
+3:     -0.0081111571      2.357788e-02           -0.0067455002
+4:      0.0007018256     -2.675366e-03            0.0006720325
+   baseline_leak_cost
+                <num>
+1:          0.3868146
+2:          0.3868146
+3:          0.3868146
+4:          0.3868146
+
+Saved:
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Estimation_Results/Model_Replacement_8paramFE_observed.rds 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04i_Theta_Table_8paramFE_AM_SE.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04i_Theta_Table_8paramFE_AM_SE.tex 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04iFETableAllControls.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04i_Welfare_PerCell.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04i_Welfare_Aggregate.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04i_Welfare_Summary.tex 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04i_Compare_8p_vs_8pFE.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04iWelfareSocial03Style.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04iWelfareSocialDecomp.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04iQSDmubyScenario.csv 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/04i_Welfare_DeltaV_byCell.png 
+   C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/04iWelfareSocialDecomposition.png 
+
+04i complete.

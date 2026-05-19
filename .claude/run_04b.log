@@ -1,0 +1,101 @@
+=================================================================
+04b: Replacement-model panel + 32-state DCM primitives
+=================================================================
+
+[1/8] Loading facility panel from Z...
+  rows = 5,061,154 | facilities = 270,506 | year range 1985-2020
+[2/8] Loading full-panel hazard predictions from 01n...
+  rows = 5,561,941 | year range 1970-2025
+  Hazard cells (per 1000 facility-years, post-1999):
+    A_bin w_state h_per1k  n_obs
+    <int>   <int>   <num>  <int>
+ 1:     1       1    4.47  41010
+ 2:     1       2   12.65  71865
+ 3:     2       1    4.59  80536
+ 4:     2       2    6.80  74704
+ 5:     3       1    7.47 138012
+ 6:     3       2    7.31  70405
+ 7:     4       1   10.07 174327
+ 8:     4       2    8.98  54252
+ 9:     5       1   11.40 166055
+10:     5       2    8.54  34320
+11:     6       1   12.03 132166
+12:     6       2    9.86  16812
+13:     7       1   12.36  90618
+14:     7       2   10.13   4557
+15:     8       1   12.57  94275
+16:     8       2   11.74   1715
+  Filter to panel_year >= 1999: 2,448,489 of 5,061,154 rows kept
+[3/8] Loading and aligning loss CSV...
+  Loss cells (mean expected cost, 2023 USD):
+    A_bin w_state      L
+    <int>   <int>  <num>
+ 1:     1       1 653798
+ 2:     1       2 394580
+ 3:     2       1 651289
+ 4:     2       2 335249
+ 5:     3       1 482469
+ 6:     3       2 266609
+ 7:     4       1 475164
+ 8:     4       2 227414
+ 9:     5       1 465378
+10:     5       2 170308
+11:     6       1 411903
+12:     6       2 152345
+13:     7       1 352029
+14:     7       2 213683
+15:     8       1 300665
+16:     8       2 317908
+[4/8] Building observation-level premium...
+  TX premium rows: 568,589
+  Premium availability:
+     state texas_treated with_premium  total   pct
+    <char>         <int>        <int>  <int> <num>
+ 1:     TX             1       420448 440264  95.5
+ 2:     AR             0        86410  86410 100.0
+ 3:     CO             0        75809  75809 100.0
+ 4:     ID             0        29355  29355 100.0
+ 5:     KS             0        77492  77492 100.0
+ 6:     KY             0       103906 103906 100.0
+ 7:     LA             0       101800 101800 100.0
+ 8:     MA             0       100630 100630 100.0
+ 9:     MD             0       135948 135948 100.0
+10:     ME             0        26622  26622 100.0
+11:     MN             0       101056 101056 100.0
+12:     MO             0       197968 197968 100.0
+13:     NC             0       193535 193535 100.0
+14:     OH             0       176479 176479 100.0
+15:     OK             0       115614 115614 100.0
+16:     SD             0        55859  55859 100.0
+17:     TN             0       171005 171005 100.0
+18:     VA             0       258737 258737 100.0
+[5/8] Building observation-level estimation panel...
+[6/8] Estimating age transitions and building F_maintain...
+  WARNING: age transition probs don't sum to 1 cleanly — possible regression
+  (firms aging backwards). Normalizing.
+   A_bin  pi_up pi_stay  n_obs
+   <int>  <num>   <num>  <int>
+1:     1 0.0594  0.9406 119127
+2:     2 0.0071  0.9929 200714
+3:     3 0.0046  0.9954 284974
+4:     4 0.0025  0.9975 347459
+5:     5 0.0016  0.9984 343080
+6:     6 0.0008  0.9992 295111
+7:     7 0.0004  0.9996 227514
+8:     8 0.0000  1.0000 438548
+[7/8] Aggregating premium to state level...
+[8/8] Initializing CCPs and writing observed + extended outputs...
+
+--- Sample: observed (TX 2006+, controls 1999+) ---
+  rows = 2,282,735 | facilities = 139,493
+  observed (TX 2006+, controls 1999+) closures: 46526 exit, 6210 replace (11.8%)
+  saved primitives -> C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Estimation_Results/DCM_Primitives_Replacement_observed.rds
+  saved obs panel -> C:/Users/kaleb/Documents/ust_ins_move_to_github/Data/Analysis/dcm_obs_panel_observed.csv
+
+--- Sample: extended (TX 1999+ with engine-imputed pre-2006, controls 1999+) ---
+  rows = 2,428,673 | facilities = 144,249
+  extended (TX 1999+ with engine-imputed pre-2006, controls 1999+) closures: 51598 exit, 6971 replace (11.9%)
+  saved primitives -> C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Estimation_Results/DCM_Primitives_Replacement_extended.rds
+  saved obs panel -> C:/Users/kaleb/Documents/ust_ins_move_to_github/Data/Analysis/dcm_obs_panel_extended.csv
+
+04b complete.

@@ -1,0 +1,210 @@
+LOG START C:/Users/kaleb/Documents/ust_ins_move_to_github/logs/04j_4p_Welfare_20260514_133902.log
+Script: 04j_4p_Welfare
+R: R version 4.5.2 (2025-10-31 ucrt)
+WD: C:/Users/kaleb/Documents/ust_ins_move_to_github
+
+=== SECTION 1: SOURCE HELPERS ===
+
+✓ model_b_estimator.R loaded
+  Key functions:
+    - create_estimation_config_model_b()
+    - npl_estimator_model_b()
+    - generate_model_b_data()
+    - test_model_b_estimation()
+
+
+✓ improved_estimator_FINAL.r loaded
+=== SECTION 2: LOAD DATA ===
+fit_4p names: theta_hat, theta_raw, P_hat, V_hat, converged, n_iter, log_likelihood, ll_path, theta_path, cache, config, sample_label, elapsed_sec 
+theta_base: kappa_exit=26.1222, K_log=1.6444, gamma_price=-0.2932, gamma_risk=0.1644 
+beta=0.9500  sigma2=1.0000
+K_baseline=5.1779
+Cache: loaded from rds
+ncell_vec absent from prims -- rebuilding from obs_panel
+=== SECTION 3: PRE-FLIGHT CHECK ===
+A_bin distribution (number of states per bin):
+   A_bin     N
+   <int> <int>
+1:     1     4
+2:     2     4
+3:     3     4
+4:     4     4
+5:     5     4
+6:     6     4
+7:     7     4
+8:     8     4
+
+A_bin range: 1 8 
+Mandate (A_bin >= 6): 12 of 32 states
+PRE-FLIGHT: PASS
+=== SECTION 4: DEFINE CFM SOLVER ===
+=== SECTION 5: DEFINE QSD HELPER ===
+=== SECTION 6: DEFINE WELFARE HELPER ===
+=== SECTION 7: SMOKE TEST ===
+Smoke [baseline]: converged=TRUE at iter 8
+Smoke [CCP delta vs saved]: 8.78e-12 (tol 1e-3)
+Smoke [CFM]: converged=TRUE at iter 8
+SMOKE TEST: PASS
+=== SECTION 8: BASELINE ===
+Baseline: converged=TRUE at iter 8
+=== BASELINE -- E_label = HEALTH_ONLY ===
+Converged: T at iter 8
+AvgP_M:        0.9803
+AvgP_E:        0.0174
+AvgP_R:        0.0023
+FirmSurplus:   30.7724
+ExternalPV:    0.2381
+GovtOutlayPV:  0.0000
+SocialWelfare: 30.5344
+dSW vs base:   0.0000 (this IS the base)
+=== BASELINE -- E_label = HEALTH_PLUS_UNMEASURED ===
+Converged: T at iter 8
+AvgP_M:        0.9803
+AvgP_E:        0.0174
+AvgP_R:        0.0023
+FirmSurplus:   30.7724
+ExternalPV:    0.7002
+GovtOutlayPV:  0.0000
+SocialWelfare: 30.0722
+dSW vs base:   0.0000 (this IS the base)
+=== SECTION 9: CF C ===
+CF C: converged=TRUE at iter 8
+=== CF C -- E_label = HEALTH_ONLY ===
+Converged: T at iter 8
+AvgP_M:        0.9618
+AvgP_E:        0.0106
+AvgP_R:        0.0276
+FirmSurplus:   31.2498
+ExternalPV:    0.1821
+GovtOutlayPV:  1.4267
+SocialWelfare: 29.6409
+dSW vs base:   -0.8934
+=== CF C -- E_label = HEALTH_PLUS_UNMEASURED ===
+Converged: T at iter 8
+AvgP_M:        0.9618
+AvgP_E:        0.0106
+AvgP_R:        0.0276
+FirmSurplus:   31.2498
+ExternalPV:    0.5357
+GovtOutlayPV:  1.4267
+SocialWelfare: 29.2874
+dSW vs base:   -0.7849
+=== SECTION 10: CF C_SCAN ===
+[13:40:24] CF C_scan s=-0.5000: converged=TRUE iter=9
+[13:40:24] CF C_scan s=-0.4007: converged=TRUE iter=9
+[13:40:24] CF C_scan s=-0.3013: converged=TRUE iter=9
+[13:40:24] CF C_scan s=-0.2020: converged=TRUE iter=8
+[13:40:25] CF C_scan s=-0.1027: converged=TRUE iter=8
+[13:40:25] CF C_scan s=-0.0033: converged=TRUE iter=8
+[13:40:25] CF C_scan s=0.0960: converged=TRUE iter=8
+[13:40:25] CF C_scan s=0.1953: converged=TRUE iter=8
+[13:40:25] CF C_scan s=0.2947: converged=TRUE iter=8
+[13:40:25] CF C_scan s=0.3940: converged=TRUE iter=8
+[13:40:25] CF C_scan s=0.4933: converged=TRUE iter=8
+[13:40:26] CF C_scan s=0.5927: converged=TRUE iter=7
+[13:40:26] CF C_scan s=0.6920: converged=TRUE iter=7
+[13:40:26] CF C_scan s=0.7913: converged=TRUE iter=7
+[13:40:26] CF C_scan s=0.8907: converged=TRUE iter=6
+[13:40:26] CF C_scan s=0.9900: converged=TRUE iter=6
+=== CF C_scan ===
+s_grid: -0.5 -0.4007 -0.3013 -0.202 -0.1027 -0.0033 0.096 0.1953 0.2947 0.394 0.4933 0.5927 0.692 0.7913 0.8907 0.99 
+All converged: TRUE
+argmax_s (SW @ HEALTH_ONLY): 0.0960
+argmax_s (SW @ HEALTH_PLUS_UNMEASURED): 0.1953
+Figure saved: 04j_4p_Subsidy_Curve.png
+=== SECTION 11: CF P ===
+=== CF P -- E_label = HEALTH_ONLY ===
+Converged: TRUE at iter 8
+AvgP_M:        0.9774
+AvgP_E:        0.0202
+AvgP_R:        0.0024
+FirmSurplus:   30.6225
+ExternalPV:    0.2277
+GovtOutlayPV:  0.0000
+SocialWelfare: 30.3948
+dSW vs base:   -0.1395
+=== CF P -- E_label = HEALTH_PLUS_UNMEASURED ===
+Converged: TRUE at iter 8
+AvgP_M:        0.9715
+AvgP_E:        0.0261
+AvgP_R:        0.0024
+FirmSurplus:   30.3671
+ExternalPV:    0.6219
+GovtOutlayPV:  0.0000
+SocialWelfare: 29.7452
+dSW vs base:   -0.3271
+Figure saved: 04j_PremiumSurcharge_byState.png
+=== SECTION 12: CF M ===
+CF M: converged=TRUE at iter 8
+=== CF M -- E_label = HEALTH_ONLY ===
+Converged: T at iter 8
+AvgP_M:        0.9800
+AvgP_E:        0.0177
+AvgP_R:        0.0023
+FirmSurplus:   30.7633
+ExternalPV:    0.2333
+GovtOutlayPV:  0.0000
+SocialWelfare: 30.5301
+dSW vs base:   -0.0043
+=== CF M -- E_label = HEALTH_PLUS_UNMEASURED ===
+Converged: T at iter 8
+AvgP_M:        0.9800
+AvgP_E:        0.0177
+AvgP_R:        0.0023
+FirmSurplus:   30.7633
+ExternalPV:    0.6860
+GovtOutlayPV:  0.0000
+SocialWelfare: 30.0773
+dSW vs base:   0.0050
+Saved: 04j_CFM_QSD_mu.csv
+=== SECTION 13: ASSEMBLE CSVs ===
+Saved: 04j_Welfare_4p_Social.csv
+Saved: 04j_Welfare_4p_Decomp.csv
+
+Welfare Social Table (all scenarios):
+                  E_label E_dollars Scenario Converged    AvgP_M     AvgP_E
+                   <char>     <num>   <char>    <lgcl>     <num>      <num>
+1:            HEALTH_ONLY     17000 Baseline      TRUE 0.9802517 0.01743167
+2:            HEALTH_ONLY     17000     CF_C      TRUE 0.9618480 0.01059782
+3:            HEALTH_ONLY     17000     CF_P      TRUE 0.9774192 0.02021460
+4:            HEALTH_ONLY     17000     CF_M      TRUE 0.9800042 0.01765362
+5: HEALTH_PLUS_UNMEASURED     50000 Baseline      TRUE 0.9802517 0.01743167
+6: HEALTH_PLUS_UNMEASURED     50000     CF_C      TRUE 0.9618480 0.01059782
+7: HEALTH_PLUS_UNMEASURED     50000     CF_P      TRUE 0.9715335 0.02605499
+8: HEALTH_PLUS_UNMEASURED     50000     CF_M      TRUE 0.9800042 0.01765362
+        AvgP_R ExpPrivateLossFlow ExpExternalDamFlow FirmSurplus SocialWelfare
+         <num>              <num>              <num>       <num>         <num>
+1: 0.002316646          0.3180783        0.011902730    30.77241      30.53436
+2: 0.027554196          0.2904781        0.009106961    31.24982      29.64094
+3: 0.002366168          0.3083479        0.011383043    30.62248      30.39482
+4: 0.002342220          0.3183242        0.011662689    30.76332      30.53007
+5: 0.002316646          0.3180783        0.035008030    30.77241      30.07225
+6: 0.027554196          0.2904781        0.026785180    31.24982      29.28738
+7: 0.002411524          0.2948290        0.031095817    30.36711      29.74519
+8: 0.002342220          0.3183242        0.034302025    30.76332      30.07728
+   GovtOutlayPV
+          <num>
+1:     0.000000
+2:     1.426736
+3:     0.000000
+4:     0.000000
+5:     0.000000
+6:     1.426736
+7:     0.000000
+8:     0.000000
+=== SECTION 14: BAR CHART ===
+Figure saved: 04j_4p_Welfare_BarChart.png
+=== SECTION 15: SAVE RDS ===
+Saved: C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Estimation_Results/Model_Welfare_4p_observed.rds
+
+=== 04j COMPLETE ===
+Estimator: 4p welfare CFs | Sample: observed | Solves: 21
+Outputs:
+  C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Estimation_Results/Model_Welfare_4p_observed.rds
+  C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04j_Welfare_4p_Social.csv
+  C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04j_Welfare_4p_Decomp.csv
+  C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04j_Welfare_4p_CScan.csv
+  C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/04j_CFM_QSD_mu.csv
+  C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/04j_4p_Welfare_BarChart.png
+  C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/04j_4p_Subsidy_Curve.png
+  C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/04j_PremiumSurcharge_byState.png
