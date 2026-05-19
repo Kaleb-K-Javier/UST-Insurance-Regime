@@ -3271,24 +3271,1439 @@ etable(
 # =============================================================================
 log_step("Generating ES plots...")
 
-# Main plots — weighted
-p_es_full_w   <- es_ggplot(m_es_full_w,  label="Full Sample — Weighted")
-p_es_donut_w  <- es_ggplot(m_es_donut_w, label="Donut — Weighted")
-p_es_p88_w    <- es_ggplot(m_es_p88_w,   label="Post-1988 Vintages — Weighted")
 
-save_gg(p_es_full_w,  "Fig_ES_Full_Weighted")
-save_gg(p_es_donut_w, "Fig_ES_Donut_Weighted")
-save_gg(p_es_p88_w,   "Fig_ES_Post88_Weighted")
+# =============================================================================
+# DIAGNOSTIC 1: Raw closure rates by vintage group
+# Shows whether pre-trend violations are vintage-concentrated
+# (Chapter 334 rolling compliance) vs uniform (parallel trends failure)
+# =============================================================================
 
-# Comparison plots — weighted vs unweighted overlaid
-# Requires es_ggplot to return data; adapt if your es_ggplot takes model list
-p_es_full_compare <- es_ggplot(
-  list(m_es_full_w, m_es_full_uw),
-  labels = c("Weighted", "Unweighted"),
-  label  = "Full Sample: Weighted vs Unweighted"
+# Define vintage groups matching the regulatory timeline
+data_C[, vintage_group := fcase(
+  install_yr_int %between% c(1950L, 1976L), "1950-1976\n(Pre-RCRA)",
+  install_yr_int %between% c(1977L, 1984L), "1977-1984\n(RCRA Era)",
+  install_yr_int %between% c(1985L, 1988L), "1985-1988\n(Pre-Reform Straddlers)",
+  install_yr_int %between% c(1989L, 1998L), "1989-1998\n(New Standard)",
+  default = NA_character_
+)]
+
+# Raw weighted closure rates by vintage group, year, treatment status
+raw_by_vintage <- data_C[
+  !is.na(vintage_group) &
+  panel_year >= 1985L &
+  panel_year <= 2003L  # focus on pre/post treatment window
+][,
+  .(
+    raw_rate     = mean(closure_event, na.rm = TRUE),
+    weighted_rate = weighted.mean(closure_event, w = cem_weight, na.rm = TRUE),
+    n_tanks      = .N
+  ),
+  by = .(panel_year, texas_treated, vintage_group)
+]
+
+raw_by_vintage[, group_label := ifelse(
+  texas_treated == 1L, "Texas", "Control"
+)]
+
+# Compute the gap within each vintage group
+gap_by_vintage <- dcast(
+  raw_by_vintage,
+  panel_year + vintage_group ~ texas_treated,
+  value.var = "weighted_rate"
+)[, diff := `1` - `0`]
+setnames(gap_by_vintage, c("0","1"), c("control_rate","texas_rate"))
+
+# ---- Plot A: Raw rates by vintage group ----
+p_raw_vintage <- ggplot(
+  raw_by_vintage,
+  aes(x = panel_year, y = weighted_rate,
+      colour = group_label, linetype = group_label)
+) +
+  geom_vline(xintercept = 1997.5, linetype = "dashed",
+             colour = "grey40", linewidth = 0.4) +
+  geom_line(linewidth = 0.7) +
+  geom_point(size = 1.2) +
+  facet_wrap(~vintage_group, scales = "free_y", ncol = 2) +
+  scale_colour_manual(
+    values = c("Texas" = "#d95f02", "Control" = "grey40"),
+    name   = NULL
+  ) +
+  scale_linetype_manual(
+    values = c("Texas" = "solid", "Control" = "dashed"),
+    name   = NULL
+  ) +
+  scale_x_continuous(breaks = seq(1985, 2003, 4)) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.001)) +
+  labs(
+    x = "Year",
+    y = "Weighted Closure Rate",
+    caption = "Vertical dashed line = Dec 1998 reform. Weighted by CEM weights."
+  ) +
+  theme_classic(base_size = 11, base_family = "Times") +
+  theme(
+    strip.background = element_blank(),
+    strip.text       = element_text(face = "bold", size = 9),
+    legend.position  = "bottom",
+    panel.grid.major.y = element_line(colour = "grey92", linewidth = 0.3)
+  )
+
+save_gg(p_raw_vintage, "Fig_Raw_Closure_By_Vintage_Group")
+
+# ---- Plot B: TX-Control gap by vintage group ----
+p_gap_vintage <- ggplot(
+  gap_by_vintage,
+  aes(x = panel_year, y = diff)
+) +
+  geom_hline(yintercept = 0, colour = "grey60", linewidth = 0.4) +
+  geom_vline(xintercept = 1997.5, linetype = "dashed",
+             colour = "grey40", linewidth = 0.4) +
+  geom_line(colour = "#1b9e77", linewidth = 0.7) +
+  geom_point(colour = "#1b9e77", size = 1.5) +
+  facet_wrap(~vintage_group, scales = "free_y", ncol = 2) +
+  scale_x_continuous(breaks = seq(1985, 2003, 4)) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.001)) +
+  labs(
+    x       = "Year",
+    y       = "Texas − Control Closure Rate",
+    caption = "Vertical dashed line = Dec 1998 reform."
+  ) +
+  theme_classic(base_size = 11, base_family = "Times") +
+  theme(
+    strip.background   = element_blank(),
+    strip.text         = element_text(face = "bold", size = 9),
+    panel.grid.major.y = element_line(colour = "grey92", linewidth = 0.3)
+  )
+
+save_gg(p_gap_vintage, "Fig_Raw_Gap_By_Vintage_Group")
+
+# ---- Print the gap table for inspection ----
+cat("\n=== TX-Control gap by vintage group and year ===\n")
+print(
+  dcast(
+    gap_by_vintage[, .(panel_year, vintage_group, diff = round(diff, 4))],
+    panel_year ~ vintage_group
+  )[order(panel_year)]
 )
-save_gg(p_es_full_compare, "Fig_ES_Full_WeightedVsUnweighted")
 
+# =============================================================================
+# DIAGNOSTIC 2: ES overlay — weighted vs unweighted
+# =============================================================================
+
+es_ggplot_compare <- function(model_w, model_uw,
+                               label_w  = "Weighted",
+                               label_uw = "Unweighted",
+                               title    = NULL,
+                               ylim     = ES_YLIM,
+                               ybreaks  = ES_YBREAKS,
+                               ref      = -1L) {
+
+  df_w  <- es_tidy(model_w,  ref = ref)[, spec := label_w]
+  df_uw <- es_tidy(model_uw, ref = ref)[, spec := label_uw]
+  df    <- rbind(df_w, df_uw)
+
+  ref_rows <- df[year == ref]
+  est_rows <- df[year != ref]
+
+  cols <- c(label_w = "#d95f02", label_uw = "grey40")
+  names(cols) <- c(label_w, label_uw)
+
+  ggplot(df, aes(x = year, y = estimate, colour = spec)) +
+    geom_hline(yintercept = 0, colour = "grey60", linewidth = 0.4) +
+    geom_vline(xintercept = 0, linetype = "dashed",
+               colour = "grey40", linewidth = 0.4) +
+    geom_ribbon(
+      data = est_rows,
+      aes(ymin = conf.low, ymax = conf.high, fill = spec),
+      alpha = 0.12, colour = NA
+    ) +
+    geom_line(data = est_rows, linewidth = 0.6) +
+    geom_point(data = est_rows, size = 1.6, shape = 16) +
+    geom_point(data = ref_rows, shape = 1, size = 2.2, colour = "grey50") +
+    annotate("text", x = ref, y = ylim[1] + diff(ylim) * 0.06,
+             label = sprintf("(%d)\nomitted", ref),
+             size = 2.8, colour = "grey35", fontface = "italic",
+             lineheight = 0.85) +
+    {if (!is.null(title))
+      annotate("text", x = -Inf, y = Inf, label = title,
+               hjust = -0.08, vjust = 1.4, size = 3, colour = "grey25")} +
+    scale_colour_manual(values = cols, name = NULL) +
+    scale_fill_manual(values = cols, name = NULL) +
+    scale_x_continuous(breaks = sort(unique(df$year))) +
+    scale_y_continuous(
+      breaks = ybreaks,
+      labels = scales::number_format(accuracy = 0.001)
+    ) +
+    coord_cartesian(ylim = ylim) +
+    labs(x = "Years Relative to 1998",
+         y = "Effect on Annual Closure Probability") +
+    theme_classic(base_size = 11, base_family = "Times") +
+    theme(
+      axis.line          = element_line(colour = "black", linewidth = 0.4),
+      axis.ticks         = element_line(colour = "black", linewidth = 0.3),
+      axis.text          = element_text(colour = "black"),
+      axis.text.x        = element_text(size = 7),
+      panel.grid         = element_blank(),
+      legend.position    = "bottom",
+      legend.text        = element_text(size = 9),
+      plot.margin        = margin(8, 10, 8, 8)
+    )
+}
+
+# Generate comparison plots
+p_compare_full <- es_ggplot_compare(
+  m_es_full_w, m_es_full_uw,
+  title = "Full Sample (1950-1998 Vintages)"
+)
+p_compare_donut <- es_ggplot_compare(
+  m_es_donut_w, m_es_donut_uw,
+  title = "Donut (excl. 1998-1999)"
+)
+p_compare_p88 <- es_ggplot_compare(
+  m_es_p88_w, m_es_p88_uw,
+  title = "Post-1988 Vintages Only"
+)
+
+save_gg(p_compare_full,  "Fig_ES_Compare_Full")
+save_gg(p_compare_donut, "Fig_ES_Compare_Donut")
+save_gg(p_compare_p88,   "Fig_ES_Compare_Post88")
+
+
+# In data_C, create interacted mandate terms
+data_C[, `:=`(
+  mandate_release_tx    = mandate_release_det   * texas_treated,
+  mandate_spill_tx      = mandate_spill_overfill * texas_treated,
+  mandate_integrity_tx  = mandate_integrity      * texas_treated
+)]
+
+# Do the same for subsamples
+for(dt in list(data_C_donut, data_C_post88)) {
+  dt[, `:=`(
+    mandate_release_tx   = mandate_release_det   * texas_treated,
+    mandate_spill_tx     = mandate_spill_overfill * texas_treated,
+    mandate_integrity_tx = mandate_integrity      * texas_treated
+  )]
+}
+
+# Updated ES formula with interacted mandates
+es_fml_tx <- function(ref) as.formula(sprintf(
+  "closure_event ~ i(rel_year, texas_treated, ref = %dL) +
+   mandate_release_det + mandate_spill_overfill + mandate_integrity +
+   mandate_release_tx  + mandate_spill_tx       + mandate_integrity_tx |
+   panel_id + cell_vintage_year_fe",
+  ref
+))
+
+# And for static
+did_fml_tx <- closure_event ~ did_term +
+  mandate_release_det + mandate_spill_overfill + mandate_integrity +
+  mandate_release_tx  + mandate_spill_tx       + mandate_integrity_tx |
+  panel_id + cell_vintage_year_fe
+
+# Fit with interacted mandates
+mC2_w_tx      <- feols(did_fml_tx, data=data_C,        weights=~cem_weight, cluster=~state)
+mC2_p88_w_tx  <- feols(did_fml_tx, data=data_C_post88, weights=~cem_weight, cluster=~state)
+
+# Correct approach — triple interaction: mandate x texas x pre-period only
+data_C[, pre_period := as.integer(panel_year < 1998L)]
+
+data_C[, `:=`(
+  mandate_release_tx_pre   = mandate_release_det    * texas_treated * pre_period,
+  mandate_spill_tx_pre     = mandate_spill_overfill * texas_treated * pre_period,
+  mandate_integrity_tx_pre = mandate_integrity      * texas_treated * pre_period
+)]
+
+# Same for subsamples
+for(dt in list(data_C_donut, data_C_post88)) {
+  dt[, pre_period := as.integer(panel_year < 1998L)]
+  dt[, `:=`(
+    mandate_release_tx_pre   = mandate_release_det    * texas_treated * pre_period,
+    mandate_spill_tx_pre     = mandate_spill_overfill * texas_treated * pre_period,
+    mandate_integrity_tx_pre = mandate_integrity      * texas_treated * pre_period
+  )]
+}
+
+# Updated ES formula
+es_fml_tx_pre <- function(ref) as.formula(sprintf(
+  "closure_event ~ i(rel_year, texas_treated, ref = %dL) +
+   mandate_release_det    + mandate_spill_overfill + mandate_integrity +
+   mandate_release_tx_pre + mandate_spill_tx_pre   + mandate_integrity_tx_pre |
+   panel_id + cell_vintage_year_fe",
+  ref
+))
+
+# Fit — full and post88 only, weighted, ref=-2 as primary
+m_es_full_tx    <- feols(es_fml_tx_pre(-2), data=data_C,        weights=~cem_weight, cluster=~state)
+m_es_p88_tx     <- feols(es_fml_tx_pre(-2), data=data_C_post88, weights=~cem_weight, cluster=~state)
+
+# Compare to baseline (no TX mandate interaction)
+m_es_full_base  <- feols(es_fml(-2),         data=data_C,        weights=~cem_weight, cluster=~state)
+m_es_p88_base   <- feols(es_fml(-2),         data=data_C_post88, weights=~cem_weight, cluster=~state)
+
+etable(
+  m_es_full_base,  m_es_full_tx,
+  m_es_p88_base,   m_es_p88_tx,
+  headers = c(
+    "Full baseline", "Full TX-mandate pre",
+    "Post88 baseline", "Post88 TX-mandate pre"
+  ),file = file.path(OUTPUT_TABLES, "T_ES_With_TxMandatePre_Appendix.tex")
+)
+
+# Compare to baseline
+etable(
+  mC2_w,       mC2_w_tx,
+  mC2_p88_w,   mC2_p88_w_tx,
+  headers = c("Full baseline", "Full TX-mandate",
+              "Post88 baseline", "Post88 TX-mandate"),
+              file = file.path(OUTPUT_TABLES, "T_C2_With_TxMandate_Appendix.tex")
+)
+
+etable(
+  m_es_full_w,  m_es_full_w_tx,
+  m_es_p88_w,   m_es_p88_w_tx,
+  headers = c("Full baseline", "Full TX-mandate",
+              "Post88 baseline", "Post88 TX-mandate")
+,file = file.path(OUTPUT_TABLES, "T_ES_With_TxMandate_Appendix.tex"))
+
+
+# =============================================================================
+# VINTAGE SPLIT ANALYSIS: Pre-1989 vs Post-1988
+# Static DiD + Event Study, Weighted vs Unweighted
+#
+# Pre-1989 (1950-1988): "Existing tanks" — subject to rolling Chapter 334
+#                        compliance obligations. Pre-trends expected to be
+#                        non-parallel due to differential TX enforcement.
+# Post-1988 (1989+):    "New standard tanks" — built to 40 CFR 280 from
+#                        day one. No rolling obligations. Clean pre-trends.
+#
+# Reference year: -1 throughout (standard convention).
+#
+# Output:
+#   T_Static_VintageSplit.tex
+#   T_ES_VintageSplit.tex
+#   Fig_ES_Pre89_Weighted/Unweighted
+#   Fig_ES_Post88_Weighted/Unweighted
+#   Fig_ES_Compare_Pre89/Post88
+#   Fig_ES_VintageSplit_Combined
+# =============================================================================
+
+log_step("Building vintage-split subsamples...")
+
+# ---- Pre-1989 subsample (1950-1988) ----
+data_C_pre89 <- data_C[install_yr_int <= 1988L][,
+  cem_w_norm_split := cem_weight / sum(cem_weight),
+  by = texas_treated
+]
+
+# ---- Post-1988 subsample (1989+) ----
+data_C_post88 <- data_C[install_yr_int >= 1989L][,
+  cem_w_norm_split := cem_weight / sum(cem_weight),
+  by = texas_treated
+]
+
+# Sanity checks
+cat(sprintf("Pre-89:  %s rows | TX tanks: %s | CTL tanks: %s\n",
+  fmt_n(nrow(data_C_pre89)),
+  fmt_n(uniqueN(data_C_pre89[texas_treated==1L]$tank_panel_id)),
+  fmt_n(uniqueN(data_C_pre89[texas_treated==0L]$tank_panel_id))))
+
+cat(sprintf("Post-88: %s rows | TX tanks: %s | CTL tanks: %s\n",
+  fmt_n(nrow(data_C_post88)),
+  fmt_n(uniqueN(data_C_post88[texas_treated==1L]$tank_panel_id)),
+  fmt_n(uniqueN(data_C_post88[texas_treated==0L]$tank_panel_id))))
+
+cat("\nPre-89 TX vintage range:\n")
+print(data_C_pre89[texas_treated==1L,
+  .(n=uniqueN(tank_panel_id)), by=install_yr_int][order(install_yr_int)])
+
+cat("\nPost-88 TX vintage range:\n")
+print(data_C_post88[texas_treated==1L,
+  .(n=uniqueN(tank_panel_id)), by=install_yr_int][order(install_yr_int)])
+
+# =============================================================================
+# SHARED FORMULAS
+# =============================================================================
+
+did_fml <- closure_event ~ did_term +
+  mandate_release_det + mandate_spill_overfill + mandate_integrity |
+  panel_id + cell_vintage_year_fe
+
+es_vs <- function(ref) as.formula(sprintf(
+  "closure_event ~ i(rel_year, texas_treated, ref = %dL) +
+   mandate_release_det + mandate_spill_overfill + mandate_integrity |
+   panel_id + cell_vintage_year_fe",
+  ref
+))
+
+# =============================================================================
+# STATIC DiD: VINTAGE SPLIT
+# =============================================================================
+log_step("Fitting static DiD — vintage split...")
+
+mC2_pre89_w  <- feols(did_fml, data=data_C_pre89,  weights=~cem_weight, cluster=~state)
+mC2_pre89_uw <- feols(did_fml, data=data_C_pre89,  cluster=~state)
+mC2_post88_w  <- feols(did_fml, data=data_C_post88, weights=~cem_weight, cluster=~state)
+mC2_post88_uw <- feols(did_fml, data=data_C_post88, cluster=~state)
+
+etable(
+  mC2_pre89_w,  mC2_pre89_uw,
+  mC2_post88_w, mC2_post88_uw,
+  headers = c(
+    "Pre-89 W", "Pre-89 UW",
+    "Post-88 W", "Post-88 UW"
+  ),
+  tex    = TRUE,
+  digits = 4,
+  title  = "Static DiD: Vintage Split (Pre-1989 vs Post-1988)",
+  file   = file.path(OUTPUT_TABLES, "T_Static_VintageSplit.tex")
+)
+
+# =============================================================================
+# EVENT STUDY: VINTAGE SPLIT — ref = -1 throughout
+# =============================================================================
+log_step("Fitting ES — vintage split...")
+
+m_es_pre89_w    <- feols(es_vs(-1), data=data_C_pre89,  weights=~cem_weight, cluster=~state)
+m_es_pre89_uw   <- feols(es_vs(-1), data=data_C_pre89,  cluster=~state)
+m_es_post88_w   <- feols(es_vs(-1), data=data_C_post88, weights=~cem_weight, cluster=~state)
+m_es_post88_uw  <- feols(es_vs(-1), data=data_C_post88, cluster=~state)
+
+etable(
+  m_es_pre89_w,  m_es_pre89_uw,
+  m_es_post88_w, m_es_post88_uw,
+  headers = c(
+    "Pre-89 W", "Pre-89 UW",
+    "Post-88 W", "Post-88 UW"
+  ),
+  tex    = TRUE,
+  digits = 4,
+  title  = "Event Study: Vintage Split, ref = -1",
+  file   = file.path(OUTPUT_TABLES, "T_ES_VintageSplit.tex")
+)
+
+# =============================================================================
+# COHERENCE CHECK
+# =============================================================================
+log_step("Coherence check: static vs ES at treatment onset...")
+
+cat("\n=== Static did_term ===\n")
+cat(sprintf("  Pre-89  W:  %.4f (%.4f)\n",
+  coef(mC2_pre89_w)["did_term"],  se(mC2_pre89_w)["did_term"]))
+cat(sprintf("  Pre-89  UW: %.4f (%.4f)\n",
+  coef(mC2_pre89_uw)["did_term"], se(mC2_pre89_uw)["did_term"]))
+cat(sprintf("  Post-88 W:  %.4f (%.4f)\n",
+  coef(mC2_post88_w)["did_term"],  se(mC2_post88_w)["did_term"]))
+cat(sprintf("  Post-88 UW: %.4f (%.4f)\n",
+  coef(mC2_post88_uw)["did_term"], se(mC2_post88_uw)["did_term"]))
+
+get_tau <- function(m, tau) {
+  b  <- coef(m)
+  s  <- se(m)
+  nm <- grep(sprintf("rel_year::%d:", tau), names(b), value=TRUE)
+  if (length(nm) == 0) return(c(NA, NA))
+  c(b[nm], s[nm])
+}
+
+cat("\n=== ES tau=0 and tau=1 (ref=-1, weighted) ===\n")
+for(pair in list(
+  list(m=m_es_pre89_w,  lbl="Pre-89  W "),
+  list(m=m_es_pre89_uw, lbl="Pre-89  UW"),
+  list(m=m_es_post88_w, lbl="Post-88 W "),
+  list(m=m_es_post88_uw,lbl="Post-88 UW")
+)) {
+  t0 <- get_tau(pair$m, 0)
+  t1 <- get_tau(pair$m, 1)
+  cat(sprintf("  %s  tau0=%.4f(%.4f)  tau1=%.4f(%.4f)\n",
+    pair$lbl, t0[1], t0[2], t1[1], t1[2]))
+}
+
+# =============================================================================
+# PLOTS
+# =============================================================================
+log_step("Generating vintage-split ES plots...")
+
+p_pre89_w   <- es_ggplot(m_es_pre89_w,   label="Pre-1989 Vintages — Weighted",    ref=-1L)
+p_pre89_uw  <- es_ggplot(m_es_pre89_uw,  label="Pre-1989 Vintages — Unweighted",  ref=-1L)
+p_post88_w  <- es_ggplot(m_es_post88_w,  label="Post-1988 Vintages — Weighted",   ref=-1L)
+p_post88_uw <- es_ggplot(m_es_post88_uw, label="Post-1988 Vintages — Unweighted", ref=-1L)
+
+save_gg(p_pre89_w,   "Fig_ES_Pre89_Weighted")
+save_gg(p_pre89_uw,  "Fig_ES_Pre89_Unweighted")
+save_gg(p_post88_w,  "Fig_ES_Post88_Weighted")
+save_gg(p_post88_uw, "Fig_ES_Post88_Unweighted")
+
+# Weighted vs unweighted comparison plots
+p_compare_pre89  <- es_ggplot_compare(
+  m_es_pre89_w,  m_es_pre89_uw,
+  title = "Pre-1989 Vintages: Weighted vs Unweighted"
+)
+p_compare_post88 <- es_ggplot_compare(
+  m_es_post88_w, m_es_post88_uw,
+  title = "Post-1988 Vintages: Weighted vs Unweighted"
+)
+
+save_gg(p_compare_pre89,  "Fig_ES_Compare_Pre89")
+save_gg(p_compare_post88, "Fig_ES_Compare_Post88")
+
+# Paper figure: pre vs post side by side, weighted only
+p_vintage_split <- p_pre89_w + p_post88_w +
+  plot_annotation(
+    caption = paste(
+      "Left: Pre-1989 vintages (1950-1988, existing tanks subject to rolling",
+      "Chapter 334 compliance obligations).",
+      "\nRight: Post-1988 vintages (1989-1998, new standard tanks, no rolling",
+      "obligations). Ref year = -1.",
+      "\nWeighted by CEM weights. Clustered SEs by state."
+    )
+  )
+
+save_gg(p_vintage_split, "Fig_ES_VintageSplit_Combined", width=14, height=6)
+
+
+# =============================================================================
+# ACTIVE-AT-TREATMENT ANALYSIS — REFACTORED
+#
+# Structure:
+#   1. Utilities
+#   2. Sample construction
+#   3. Stepped DiD tables (no weights)
+#   4. Event studies (3 samples, clean plots)
+#   5. HTE DiD: did x 1[pre_1989]
+#   6. Vintage forest plot (ATT by install year)
+#   7. HonestDiD (inline, one block per regression)
+#   8. Survival bias diagnostics + IPSW
+# =============================================================================
+
+library(fixest)
+library(data.table)
+library(ggplot2)
+library(patchwork)
+library(sandwich)
+library(lmtest)
+library(HonestDiD)
+
+# =============================================================================
+# 1. UTILITIES
+# =============================================================================
+
+# ── 1A. Coefficient name parsers ──────────────────────────────────────────────
+.pat_a <- "^rel_year::(-?[0-9]+):texas_treated$"
+.pat_b <- "^texas_treated:rel_year::(-?[0-9]+)$"
+
+.parse_es_names <- function(nms) {
+  if (any(grepl(.pat_a, nms))) {
+    hits <- grep(.pat_a, nms, value = TRUE)
+    list(hits = hits, years = as.integer(sub(.pat_a, "\\1", hits)))
+  } else if (any(grepl(.pat_b, nms))) {
+    hits <- grep(.pat_b, nms, value = TRUE)
+    list(hits = hits, years = as.integer(sub(.pat_b, "\\1", hits)))
+  } else {
+    stop("Cannot parse ES names. First 5: ", paste(head(nms, 5), collapse = ", "))
+  }
+}
+
+# ── 1B. Extract event-study coefficient data.table ───────────────────────────
+extract_es_coef_dt <- function(m, ref_period = -1L) {
+  p  <- .parse_es_names(names(coef(m)))
+  dt <- data.table(
+    rel_year = p$years,
+    estimate = coef(m)[p$hits],
+    se       = se(m)[p$hits]
+  )
+  if (!ref_period %in% dt$rel_year)
+    dt <- rbindlist(list(dt, data.table(rel_year = ref_period,
+                                        estimate = 0, se = 0)))
+  setorder(dt, rel_year)
+  dt[, period := fcase(rel_year < 0, "pre",
+                       rel_year == 0, "event",
+                       default        = "post")]
+  dt[, `:=`(ci_lo = estimate - 1.96 * se,
+             ci_hi = estimate + 1.96 * se)]
+  dt
+}
+
+# ── 1C. Extract inputs for HonestDiD (strips ref period row) ─────────────────
+extract_es_inputs <- function(m, ref_period = -1L) {
+  p  <- .parse_es_names(names(coef(m)))
+  ct <- data.table(term = p$hits, estimate = coef(m)[p$hits], year = p$years)
+  setorder(ct, year)
+
+  V_full <- vcov(m, type = "clustered")
+  idx    <- match(ct$term, rownames(V_full))
+  idx    <- idx[!is.na(idx)]
+  V_es   <- V_full[idx, idx, drop = FALSE]
+
+  beta_es <- ct$estimate
+  names(beta_es)           <- as.character(ct$year)
+  rownames(V_es) <- colnames(V_es) <- as.character(ct$year)
+
+  if (!as.character(ref_period) %in% names(beta_es)) {
+    new_yrs <- sort(c(ct$year, ref_period))
+    n       <- length(new_yrs)
+    V_aug   <- matrix(0, n, n,
+                      dimnames = list(as.character(new_yrs),
+                                      as.character(new_yrs)))
+    kc <- as.character(ct$year)
+    V_aug[kc, kc] <- V_es
+    beta_aug       <- setNames(rep(0, n), as.character(new_yrs))
+    beta_aug[kc]   <- beta_es
+    beta_es <- beta_aug
+    V_es    <- V_aug
+  }
+
+  list(
+    beta         = beta_es,
+    sigma        = V_es,
+    pre_periods  = sort(as.integer(
+      names(beta_es)[as.integer(names(beta_es)) < ref_period])),
+    post_periods = sort(as.integer(
+      names(beta_es)[as.integer(names(beta_es)) >= 0L])),
+    ref_period   = ref_period
+  )
+}
+
+# ── 1D. Clean event-study ggplot (no title, no caption) ──────────────────────
+#   Academic style: Times, minimal grid, no legend title, ref period marked.
+
+plot_es_clean <- function(m, ref_period = -1L,
+                           col_pre   = "#3A6BBF",
+                           col_post  = "#BF3A3A",
+                           col_event = "#888888") {
+  dt <- extract_es_coef_dt(m, ref_period = ref_period)
+
+  ggplot(dt, aes(x = rel_year, y = estimate, colour = period)) +
+    geom_hline(yintercept = 0, colour = "grey55",
+               linetype = "dashed", linewidth = 0.45) +
+    geom_vline(xintercept = ref_period - 0.5, colour = "grey40",
+               linetype = "dotted", linewidth = 0.5) +
+    geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi),
+                  width = 0.25, linewidth = 0.5) +
+    geom_point(size = 2.0, shape = 21, fill = "white", stroke = 1.2) +
+    scale_colour_manual(
+      values = c(pre = col_pre, event = col_event, post = col_post),
+      labels = c(pre = "Pre-treatment", event = "Event", post = "Post-treatment"),
+      name   = NULL) +
+    scale_x_continuous(breaks = seq(-14, 22, by = 2)) +
+    labs(x = "Years relative to Dec 22 1998", y = "Coefficient") +
+    theme_classic(base_size = 11, base_family = "Times") +
+    theme(
+      legend.position    = "bottom",
+      legend.key.width   = unit(1.2, "cm"),
+      axis.line          = element_line(colour = "black", linewidth = 0.4),
+      axis.ticks         = element_line(colour = "black", linewidth = 0.3),
+      axis.text          = element_text(colour = "black"),
+      panel.grid.major.y = element_line(colour = "grey92", linewidth = 0.3),
+      panel.grid.minor   = element_blank(),
+      plot.margin        = margin(8, 12, 8, 8)
+    )
+}
+
+# ── 1E. HonestDiD sensitivity plot (inline, no wrapper fn) ───────────────────
+#   Called after run_hd_*; returns a ggplot object.
+plot_hd_sensitivity <- function(rm_results, sd_results,
+                                point_ci_lo, point_ci_hi,
+                                point_col = "grey25") {
+  make_panel <- function(res, x_lab) {
+    if (is.null(res)) return(NULL)
+    res_dt   <- as.data.table(res)
+
+    # Rename grid column robustly (could be "M" or "Mbar")
+    mcol <- intersect(names(res_dt), c("M", "Mbar"))
+    if (!length(mcol)) return(NULL)
+    setnames(res_dt, mcol, "M_val")
+
+    baseline <- data.table(M_val = 0, lb = point_ci_lo, ub = point_ci_hi)
+
+    ggplot() +
+      geom_hline(yintercept = 0, colour = "grey50",
+                 linetype = "dashed", linewidth = 0.45) +
+      geom_ribbon(data = res_dt, aes(x = M_val, ymin = lb, ymax = ub),
+                  fill = point_col, alpha = 0.22) +
+      geom_line(data = res_dt, aes(x = M_val, y = lb),
+                colour = point_col, linewidth = 0.55) +
+      geom_line(data = res_dt, aes(x = M_val, y = ub),
+                colour = point_col, linewidth = 0.55) +
+      geom_errorbar(data = baseline,
+                    aes(x = M_val, ymin = lb, ymax = ub),
+                    colour = "black", width = 0.04, linewidth = 0.7) +
+      geom_point(data = baseline, aes(x = M_val, y = (lb + ub) / 2),
+                 colour = "black", size = 1.8) +
+      labs(x = x_lab, y = "95% CI bounds") +
+      theme_classic(base_size = 10, base_family = "Times") +
+      theme(axis.line  = element_line(colour = "black", linewidth = 0.4),
+            axis.ticks = element_line(colour = "black", linewidth = 0.3),
+            axis.text  = element_text(colour = "black"),
+            panel.grid = element_blank(),
+            plot.margin = margin(6, 10, 6, 6))
+  }
+
+  p_rm <- make_panel(rm_results,
+                     expression(bar(M)~"(relative magnitude)"))
+  p_sd <- make_panel(sd_results, "M (smoothness bound)")
+
+  if (!is.null(p_rm) && !is.null(p_sd)) p_rm | p_sd
+  else if (!is.null(p_rm)) p_rm
+  else p_sd
+}
+
+# ── 1F. HonestDiD breakdown finder ───────────────────────────────────────────
+hd_breakdown <- function(res) {
+  if (is.null(res)) return(NA_real_)
+  dt   <- as.data.table(res)
+  mcol <- intersect(names(dt), c("M", "Mbar"))
+  if (!length(mcol)) return(NA_real_)
+  setnames(dt, mcol, "M_val")
+  crosses <- dt[lb <= 0 & ub >= 0, M_val]
+  if (!length(crosses)) NA_real_ else min(crosses)
+}
+
+# =============================================================================
+# 2. SAMPLE CONSTRUCTION
+# =============================================================================
+
+log_step("Section 2: Sample construction...")
+
+data_C <- matched_tanks_birth_cem[install_yr_int < 1999L & cem_weight > 0]
+data_C[, cell_vintage_year_fe := .GRP,
+       by = .(panel_year, make_model_noage, install_yr_int)]
+data_C[, rel_year     := as.integer(panel_year) - 1998L]
+data_C[, pre89_cohort := as.integer(install_yr_int <= 1988L)]
+
+cat(sprintf("  Facilities: %s | Tanks: %s | TX tanks: %s\n",
+            fmt_n(uniqueN(data_C$panel_id)),
+            fmt_n(uniqueN(data_C$tank_panel_id)),
+            fmt_n(uniqueN(data_C[texas_treated == 1L]$tank_panel_id))))
+
+# Active-at-treatment: facility had ≥1 open or newly installed tank on Dec 22 1998
+tanks_open_1998        <- data_C[panel_year == 1998L & closure_event == 0L,
+                                  unique(panel_id)]
+tanks_installed_1998   <- data_C[install_yr_int == 1998L, unique(panel_id)]
+facilities_active_1998 <- union(tanks_open_1998, tanks_installed_1998)
+
+data_C_active      <- data_C[panel_id %in% facilities_active_1998]
+data_C_active_pre89  <- data_C_active[install_yr_int <= 1988L]
+data_C_active_post88 <- data_C_active[install_yr_int >= 1989L]
+
+for (d in list(data_C_active, data_C_active_pre89, data_C_active_post88))
+  d[, cell_vintage_year_fe := .GRP,
+    by = .(panel_year, make_model_noage, install_yr_int)]
+
+cat(sprintf("  Active — full:    %s rows | %s facilities\n",
+            fmt_n(nrow(data_C_active)),      fmt_n(uniqueN(data_C_active$panel_id))))
+cat(sprintf("  Active — pre-89:  %s rows | %s facilities\n",
+            fmt_n(nrow(data_C_active_pre89)),  fmt_n(uniqueN(data_C_active_pre89$panel_id))))
+cat(sprintf("  Active — post-88: %s rows | %s facilities\n",
+            fmt_n(nrow(data_C_active_post88)), fmt_n(uniqueN(data_C_active_post88$panel_id))))
+
+# Full pre-treatment cross-section (survivors + non-survivors) for Section 8
+tank_xsec_full <- matched_tanks_birth_cem[
+  install_yr_int < 1999L & cem_weight > 0
+][order(panel_year), .SD[1L], by = tank_panel_id,
+  .SDcols = c("panel_id","tank_panel_id","texas_treated",
+              "install_yr_int","state","single_wall",
+              "tank_age","cem_weight")]
+tank_xsec_full[, survived      := as.integer(panel_id %in% facilities_active_1998)]
+tank_xsec_full[, vintage_pre89 := as.integer(install_yr_int <= 1988L)]
+
+# =============================================================================
+# 3. STEPPED DiD TABLES (unweighted, no CEM weights)
+# =============================================================================
+# Steps:
+#   M1 — did_term only (no FE)
+#   M2 — + facility FE (panel_id)
+#   M3 — + facility FE + mandate controls
+#   M4 — + facility FE + mandate controls + cell_vintage_year_fe  ← main spec
+#
+# Three samples: full active, pre-89 vintage, post-88 vintage.
+# All standard errors clustered by state.
+# =============================================================================
+
+log_step("Section 3: Stepped DiD tables (unweighted)...")
+
+.controls <- "+ mandate_release_det + mandate_spill_overfill + mandate_integrity"
+
+# ── 3A. Full active sample ────────────────────────────────────────────────────
+m3_full_1 <- feols(closure_event ~ did_term,
+                   data_C_active, cluster = ~state)
+m3_full_2 <- feols(closure_event ~ did_term | panel_id,
+                   data_C_active, cluster = ~state)
+m3_full_3 <- feols(
+  as.formula(paste("closure_event ~ did_term", .controls, "| panel_id")),
+  data_C_active, cluster = ~state)
+m3_full_4 <- feols(
+  as.formula(paste("closure_event ~ did_term", .controls,
+                   "| panel_id + cell_vintage_year_fe")),
+  data_C_active, cluster = ~state)
+
+etable(m3_full_1, m3_full_2, m3_full_3, m3_full_4,
+       headers   = c("(1) Raw","(2) + Fac FE","(3) + Controls","(4) + Cell FE"),
+       tex       = TRUE, digits = 4,
+       file      = file.path(OUTPUT_TABLES, "T_DiD_Stepped_Full.tex"))
+
+# ── 3B. Pre-1989 vintage ──────────────────────────────────────────────────────
+m3_pre89_1 <- feols(closure_event ~ did_term,
+                    data_C_active_pre89, cluster = ~state)
+m3_pre89_2 <- feols(closure_event ~ did_term | panel_id,
+                    data_C_active_pre89, cluster = ~state)
+m3_pre89_3 <- feols(
+  as.formula(paste("closure_event ~ did_term", .controls, "| panel_id")),
+  data_C_active_pre89, cluster = ~state)
+m3_pre89_4 <- feols(
+  as.formula(paste("closure_event ~ did_term", .controls,
+                   "| panel_id + cell_vintage_year_fe")),
+  data_C_active_pre89, cluster = ~state)
+
+etable(m3_pre89_1, m3_pre89_2, m3_pre89_3, m3_pre89_4,
+       headers   = c("(1) Raw","(2) + Fac FE","(3) + Controls","(4) + Cell FE"),
+       tex       = TRUE, digits = 4,
+       file      = file.path(OUTPUT_TABLES, "T_DiD_Stepped_Pre89.tex"))
+
+# ── 3C. Post-1988 vintage ─────────────────────────────────────────────────────
+m3_post88_1 <- feols(closure_event ~ did_term,
+                     data_C_active_post88, cluster = ~state)
+m3_post88_2 <- feols(closure_event ~ did_term | panel_id,
+                     data_C_active_post88, cluster = ~state)
+m3_post88_3 <- feols(
+  as.formula(paste("closure_event ~ did_term", .controls, "| panel_id")),
+  data_C_active_post88, cluster = ~state)
+m3_post88_4 <- feols(
+  as.formula(paste("closure_event ~ did_term", .controls,
+                   "| panel_id + cell_vintage_year_fe")),
+  data_C_active_post88, cluster = ~state)
+
+etable(m3_post88_1, m3_post88_2, m3_post88_3, m3_post88_4,
+       headers   = c("(1) Raw","(2) + Fac FE","(3) + Controls","(4) + Cell FE"),
+       tex       = TRUE, digits = 4,
+       file      = file.path(OUTPUT_TABLES, "T_DiD_Stepped_Post88.tex"))
+
+cat("  Saved: T_DiD_Stepped_{Full,Pre89,Post88}.tex\n")
+
+# Quick print for log
+cat("\n=== Main DiD estimates (step 4, unweighted) ===\n")
+for (x in list(
+  list(m3_full_4,   "Full   "),
+  list(m3_pre89_4,  "Pre-89 "),
+  list(m3_post88_4, "Post-88")
+)) cat(sprintf("  %s  coef=%.4f  se=%.4f\n", x[[2]],
+               coef(x[[1]])["did_term"], se(x[[1]])["did_term"]))
+
+# =============================================================================
+# 4. EVENT STUDIES (3 samples, clean plots, no weights)
+# =============================================================================
+
+log_step("Section 4: Event-study models and plots...")
+
+.es_fml <- function(ref = -1L, controls = TRUE) {
+  ctrl <- if (controls)
+    "+ mandate_release_det + mandate_spill_overfill + mandate_integrity"
+  else ""
+  as.formula(sprintf(
+    "closure_event ~ i(rel_year, texas_treated, ref = %dL) %s |
+     panel_id + cell_vintage_year_fe", ref, ctrl))
+}
+
+# ── 4A. Estimate (unweighted, ref = -1) ──────────────────────────────────────
+mES_full    <- feols(.es_fml(-1), data_C_active,        cluster = ~state)
+mES_pre89   <- feols(.es_fml(-1), data_C_active_pre89,  cluster = ~state)
+mES_post88  <- feols(.es_fml(-1), data_C_active_post88, cluster = ~state)
+
+# Robustness: ref = -2
+mES_full_r2   <- feols(.es_fml(-2), data_C_active,        cluster = ~state)
+mES_pre89_r2  <- feols(.es_fml(-2), data_C_active_pre89,  cluster = ~state)
+mES_post88_r2 <- feols(.es_fml(-2), data_C_active_post88, cluster = ~state)
+
+# ── 4B. Tables ───────────────────────────────────────────────────────────────
+etable(mES_full, mES_pre89, mES_post88,
+       headers = c("Full","Pre-89","Post-88"),
+       tex = TRUE, digits = 4,
+       file = file.path(OUTPUT_TABLES, "T_ES_Active_Main.tex"))
+
+etable(mES_full_r2, mES_pre89_r2, mES_post88_r2,
+       headers = c("Full ref=-2","Pre-89 ref=-2","Post-88 ref=-2"),
+       tex = TRUE, digits = 4,
+       file = file.path(OUTPUT_TABLES, "T_ES_Active_Ref2.tex"))
+
+# ── 4C. Plots (no titles, no captions, clean academic style) ─────────────────
+
+p_es_full   <- plot_es_clean(mES_full,   ref_period = -1L)
+p_es_pre89  <- plot_es_clean(mES_pre89,  ref_period = -1L)
+p_es_post88 <- plot_es_clean(mES_post88, ref_period = -1L)
+
+# Individual figures
+save_gg(p_es_full,   "Fig_ES_Full",   width = 10, height = 5)
+save_gg(p_es_pre89,  "Fig_ES_Pre89",  width = 10, height = 5)
+save_gg(p_es_post88, "Fig_ES_Post88", width = 10, height = 5)
+
+# Three-panel combined (stacked vertically, shared x-axis style)
+p_es_combined <- (p_es_full / p_es_pre89 / p_es_post88) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+
+save_gg(p_es_combined, "Fig_ES_Combined_3Panel", width = 10, height = 14)
+
+cat("  Saved: Fig_ES_{Full,Pre89,Post88} + Fig_ES_Combined_3Panel\n")
+cat("  Saved: T_ES_Active_Main.tex | T_ES_Active_Ref2.tex\n")
+
+# =============================================================================
+# 5. HTE DiD — did × 1[pre_1989 cohort]
+# =============================================================================
+# Spec: closure ~ did_term + did_term × pre89_cohort + pre89_cohort
+#              + mandate controls | panel_id + cell_vintage_year_fe
+# did_term                = ATT for post-1988 cohort (base)
+# did_term:pre89_cohort   = differential ATT for pre-1989 cohort
+# Interpretation: did_term + did_term:pre89_cohort = ATT for pre-1989 cohort
+# =============================================================================
+
+log_step("Section 5: HTE DiD (did x pre89_cohort)...")
+
+mHTE_1 <- feols(
+  closure_event ~ did_term * pre89_cohort,
+  data_C_active, cluster = ~state)
+
+mHTE_2 <- feols(
+  closure_event ~ did_term * pre89_cohort | panel_id,
+  data_C_active, cluster = ~state)
+
+mHTE_3 <- feols(
+  as.formula(paste(
+    "closure_event ~ did_term * pre89_cohort",
+    .controls, "| panel_id")),
+  data_C_active, cluster = ~state)
+
+mHTE_4 <- feols(
+  as.formula(paste(
+    "closure_event ~ did_term * pre89_cohort",
+    .controls, "| panel_id + cell_vintage_year_fe")),
+  data_C_active, cluster = ~state)
+
+# Derived ATTs
+hte_post88_att <- coef(mHTE_4)["did_term"]
+hte_post88_se  <- se(mHTE_4)["did_term"]
+hte_interact   <- coef(mHTE_4)["did_term:pre89_cohort"]
+hte_interact_se <- se(mHTE_4)["did_term:pre89_cohort"]
+hte_pre89_att  <- hte_post88_att + hte_interact
+
+# Delta-method SE for pre-89 ATT
+V_hte <- vcov(mHTE_4, type = "clustered")
+idxA  <- match("did_term",             rownames(V_hte))
+idxB  <- match("did_term:pre89_cohort", rownames(V_hte))
+hte_pre89_se <- sqrt(V_hte[idxA, idxA] + V_hte[idxB, idxB] +
+                       2 * V_hte[idxA, idxB])
+
+cat(sprintf(
+  "\n=== HTE DiD (main spec, step 4) ===\n  Post-88 ATT: %.4f (se=%.4f)\n  Pre-89  ATT: %.4f (se=%.4f)  [= did + interact]\n  Differential: %.4f (se=%.4f)\n",
+  hte_post88_att, hte_post88_se,
+  hte_pre89_att,  hte_pre89_se,
+  hte_interact,   hte_interact_se))
+
+etable(mHTE_1, mHTE_2, mHTE_3, mHTE_4,
+       headers = c("(1) Raw","(2) + Fac FE","(3) + Controls","(4) + Cell FE"),
+       tex = TRUE, digits = 4,
+       file = file.path(OUTPUT_TABLES, "T_HTE_DiD_Vintage.tex"))
+cat("  Saved: T_HTE_DiD_Vintage.tex\n")
+
+
+### 6. VINTAGE FOREST PLOT (ATT by install year)
+
+data_C_active[, vintage_f := factor(install_yr_int)]
+
+m_vintage_interact <- feols(
+  closure_event ~ i(vintage_f, did_term, ref = "1995") |
+    panel_id + cell_vintage_year_fe,
+  data_C_active, cluster = ~state)
+
+# Check what actually came out of the model
+cat("Coefficients in model:\n")
+print(names(coef(m_vintage_interact)))
+
+V <- vcov(m_vintage_interact, type = "clustered")
+
+# The ref=1995 cohort ATT is NOT separately identified as "did_term" —
+# it is implicit. We need to recover it via lincom:
+# For any cohort k: ATT_k = vintage_f::k:did_term (that IS the full marginal effect)
+# fixest i(x, v, ref) gives you v's coefficient *within* each level of x,
+# so each coef IS already the full ATT for that cohort. No base to add.
+
+vintage_coef_dt <- data.table(
+  term     = names(coef(m_vintage_interact)),
+  estimate = coef(m_vintage_interact),
+  se       = se(m_vintage_interact)
+)[grepl("vintage_f::[0-9]+:did_term", term)]
+
+vintage_coef_dt[, install_yr := as.integer(
+  sub("vintage_f::([0-9]+):did_term", "\\1", term))]
+
+vintage_coef_dt[, `:=`(
+  total_att = estimate,
+  total_se  = se,
+  pre89_lgl = install_yr <= 1988L,
+  is_ref    = FALSE
+)]
+
+vintage_coef_dt[, `:=`(
+  ci_lo = total_att - 1.96 * total_se,
+  ci_hi = total_att + 1.96 * total_se
+)]
+
+# Reference year: coefficient is zero by construction (omitted), no SE
+vintage_coef_dt <- rbindlist(list(
+  vintage_coef_dt,
+  data.table(
+    term      = NA_character_,
+    estimate  = 0, se = 0,
+    install_yr = 1995L,
+    total_att = 0, total_se = NA_real_,
+    ci_lo = NA_real_, ci_hi = NA_real_,
+    pre89_lgl = FALSE,
+    is_ref    = TRUE)
+), fill = TRUE)
+
+setorder(vintage_coef_dt, install_yr)
+
+# pre89 as character so scale_colour_manual keys match
+vintage_coef_dt[, pre89_chr := ifelse(pre89_lgl, "pre89", "post88")]
+
+p_vintage_forest <- ggplot(vintage_coef_dt,
+                            aes(x = install_yr, y = total_att)) +
+  geom_hline(yintercept = 0, colour = "grey55",
+             linetype = "dashed", linewidth = 0.45) +
+  geom_vline(xintercept = 1988.5, colour = "grey35",
+             linetype = "dotted", linewidth = 0.55) +
+  geom_errorbar(data = vintage_coef_dt[is_ref == FALSE],
+                aes(ymin = ci_lo, ymax = ci_hi, colour = pre89_chr),
+                width = 0.35, linewidth = 0.6) +
+  geom_point(data = vintage_coef_dt[is_ref == FALSE],
+             aes(colour = pre89_chr, fill = pre89_chr),
+             size = 2.8, shape = 21, stroke = 1.1) +
+  geom_point(data = vintage_coef_dt[is_ref == TRUE],
+             colour = "grey40", fill = "white",
+             size = 3.2, shape = 23, stroke = 1.1) +
+  annotate("text",
+           x = 1995.3, y = 0.003,
+           label = "ref.", hjust = 0, size = 2.8,
+           colour = "grey40", family = "Times") +
+  scale_colour_manual(
+    values = c("pre89"  = "#3A6BBF", "post88" = "#BF3A3A"),
+    labels = c("pre89"  = "Existing tanks (pre-Dec 1988 EPA rule)",
+               "post88" = "New tanks (post-Dec 1988 EPA rule)"),
+    name = NULL) +
+  scale_fill_manual(
+    values = c("pre89"  = "#3A6BBF", "post88" = "#BF3A3A"),
+    guide  = "none") +
+  scale_x_continuous(breaks = seq(min(vintage_coef_dt$install_yr),
+                                   max(vintage_coef_dt$install_yr), by = 2)) +
+  labs(x = "Installation year (vintage cohort)", y = "ATT") +
+  theme_classic(base_size = 11, base_family = "Times") +
+  theme(
+    legend.position    = "bottom",
+    axis.line          = element_line(colour = "black", linewidth = 0.4),
+    axis.ticks         = element_line(colour = "black", linewidth = 0.3),
+    axis.text          = element_text(colour = "black"),
+    panel.grid.major.y = element_line(colour = "grey92", linewidth = 0.3),
+    panel.grid.minor   = element_blank(),
+    plot.margin        = margin(8, 12, 8, 8)
+  )
+
+save_gg(p_vintage_forest, "Fig_Vintage_Forest", width = 11, height = 6)
+
+
+# =============================================================================
+# 7. HONESTDID — INLINE (one block per key regression)
+# =============================================================================
+library(doParallel)
+registerDoParallel(cores = parallel::detectCores()/2)
+# Grid parameters
+HD_M_GRID_RM <- seq(0, 3,    by = 0.1)
+HD_M_GRID_SD <- seq(0, 0.08, by = 0.005)
+
+log_step("Section 7: HonestDiD sensitivity analyses...")
+
+# ── Helper: run HonestDiD given extracted inputs ─────────────────────────────
+.run_hd <- function(ei, M_grid_rm = HD_M_GRID_RM, M_grid_sd = HD_M_GRID_SD) {
+  ref_chr  <- as.character(ei$ref_period)
+  keep     <- setdiff(names(ei$beta), ref_chr)
+  beta_in  <- ei$beta[keep]
+  sigma_in <- ei$sigma[keep, keep, drop = FALSE]
+
+  numPre  <- length(ei$pre_periods)
+  numPost <- length(ei$post_periods)
+
+  ord      <- c(as.character(ei$pre_periods), as.character(ei$post_periods))
+  ord      <- ord[ord %in% names(beta_in)]
+  beta_in  <- beta_in[ord]
+  sigma_in <- sigma_in[ord, ord, drop = FALSE]
+
+  if (length(beta_in) != numPre + numPost) {
+    warning(sprintf(".run_hd: beta=%d expected=%d — skipping.",
+                    length(beta_in), numPre + numPost))
+    return(NULL)
+  }
+
+  l_post <- rep(1 / numPost, numPost)
+  l_full <- c(rep(0, numPre), l_post)
+
+  pe    <- as.numeric(l_full %*% beta_in)
+  pe_se <- sqrt(as.numeric(t(l_full) %*% sigma_in %*% l_full))
+
+  rm_res <- tryCatch(
+    HonestDiD::createSensitivityResults(
+      betahat = beta_in, sigma = sigma_in,
+      numPrePeriods = numPre, numPostPeriods = numPost,
+      l_vec = l_post, Mvec = M_grid_rm,
+      method = "C-LF", alpha = 0.05, parallel = TRUE),
+    error = function(e) { message("HD RM error: ", e$message); NULL })
+
+  sd_res <- tryCatch(
+    HonestDiD::createSensitivityResults_relativeMagnitudes(
+      betahat = beta_in, sigma = sigma_in,
+      numPrePeriods = numPre, numPostPeriods = numPost,
+      l_vec = l_post, Mbarvec = M_grid_sd,
+      method = "C-LF", alpha = 0.05, parallel = TRUE),
+    error = function(e) { message("HD SD error: ", e$message); NULL })
+
+  list(
+    point_est   = pe,
+    point_se    = pe_se,
+    point_ci_lo = pe - 1.96 * pe_se,
+    point_ci_hi = pe + 1.96 * pe_se,
+    breakdown_rm = hd_breakdown(rm_res),
+    breakdown_sd = hd_breakdown(sd_res),
+    rm_results   = rm_res,
+    sd_results   = sd_res
+  )
+}
+
+.fmt_bd <- function(x, mv) {
+  if (is.na(x)) sprintf(">%.1f", mv) else sprintf("%.2f", x)
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7A. HonestDiD — FULL active sample (mES_full)
+# ─────────────────────────────────────────────────────────────────────────────
+
+cat("\n--- 7A: Full active sample ---\n")
+
+ei_full   <- extract_es_inputs(mES_full, ref_period = -1L)
+hd_full   <- .run_hd(ei_full)
+
+if (!is.null(hd_full)) {
+  cat(sprintf("  ATT=%+.5f (se=%.5f)  95%%CI=[%+.5f, %+.5f]\n",
+              hd_full$point_est, hd_full$point_se,
+              hd_full$point_ci_lo, hd_full$point_ci_hi))
+  cat(sprintf("  BD_RM=%s  BD_SD=%s\n",
+              .fmt_bd(hd_full$breakdown_rm, max(HD_M_GRID_RM)),
+              .fmt_bd(hd_full$breakdown_sd, max(HD_M_GRID_SD))))
+
+  p_hd_full <- plot_hd_sensitivity(
+    hd_full$rm_results, hd_full$sd_results,
+    hd_full$point_ci_lo, hd_full$point_ci_hi,
+    point_col = "grey25")
+  save_gg(p_hd_full, "Fig_HD_Full", width = 10, height = 5)
+  cat("  Saved: Fig_HD_Full\n")
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7B. HonestDiD — Pre-1989 vintage (mES_pre89)
+# ─────────────────────────────────────────────────────────────────────────────
+
+cat("\n--- 7B: Pre-1989 vintage ---\n")
+
+ei_pre89  <- extract_es_inputs(mES_pre89, ref_period = -1L)
+hd_pre89  <- .run_hd(ei_pre89)
+
+if (!is.null(hd_pre89)) {
+  cat(sprintf("  ATT=%+.5f (se=%.5f)  95%%CI=[%+.5f, %+.5f]\n",
+              hd_pre89$point_est, hd_pre89$point_se,
+              hd_pre89$point_ci_lo, hd_pre89$point_ci_hi))
+  cat(sprintf("  BD_RM=%s  BD_SD=%s\n",
+              .fmt_bd(hd_pre89$breakdown_rm, max(HD_M_GRID_RM)),
+              .fmt_bd(hd_pre89$breakdown_sd, max(HD_M_GRID_SD))))
+
+  p_hd_pre89 <- plot_hd_sensitivity(
+    hd_pre89$rm_results, hd_pre89$sd_results,
+    hd_pre89$point_ci_lo, hd_pre89$point_ci_hi,
+    point_col = "#3A6BBF")
+  save_gg(p_hd_pre89, "Fig_HD_Pre89", width = 10, height = 5)
+  cat("  Saved: Fig_HD_Pre89\n")
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7C. HonestDiD — Post-1988 vintage (mES_post88)
+# ─────────────────────────────────────────────────────────────────────────────
+
+cat("\n--- 7C: Post-1988 vintage ---\n")
+
+ei_post88 <- extract_es_inputs(mES_post88, ref_period = -1L)
+hd_post88 <- .run_hd(ei_post88)
+
+if (!is.null(hd_post88)) {
+  cat(sprintf("  ATT=%+.5f (se=%.5f)  95%%CI=[%+.5f, %+.5f]\n",
+              hd_post88$point_est, hd_post88$point_se,
+              hd_post88$point_ci_lo, hd_post88$point_ci_hi))
+  cat(sprintf("  BD_RM=%s  BD_SD=%s\n",
+              .fmt_bd(hd_post88$breakdown_rm, max(HD_M_GRID_RM)),
+              .fmt_bd(hd_post88$breakdown_sd, max(HD_M_GRID_SD))))
+
+  p_hd_post88 <- plot_hd_sensitivity(
+    hd_post88$rm_results, hd_post88$sd_results,
+    hd_post88$point_ci_lo, hd_post88$point_ci_hi,
+    point_col = "#BF3A3A")
+  save_gg(p_hd_post88, "Fig_HD_Post88", width = 10, height = 5)
+  cat("  Saved: Fig_HD_Post88\n")
+}
+
+# ── 7D. Selection-adjusted HonestDiD for pre-89 ──────────────────────────────
+# M_sel = excess pre-trend in pre-89 vs post-88 (attributed to survivor selection)
+# Grid starts at M_sel so breakdown reports additional robustness beyond selection.
+
+cat("\n--- 7D: Selection-adjusted HonestDiD (pre-89) ---\n")
+
+pre89_coef_dt  <- extract_es_coef_dt(mES_pre89,  ref_period = -1L)
+post88_coef_dt <- extract_es_coef_dt(mES_post88, ref_period = -1L)
+
+max_pre_pre89  <- max(abs(pre89_coef_dt[rel_year  < -1, estimate]))
+max_pre_post88 <- max(abs(post88_coef_dt[rel_year < -1, estimate]), na.rm = TRUE)
+M_sel          <- max(0, max_pre_pre89 - max_pre_post88)
+M_sel_relative <- if (max_pre_pre89 > 0) M_sel / max_pre_pre89 else 0
+
+cat(sprintf("  M_sel (abs): %.5f  M_sel (rel): %.4f\n",
+            M_sel, M_sel_relative))
+
+hd_pre89_sel <- .run_hd(
+  ei_pre89,
+  M_grid_rm = seq(M_sel_relative, M_sel_relative + 3, by = 0.1),
+  M_grid_sd = HD_M_GRID_SD)
+
+if (!is.null(hd_pre89_sel)) {
+  bd_sel <- hd_pre89_sel$breakdown_rm
+  cat(sprintf("  Breakdown M-bar (sel-adj): %s\n",
+              if (is.na(bd_sel))
+                sprintf(">%.1f (robust across full grid)", M_sel_relative + 3)
+              else sprintf("%.2f", bd_sel)))
+
+  p_hd_pre89_sel <- plot_hd_sensitivity(
+    hd_pre89_sel$rm_results, hd_pre89_sel$sd_results,
+    hd_pre89_sel$point_ci_lo, hd_pre89_sel$point_ci_hi,
+    point_col = "#3A6BBF")
+
+  if (!is.null(p_hd_pre89_sel)) {
+    # Add vertical line at M_sel on the RM panel (left panel)
+    # Note: patchwork object — add annotation after save if needed
+    save_gg(p_hd_pre89_sel, "Fig_HD_Pre89_SelAdj", width = 10, height = 5)
+    cat("  Saved: Fig_HD_Pre89_SelAdj\n")
+  }
+}
+
+# ── 7E. Summary table ─────────────────────────────────────────────────────────
+
+hd_summary <- rbindlist(list(
+  if (!is.null(hd_full))   data.table(sample = "Full active",    hd_full[c("point_est","point_se","point_ci_lo","point_ci_hi","breakdown_rm","breakdown_sd")]),
+  if (!is.null(hd_pre89))  data.table(sample = "Pre-1989",       hd_pre89[c("point_est","point_se","point_ci_lo","point_ci_hi","breakdown_rm","breakdown_sd")]),
+  if (!is.null(hd_post88)) data.table(sample = "Post-1988",      hd_post88[c("point_est","point_se","point_ci_lo","point_ci_hi","breakdown_rm","breakdown_sd")]),
+  if (!is.null(hd_pre89_sel)) data.table(sample = "Pre-1989 (sel-adj)", hd_pre89_sel[c("point_est","point_se","point_ci_lo","point_ci_hi","breakdown_rm","breakdown_sd")])
+), fill = TRUE)
+
+fwrite(hd_summary, file.path(OUTPUT_TABLES, "T_HonestDiD_Summary.csv"))
+
+.fmt_bd_tex <- function(x, mv, dp = 2L) {
+  if (is.na(x)) sprintf("$\\geq %.1f$", mv)
+  else sprintf(paste0("%.", dp, "f"), x)
+}
+
+write_tex(c(
+  "\\begin{table}[htbp]\\centering",
+  "\\caption{HonestDiD Sensitivity: Static DiD ATT}",
+  "\\label{tbl:honestdid_summary}",
+  "\\begin{tabular}{lcccc}\\toprule",
+  "Sample & ATT & 95\\% CI & $\\bar{M}$ (RM) & $M$ (SD) \\\\",
+  "\\midrule",
+  vapply(seq_len(nrow(hd_summary)), function(i) {
+    r <- hd_summary[i]
+    sprintf("%s & %+.5f & [%+.5f,\\ %+.5f] & %s & %s \\\\",
+            r$sample, r$point_est, r$point_ci_lo, r$point_ci_hi,
+            .fmt_bd_tex(r$breakdown_rm, max(HD_M_GRID_RM), 2L),
+            .fmt_bd_tex(r$breakdown_sd, max(HD_M_GRID_SD), 4L))
+  }, character(1L)),
+  "\\bottomrule\\end{tabular}",
+  "\\end{table}"
+), "T_HonestDiD_Summary.tex")
+
+cat("\n  Saved: T_HonestDiD_Summary.{tex,csv}\n")
+
+# =============================================================================
+# 8. SURVIVAL BIAS DIAGNOSTICS + IPSW
+# =============================================================================
+
+log_step("Section 8: Survival bias diagnostics...")
+
+# ── 8A. Does texas_treated predict survival? ──────────────────────────────────
+.surv_lm     <- function(dat)
+  lm(survived ~ texas_treated + install_yr_int + factor(state), data = dat)
+.surv_lm_int <- function(dat)
+  lm(survived ~ texas_treated * install_yr_int + factor(state), data = dat)
+.cluster_se  <- function(mod, dat)
+  coeftest(mod, vcov = vcovCL(mod, cluster = ~state, data = dat))
+
+surv_pre89_lm   <- .surv_lm(tank_xsec_full[vintage_pre89 == 1L])
+surv_post88_lm  <- .surv_lm(tank_xsec_full[vintage_pre89 == 0L])
+surv_pre89_int  <- .surv_lm_int(tank_xsec_full[vintage_pre89 == 1L])
+surv_post88_int <- .surv_lm_int(tank_xsec_full[vintage_pre89 == 0L])
+
+surv_pre89_cr      <- .cluster_se(surv_pre89_lm,  tank_xsec_full[vintage_pre89 == 1L])
+surv_post88_cr     <- .cluster_se(surv_post88_lm, tank_xsec_full[vintage_pre89 == 0L])
+surv_pre89_int_cr  <- .cluster_se(surv_pre89_int,  tank_xsec_full[vintage_pre89 == 1L])
+surv_post88_int_cr <- .cluster_se(surv_post88_int, tank_xsec_full[vintage_pre89 == 0L])
+
+sp_pre89   <- surv_pre89_cr["texas_treated",                , drop = FALSE]
+sp_post88  <- surv_post88_cr["texas_treated",               , drop = FALSE]
+si_pre89   <- surv_pre89_int_cr["texas_treated:install_yr_int",  , drop = FALSE]
+si_post88  <- surv_post88_int_cr["texas_treated:install_yr_int", , drop = FALSE]
+
+.verdict <- function(p) {
+  ifelse(p < 0.05, "[SIG — selection endogenous]",
+         ifelse(p < 0.10, "[MARGINAL]", "[OK]"))
+}
+
+cat("\n=== 8A: Survival prediction ===\n")
+cat(sprintf("  Pre-89  TX: %+.5f  se=%.5f  p=%.4f  %s\n",
+            sp_pre89[,"Estimate"],  sp_pre89[,"Std. Error"],
+            sp_pre89[,"Pr(>|t|)"],  .verdict(sp_pre89[,"Pr(>|t|)"])))
+cat(sprintf("  Post-88 TX: %+.5f  se=%.5f  p=%.4f  %s\n",
+            sp_post88[,"Estimate"], sp_post88[,"Std. Error"],
+            sp_post88[,"Pr(>|t|)"], .verdict(sp_post88[,"Pr(>|t|)"])))
+cat(sprintf("  TX gap (pre89 - post88): %+.5f\n",
+            sp_pre89[,"Estimate"] - sp_post88[,"Estimate"]))
+
+write_tex(c(
+  "\\begin{table}[htbp]\\centering",
+  "\\caption{Survival Prediction Test}",
+  "\\label{tbl:survival_prediction}",
+  "\\begin{tabular}{lcccccc}\\toprule",
+  " & \\multicolumn{3}{c}{Main} & \\multicolumn{3}{c}{With TX$\\times$vintage} \\\\",
+  "\\cmidrule(lr){2-4}\\cmidrule(lr){5-7}",
+  "Subsample & TX & SE & $p$ & TX$\\times$vintage & SE & $p$ \\\\",
+  "\\midrule",
+  sprintf("Pre-1989  & %+.5f & %.5f & %.4f & %+.5f & %.5f & %.4f \\\\",
+          sp_pre89[,"Estimate"],  sp_pre89[,"Std. Error"],  sp_pre89[,"Pr(>|t|)"],
+          si_pre89[,"Estimate"],  si_pre89[,"Std. Error"],  si_pre89[,"Pr(>|t|)"]),
+  sprintf("Post-1988 & %+.5f & %.5f & %.4f & %+.5f & %.5f & %.4f \\\\",
+          sp_post88[,"Estimate"], sp_post88[,"Std. Error"], sp_post88[,"Pr(>|t|)"],
+          si_post88[,"Estimate"], si_post88[,"Std. Error"], si_post88[,"Pr(>|t|)"]),
+  "\\bottomrule\\end{tabular}",
+  "\\end{table}"
+), "T_SA_SurvivalPrediction.tex")
+
+# ── 8B. IPSW event study ──────────────────────────────────────────────────────
+psurv_pre89_glm  <- glm(survived ~ install_yr_int + factor(state),
+                         data   = tank_xsec_full[vintage_pre89 == 1L],
+                         family = binomial(link = "logit"))
+psurv_post88_glm <- glm(survived ~ install_yr_int + factor(state),
+                         data   = tank_xsec_full[vintage_pre89 == 0L],
+                         family = binomial(link = "logit"))
+
+tank_xsec_full[vintage_pre89 == 1L,
+               p_survive := predict(psurv_pre89_glm,  type = "response")]
+tank_xsec_full[vintage_pre89 == 0L,
+               p_survive := predict(psurv_post88_glm, type = "response")]
+tank_xsec_full[, p_survive_trim := pmax(pmin(p_survive, 0.99), 0.01)]
+
+data_C_active_ipsw <- merge(
+  data_C_active,
+  tank_xsec_full[, .(tank_panel_id, p_survive_trim)],
+  by = "tank_panel_id", all.x = TRUE)
+data_C_active_ipsw[, ipsw_weight := 1 / p_survive_trim]   # unweighted IPSW (no CEM)
+
+data_C_active_pre89_ipsw  <- data_C_active_ipsw[install_yr_int <= 1988L]
+data_C_active_post88_ipsw <- data_C_active_ipsw[install_yr_int >= 1989L]
+
+mES_pre89_ipsw  <- feols(
+  as.formula(paste("closure_event ~ i(rel_year, texas_treated, ref=-1L)",
+                   .controls, "| panel_id + cell_vintage_year_fe")),
+  data    = data_C_active_pre89_ipsw,
+  weights = ~ipsw_weight,
+  cluster = ~state)
+
+mES_post88_ipsw <- feols(
+  as.formula(paste("closure_event ~ i(rel_year, texas_treated, ref=-1L)",
+                   .controls, "| panel_id + cell_vintage_year_fe")),
+  data    = data_C_active_post88_ipsw,
+  weights = ~ipsw_weight,
+  cluster = ~state)
+
+# Comparison: IPSW vs unweighted
+.es_divergence <- function(m_base, m_ipsw, label) {
+  dt_base <- extract_es_coef_dt(m_base, ref_period = -1L)[, src := "Unweighted"]
+  dt_ipsw <- extract_es_coef_dt(m_ipsw, ref_period = -1L)[, src := "IPSW"]
+  dt      <- rbindlist(list(dt_base, dt_ipsw))
+
+  pre_div <- dt[rel_year < -1, {
+    b <- estimate[src == "Unweighted"]
+    i <- estimate[src == "IPSW"]
+    if (length(b) && length(i)) .(d = max(abs(b - i))) else .(d = NA_real_)
+  }, by = rel_year][, max(d, na.rm = TRUE)]
+
+  cat(sprintf("  %s: max pre-period divergence = %.5f  %s\n",
+              label, pre_div,
+              if (pre_div > 0.005) "[MATERIAL selection bias]" else "[OK]"))
+
+  ggplot(dt, aes(x = rel_year, y = estimate,
+                 colour = src, fill = src, linetype = src)) +
+    geom_hline(yintercept = 0, colour = "grey55",
+               linetype = "dashed", linewidth = 0.45) +
+    geom_vline(xintercept = -1.5, colour = "grey40",
+               linetype = "dotted", linewidth = 0.5) +
+    geom_ribbon(aes(ymin = ci_lo, ymax = ci_hi),
+                alpha = 0.10, colour = NA) +
+    geom_line(linewidth = 0.55) +
+    geom_point(size = 1.6, shape = 21, fill = "white", stroke = 1.0) +
+    scale_colour_manual(values   = c("Unweighted" = "#3A6BBF",
+                                      "IPSW"       = "#BF3A3A"),
+                        name = NULL) +
+    scale_fill_manual(values     = c("Unweighted" = "#3A6BBF",
+                                      "IPSW"       = "#BF3A3A"),
+                      name = NULL) +
+    scale_linetype_manual(values = c("Unweighted" = "solid",
+                                      "IPSW"       = "longdash"),
+                          name = NULL) +
+    scale_x_continuous(breaks = seq(-14, 22, by = 2)) +
+    labs(x = "Years relative to Dec 22 1998",
+         y = "Coefficient") +
+    theme_classic(base_size = 11, base_family = "Times") +
+    theme(legend.position    = "bottom",
+          axis.line          = element_line(colour = "black", linewidth = 0.4),
+          axis.ticks         = element_line(colour = "black", linewidth = 0.3),
+          axis.text          = element_text(colour = "black"),
+          panel.grid.major.y = element_line(colour = "grey92", linewidth = 0.3),
+          panel.grid.minor   = element_blank(),
+          plot.margin        = margin(8, 12, 8, 8))
+}
+
+cat("\n=== 8B: IPSW divergence ===\n")
+p_ipsw_pre89  <- .es_divergence(mES_pre89,  mES_pre89_ipsw,  "Pre-1989")
+p_ipsw_post88 <- .es_divergence(mES_post88, mES_post88_ipsw, "Post-1988")
+
+save_gg(p_ipsw_pre89 / p_ipsw_post88,
+        "Fig_IPSW_vs_Unweighted_Combined", width = 10, height = 11)
+cat("  Saved: Fig_IPSW_vs_Unweighted_Combined\n")
+
+# =============================================================================
+# OUTPUT SUMMARY
+# =============================================================================
+
+cat("\n====================================================\n")
+cat("OUTPUT SUMMARY\n")
+cat("====================================================\n")
+cat("Tables:\n")
+cat("  T_DiD_Stepped_{Full,Pre89,Post88}.tex\n")
+cat("  T_ES_Active_Main.tex | T_ES_Active_Ref2.tex\n")
+cat("  T_HTE_DiD_Vintage.tex\n")
+cat("  T_HonestDiD_Summary.{tex,csv}\n")
+cat("  T_SA_SurvivalPrediction.tex\n")
+cat("Figures:\n")
+cat("  Fig_ES_{Full,Pre89,Post88} | Fig_ES_Combined_3Panel\n")
+cat("  Fig_Vintage_Forest\n")
+cat("  Fig_HD_{Full,Pre89,Post88} | Fig_HD_Pre89_SelAdj\n")
+cat("  Fig_IPSW_vs_Unweighted_Combined\n")
+cat("====================================================\n")
 
 #### S8a OLS Event Study Models + Figures ####
 
@@ -5674,7 +7089,7 @@ run_hd_sensitivity <- function(es_inputs, horizon = 0L,
   sigma_in <- sigma_in[ord, ord, drop = FALSE]
 
   # Identify which row of beta_in corresponds to the requested horizon
-  l_vec <- rep(0, length(beta_in))
+l_vec <- rep(0, numPostPeriods)           # ← correct: post periods only
   horizon_idx <- which(es_inputs$post_periods == horizon)
   if (length(horizon_idx) == 0L) {
     return(NULL)  # horizon not estimated

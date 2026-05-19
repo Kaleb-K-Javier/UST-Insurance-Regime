@@ -1,0 +1,30 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \toprule
+                                            & (1) Raw        & (2) + Fac FE         & (3) + Controls & (4) + Cell FE \\   
+                                            & (1)            & (2)                  & (3)            & (4)\\  
+   \midrule 
+   Constant                                 & 0.0203$^{***}$ &                      &                &   \\   
+                                            & (0.0022)       &                      &                &   \\   
+   did\_term                                & 0.0106$^{***}$ & 0.0338$^{***}$       & 0.0350$^{***}$ & 0.0158$^{***}$\\   
+                                            & (0.0022)       & ($1\times 10^{-6}$)  & (0.0015)       & (0.0040)\\   
+   mandate\_release\_det                    &                &                      & -0.0039        &   \\   
+                                            &                &                      & (0.0035)       &   \\   
+   mandate\_spill\_overfill                 &                &                      & 0.0048$^{*}$   &   \\   
+                                            &                &                      & (0.0025)       &   \\   
+   mandate\_integrity                       &                &                      & 0.0085$^{***}$ &   \\   
+                                            &                &                      & (0.0026)       &   \\   
+    \\
+   Observations                             & 9,761,982      & 9,761,982            & 9,761,982      & 9,761,044\\  
+   R$^2$                                    & 0.00047        & 0.03550              & 0.03584        & 0.07745\\  
+   Within R$^2$                             &                & 0.00218              & 0.00253        & 0.00036\\  
+    \\
+   panel\_id fixed effects                  &                & $\checkmark$         & $\checkmark$   & $\checkmark$\\   
+   cell\_vintage\_year\_fe fixed effects    &                &                      &                & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+

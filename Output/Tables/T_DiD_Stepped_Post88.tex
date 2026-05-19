@@ -1,0 +1,24 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \toprule
+                                            & (1) Raw        & (2) + Fac FE         & (3) + Controls       & (4) + Cell FE \\   
+                                            & (1)            & (2)                  & (3)                  & (4)\\  
+   \midrule 
+   Constant                                 & 0.0103$^{***}$ &                      &                      &   \\   
+                                            & (0.0011)       &                      &                      &   \\   
+   did\_term                                & 0.0048$^{***}$ & 0.0268$^{***}$       & 0.0268$^{***}$       & 0.0056$^{**}$\\   
+                                            & (0.0011)       & ($1\times 10^{-6}$)  & ($1\times 10^{-6}$)  & (0.0021)\\   
+    \\
+   Observations                             & 2,564,708      & 2,564,708            & 2,564,708            & 2,564,637\\  
+   R$^2$                                    & 0.00021        & 0.05443              & 0.05443              & 0.07567\\  
+   Within R$^2$                             &                & 0.00172              & 0.00172              & $6.03\times 10^{-5}$\\   
+    \\
+   panel\_id fixed effects                  &                & $\checkmark$         & $\checkmark$         & $\checkmark$\\   
+   cell\_vintage\_year\_fe fixed effects    &                &                      &                      & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+

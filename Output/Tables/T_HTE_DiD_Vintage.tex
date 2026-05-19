@@ -1,0 +1,34 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \toprule
+                                            & (1) Raw        & (2) + Fac FE   & (3) + Controls & (4) + Cell FE \\   
+                                            & (1)            & (2)            & (3)            & (4)\\  
+   \midrule 
+   Constant                                 & 0.0103$^{***}$ &                &                &   \\   
+                                            & (0.0011)       &                &                &   \\   
+   did\_term                                & 0.0048$^{***}$ & 0.0117$^{***}$ & 0.0114$^{***}$ & -0.0067$^{**}$\\   
+                                            & (0.0011)       & (0.0028)       & (0.0029)       & (0.0031)\\   
+   pre89\_cohort                            & 0.0135$^{***}$ & 0.0671$^{***}$ & 0.0696$^{***}$ &   \\   
+                                            & (0.0023)       & (0.0062)       & (0.0060)       &   \\   
+   did\_term $\times$ pre89\_cohort         & 0.0094$^{***}$ & 0.0382$^{***}$ & 0.0360$^{***}$ & 0.0309$^{***}$\\   
+                                            & (0.0023)       & (0.0029)       & (0.0029)       & (0.0065)\\   
+   mandate\_release\_det                    &                &                & -0.0114$^{**}$ &   \\   
+                                            &                &                & (0.0040)       &   \\   
+   mandate\_spill\_overfill                 &                &                & 0.0009         &   \\   
+                                            &                &                & (0.0028)       &   \\   
+   mandate\_integrity                       &                &                & 0.0044         &   \\   
+                                            &                &                & (0.0030)       &   \\   
+    \\
+   Observations                             & 9,761,982      & 9,761,982      & 9,761,982      & 9,761,044\\  
+   R$^2$                                    & 0.00249        & 0.04685        & 0.04750        & 0.07772\\  
+   Within R$^2$                             &                & 0.01392        & 0.01460        & 0.00065\\  
+    \\
+   panel\_id fixed effects                  &                & $\checkmark$   & $\checkmark$   & $\checkmark$\\   
+   cell\_vintage\_year\_fe fixed effects    &                &                &                & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
