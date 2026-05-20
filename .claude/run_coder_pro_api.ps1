@@ -37,14 +37,28 @@ $ErrorActionPreference = "Stop"
 
 # -- Paths ----------------------------------------------------------------------
 $ticketDir  = ".claude\TICKETS"
-$specFile   = "$ticketDir\${TicketID}_spec.md"
+# Spec naming: legacy convention was ${TicketID}_spec.md; newer tickets use
+# ${TicketID}_<descriptive_slug>.md (e.g. 005_02b_stepped_did.md). Glob to find
+# the spec for this ticket regardless of slug, but prefer the legacy
+# _spec.md form if both exist.
+$legacySpec = Join-Path $ticketDir "${TicketID}_spec.md"
+if (Test-Path $legacySpec) {
+    $specFile = $legacySpec
+} else {
+    $specCandidates = @(Get-ChildItem -Path $ticketDir -Filter "${TicketID}_*.md" `
+                        -ErrorAction SilentlyContinue |
+                        Where-Object { $_.Name -notmatch '_(transcript|attempt[0-9]+_raw|review_attempt[0-9]+|handoff)' })
+    if ($specCandidates.Count -eq 0) {
+        Write-Error "Ticket spec not found: ${ticketDir}\${TicketID}_*.md -- run architect first"
+        exit 1
+    } elseif ($specCandidates.Count -gt 1) {
+        Write-Error "Multiple spec candidates found for ticket ${TicketID}: $($specCandidates.Name -join ', ') -- delete extras or rename"
+        exit 1
+    }
+    $specFile = $specCandidates[0].FullName
+}
 $rawLog     = "$ticketDir\${TicketID}_attempt${Attempt}_raw.txt"
 $cleanLog   = "$ticketDir\${TicketID}_transcript.txt"  # reviewer always reads this name
-
-if (-Not (Test-Path $specFile)) {
-    Write-Error "Ticket spec not found: $specFile -- run architect first"
-    exit 1
-}
 
 if ($Attempt -gt 2) {
     Write-Error "Attempt $Attempt exceeds retry cap of 2. Escalate to Opus."

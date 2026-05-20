@@ -1,3 +1,143 @@
+# HANDOFF -- 2026-05-19 (Tickets 005-008 specs done; T005 R1 attempt 2 ready for server)
+# Written by: Opus (architect for T005-T008)
+# Session type: Drafted 4-ticket 02b reduced-form refactor; T005 R1 attempt 1
+#               failed Cox identifiability (PSEUDOCODE_FAIL); spec corrected;
+#               R1 attempt 2 in-progress with revised spec — local OLS verified,
+#               Cox col (2) needs server compute (matches spec wall-time note).
+
+═══════════════════════════════════════════════════
+CHECKPOINT: Reduced-form refactor — T005 attempt 2 awaiting server (2026-05-19)
+═══════════════════════════════════════════════════
+
+GOAL: Produce Reports/Paper/Reduced_Form_Results_Report.qmd (PDF), the
+reduced-form analogue of Dynamic_Model_Fit_Report.qmd, by refactoring
+the relevant pieces of 02b_tank_closure_analysis.R into four small,
+clean scripts via the architect→R1→reviewer loop. Sample is fixed
+throughout: active-at-treatment, unweighted (no CEM weights, no
+Pre-89/Post-88 splits — those become HTE interactions only).
+
+  Tickets drafted (4):
+    .claude/TICKETS/005_02b_stepped_did.md    — stepped DiD OLS+Cox + wild bootstrap
+    .claude/TICKETS/006_02b_event_studies.md  — OLS+Cox ES, ref=-1 and ref=-2
+    .claude/TICKETS/007_02b_vintage_hte.md    — HTE interaction + vintage forest
+    .claude/TICKETS/008_02b_honestdid.md      — HonestDiD raw package calls (figs/tex in qmd)
+
+  Companion files (this session):
+    .claude/TICKETS/005_handoff.md            — operator pre-flight notes for R1
+    Reports/Paper/Reduced_Form_Results_Report.qmd  — scaffold (compiles to PDF
+                                                     today even with no artifacts)
+    .claude/run_coder_pro_api.ps1             — patched to glob ${TicketID}_*.md
+                                                so descriptive ticket filenames work
+
+  Spec corrections made mid-session (architect own-goals; documented in
+  005 spec, propagated to 006/007/qmd):
+    (1) REFORM_DAYS uses 1970-01-01 origin (R default), matching 02b's
+        exact_base survival frame — not the 1985-01-01 I originally wrote.
+    (2) build_active_cox_split must inner-join active_panel$tank_panel_id
+        back to exact_base; cannot reconstruct survival times from the
+        long panel directly. Function now takes exact_base as a 2nd arg.
+    (3) OLS bootstrap uses 02b's manual wild-cluster-bootstrap (score-based
+        variant), NOT fwildclusterboot::boottest. Reason: boottest fails on
+        the high-cardinality cell_vintage_year_fe in cols 5-7. Both are
+        "wild cluster bootstrap" family — table notes label honestly.
+    (4) Cox stepped: 7→4 cols. Original spec used strata(state/facility/tank)
+        which is unidentifiable in single-treated-state DiD (did_term is
+        deterministic step function of calendar time within any unit
+        stratum → partial-likelihood score for β = 0). Corrected Cox:
+          (1) factor(state)                                       [OLS (1)]
+          (2) factor(state) + factor(cell_id)                     [OLS (2,3,4)]
+          (3) factor(state) + strata(cell_id)                     [OLS (5,6)]
+          (4) factor(state) + strata(cell_id) + factor(panel_year) [OLS (7) — MAIN]
+        Sub-header row in the Cox table maps each Cox col to its OLS analogue.
+    (5) OLS cols 2 and 5 now include `state +` because cell+year alone
+        does not force a within-state T/C comparison (user caught this).
+
+R1 STATUS (attempt 2, with revised spec — per R1 final note 2026-05-19 eve):
+
+  Files written by R1 (Sonnet 4.6 via Anthropic Pro / OAuth):
+    Code/Helpers/reduced_form_utils.R   — full helper library, no I/O on source
+    Code/Analysis/02c_Stepped_DiD.R     — all spec changes applied:
+       - OLS cols 2 & 5 include `state` FE
+       - fit_cox / m_cox = 4-col identifiable design
+       - Cox SE-finiteness check is hard stopifnot (no silent warn)
+       - CSV row count = 11; .rds m_cox/boot_cox length = 4
+       - OLS table FE block: "State FE (explicit)" Y/Y/—/—/Y/—/—
+       - Cox table: 4 cols, sub-header with OLS-analogue mapping,
+         \multicolumn{5}{...} notes
+       - Notes match acceptance strings (OLS: "wild cluster bootstrap"
+         + "score-based"; Cox: "wild score bootstrap" + "Kline-Santos")
+
+  Local verification (Kaleb's dev machine):
+    Steps 1-3 OLS + bootstrap: PASS (7 specs, all assertions, SE_boot
+    reproducible across runs)
+    Cox col (1) factor(state): β=4.64, finite SE, ~30s on full data
+    Cox cols (2)-(4): TIMED OUT LOCALLY on col (2) — matches spec
+       wall-time note "~10-30 min on server"; cols (3) & (4) untested
+       locally but architecturally identical to col (1).
+
+  Headline OLS numbers from attempt-2 local build (use these as the
+  reviewer's spot-check baselines for the server run — if the server
+  produces materially different β̂'s for cols 2, 5, 7, something
+  changed and review should fail):
+
+    Col 2  (state+cell+yr)  β̂ = 0.00994  SE_boot = 0.00357
+    Col 5  (state+cell×yr)  β̂ = 0.01073  SE_boot = 0.00303
+    Col 7  (fac+cell×yr, MAIN)  β̂ = 0.02061  SE_boot = 0.00556
+
+  Sanity check vs attempt 1 (before state-FE was added to cols 2 & 5):
+  cols 2 & 5 coefficients barely moved (~0.00997 → 0.00994; 0.01003 →
+  0.01073), SEs widened slightly (expected from additional FE). Col 7
+  unchanged (no spec change on col 7).
+
+  Main-spec headline for advisor meeting: ~2.06pp increase in annual
+  closure probability for Texas tanks post-1998, t-stat ~3.7
+  (0.02061 / 0.00556).
+
+PENDING (tomorrow's first task):
+
+  1. Server compute for T005 attempt 2:
+       (a) On the server, edit top of Code/Analysis/02c_Stepped_DiD.R:
+             ANALYSIS_DIR <- "Z:/ust_ins_move_to_github/Data/Analysis"
+             PANEL_FILE   <- "matched_tanks_birth_cem.csv"
+           (currently set to local dev paths; R1 noted explicitly)
+       (b) Source the script. Expected wall time <15 min on a 32-core
+           server. Bottleneck = Cox col (2).
+       (c) Verify outputs land:
+             Output/Tables/T_Stepped_DiD_OLS.tex
+             Output/Tables/T_Stepped_DiD_Cox.tex
+             Output/Tables/T_Stepped_DiD_Bootstrap_Diagnostics.csv  (11 rows)
+             Output/Estimation_Results/Stepped_DiD_Fits_active_at_treatment.rds
+             logs/02c_Stepped_DiD_*.log
+       (d) Pull files back to local repo for review.
+
+  2. Reviewer agent (Opus this session OR new Opus session):
+       Run "Review ticket 005 attempt 2" against the spec acceptance criteria.
+       Expected verdict: PASS (all spec issues from attempt 1 corrected).
+       If PASS → land 005, proceed to Ticket 006.
+
+  3. Once T005 lands, launch Ticket 006 (event studies):
+       .\.claude\run_coder_pro_api.ps1 -TicketID 006
+       006 spec is already corrected for the same Cox identification
+       issue: ES Cox uses strata(cell_id) + factor(state) + factor(panel_year),
+       not strata(panel_id). No further architect work needed before R1.
+
+  4. After 006 lands, launch 007 and 008 (can run in parallel — 008
+     depends on 006's .rds output, 007 only on 005's helper file).
+
+  5. After all 4 R1 tickets land, render the qmd:
+       quarto render Reports/Paper/Reduced_Form_Results_Report.qmd
+     The .qmd is already wired with graceful file-existence checks —
+     every chunk that loads a not-yet-existing artifact emits an italic
+     placeholder so the file compiles today and progressively fills in
+     as each ticket's outputs land.
+
+RESUME PROMPT (paste at top of tomorrow's session):
+  "Load CLAUDE.md. T005 attempt 2 is on the server (Kaleb to run after
+   setting ANALYSIS_DIR/PANEL_FILE constants). Today: pull T005 outputs
+   back, run reviewer agent, then move to Ticket 006."
+
+═══════════════════════════════════════════════════
+
 # HANDOFF -- 2026-05-18 (Ticket 003 PASS + polish-direct qmd report)
 # Written by: Opus (architect for T003; polish-direct for the qmd)
 # Session type: Architect drafted Ticket 003; Sonnet-on-Pro implemented;

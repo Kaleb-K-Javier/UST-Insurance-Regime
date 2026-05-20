@@ -1,0 +1,482 @@
+---
+title: "Reduced-Form Results: Tank Closure, Vintage HTE, and Sensitivity"
+author: "Kaleb Javier"
+date: "`r Sys.Date()`"
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    linestretch: 1.15
+    toc: true
+    number-sections: true
+    keep-tex: true
+    fig-cap-location: top
+    include-in-header:
+      text: |
+        \usepackage{amsmath}
+        \usepackage{amssymb}
+        \usepackage{booktabs}
+        \usepackage{float}
+        \usepackage{longtable}
+        \usepackage{graphicx}
+        \usepackage{array}
+        \usepackage{makecell}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.pos = "H"
+)
+library(data.table)
+library(knitr)
+library(kableExtra)
+library(here)
+library(ggplot2)
+library(patchwork)
+```
+
+# Introduction {#sec-intro}
+
+This report collects the reduced-form evidence on the 1998 Texas financial-responsibility reform's effect on UST closure and on facility-level portfolio behaviour. It is the analogue, on the reduced-form side, of [Dynamic_Model_Fit_Report](Reports/Paper/Dynamic_Model_Fit_Report.qmd) for the structural side. The intended audience is advisor meetings — sections are organized so each result fits on a single page (or facing pages) with its regression equation, brief specification commentary, and the relevant table or figure.
+
+All artifacts are produced by:
+
+  - `Code/Analysis/02c_Stepped_DiD.R` — main stepped DiD tables (Ticket 005)
+  - `Code/Analysis/02d_Event_Studies.R` — event studies (Ticket 006)
+  - `Code/Analysis/02e_Vintage_HTE.R` — vintage HTE + forest figure (Ticket 007)
+  - `Code/Analysis/02f_HonestDiD.R` — HonestDiD sensitivity outputs (Ticket 008)
+  - `Code/Analysis/02a_DiD_facility_behavior.R` — descriptive portfolio and LUST DiD
+
+No estimation is re-run in the production of this report; only HonestDiD sensitivity figures and the HonestDiD summary table are assembled inline from saved `.rds` artifacts.
+
+# Sample and Inference {#sec-sample}
+
+**Sample (single, canonical).** All causal regressions in @sec-closure, @sec-es, @sec-hte, and @sec-honestdid use the **active-at-treatment** sample: tanks installed before 1999 belonging to facilities that had at least one open or newly installed tank on the reform date (1998-12-22). The CEM-matched birth panel is used to define the match-cell support, but cell-membership weights are **not** applied — all regressions are unweighted.
+
+**Cell definition.** Matching cells are defined as `make_model_noage` $\times$ `install_yr_int`. The "cell $\times$ year" fixed effect that appears in cols 5–7 of the stepped DiD tables is `panel_year` $\times$ `make_model_noage` $\times$ `install_yr_int`.
+
+**Inference.** Standard errors are clustered at the state level ($G = 18$). Each coefficient cell in the stepped tables reports three rows:
+
+  1. point estimate $\hat\beta$
+  2. analytic cluster-robust SE in `(parentheses)` — CR1 for OLS (`fixest::feols`); Lin-Wei robust sandwich for Cox (`survival::coxph` with `cluster = state`)
+  3. bootstrap SE in `[brackets]` — wild cluster bootstrap (Cameron-Gelbach-Miller; `fwildclusterboot`) for OLS, or wild score bootstrap (Kline-Santos; existing project implementation) for Cox. $B = 9{,}999$ Rademacher draws throughout, fixed seed `20260519`.
+
+Bootstrap and analytic SEs typically agree closely for the main specification. Where they diverge meaningfully the bootstrap version should be preferred (small number of clusters).
+
+```{r sample-meta, results="asis"}
+#| label: tbl-sample-meta
+#| tbl-cap: "Sample sizes for the active-at-treatment panel used throughout."
+# Loaded from the .rds saved by 02c_Stepped_DiD.R. If that file does not yet
+# exist, the chunk emits a placeholder note so the document still compiles.
+.path <- here("Output", "Estimation_Results", "Stepped_DiD_Fits_active_at_treatment.rds")
+if (file.exists(.path)) {
+  .rds <- readRDS(.path)
+  .meta <- .rds$sample_meta
+  .tbl <- data.table(
+    Quantity = c("Tank-year observations", "Tanks", "Facilities",
+                 "States", "Closure events", "Seed",
+                 "Bootstrap replicates"),
+    Value    = c(prettyNum(.meta$n_rows,       big.mark = ","),
+                 prettyNum(.meta$n_tanks,      big.mark = ","),
+                 prettyNum(.meta$n_facilities, big.mark = ","),
+                 as.character(.meta$n_states),
+                 prettyNum(.meta$n_closures,   big.mark = ","),
+                 as.character(.meta$seed),
+                 prettyNum(.meta$B, big.mark = ","))
+  )
+  kable(.tbl, format = "latex", booktabs = TRUE, align = "lr") |>
+    kable_styling(latex_options = c("hold_position"))
+} else {
+  cat("\\textit{Sample-size table will populate once \\texttt{02c\\_Stepped\\_DiD.R} has been run.}\n")
+}
+```
+
+\newpage
+
+# Tank Closure: Stepped DiD {#sec-closure}
+
+## OLS linear probability model {#sec-closure-ols}
+
+**Specification.** For tank $k$ in facility $i$ in state $s$, cell $c$, year $t$, with $\text{did\_term}_{kt} = \text{texas\_treated}_k \cdot \mathbf{1}\{t \geq 1998\}$ and mandate controls $X_{kt}$:
+
+$$
+y_{kt} \;=\; \beta \cdot \text{did\_term}_{kt} \;+\; \gamma' X_{kt} \;+\; \text{FE}_{kt} \;+\; \varepsilon_{kt}
+$$
+
+where $y_{kt} = 1$ if tank $k$ closes in year $t$. The seven columns vary only in $\text{FE}_{kt}$. Every column absorbs state-level baseline differences, either explicitly (cols 1, 2, 5) or implicitly through a nested unit FE (facility or tank, cols 3, 4, 6, 7) — without this, cells alone would mix Texas tanks with control-state tanks at different baselines and the T/C comparison would be malformed.
+
+  1. **state + year** — pools all variation except state-level levels and common-year shocks. The naïve TWFE-style benchmark.
+  2. **state + cell + year** — adds make-model × vintage composition on top of state and year.
+  3. **facility + year** — absorbs all time-invariant facility heterogeneity (and therefore state); allows raw match-cell composition to enter.
+  4. **tank + year** — absorbs tank-level heterogeneity (and therefore facility and state).
+  5. **state + cell × year** — interacted cell-and-year, forces the comparison to occur within the same (make-model × vintage) cell × calendar year, with state-level baseline differences still controlled.
+  6. **tank + cell × year** — within-tank variation + cell-specific time path.
+  7. **facility + cell × year** — main specification: within-facility variation, within-cell-year comparison.
+
+Reading left to right, the estimator is progressively more demanding of the data, but the within-facility within-cell-year column on the right is the cleanest match to the model in [01_LUST_Insurance_Draft](Reports/Paper/01_LUST_Insurance_Draft.qmd).
+
+```{r tbl-stepped-ols, results="asis"}
+#| label: tbl-stepped-ols
+#| tbl-cap: "Stepped DiD: OLS linear probability model. Three rows per coefficient: estimate; (analytic cluster-robust SE); [wild cluster bootstrap SE, $B = 9{,}999$]. All specifications include mandate controls and cluster SEs at the state level. Col (7) is the main specification."
+.path <- here("Output", "Tables", "T_Stepped_DiD_OLS.tex")
+if (file.exists(.path)) {
+  cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
+  cat(readLines(.path), sep = "\n")
+  cat("\n}\n\\end{center}\n")
+} else {
+  cat("\\textit{Awaiting \\texttt{T\\_Stepped\\_DiD\\_OLS.tex} from Ticket 005.}\n")
+}
+```
+
+\newpage
+
+## Cox proportional-hazards model {#sec-closure-cox}
+
+**Specification.** Mirror of the OLS table on the proportional-hazards likelihood. For tank $k$ at calendar time $t$ measured in days from a common origin:
+
+$$
+h(t \mid k) \;=\; h_{0,\text{strat}(k)}(t) \cdot \exp\!\Bigl( \beta \cdot \text{did\_term}_k(t) \;+\; \gamma' X_k(t) \;+\; Z_k(t)'\eta \Bigr)
+$$
+
+implemented on two-episode splits at the reform date.
+
+**Why Cox cannot mirror the OLS unit-FE columns.** In a single-treated-state DiD, stratifying the partial likelihood on any treatment-invariant unit (state, facility, or tank) makes `did_term` a deterministic step function of calendar time within each stratum, so the partial-likelihood score for $\beta$ is zero and $\beta$ is unidentified. The CEM-matched cell IS identifiable as a stratum because cells contain both Texas and control tanks at risk simultaneously. We therefore report Cox in **4 distinct identifiable specifications** rather than seven, mapped to the OLS columns via the sub-header in the table:
+
+| Cox col | OLS analogue(s)  | Cox RHS (after `did_term + controls`)                          |
+|---------|------------------|----------------------------------------------------------------|
+| (1)     | OLS (1)          | `+ factor(state)`                                              |
+| (2)     | OLS (2, 3, 4)    | `+ factor(state) + factor(cell_id)`                            |
+| (3)     | OLS (5, 6)       | `+ factor(state) + strata(cell_id)`                            |
+| (4)     | OLS (7) — **main** | `+ factor(state) + strata(cell_id) + factor(panel_year)`     |
+
+State-level absorption is enforced in every Cox column via `factor(state)` as a covariate, mirroring the same enforcement in OLS cols 2 and 5. Cell-level stratification (Cox cols 3 and 4) is identifiable because the CEM-matched cells contain both Texas and control tanks at risk simultaneously, so `did_term` varies within cell-stratum × time.
+
+Coefficients are log-hazard ratios. Ties are handled by Efron's method. Standard errors are robust cluster-sandwich (Lin-Wei 1989) clustered at state; the bracketed bootstrap SE row is a wild **score** bootstrap (the Cox-appropriate analogue of OLS wild cluster bootstrap), same $B$ and seed as the OLS table.
+
+```{r tbl-stepped-cox, results="asis"}
+#| label: tbl-stepped-cox
+#| tbl-cap: "Stepped DiD: Cox proportional-hazards model. Three rows per coefficient: estimate (log hazard ratio); (analytic cluster-robust sandwich SE); [wild score bootstrap SE, $B = 9{,}999$]. All specifications include mandate controls and cluster SEs at the state level. Cols 5--7 use Option B for the partial-likelihood approximation of OLS cell $\\times$ year FE; see text. Col (7) is the main specification."
+.path <- here("Output", "Tables", "T_Stepped_DiD_Cox.tex")
+if (file.exists(.path)) {
+  cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
+  cat(readLines(.path), sep = "\n")
+  cat("\n}\n\\end{center}\n")
+} else {
+  cat("\\textit{Awaiting \\texttt{T\\_Stepped\\_DiD\\_Cox.tex} from Ticket 005.}\n")
+}
+```
+
+\newpage
+
+# Event Studies {#sec-es}
+
+We trace the dynamic response of closure to the reform with event-time interactions estimated at the main specification (col (7) for OLS, col (4) for Cox — both equivalent to "facility + cell × year" in OLS / "state + cell-strata + year" in Cox). The reference period is the year immediately before reform ($\tau = -1$); we also report a robustness specification with $\tau = -2$ omitted, since the reform date (December 22, 1998) falls so late in the calendar year that part of the $\tau = -1$ window may already be partially "treated" in the data.
+
+$$
+y_{kt} \;=\; \sum_{\tau \neq \omega} \beta_\tau \cdot \mathbf{1}\{\text{rel\_year}_{kt} = \tau\} \cdot \text{texas\_treated}_k \;+\; \gamma' X_{kt} \;+\; \varphi_i + \theta_{c,t} + \varepsilon_{kt}
+$$
+
+with $\omega \in \{-1, -2\}$. The Cox analogue uses per-year split episodes with $\text{es\_tau}_{\tau}$ dummies; the strata/covariate structure mirrors Cox col (4) of @sec-closure-cox: `strata(cell_id) + factor(state) + factor(panel_year)`. The same identification logic applies — stratifying on facility or tank would zero the score for the $\beta_\tau$ event-time coefficients.
+
+Tables of the per-$\tau$ coefficients are saved as reference artifacts (`T_Event_Study_OLS.tex` and `T_Event_Study_Cox.tex`) but omitted from this report.
+
+## OLS event studies {#sec-es-ols}
+
+```{r fig-es-ols-m1}
+#| label: fig-es-ols-m1
+#| fig-cap: "OLS event study, reference $\\tau = -1$. Vertical dotted line at $\\tau = -1.5$ marks the reference period. Point estimates $\\hat\\beta_\\tau$ with 95\\% pointwise CIs from cluster-robust (state) SEs. Main specification (facility FE + cell $\\times$ year FE)."
+#| fig-width: 7
+#| fig-height: 4.2
+.path <- here("Output", "Figures", "Fig_Event_Study_OLS_ref_m1.png")
+if (file.exists(.path)) knitr::include_graphics(.path) else cat("Awaiting Ticket 006 output: ", .path, sep = "")
+```
+
+```{r fig-es-ols-m2}
+#| label: fig-es-ols-m2
+#| fig-cap: "OLS event study, reference $\\tau = -2$ (robustness). Otherwise identical to @fig-es-ols-m1."
+#| fig-width: 7
+#| fig-height: 4.2
+.path <- here("Output", "Figures", "Fig_Event_Study_OLS_ref_m2.png")
+if (file.exists(.path)) knitr::include_graphics(.path) else cat("Awaiting Ticket 006 output: ", .path, sep = "")
+```
+
+\newpage
+
+## Cox event studies {#sec-es-cox}
+
+```{r fig-es-cox-m1}
+#| label: fig-es-cox-m1
+#| fig-cap: "Cox event study, reference $\\tau = -1$. Y-axis is log hazard ratio. Per-year-split partial-likelihood with the strata/factor structure matching col (7) of @tbl-stepped-cox. 95\\% pointwise CIs from cluster-robust (state) sandwich SEs."
+#| fig-width: 7
+#| fig-height: 4.2
+.path <- here("Output", "Figures", "Fig_Event_Study_Cox_ref_m1.png")
+if (file.exists(.path)) knitr::include_graphics(.path) else cat("Awaiting Ticket 006 output: ", .path, sep = "")
+```
+
+```{r fig-es-cox-m2}
+#| label: fig-es-cox-m2
+#| fig-cap: "Cox event study, reference $\\tau = -2$ (robustness). Otherwise identical to @fig-es-cox-m1."
+#| fig-width: 7
+#| fig-height: 4.2
+.path <- here("Output", "Figures", "Fig_Event_Study_Cox_ref_m2.png")
+if (file.exists(.path)) knitr::include_graphics(.path) else cat("Awaiting Ticket 006 output: ", .path, sep = "")
+```
+
+\newpage
+
+# Vintage Heterogeneity {#sec-hte}
+
+The reform plausibly bound the marginal closure decision harder for older tanks — those installed before the December 1988 EPA federal tank standard ("grandfathered" units). We test this two ways: a single interaction model that splits the ATT into post-1988 baseline / pre-1989 differential / derived pre-1989 cohort levels, and a vintage forest that estimates a separate ATT per installation year.
+
+## Pre-1989 vs post-1988 interaction {#sec-hte-interaction}
+
+$$
+y_{kt} \;=\; \beta_{\text{post}} \cdot \text{did\_term}_{kt}
+\;+\; \beta_{\text{int}} \cdot \text{did\_term}_{kt} \cdot \mathbf{1}\{\text{pre89}_k\}
+\;+\; \gamma' X_{kt} \;+\; \varphi_i + \theta_{c,t} + \varepsilon_{kt}
+$$
+
+with the Cox analogue using the same RHS on the partial likelihood. The derived pre-1989 cohort ATT $\beta_{\text{pre89}} = \beta_{\text{post}} + \beta_{\text{int}}$ is reported with its delta-method analytic SE in `()` and a wild-bootstrap SE in `[]` (constructed for OLS via `fwildclusterboot::boottest` with the linear-restriction argument; for Cox by summing the per-iteration wild-score bootstrap draws of the two component coefficients).
+
+```{r tbl-hte-vintage, results="asis"}
+#| label: tbl-hte-vintage
+#| tbl-cap: "Vintage HTE at the main specification (OLS col (7) of @tbl-stepped-ols; Cox col (4) of @tbl-stepped-cox: `strata(cell_id) + factor(state) + factor(panel_year)`). Three rows per coefficient: estimate; (analytic SE); [wild bootstrap SE]. Pre-1989 cohort ATT is the linear combination $\\beta_{\\text{post}} + \\beta_{\\text{int}}$. Sample: active-at-treatment, unweighted, cluster = state."
+.path <- here("Output", "Tables", "T_HTE_Vintage.tex")
+if (file.exists(.path)) {
+  cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
+  cat(readLines(.path), sep = "\n")
+  cat("\n}\n\\end{center}\n")
+} else {
+  cat("\\textit{Awaiting \\texttt{T\\_HTE\\_Vintage.tex} from Ticket 007.}\n")
+}
+```
+
+\newpage
+
+## Vintage forest plot {#sec-hte-forest}
+
+The binary pre-1989 / post-1988 split may mask a smoother vintage gradient. The forest plots estimate a separate ATT per installation cohort:
+
+$$
+y_{kt} \;=\; \sum_{v \neq 1995} \alpha_v \cdot \mathbf{1}\{\text{install\_yr}_k = v\} \cdot \text{did\_term}_{kt}
+\;+\; \gamma' X_{kt} \;+\; \varphi_i + \theta_{c,t} + \varepsilon_{kt}
+$$
+
+with $v = 1995$ as the omitted reference. The vertical dotted line at $v = 1988.5$ marks the EPA standard boundary.
+
+```{r fig-vintage-ols}
+#| label: fig-vintage-ols
+#| fig-cap: "Vintage forest, OLS. Per-cohort ATT $\\hat\\alpha_v$ from the OLS specification of @sec-hte-forest. Blue points: pre-Dec 1988 (existing tanks); red points: post-Dec 1988 (new federal-standard tanks). 1995 is the omitted reference cohort (hollow diamond)."
+#| fig-width: 7
+#| fig-height: 4.5
+.path <- here("Output", "Figures", "Fig_Vintage_Forest_OLS.png")
+if (file.exists(.path)) knitr::include_graphics(.path) else cat("Awaiting Ticket 007 output: ", .path, sep = "")
+```
+
+```{r fig-vintage-cox}
+#| label: fig-vintage-cox
+#| fig-cap: "Vintage forest, Cox. Same as @fig-vintage-ols but per-cohort log hazard ratio."
+#| fig-width: 7
+#| fig-height: 4.5
+.path <- here("Output", "Figures", "Fig_Vintage_Forest_Cox.png")
+if (file.exists(.path)) knitr::include_graphics(.path) else cat("Awaiting Ticket 007 output: ", .path, sep = "")
+```
+
+\newpage
+
+# HonestDiD Sensitivity {#sec-honestdid}
+
+The event studies in @sec-es assume parallel pre-trends. **HonestDiD** (Rambachan-Roth 2023) inverts the question: given a bound on the magnitude of pre-trend violations, what are the robust post-period confidence intervals? We report two bound families:
+
+  - **Relative magnitude (RM)**: post-period violation $\leq \bar M \cdot$ max pre-period violation.
+  - **Smoothness (SD)**: successive deviations from parallel trends bounded by $M$.
+
+The "breakdown" value is the smallest bound at which the post-period CI no longer excludes zero. Per the existing convention, NA breakdowns mean "the CI excludes zero across the entire grid" — i.e. the result is robust to the worst case considered.
+
+Both summary table and sensitivity figures below are assembled **inline** from the raw `HonestDiD` package outputs saved by `02f_HonestDiD.R`.
+
+```{r tbl-honestdid-summary, results="asis"}
+#| label: tbl-honestdid-summary
+#| tbl-cap: "HonestDiD sensitivity summary at the main specification (OLS col (7); Cox col (4)), reference $\\tau = -1$. ATT is the average post-period coefficient. BD (SD) is the breakdown $M$ under the smoothness bound; BD (RM) is the breakdown $\\bar M$ under the relative-magnitude bound. A value reported as $>0.0\\text{xx}$ means the CI excludes zero across the entire grid."
+.path <- here("Output", "Tables", "T_HonestDiD_Summary.csv")
+if (file.exists(.path)) {
+  .hd <- fread(.path)
+  .show <- .hd[, .(
+    Model         = model,
+    `ATT`         = sprintf("%+.5f", point_est),
+    `95% CI`      = sprintf("[%+.5f,\\, %+.5f]", point_ci_lo, point_ci_hi),
+    `BD ($M$, SD)` = breakdown_sd_fmt,
+    `BD ($\\bar M$, RM)` = breakdown_rm_fmt
+  )]
+  kable(.show, format = "latex", booktabs = TRUE, escape = FALSE,
+        align = c("l", "c", "c", "c", "c")) |>
+    kable_styling(latex_options = c("hold_position"))
+} else {
+  cat("\\textit{Awaiting \\texttt{T\\_HonestDiD\\_Summary.csv} from Ticket 008.}\n")
+}
+```
+
+```{r honestdid-helpers, include=FALSE}
+# Helper to assemble a two-panel sensitivity plot from one model's HonestDiD output.
+# Used in the next two chunks to render OLS and Cox sensitivity figures.
+.plot_hd_sensitivity <- function(model_obj, model_label, point_col = "grey25") {
+  rm_dt <- as.data.table(model_obj$rm_results)
+  sd_dt <- as.data.table(model_obj$sd_results)
+
+  # Rename grid column to common name "M_val"
+  setnames(rm_dt, intersect(c("M", "Mbar"), names(rm_dt)), "M_val")
+  setnames(sd_dt, intersect(c("M", "Mbar"), names(sd_dt)), "M_val")
+
+  baseline <- data.table(M_val = 0,
+                         lb = model_obj$point$point_ci_lo,
+                         ub = model_obj$point$point_ci_hi)
+
+  build_panel <- function(dt, x_lab) {
+    ggplot() +
+      geom_hline(yintercept = 0, colour = "grey50",
+                 linetype = "dashed", linewidth = 0.45) +
+      geom_ribbon(data = dt, aes(x = M_val, ymin = lb, ymax = ub),
+                  fill = point_col, alpha = 0.22) +
+      geom_line(data = dt, aes(x = M_val, y = lb),
+                colour = point_col, linewidth = 0.55) +
+      geom_line(data = dt, aes(x = M_val, y = ub),
+                colour = point_col, linewidth = 0.55) +
+      geom_errorbar(data = baseline,
+                    aes(x = M_val, ymin = lb, ymax = ub),
+                    colour = "black", width = 0.03, linewidth = 0.7) +
+      geom_point(data = baseline, aes(x = M_val, y = (lb + ub) / 2),
+                 colour = "black", size = 1.8) +
+      labs(x = x_lab, y = "95% CI bounds") +
+      theme_classic(base_size = 10, base_family = "Times") +
+      theme(axis.line  = element_line(colour = "black", linewidth = 0.4),
+            axis.ticks = element_line(colour = "black", linewidth = 0.3),
+            axis.text  = element_text(colour = "black"),
+            panel.grid = element_blank(),
+            plot.margin = margin(6, 10, 6, 6))
+  }
+
+  p_rm <- build_panel(rm_dt, expression(bar(M)~"(relative magnitude)"))
+  p_sd <- build_panel(sd_dt, "M (smoothness bound)")
+
+  (p_rm | p_sd) + plot_annotation(
+    title = model_label,
+    theme = theme(plot.title = element_text(family = "Times", size = 11,
+                                             hjust = 0.5)))
+}
+```
+
+\newpage
+
+```{r fig-hd-ols}
+#| label: fig-hd-ols
+#| fig-cap: "HonestDiD sensitivity, OLS. Left panel: relative-magnitude bound $\\bar M$. Right panel: smoothness bound $M$. Shaded region traces the post-period 95\\% CI bounds; the black errorbar at $M = 0$ (or $\\bar M = 0$) reproduces the asymptotic baseline CI from the event study."
+#| fig-width: 7
+#| fig-height: 3.5
+.path <- here("Output", "Estimation_Results", "HonestDiD_main_active_at_treatment.rds")
+if (file.exists(.path)) {
+  .hd <- readRDS(.path)
+  print(.plot_hd_sensitivity(.hd$ols, "OLS (LPM)", point_col = "#3A6BBF"))
+} else {
+  cat("Awaiting Ticket 008 output: ", .path, sep = "")
+}
+```
+
+```{r fig-hd-cox}
+#| label: fig-hd-cox
+#| fig-cap: "HonestDiD sensitivity, Cox. Same construction as @fig-hd-ols on the partial-likelihood event study (y-axis is on the log hazard ratio scale)."
+#| fig-width: 7
+#| fig-height: 3.5
+.path <- here("Output", "Estimation_Results", "HonestDiD_main_active_at_treatment.rds")
+if (file.exists(.path)) {
+  .hd <- readRDS(.path)
+  print(.plot_hd_sensitivity(.hd$cox, "Cox (log HR)", point_col = "#BF3A3A"))
+} else {
+  cat("Awaiting Ticket 008 output: ", .path, sep = "")
+}
+```
+
+\newpage
+
+# Facility Portfolio Choice (Descriptive) {#sec-portfolio}
+
+This section reports descriptive facility-portfolio results from `Code/Analysis/02a_DiD_facility_behavior.R`. These describe the composition of facility-level tank holdings and how it shifts in the post-reform period; **no stepped causal table** is reported here — these are descriptive (per ticket scope; the DiD-style causal versions of these outcomes are in @sec-lust).
+
+```{r tbl-closure-composition, results="asis"}
+#| label: tbl-closure-composition
+#| tbl-cap: "Closure composition (descriptive). Pre/post composition shifts in active-at-treatment facility portfolios, as estimated by 02a."
+.path <- here("Output", "Tables", "T2_ClosureComposition.tex")
+if (file.exists(.path)) {
+  cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
+  cat(readLines(.path), sep = "\n")
+  cat("\n}\n\\end{center}\n")
+} else {
+  cat("\\textit{Awaiting \\texttt{T2\\_ClosureComposition.tex} from 02a.}\n")
+}
+```
+
+```{r fig-hte-wall}
+#| label: fig-hte-wall
+#| fig-cap: "Heterogeneous portfolio response by wall composition (descriptive)."
+#| fig-width: 7
+#| fig-height: 4.5
+.path <- here("Output", "Figures", "Figure_HTE_WallType.png")
+if (file.exists(.path)) knitr::include_graphics(.path) else cat("Awaiting 02a output: ", .path, sep = "")
+```
+
+```{r fig-hte-age}
+#| label: fig-hte-age
+#| fig-cap: "Heterogeneous portfolio response by oldest-tank age bin (descriptive)."
+#| fig-width: 7
+#| fig-height: 4.5
+.path <- here("Output", "Figures", "Figure_HTE_OldestAge.png")
+if (file.exists(.path)) knitr::include_graphics(.path) else cat("Awaiting 02a output: ", .path, sep = "")
+```
+
+\newpage
+
+# LUST Difference-in-Differences {#sec-lust}
+
+LUST (leaking-underground-storage-tank) incidents are the second causal outcome estimated in `02a_DiD_facility_behavior.R`. These results are reported on the facility-year panel using the same DiD design as the LPM closure regressions, with state-level clustering. We report both the total LUST count regression and the decomposition by incident category (background reports vs. inspection-triggered reports).
+
+```{r tbl-lust-total, results="asis"}
+#| label: tbl-lust-total
+#| tbl-cap: "LUST DiD: total incident count. Outcome is per-facility-year LUST incidents. Cluster SEs at state."
+.path <- here("Output", "Tables", "T_LUST_A_Total.tex")
+if (file.exists(.path)) {
+  cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
+  cat(readLines(.path), sep = "\n")
+  cat("\n}\n\\end{center}\n")
+} else {
+  cat("\\textit{Awaiting \\texttt{T\\_LUST\\_A\\_Total.tex} from 02a.}\n")
+}
+```
+
+```{r tbl-lust-decomp, results="asis"}
+#| label: tbl-lust-decomp
+#| tbl-cap: "LUST DiD: decomposition by incident source (background vs. inspection-triggered)."
+.path <- here("Output", "Tables", "T_LUST_B_Decomp.tex")
+if (file.exists(.path)) {
+  cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
+  cat(readLines(.path), sep = "\n")
+  cat("\n}\n\\end{center}\n")
+} else {
+  cat("\\textit{Awaiting \\texttt{T\\_LUST\\_B\\_Decomp.tex} from 02a.}\n")
+}
+```
+
+```{r tbl-any-closure, results="asis"}
+#| label: tbl-any-closure
+#| tbl-cap: "Any-closure DiD (companion to the tank-level regressions in @sec-closure but estimated on the facility-year panel from 02a)."
+.path <- here("Output", "Tables", "T1_AnyClosure.tex")
+if (file.exists(.path)) {
+  cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
+  cat(readLines(.path), sep = "\n")
+  cat("\n}\n\\end{center}\n")
+} else {
+  cat("\\textit{Awaiting \\texttt{T1\\_AnyClosure.tex} from 02a.}\n")
+}
+```
