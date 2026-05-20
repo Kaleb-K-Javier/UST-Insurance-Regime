@@ -144,22 +144,21 @@ $$
 
 implemented on two-episode splits at the reform date.
 
-**Why Cox cannot mirror the OLS unit-FE columns.** In a single-treated-state DiD, stratifying the partial likelihood on any treatment-invariant unit (state, facility, or tank) makes `did_term` a deterministic step function of calendar time within each stratum, so the partial-likelihood score for $\beta$ is zero and $\beta$ is unidentified. The CEM-matched cell IS identifiable as a stratum because cells contain both Texas and control tanks at risk simultaneously. We therefore report Cox in **4 distinct identifiable specifications** rather than seven, mapped to the OLS columns via the sub-header in the table:
+**Why Cox cannot mirror the OLS unit-FE columns.** In a single-treated-state DiD, stratifying the partial likelihood on any treatment-invariant unit (state, facility, or tank) makes `did_term` a deterministic step function of calendar time within each stratum, so the partial-likelihood score for $\beta$ is zero and $\beta$ is unidentified. The CEM-matched cell IS identifiable as a stratum because cells contain both Texas and control tanks at risk simultaneously. A second practical constraint also limits us: including `factor(cell_id)` as a multiplicative covariate (one alternative for absorbing cell composition) is computationally infeasible in `coxph` at our cell cardinality (~1,083 levels, ~728K episodes — the Hessian inversion at each Newton step does not finish in tractable wall time). The strictly stronger `strata(cell_id)` variant subsumes this anyway: it lets the baseline hazard $h_{0,c}(t)$ vary freely by cell rather than just shifting the log-hazard multiplicatively. We therefore report Cox in **3 distinct identifiable specifications** rather than seven, mapped to the OLS columns via the sub-header in the table:
 
 | Cox col | OLS analogue(s)  | Cox RHS (after `did_term + controls`)                          |
 |---------|------------------|----------------------------------------------------------------|
 | (1)     | OLS (1)          | `+ factor(state)`                                              |
-| (2)     | OLS (2, 3, 4)    | `+ factor(state) + factor(cell_id)`                            |
-| (3)     | OLS (5, 6)       | `+ factor(state) + strata(cell_id)`                            |
-| (4)     | OLS (7) — **main** | `+ factor(state) + strata(cell_id) + factor(panel_year)`     |
+| (2)     | OLS (2--6)       | `+ factor(state) + strata(cell_id)`                            |
+| (3)     | OLS (7) — **main** | `+ factor(state) + strata(cell_id) + factor(panel_year)`     |
 
-State-level absorption is enforced in every Cox column via `factor(state)` as a covariate, mirroring the same enforcement in OLS cols 2 and 5. Cell-level stratification (Cox cols 3 and 4) is identifiable because the CEM-matched cells contain both Texas and control tanks at risk simultaneously, so `did_term` varies within cell-stratum × time.
+State-level absorption is enforced in every Cox column via `factor(state)` as a covariate, mirroring the same enforcement in OLS cols 2 and 5. Cell-level stratification (Cox cols 2 and 3) is identifiable because the CEM-matched cells contain both Texas and control tanks at risk simultaneously, so `did_term` varies within cell-stratum × time.
 
 Coefficients are log-hazard ratios. Ties are handled by Efron's method. Standard errors are robust cluster-sandwich (Lin-Wei 1989) clustered at state; the bracketed bootstrap SE row is a wild **score** bootstrap (the Cox-appropriate analogue of OLS wild cluster bootstrap), same $B$ and seed as the OLS table.
 
 ```{r tbl-stepped-cox, results="asis"}
 #| label: tbl-stepped-cox
-#| tbl-cap: "Stepped DiD: Cox proportional-hazards model. Three rows per coefficient: estimate (log hazard ratio); (analytic cluster-robust sandwich SE); [wild score bootstrap SE, $B = 9{,}999$]. All specifications include mandate controls and cluster SEs at the state level. Cols 5--7 use Option B for the partial-likelihood approximation of OLS cell $\\times$ year FE; see text. Col (7) is the main specification."
+#| tbl-cap: "Stepped DiD: Cox proportional-hazards model. Three rows per coefficient: estimate (log hazard ratio); (analytic cluster-robust sandwich SE); [wild score bootstrap SE, $B = 9{,}999$]. All specifications include mandate controls and cluster SEs at the state level. Cell-level stratification (cols 2--3) provides the Cox analogue of OLS cell$\\,\\times\\,$year FE because the partial likelihood's time axis is calendar time. Col (3) is the main specification."
 .path <- here("Output", "Tables", "T_Stepped_DiD_Cox.tex")
 if (file.exists(.path)) {
   cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
@@ -180,7 +179,7 @@ $$
 y_{kt} \;=\; \sum_{\tau \neq \omega} \beta_\tau \cdot \mathbf{1}\{\text{rel\_year}_{kt} = \tau\} \cdot \text{texas\_treated}_k \;+\; \gamma' X_{kt} \;+\; \varphi_i + \theta_{c,t} + \varepsilon_{kt}
 $$
 
-with $\omega \in \{-1, -2\}$. The Cox analogue uses per-year split episodes with $\text{es\_tau}_{\tau}$ dummies; the strata/covariate structure mirrors Cox col (4) of @sec-closure-cox: `strata(cell_id) + factor(state) + factor(panel_year)`. The same identification logic applies — stratifying on facility or tank would zero the score for the $\beta_\tau$ event-time coefficients.
+with $\omega \in \{-1, -2\}$. The Cox analogue uses per-year split episodes with $\text{es\_tau}_{\tau}$ dummies; the strata/covariate structure mirrors Cox col (3) of @sec-closure-cox: `strata(cell_id) + factor(state) + factor(panel_year)`. The same identification logic applies — stratifying on facility or tank would zero the score for the $\beta_\tau$ event-time coefficients.
 
 Tables of the per-$\tau$ coefficients are saved as reference artifacts (`T_Event_Study_OLS.tex` and `T_Event_Study_Cox.tex`) but omitted from this report.
 
@@ -210,7 +209,7 @@ if (file.exists(.path)) knitr::include_graphics(.path) else cat("Awaiting Ticket
 
 ```{r fig-es-cox-m1}
 #| label: fig-es-cox-m1
-#| fig-cap: "Cox event study, reference $\\tau = -1$. Y-axis is log hazard ratio. Per-year-split partial-likelihood with the strata/factor structure matching col (7) of @tbl-stepped-cox. 95\\% pointwise CIs from cluster-robust (state) sandwich SEs."
+#| fig-cap: "Cox event study, reference $\\tau = -1$. Y-axis is log hazard ratio. Per-year-split partial-likelihood with the strata/factor structure matching col (3) of @tbl-stepped-cox. 95\\% pointwise CIs from cluster-robust (state) sandwich SEs."
 #| fig-width: 7
 #| fig-height: 4.2
 .path <- here("Output", "Figures", "Fig_Event_Study_Cox_ref_m1.png")
@@ -244,7 +243,7 @@ with the Cox analogue using the same RHS on the partial likelihood. The derived 
 
 ```{r tbl-hte-vintage, results="asis"}
 #| label: tbl-hte-vintage
-#| tbl-cap: "Vintage HTE at the main specification (OLS col (7) of @tbl-stepped-ols; Cox col (4) of @tbl-stepped-cox: `strata(cell_id) + factor(state) + factor(panel_year)`). Three rows per coefficient: estimate; (analytic SE); [wild bootstrap SE]. Pre-1989 cohort ATT is the linear combination $\\beta_{\\text{post}} + \\beta_{\\text{int}}$. Sample: active-at-treatment, unweighted, cluster = state."
+#| tbl-cap: "Vintage HTE at the main specification (OLS col (7) of @tbl-stepped-ols; Cox col (3) of @tbl-stepped-cox: `strata(cell_id) + factor(state) + factor(panel_year)`). Three rows per coefficient: estimate; (analytic SE); [wild bootstrap SE]. Pre-1989 cohort ATT is the linear combination $\\beta_{\\text{post}} + \\beta_{\\text{int}}$. Sample: active-at-treatment, unweighted, cluster = state."
 .path <- here("Output", "Tables", "T_HTE_Vintage.tex")
 if (file.exists(.path)) {
   cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
@@ -301,7 +300,7 @@ Both summary table and sensitivity figures below are assembled **inline** from t
 
 ```{r tbl-honestdid-summary, results="asis"}
 #| label: tbl-honestdid-summary
-#| tbl-cap: "HonestDiD sensitivity summary at the main specification (OLS col (7); Cox col (4)), reference $\\tau = -1$. ATT is the average post-period coefficient. BD (SD) is the breakdown $M$ under the smoothness bound; BD (RM) is the breakdown $\\bar M$ under the relative-magnitude bound. A value reported as $>0.0\\text{xx}$ means the CI excludes zero across the entire grid."
+#| tbl-cap: "HonestDiD sensitivity summary at the main specification (OLS col (7); Cox col (3)), reference $\\tau = -1$. ATT is the average post-period coefficient. BD (SD) is the breakdown $M$ under the smoothness bound; BD (RM) is the breakdown $\\bar M$ under the relative-magnitude bound. A value reported as $>0.0\\text{xx}$ means the CI excludes zero across the entire grid."
 .path <- here("Output", "Tables", "T_HonestDiD_Summary.csv")
 if (file.exists(.path)) {
   .hd <- fread(.path)

@@ -234,15 +234,22 @@ fit_cox <- function(extra_covs = "", strata_var = NULL) {
   m
 }
 
+# NOTE: dropped the prior col 2 (`factor(state) + factor(cell_id)`). With
+# 1,083 cell_id levels and 728K episodes, `coxph` cannot invert the dense
+# Hessian in reasonable wall time (>>1 hour). The cell-as-strata variant
+# below is the strictly stronger econometric control (it lets the baseline
+# hazard h_{0,c}(t) vary freely by cell rather than just shifting the
+# log-hazard multiplicatively), so dropping the factor variant loses no
+# identifying information. See T_Stepped_DiD_Cox.tex notes for the
+# updated OLS-analogue mapping.
 m_cox <- list(
   `1` = fit_cox("factor(state)"),
-  `2` = fit_cox("factor(state) + factor(cell_id)"),
-  `3` = fit_cox("factor(state)",                      strata_var = "cell_id"),
-  `4` = fit_cox("factor(state) + factor(panel_year)", strata_var = "cell_id")
+  `2` = fit_cox("factor(state)",                      strata_var = "cell_id"),
+  `3` = fit_cox("factor(state) + factor(panel_year)", strata_var = "cell_id")
 )
 cat("\n")
 
-stopifnot(length(m_cox) == 4L)
+stopifnot(length(m_cox) == 3L)
 stopifnot(all(sapply(m_cox, function(m) !is.na(coef(m)["did_term"]))))
 stopifnot(all(sapply(m_cox, function(m)
   is.finite(sqrt(diag(vcov(m)))["did_term"]))))
@@ -254,7 +261,7 @@ stopifnot(all(sapply(m_cox, function(m) identical(m$method, "efron"))))
 
 cat("=== STEP 5: WILD SCORE BOOTSTRAP (COX) ===\n")
 
-boot_cox <- vector("list", 4L)
+boot_cox <- vector("list", 3L)
 names(boot_cox) <- names(m_cox)
 for (i in seq_along(m_cox)) {
   t0 <- proc.time()["elapsed"]
@@ -268,7 +275,7 @@ for (i in seq_along(m_cox)) {
 }
 cat("\n")
 
-stopifnot(length(boot_cox) == 4L)
+stopifnot(length(boot_cox) == 3L)
 stopifnot(all(sapply(boot_cox, function(b) is.finite(b$SE_boot))))
 stopifnot(all(sapply(boot_cox, function(b) b$SE_boot > 0)))
 stopifnot(all(sapply(boot_cox, function(b) b$B == BOOT_B)))
@@ -306,7 +313,7 @@ boot_diag <- rbindlist(list(
   )))
 ))
 
-stopifnot(nrow(boot_diag) == 11L)   # 7 OLS + 4 Cox
+stopifnot(nrow(boot_diag) == 10L)   # 7 OLS + 3 Cox
 stopifnot(all(c("model","col","coef","se_model","se_boot",
                 "ci_lo_boot","ci_hi_boot","p_boot","B","n_obs") %in% names(boot_diag)))
 
@@ -412,7 +419,7 @@ stopifnot(any(grepl("wild cluster bootstrap", .ols_tex)))
 stopifnot(any(grepl("score-based", .ols_tex)))
 
 # =============================================================================
-# === STEP 8 — COX TABLE (LaTeX, 4 cols) ===
+# === STEP 8 — COX TABLE (LaTeX, 3 cols) ===
 # =============================================================================
 
 cat("=== STEP 8: RENDER COX TABLE ===\n")
@@ -424,13 +431,12 @@ cat("=== STEP 8: RENDER COX TABLE ===\n")
 .nev_cox     <- sapply(m_cox, function(m) m$nevent)
 .n_tanks_cox <- uniqueN(cox_active$tank_panel_id)
 
-.yn4 <- function(v) paste(ifelse(v, "Y", "---"), collapse = " & ")
+.yn3 <- function(v) paste(ifelse(v, "Y", "---"), collapse = " & ")
 
-.cox_state_cov <- rep(T, 4)
-.cox_cell_cov  <- c(F, T, F, F)
-.cox_cell_str  <- c(F, F, T, T)
-.cox_year_cov  <- c(F, F, F, T)
-.cox_mandate   <- rep(T, 4)
+.cox_state_cov <- rep(T, 3)
+.cox_cell_str  <- c(F, T, T)
+.cox_year_cov  <- c(F, F, T)
+.cox_mandate   <- rep(T, 3)
 
 .cox_notes <- paste0(
   "Cox proportional-hazards model with two-episode splits at the reform date ",
@@ -439,16 +445,20 @@ cat("=== STEP 8: RENDER COX TABLE ===\n")
   "(Lin-Wei 1989; clustered at state, $G=18$); bootstrap row shows wild score ",
   "bootstrap SE in brackets (Kline-Santos 2012; Rademacher weights; $B=9{,}999$). ",
   "Ties handled by Efron's method. ",
-  "Cox cols are reported in 4 distinct identifiable specifications mapped to the OLS ",
-  "columns via the sub-header. OLS cols 3, 4 (fac/tank $+$ year FE) and OLS col 6 ",
-  "(tank $+$ cell $\\times$ year FE) collapse into Cox cols (2) and (3) because Cox ",
-  "cannot identify additional within-unit variation in a single-treated-state DiD design: ",
+  "Cox cols are reported in 3 distinct identifiable specifications mapped to the OLS ",
+  "columns via the sub-header. The OLS-to-Cox mapping is many-to-one because Cox cannot ",
+  "identify additional within-unit variation in a single-treated-state DiD design: ",
   "stratifying the partial likelihood on treatment-invariant units (state, facility, or tank) ",
-  "zeros the score for $\\beta$. State-level absorption is enforced in every Cox column ",
-  "via \\texttt{factor(state)} covariate, mirroring the same enforcement in OLS cols 2 and 5. ",
-  "Cell-level stratification (Cox cols 3, 4) is identifiable because CEM-matched cells ",
+  "zeros the score for $\\beta$. Also, including \\texttt{factor(cell\\_id)} as a multiplicative ",
+  "covariate (one alternative for absorbing cell composition) is computationally infeasible ",
+  "in \\texttt{coxph} at our cell cardinality ($\\sim$1{,}100 levels, $\\sim$728K episodes). ",
+  "We use the strictly stronger \\texttt{strata(cell\\_id)} variant from col~(2) onward, which ",
+  "lets the baseline hazard $h_{0,c}(t)$ vary freely by cell and subsumes the multiplicative-shifter ",
+  "alternative. State-level absorption is enforced in every Cox column via \\texttt{factor(state)} ",
+  "covariate, mirroring the same enforcement in OLS cols 2 and 5. ",
+  "Cell-level stratification (Cox cols 2, 3) is identifiable because CEM-matched cells ",
   "contain both Texas and control tanks at risk simultaneously. ",
-  "Sample: same active-at-treatment tanks as the OLS table. Cox col~(4) is the main specification."
+  "Sample: same active-at-treatment tanks as the OLS table. Cox col~(3) is the main specification."
 )
 
 .cox_tex <- c(
@@ -458,13 +468,12 @@ cat("=== STEP 8: RENDER COX TABLE ===\n")
   "\\caption{Stepped DiD: Cox Proportional-Hazards Model of Tank Closure}",
   "\\label{tab:stepped_did_cox}",
   "\\footnotesize",
-  "\\begin{tabular}{lcccc}",
+  "\\begin{tabular}{lccc}",
   "\\toprule",
-  " & (1) & (2) & (3) & (4) \\\\",
+  " & (1) & (2) & (3) \\\\",
   paste0("{\\small\\textit{(OLS analogue):}} & ",
          "{\\small\\textit{(1)}} & ",
-         "{\\small\\textit{(2, 3, 4)}} & ",
-         "{\\small\\textit{(5, 6)}} & ",
+         "{\\small\\textit{(2--6)}} & ",
          "{\\small\\textit{(7 --- main)}} \\\\[2pt]"),
   "\\midrule",
   paste0("Texas reform ($\\hat{\\beta}$, log HR) & ",
@@ -474,27 +483,26 @@ cat("=== STEP 8: RENDER COX TABLE ===\n")
   paste0(" & ",
          paste(sprintf("[%s]", .fmt4(.ses_b_cox)), collapse = " & "), " \\\\"),
   "\\midrule",
-  paste0("State covariate & ",   .yn4(.cox_state_cov), " \\\\"),
-  paste0("Cell covariate & ",    .yn4(.cox_cell_cov),  " \\\\"),
-  paste0("Cell stratum & ",      .yn4(.cox_cell_str),  " \\\\"),
-  paste0("Year covariate & ",    .yn4(.cox_year_cov),  " \\\\"),
-  paste0("Mandate controls & ",  .yn4(.cox_mandate),   " \\\\"),
+  paste0("State covariate & ",   .yn3(.cox_state_cov), " \\\\"),
+  paste0("Cell stratum & ",      .yn3(.cox_cell_str),  " \\\\"),
+  paste0("Year covariate & ",    .yn3(.cox_year_cov),  " \\\\"),
+  paste0("Mandate controls & ",  .yn3(.cox_mandate),   " \\\\"),
   "\\midrule",
   paste0("Tanks & ",
-         paste(rep(.fmtn(.n_tanks_cox), 4), collapse = " & "), " \\\\"),
+         paste(rep(.fmtn(.n_tanks_cox), 3), collapse = " & "), " \\\\"),
   paste0("Events & ",
          paste(.fmtn(.nev_cox), collapse = " & "), " \\\\"),
   paste0("Wild score $B$ & ",
-         paste(rep("$9{,}999$", 4), collapse = " & "), " \\\\"),
+         paste(rep("$9{,}999$", 3), collapse = " & "), " \\\\"),
   "\\bottomrule",
-  paste0("\\multicolumn{5}{p{0.98\\textwidth}}{\\textit{Notes:} ", .cox_notes, "}"),
+  paste0("\\multicolumn{4}{p{0.98\\textwidth}}{\\textit{Notes:} ", .cox_notes, "}"),
   "\\end{tabular}",
   "\\end{table}"
 )
 
 write_tex(.cox_tex, "T_Stepped_DiD_Cox.tex")
 stopifnot(any(grepl("\\(1\\)", .cox_tex)))
-stopifnot(any(grepl("\\(4\\)", .cox_tex)))
+stopifnot(any(grepl("\\(3\\)", .cox_tex)))
 stopifnot(any(grepl("OLS analogue", .cox_tex)))
 stopifnot(any(grepl("\\[", .cox_tex)))
 stopifnot(any(grepl("wild score bootstrap", .cox_tex)))
@@ -537,9 +545,9 @@ cat(sprintf("  Saved: %s\n\n", .rds_path))
 .tmp <- readRDS(.rds_path)
 stopifnot(all(c("m_ols","m_cox","boot_ols","boot_cox","sample_meta") %in% names(.tmp)))
 stopifnot(length(.tmp$m_ols)    == 7L)
-stopifnot(length(.tmp$m_cox)    == 4L)
+stopifnot(length(.tmp$m_cox)    == 3L)
 stopifnot(length(.tmp$boot_ols) == 7L)
-stopifnot(length(.tmp$boot_cox) == 4L)
+stopifnot(length(.tmp$boot_cox) == 3L)
 rm(.tmp)
 
 # =============================================================================
