@@ -232,8 +232,11 @@ build_active_cox_split <- function(active_panel, exact_base_dt,
   m_null   <- survival::coxph(null_fml, data = data,
                                cluster = state, ties = "efron", model = FALSE)
 
-  mart_resid  <- survival::naresid(m_null$na.action,
-                                    residuals(m_null, type = "martingale"))
+  # `naresid` is exported from {stats}, not {survival}; the survival package
+  # uses it internally but does not re-export. 02b calls it bare via the
+  # search path; we qualify with stats:: for explicitness.
+  mart_resid  <- stats::naresid(m_null$na.action,
+                                 residuals(m_null, type = "martingale"))
   score_vec   <- mart_resid * data[[term]]
 
   valid_rows     <- !is.na(score_vec) & !is.na(states)
