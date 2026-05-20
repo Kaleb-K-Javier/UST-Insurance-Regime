@@ -222,11 +222,24 @@ stopifnot(all(sapply(boot_ols, function(b) b$B == BOOT_B)))
 cat("=== STEP 4: FIT 5 COX SPECIFICATIONS ===\n")
 
 fit_cox <- function(extra_covs = "", strata_var = NULL) {
+  # IMPORTANT: Cox uses NO mandate controls.
+  #
+  # The OLS table includes the three mandate controls because in the long
+  # panel, panel_year is the calendar year and the mandates encode
+  # state-by-year regulatory variation cleanly. In the two-episode Cox
+  # split, panel_year is the EPISODE MIDPOINT year, which for
+  # pre-reform-failure episodes is mechanically correlated with the
+  # failure time itself. The mandate dummies then become near-perfect
+  # predictors of the failure indicator and coxph drives their
+  # coefficients to +/- infinity (and the linear predictor overflows
+  # exp() in some specifications). Dropping them entirely from the
+  # Cox model is the correct fix; the OLS table notes flag the
+  # asymmetry to the reader.
   rhs_extra <- if (nzchar(extra_covs))   paste("+", extra_covs)               else ""
   rhs_strat <- if (!is.null(strata_var)) paste("+ strata(", strata_var, ")")  else ""
   fml <- as.formula(sprintf(
-    "Surv(t_enter, t_exit, failure) ~ did_term + %s %s %s",
-    ctrl_rhs, rhs_extra, rhs_strat))
+    "Surv(t_enter, t_exit, failure) ~ did_term %s %s",
+    rhs_extra, rhs_strat))
   t0 <- proc.time()["elapsed"]
   m  <- coxph(fml, data = cox_active, cluster = state,
                ties = "efron", model = TRUE)
@@ -462,7 +475,7 @@ cat("=== STEP 8: RENDER COX TABLE ===\n")
 .cox_vint_str   <- c(F, F, T, F, F)            # only col 3
 .cox_mm_str     <- c(F, F, F, T, F)            # only col 4
 .cox_cell_str   <- c(F, F, F, F, T)            # only col 5 (main)
-.cox_mandate    <- rep(T, 5)
+.cox_mandate    <- rep(F, 5)                   # none (see notes)
 
 .cox_notes <- paste0(
   "Cox proportional-hazards model with two-episode splits at the reform date ",
@@ -487,6 +500,13 @@ cat("=== STEP 8: RENDER COX TABLE ===\n")
   "with the cell-specific non-parametric baseline hazard $h_{0,c}(t)$ that stratification ",
   "already provides, and causes the information matrix to collapse numerically (robust SE ",
   "order $10^{79}$). ",
+  "Note that the three mandate controls included in the OLS table are OMITTED from every Cox ",
+  "specification: in the two-episode Cox split, \\texttt{panel\\_year} is the episode-midpoint ",
+  "year, which for pre-reform-failure episodes is mechanically correlated with the failure ",
+  "time itself --- the mandate dummies become near-perfect predictors of the failure indicator ",
+  "and drive coefficients to $\\pm\\infty$ (linear-predictor overflow in cols with ",
+  "\\texttt{factor(panel\\_year)}). The OLS mandate controls remain valid because the long-panel ",
+  "\\texttt{panel\\_year} is the actual calendar year, not an episode midpoint. ",
   "Sample: same active-at-treatment tanks as the OLS table. Cox col~(5) is the main specification."
 )
 
