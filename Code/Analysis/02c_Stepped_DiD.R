@@ -216,10 +216,10 @@ stopifnot(all(sapply(boot_ols, function(b) b$SE_boot > 0)))
 stopifnot(all(sapply(boot_ols, function(b) b$B == BOOT_B)))
 
 # =============================================================================
-# === STEP 4 — FIT 5 COX SPECIFICATIONS ===
+# === STEP 4 — FIT 4 COX SPECIFICATIONS ===
 # =============================================================================
 
-cat("=== STEP 4: FIT 5 COX SPECIFICATIONS ===\n")
+cat("=== STEP 4: FIT 4 COX SPECIFICATIONS ===\n")
 
 fit_cox <- function(extra_covs = "", strata_var = NULL) {
   # IMPORTANT: Cox uses NO mandate controls.
@@ -255,29 +255,29 @@ fit_cox <- function(extra_covs = "", strata_var = NULL) {
   m
 }
 
-# NOTE on Cox column structure (revised across attempts 2-3):
+# NOTE on Cox column structure (revised across attempts 2-4):
 #
-#   Earlier attempts tried `factor(state) + factor(cell_id)` and
-#   `factor(state) + strata(cell_id) + factor(panel_year)`; both were
-#   rejected (former computationally infeasible at 1,083 cell levels
-#   x 728K episodes; latter rank-deficient because factor(panel_year)
-#   is redundant with the cell-specific non-parametric baseline hazard
-#   h_{0,c}(t) — robust SE order 1e79).
+#   Earlier attempts tried `factor(state) + factor(cell_id)` (computationally
+#   infeasible at 1,083 cell levels x 728K episodes); `factor(state) +
+#   strata(cell_id) + factor(panel_year)` (rank-deficient because
+#   factor(panel_year) is redundant with the cell-specific non-parametric
+#   baseline hazard h_{0,c}(t) — robust SE order 1e79); and most recently
+#   `factor(state) + factor(panel_year)` without strata (Missouri's
+#   coefficient diverges to +/- infinity once year dummies are added,
+#   triggering exp() overflow in the partial-likelihood evaluation).
 #
-# Final 5-col design: progressive controls (cols 1-2) + three alternative
-# baseline stratification choices (cols 3-5) showing how the headline
-# changes as we tighten the cell-level match. Col 5 (full cell strata)
-# is the main specification.
+# Final 4-col design: naive state covariate (col 1) plus three alternative
+# baseline stratifications of increasing granularity (cols 2-4). Col 4
+# (full mm x vintage cell strata) is the main specification.
 m_cox <- list(
   `1` = fit_cox("factor(state)"),
-  `2` = fit_cox("factor(state) + factor(panel_year)"),
-  `3` = fit_cox("factor(state)", strata_var = "install_yr_int"),
-  `4` = fit_cox("factor(state)", strata_var = "make_model_noage"),
-  `5` = fit_cox("factor(state)", strata_var = "cell_id")
+  `2` = fit_cox("factor(state)", strata_var = "install_yr_int"),
+  `3` = fit_cox("factor(state)", strata_var = "make_model_noage"),
+  `4` = fit_cox("factor(state)", strata_var = "cell_id")
 )
 cat("\n")
 
-stopifnot(length(m_cox) == 5L)
+stopifnot(length(m_cox) == 4L)
 stopifnot(all(sapply(m_cox, function(m) !is.na(coef(m)["did_term"]))))
 stopifnot(all(sapply(m_cox, function(m)
   is.finite(sqrt(diag(vcov(m)))["did_term"]))))
@@ -297,7 +297,7 @@ cat("\n")
 
 cat("=== STEP 5: WILD SCORE BOOTSTRAP (COX) ===\n")
 
-boot_cox <- vector("list", 5L)
+boot_cox <- vector("list", 4L)
 names(boot_cox) <- names(m_cox)
 for (i in seq_along(m_cox)) {
   t0 <- proc.time()["elapsed"]
@@ -311,7 +311,7 @@ for (i in seq_along(m_cox)) {
 }
 cat("\n")
 
-stopifnot(length(boot_cox) == 5L)
+stopifnot(length(boot_cox) == 4L)
 stopifnot(all(sapply(boot_cox, function(b) is.finite(b$SE_boot))))
 stopifnot(all(sapply(boot_cox, function(b) b$SE_boot > 0)))
 stopifnot(all(sapply(boot_cox, function(b) b$B == BOOT_B)))
@@ -349,7 +349,7 @@ boot_diag <- rbindlist(list(
   )))
 ))
 
-stopifnot(nrow(boot_diag) == 12L)   # 7 OLS + 5 Cox
+stopifnot(nrow(boot_diag) == 11L)   # 7 OLS + 4 Cox
 stopifnot(all(c("model","col","coef","se_model","se_boot",
                 "ci_lo_boot","ci_hi_boot","p_boot","B","n_obs") %in% names(boot_diag)))
 
@@ -455,7 +455,7 @@ stopifnot(any(grepl("wild cluster bootstrap", .ols_tex)))
 stopifnot(any(grepl("score-based", .ols_tex)))
 
 # =============================================================================
-# === STEP 8 — COX TABLE (LaTeX, 5 cols) ===
+# === STEP 8 — COX TABLE (LaTeX, 4 cols) ===
 # =============================================================================
 
 cat("=== STEP 8: RENDER COX TABLE ===\n")
@@ -467,15 +467,14 @@ cat("=== STEP 8: RENDER COX TABLE ===\n")
 .nev_cox     <- sapply(m_cox, function(m) m$nevent)
 .n_tanks_cox <- uniqueN(cox_active$tank_panel_id)
 
-.yn5 <- function(v) paste(ifelse(v, "Y", "---"), collapse = " & ")
+.yn4 <- function(v) paste(ifelse(v, "Y", "---"), collapse = " & ")
 
-#                              (1)   (2)   (3)   (4)   (5)
-.cox_state_cov  <- rep(T, 5)                  # all cols
-.cox_year_cov   <- c(F, T, F, F, F)            # only col 2
-.cox_vint_str   <- c(F, F, T, F, F)            # only col 3
-.cox_mm_str     <- c(F, F, F, T, F)            # only col 4
-.cox_cell_str   <- c(F, F, F, F, T)            # only col 5 (main)
-.cox_mandate    <- rep(F, 5)                   # none (see notes)
+#                              (1)   (2)   (3)   (4)
+.cox_state_cov  <- rep(T, 4)                   # all cols
+.cox_vint_str   <- c(F, T, F, F)               # only col 2
+.cox_mm_str     <- c(F, F, T, F)               # only col 3
+.cox_cell_str   <- c(F, F, F, T)               # only col 4 (main)
+.cox_mandate    <- rep(F, 4)                   # none (see notes)
 
 .cox_notes <- paste0(
   "Cox proportional-hazards model with two-episode splits at the reform date ",
@@ -484,11 +483,10 @@ cat("=== STEP 8: RENDER COX TABLE ===\n")
   "(Lin-Wei 1989; clustered at state, $G=18$); bootstrap row shows wild score ",
   "bootstrap SE in brackets (Kline-Santos 2012; Rademacher weights; $B=9{,}999$). ",
   "Ties handled by Efron's method. ",
-  "Cols 1--2 progressively add controls (state covariate, then parametric calendar-year ",
-  "dummies via episode-midpoint year). Cols 3--5 explore alternative baseline stratifications ",
-  "of increasing granularity: by installation cohort (col 3, $\\sim$28 vintage levels), ",
-  "by tank make-model (col 4, $\\sim$100 levels), and by the full mm$\\,\\times\\,$vintage ",
-  "cell (col 5, $\\sim$1{,}100 levels). ",
+  "Col 1 is the naive state-covariate-only spec. Cols 2--4 explore alternative baseline ",
+  "stratifications of increasing granularity: by installation cohort (col 2, $\\sim$28 vintage ",
+  "levels), by tank make-model (col 3, $\\sim$100 levels), and by the full mm$\\,\\times\\,$vintage ",
+  "cell (col 4, $\\sim$1{,}100 levels). ",
   "State-level absorption is enforced in every column via \\texttt{factor(state)} covariate. ",
   "Several otherwise-natural Cox specs are NOT reported here because they are unidentified or ",
   "numerically degenerate in a single-treated-state DiD design: ",
@@ -498,16 +496,18 @@ cat("=== STEP 8: RENDER COX TABLE ===\n")
   "infeasible in \\texttt{coxph} at $\\sim$1{,}100 cell levels $\\times$ 728K episodes; ",
   "(iii) adding \\texttt{factor(panel\\_year)} on top of \\texttt{strata(cell\\_id)} is redundant ",
   "with the cell-specific non-parametric baseline hazard $h_{0,c}(t)$ that stratification ",
-  "already provides, and causes the information matrix to collapse numerically (robust SE ",
-  "order $10^{79}$). ",
+  "already provides and causes the information matrix to collapse numerically (robust SE order $10^{79}$); ",
+  "(iv) the no-strata $+$ \\texttt{factor(panel\\_year)} spec causes Missouri's state-fixed-effect ",
+  "coefficient to diverge to infinity (linear-predictor \\texttt{exp()} overflow), reflecting a ",
+  "MO-specific data anomaly in the episode-midpoint-year distribution that the cell-stratified ",
+  "specs absorb harmlessly via per-cell baseline hazards. ",
   "Note that the three mandate controls included in the OLS table are OMITTED from every Cox ",
   "specification: in the two-episode Cox split, \\texttt{panel\\_year} is the episode-midpoint ",
   "year, which for pre-reform-failure episodes is mechanically correlated with the failure ",
   "time itself --- the mandate dummies become near-perfect predictors of the failure indicator ",
-  "and drive coefficients to $\\pm\\infty$ (linear-predictor overflow in cols with ",
-  "\\texttt{factor(panel\\_year)}). The OLS mandate controls remain valid because the long-panel ",
-  "\\texttt{panel\\_year} is the actual calendar year, not an episode midpoint. ",
-  "Sample: same active-at-treatment tanks as the OLS table. Cox col~(5) is the main specification."
+  "and drive coefficients to $\\pm\\infty$. The OLS mandate controls remain valid because the ",
+  "long-panel \\texttt{panel\\_year} is the actual calendar year, not an episode midpoint. ",
+  "Sample: same active-at-treatment tanks as the OLS table. Cox col~(4) is the main specification."
 )
 
 .cox_tex <- c(
@@ -517,11 +517,10 @@ cat("=== STEP 8: RENDER COX TABLE ===\n")
   "\\caption{Stepped DiD: Cox Proportional-Hazards Model of Tank Closure}",
   "\\label{tab:stepped_did_cox}",
   "\\footnotesize",
-  "\\begin{tabular}{lccccc}",
+  "\\begin{tabular}{lcccc}",
   "\\toprule",
-  " & (1) & (2) & (3) & (4) & (5) \\\\",
+  " & (1) & (2) & (3) & (4) \\\\",
   paste0("{\\small\\textit{(stratification basis):}} & ",
-         "{\\small\\textit{none}} & ",
          "{\\small\\textit{none}} & ",
          "{\\small\\textit{vintage}} & ",
          "{\\small\\textit{make-model}} & ",
@@ -534,28 +533,27 @@ cat("=== STEP 8: RENDER COX TABLE ===\n")
   paste0(" & ",
          paste(sprintf("[%s]", .fmt4(.ses_b_cox)), collapse = " & "), " \\\\"),
   "\\midrule",
-  paste0("State covariate & ",          .yn5(.cox_state_cov), " \\\\"),
-  paste0("Year dummies (parametric) & ", .yn5(.cox_year_cov),  " \\\\"),
-  paste0("Vintage stratum & ",          .yn5(.cox_vint_str),  " \\\\"),
-  paste0("Make-model stratum & ",       .yn5(.cox_mm_str),    " \\\\"),
-  paste0("Cell stratum & ",             .yn5(.cox_cell_str),  " \\\\"),
-  paste0("Mandate controls & ",         .yn5(.cox_mandate),   " \\\\"),
+  paste0("State covariate & ",   .yn4(.cox_state_cov), " \\\\"),
+  paste0("Vintage stratum & ",   .yn4(.cox_vint_str),  " \\\\"),
+  paste0("Make-model stratum & ", .yn4(.cox_mm_str),    " \\\\"),
+  paste0("Cell stratum & ",      .yn4(.cox_cell_str),  " \\\\"),
+  paste0("Mandate controls & ",  .yn4(.cox_mandate),   " \\\\"),
   "\\midrule",
   paste0("Tanks & ",
-         paste(rep(.fmtn(.n_tanks_cox), 5), collapse = " & "), " \\\\"),
+         paste(rep(.fmtn(.n_tanks_cox), 4), collapse = " & "), " \\\\"),
   paste0("Events & ",
          paste(.fmtn(.nev_cox), collapse = " & "), " \\\\"),
   paste0("Wild score $B$ & ",
-         paste(rep("$9{,}999$", 5), collapse = " & "), " \\\\"),
+         paste(rep("$9{,}999$", 4), collapse = " & "), " \\\\"),
   "\\bottomrule",
-  paste0("\\multicolumn{6}{p{0.98\\textwidth}}{\\textit{Notes:} ", .cox_notes, "}"),
+  paste0("\\multicolumn{5}{p{0.98\\textwidth}}{\\textit{Notes:} ", .cox_notes, "}"),
   "\\end{tabular}",
   "\\end{table}"
 )
 
 write_tex(.cox_tex, "T_Stepped_DiD_Cox.tex")
 stopifnot(any(grepl("\\(1\\)", .cox_tex)))
-stopifnot(any(grepl("\\(5\\)", .cox_tex)))
+stopifnot(any(grepl("\\(4\\)", .cox_tex)))
 stopifnot(any(grepl("stratification basis", .cox_tex)))
 stopifnot(any(grepl("\\[", .cox_tex)))
 stopifnot(any(grepl("wild score bootstrap", .cox_tex)))
@@ -598,9 +596,9 @@ cat(sprintf("  Saved: %s\n\n", .rds_path))
 .tmp <- readRDS(.rds_path)
 stopifnot(all(c("m_ols","m_cox","boot_ols","boot_cox","sample_meta") %in% names(.tmp)))
 stopifnot(length(.tmp$m_ols)    == 7L)
-stopifnot(length(.tmp$m_cox)    == 5L)
+stopifnot(length(.tmp$m_cox)    == 4L)
 stopifnot(length(.tmp$boot_ols) == 7L)
-stopifnot(length(.tmp$boot_cox) == 5L)
+stopifnot(length(.tmp$boot_cox) == 4L)
 rm(.tmp)
 
 # =============================================================================
