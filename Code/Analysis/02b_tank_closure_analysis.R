@@ -4306,18 +4306,31 @@ p_vintage_forest <- ggplot(vintage_coef_dt,
 save_gg(p_vintage_forest, "Fig_Vintage_Forest", width = 11, height = 6)
 
 
+
 # =============================================================================
 # 7. HONESTDID — INLINE (one block per key regression)
 # =============================================================================
 library(doParallel)
-registerDoParallel(cores = parallel::detectCores()/2)
-# Grid parameters
+registerDoParallel(cores = parallel::detectCores() / 2)
+
 HD_M_GRID_RM <- seq(0, 3,    by = 0.1)
 HD_M_GRID_SD <- seq(0, 0.08, by = 0.005)
 
 log_step("Section 7: HonestDiD sensitivity analyses...")
 
-# ── Helper: run HonestDiD given extracted inputs ─────────────────────────────
+# ── Pre-trend maxima (computed once from ES models) ───────────────────────────
+es_full_coef_dt   <- extract_es_coef_dt(mES_full,   ref_period = -1L)
+es_pre89_coef_dt  <- extract_es_coef_dt(mES_pre89,  ref_period = -1L)
+es_post88_coef_dt <- extract_es_coef_dt(mES_post88, ref_period = -1L)
+
+pt_full_sd   <- max(abs(es_full_coef_dt[rel_year   < -1, estimate]), na.rm = TRUE)
+pt_pre89_sd  <- max(abs(es_pre89_coef_dt[rel_year  < -1, estimate]), na.rm = TRUE)
+pt_post88_sd <- max(abs(es_post88_coef_dt[rel_year < -1, estimate]), na.rm = TRUE)
+
+# RM pre-trend anchor: M_bar = 1 means "violations no larger than pre-period"
+PT_RM_ANCHOR <- 1.0
+
+# ── Helper: run HonestDiD ─────────────────────────────────────────────────────
 .run_hd <- function(ei, M_grid_rm = HD_M_GRID_RM, M_grid_sd = HD_M_GRID_SD) {
   ref_chr  <- as.character(ei$ref_period)
   keep     <- setdiff(names(ei$beta), ref_chr)
@@ -4344,27 +4357,29 @@ log_step("Section 7: HonestDiD sensitivity analyses...")
   pe    <- as.numeric(l_full %*% beta_in)
   pe_se <- sqrt(as.numeric(t(l_full) %*% sigma_in %*% l_full))
 
+  # NOTE: createSensitivityResults_relativeMagnitudes = RM (Mbar grid)
+  #       createSensitivityResults                    = SD (M/smoothness grid)
   rm_res <- tryCatch(
-    HonestDiD::createSensitivityResults(
-      betahat = beta_in, sigma = sigma_in,
-      numPrePeriods = numPre, numPostPeriods = numPost,
-      l_vec = l_post, Mvec = M_grid_rm,
+    HonestDiD::createSensitivityResults_relativeMagnitudes(
+      betahat       = beta_in, sigma = sigma_in,
+      numPrePeriods = numPre,  numPostPeriods = numPost,
+      l_vec = l_post, Mbarvec = M_grid_rm,
       method = "C-LF", alpha = 0.05, parallel = TRUE),
     error = function(e) { message("HD RM error: ", e$message); NULL })
 
   sd_res <- tryCatch(
-    HonestDiD::createSensitivityResults_relativeMagnitudes(
-      betahat = beta_in, sigma = sigma_in,
-      numPrePeriods = numPre, numPostPeriods = numPost,
-      l_vec = l_post, Mbarvec = M_grid_sd,
+    HonestDiD::createSensitivityResults(
+      betahat       = beta_in, sigma = sigma_in,
+      numPrePeriods = numPre,  numPostPeriods = numPost,
+      l_vec = l_post, Mvec = M_grid_sd,
       method = "C-LF", alpha = 0.05, parallel = TRUE),
     error = function(e) { message("HD SD error: ", e$message); NULL })
 
   list(
-    point_est   = pe,
-    point_se    = pe_se,
-    point_ci_lo = pe - 1.96 * pe_se,
-    point_ci_hi = pe + 1.96 * pe_se,
+    point_est    = pe,
+    point_se     = pe_se,
+    point_ci_lo  = pe - 1.96 * pe_se,
+    point_ci_hi  = pe + 1.96 * pe_se,
     breakdown_rm = hd_breakdown(rm_res),
     breakdown_sd = hd_breakdown(sd_res),
     rm_results   = rm_res,
@@ -4376,14 +4391,97 @@ log_step("Section 7: HonestDiD sensitivity analyses...")
   if (is.na(x)) sprintf(">%.1f", mv) else sprintf("%.2f", x)
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 7A. HonestDiD — FULL active sample (mES_full)
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Plot function ─────────────────────────────────────────────────────────────
+plot_hd_sensitivity <- function(rm_results, sd_results,
+                                point_ci_lo, point_ci_hi, point_est,
+                                pre_trend_rm = PT_RM_ANCHOR,
+                                pre_trend_sd = NULL,
+                                point_col    = "grey25") {
 
+  make_panel <- function(res, x_lab, title_lab, pre_trend_vline) {
+    if (is.null(res)) return(NULL)
+    res_dt <- as.data.table(res)
+
+    mcol <- intersect(names(res_dt), c("M", "Mbar"))
+    if (!length(mcol)) return(NULL)
+    setnames(res_dt, mcol, "M_val")
+
+    x_range  <- diff(range(res_dt$M_val, na.rm = TRUE))
+    eb_width <- x_range * 0.03
+
+    baseline <- data.table(
+      M_val = 0, lb = point_ci_lo, ub = point_ci_hi, mid = point_est)
+
+    p <- ggplot() +
+      geom_hline(yintercept = 0, colour = "grey50",
+                 linetype = "dashed", linewidth = 0.45) +
+      geom_line(data = res_dt, aes(x = M_val, y = lb),
+                colour = point_col, linewidth = 0.7) +
+      geom_line(data = res_dt, aes(x = M_val, y = ub),
+                colour = point_col, linewidth = 0.7) +
+      geom_errorbar(data = baseline,
+                    aes(x = M_val, ymin = lb, ymax = ub),
+                    colour = "black", width = eb_width, linewidth = 0.8) +
+      geom_point(data = baseline, aes(x = M_val, y = mid),
+                 colour = "black", size = 2.2)
+
+    if (!is.null(pre_trend_vline) && !is.na(pre_trend_vline)) {
+      lb_at <- approx(res_dt$M_val, res_dt$lb, xout = pre_trend_vline)$y
+      ci_crosses_zero <- !is.na(lb_at) && lb_at <= 0
+
+      p <- p +
+        geom_vline(xintercept = pre_trend_vline, colour = "firebrick",
+                   linetype = "dotted", linewidth = 0.7) +
+        annotate("text",
+                 x     = pre_trend_vline + x_range * 0.03,
+                 y     = max(res_dt$ub, na.rm = TRUE) * 0.92,
+                 label = sprintf("Max observed pre-trend\n= %.3f\n%s",
+                                 pre_trend_vline,
+                                 ifelse(ci_crosses_zero,
+                                        "\u2192 CI includes zero",
+                                        "\u2192 CI excludes zero")),
+                 hjust = 0, vjust = 1, size = 2.6,
+                 colour = "firebrick", family = "Times")
+    }
+
+    p +
+      labs(x = x_lab, y = "95% CI bounds", title = title_lab) +
+      theme_classic(base_size = 10, base_family = "Times") +
+      theme(
+        plot.title  = element_text(size = 9.5, face = "plain",
+                                   family = "Times", hjust = 0,
+                                   margin = margin(b = 6)),
+        axis.line   = element_line(colour = "black", linewidth = 0.4),
+        axis.ticks  = element_line(colour = "black", linewidth = 0.3),
+        axis.text   = element_text(colour = "black"),
+        panel.grid  = element_blank(),
+        plot.margin = margin(6, 12, 6, 6))
+  }
+
+  p_rm <- make_panel(
+    rm_results,
+    x_lab     = expression(bar(M)~"— post-reform violations relative to pre-reform"),
+    title_lab = "How much larger can violations get after the reform?",
+    pre_trend_vline = pre_trend_rm)
+
+  p_sd <- make_panel(
+    sd_results,
+    x_lab     = "M (pp) — how much can the pre-trend slope change after the reform?",
+    title_lab = "How much can the underlying trend shift after the reform?",
+    pre_trend_vline = pre_trend_sd)
+
+  if (!is.null(p_rm) && !is.null(p_sd)) p_rm | p_sd
+  else if (!is.null(p_rm)) p_rm
+  else p_sd
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7A. HonestDiD — FULL active sample
+# ─────────────────────────────────────────────────────────────────────────────
 cat("\n--- 7A: Full active sample ---\n")
 
-ei_full   <- extract_es_inputs(mES_full, ref_period = -1L)
-hd_full   <- .run_hd(ei_full)
+ei_full <- extract_es_inputs(mES_full, ref_period = -1L)
+hd_full <- .run_hd(ei_full)
 
 if (!is.null(hd_full)) {
   cat(sprintf("  ATT=%+.5f (se=%.5f)  95%%CI=[%+.5f, %+.5f]\n",
@@ -4395,20 +4493,21 @@ if (!is.null(hd_full)) {
 
   p_hd_full <- plot_hd_sensitivity(
     hd_full$rm_results, hd_full$sd_results,
-    hd_full$point_ci_lo, hd_full$point_ci_hi,
-    point_col = "grey25")
+    hd_full$point_ci_lo, hd_full$point_ci_hi, hd_full$point_est,
+    pre_trend_rm = PT_RM_ANCHOR,
+    pre_trend_sd = pt_full_sd,
+    point_col    = "grey25")
   save_gg(p_hd_full, "Fig_HD_Full", width = 10, height = 5)
   cat("  Saved: Fig_HD_Full\n")
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7B. HonestDiD — Pre-1989 vintage (mES_pre89)
+# 7B. HonestDiD — Pre-1989 vintage
 # ─────────────────────────────────────────────────────────────────────────────
-
 cat("\n--- 7B: Pre-1989 vintage ---\n")
 
-ei_pre89  <- extract_es_inputs(mES_pre89, ref_period = -1L)
-hd_pre89  <- .run_hd(ei_pre89)
+ei_pre89 <- extract_es_inputs(mES_pre89, ref_period = -1L)
+hd_pre89 <- .run_hd(ei_pre89)
 
 if (!is.null(hd_pre89)) {
   cat(sprintf("  ATT=%+.5f (se=%.5f)  95%%CI=[%+.5f, %+.5f]\n",
@@ -4420,16 +4519,17 @@ if (!is.null(hd_pre89)) {
 
   p_hd_pre89 <- plot_hd_sensitivity(
     hd_pre89$rm_results, hd_pre89$sd_results,
-    hd_pre89$point_ci_lo, hd_pre89$point_ci_hi,
-    point_col = "#3A6BBF")
+    hd_pre89$point_ci_lo, hd_pre89$point_ci_hi, hd_pre89$point_est,
+    pre_trend_rm = PT_RM_ANCHOR,
+    pre_trend_sd = pt_pre89_sd,
+    point_col    = "#3A6BBF")
   save_gg(p_hd_pre89, "Fig_HD_Pre89", width = 10, height = 5)
   cat("  Saved: Fig_HD_Pre89\n")
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7C. HonestDiD — Post-1988 vintage (mES_post88)
+# 7C. HonestDiD — Post-1988 vintage
 # ─────────────────────────────────────────────────────────────────────────────
-
 cat("\n--- 7C: Post-1988 vintage ---\n")
 
 ei_post88 <- extract_es_inputs(mES_post88, ref_period = -1L)
@@ -4445,61 +4545,19 @@ if (!is.null(hd_post88)) {
 
   p_hd_post88 <- plot_hd_sensitivity(
     hd_post88$rm_results, hd_post88$sd_results,
-    hd_post88$point_ci_lo, hd_post88$point_ci_hi,
-    point_col = "#BF3A3A")
+    hd_post88$point_ci_lo, hd_post88$point_ci_hi, hd_post88$point_est,
+    pre_trend_rm = PT_RM_ANCHOR,
+    pre_trend_sd = pt_post88_sd,
+    point_col    = "#BF3A3A")
   save_gg(p_hd_post88, "Fig_HD_Post88", width = 10, height = 5)
   cat("  Saved: Fig_HD_Post88\n")
 }
 
-# ── 7D. Selection-adjusted HonestDiD for pre-89 ──────────────────────────────
-# M_sel = excess pre-trend in pre-89 vs post-88 (attributed to survivor selection)
-# Grid starts at M_sel so breakdown reports additional robustness beyond selection.
-
-cat("\n--- 7D: Selection-adjusted HonestDiD (pre-89) ---\n")
-
-pre89_coef_dt  <- extract_es_coef_dt(mES_pre89,  ref_period = -1L)
-post88_coef_dt <- extract_es_coef_dt(mES_post88, ref_period = -1L)
-
-max_pre_pre89  <- max(abs(pre89_coef_dt[rel_year  < -1, estimate]))
-max_pre_post88 <- max(abs(post88_coef_dt[rel_year < -1, estimate]), na.rm = TRUE)
-M_sel          <- max(0, max_pre_pre89 - max_pre_post88)
-M_sel_relative <- if (max_pre_pre89 > 0) M_sel / max_pre_pre89 else 0
-
-cat(sprintf("  M_sel (abs): %.5f  M_sel (rel): %.4f\n",
-            M_sel, M_sel_relative))
-
-hd_pre89_sel <- .run_hd(
-  ei_pre89,
-  M_grid_rm = seq(M_sel_relative, M_sel_relative + 3, by = 0.1),
-  M_grid_sd = HD_M_GRID_SD)
-
-if (!is.null(hd_pre89_sel)) {
-  bd_sel <- hd_pre89_sel$breakdown_rm
-  cat(sprintf("  Breakdown M-bar (sel-adj): %s\n",
-              if (is.na(bd_sel))
-                sprintf(">%.1f (robust across full grid)", M_sel_relative + 3)
-              else sprintf("%.2f", bd_sel)))
-
-  p_hd_pre89_sel <- plot_hd_sensitivity(
-    hd_pre89_sel$rm_results, hd_pre89_sel$sd_results,
-    hd_pre89_sel$point_ci_lo, hd_pre89_sel$point_ci_hi,
-    point_col = "#3A6BBF")
-
-  if (!is.null(p_hd_pre89_sel)) {
-    # Add vertical line at M_sel on the RM panel (left panel)
-    # Note: patchwork object — add annotation after save if needed
-    save_gg(p_hd_pre89_sel, "Fig_HD_Pre89_SelAdj", width = 10, height = 5)
-    cat("  Saved: Fig_HD_Pre89_SelAdj\n")
-  }
-}
-
-# ── 7E. Summary table ─────────────────────────────────────────────────────────
-
+# ── 7D. Summary table ─────────────────────────────────────────────────────────
 hd_summary <- rbindlist(list(
-  if (!is.null(hd_full))   data.table(sample = "Full active",    hd_full[c("point_est","point_se","point_ci_lo","point_ci_hi","breakdown_rm","breakdown_sd")]),
-  if (!is.null(hd_pre89))  data.table(sample = "Pre-1989",       hd_pre89[c("point_est","point_se","point_ci_lo","point_ci_hi","breakdown_rm","breakdown_sd")]),
-  if (!is.null(hd_post88)) data.table(sample = "Post-1988",      hd_post88[c("point_est","point_se","point_ci_lo","point_ci_hi","breakdown_rm","breakdown_sd")]),
-  if (!is.null(hd_pre89_sel)) data.table(sample = "Pre-1989 (sel-adj)", hd_pre89_sel[c("point_est","point_se","point_ci_lo","point_ci_hi","breakdown_rm","breakdown_sd")])
+  if (!is.null(hd_full))   data.table(sample = "Full active", hd_full[c("point_est","point_se","point_ci_lo","point_ci_hi","breakdown_rm","breakdown_sd")]),
+  if (!is.null(hd_pre89))  data.table(sample = "Pre-1989",    hd_pre89[c("point_est","point_se","point_ci_lo","point_ci_hi","breakdown_rm","breakdown_sd")]),
+  if (!is.null(hd_post88)) data.table(sample = "Post-1988",   hd_post88[c("point_est","point_se","point_ci_lo","point_ci_hi","breakdown_rm","breakdown_sd")])
 ), fill = TRUE)
 
 fwrite(hd_summary, file.path(OUTPUT_TABLES, "T_HonestDiD_Summary.csv"))
@@ -4528,6 +4586,7 @@ write_tex(c(
 ), "T_HonestDiD_Summary.tex")
 
 cat("\n  Saved: T_HonestDiD_Summary.{tex,csv}\n")
+
 
 # =============================================================================
 # 8. SURVIVAL BIAS DIAGNOSTICS + IPSW
