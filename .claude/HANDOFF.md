@@ -1,3 +1,81 @@
+# HANDOFF -- 2026-05-20 (T005 PASS; T006 ready for R1 launch)
+# Written by: Opus (architect + reviewer for T005)
+# Session type: T005 server runs (multiple attempts), debugging, PASS; T006 queued
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T005 PASS (2026-05-20)
+═══════════════════════════════════════════════════
+
+Ticket 005 — stepped DiD (OLS + Cox) + wild bootstrap inference
+  Spec:       .claude/TICKETS/005_02b_stepped_did.md (attempt log = full history)
+  Reviewer:   Opus (this session)
+  Result:     PASS on attempt 4 final
+
+  Architect deviations from original spec (all justified):
+    Cox table: 7 cols -> 4 cols (identification + numerical constraints in
+      single-treated-state DiD; final 4 cols are maximally identifiable)
+    OLS bootstrap: score variant (boottest fails on high-card cell_vintage_year_fe)
+    Cox mandates: omitted (mis-aligned with two-episode panel_year semantics)
+
+  Deliverables verified on Z mount:
+    Output/Tables/T_Stepped_DiD_OLS.tex                            (7 cols)
+    Output/Tables/T_Stepped_DiD_Cox.tex                            (4 cols)
+    Output/Tables/T_Stepped_DiD_Bootstrap_Diagnostics.csv          (11 rows)
+    Output/Estimation_Results/Stepped_DiD_Fits_active_at_treatment.rds (1 GB)
+    logs/02c_Stepped_DiD_20260520_161704.log
+
+  Headline numbers (active-at-treatment sample, unweighted, cluster=state, G=18):
+    OLS col (7) main: beta = 0.01584, SE_boot = 0.00400, CI [0.0101, 0.0216]
+                      -> +1.58 pp annual closure probability for TX
+    Cox col (4) main: beta = 0.36561, SE_boot = 0.11677, CI [0.249, 0.482]
+                      -> HR = 1.44 (44% higher closure hazard for TX)
+    Cox walk-in:      HR 1.65 (naive) -> 1.47 (vintage) -> 1.55 (mm)
+                      -> 1.44 (cell --- main).
+    Both methods agree directionally and significance (p_boot < 0.001 throughout).
+
+NEXT — T006 launch (event studies, OLS + Cox, ref=-1 and ref=-2):
+
+  Spec already drafted: .claude/TICKETS/006_02b_event_studies.md
+    Status: AWAITING_IMPLEMENTATION
+    The spec was corrected for the Cox identification fix back at draft time
+    (uses strata(cell_id) + factor(state) for the Cox ES main spec, NOT
+    strata(panel_id)). Spec also handles the per-year-split data structure
+    where factor(panel_year) MIGHT work (not blocked by the static stepped
+    table's Missouri overflow — different data structure).
+
+  Operator launch sequence (local Windows dev machine):
+    .\.claude\run_coder_pro_api.ps1 -TicketID 006
+
+  Expected R1 output deliverables:
+    Code/Helpers/reduced_form_utils.R                          (extend with ES utils)
+    Code/Analysis/02d_Event_Studies.R                          (new)
+    Output/Tables/T_Event_Study_OLS.tex                        (2 cols: ref=-1, -2)
+    Output/Tables/T_Event_Study_Cox.tex                        (2 cols)
+    Output/Tables/T_Event_Study_Coefficients_Long.csv          (~148 rows)
+    Output/Figures/Fig_Event_Study_OLS_ref_m{1,2}.{pdf,png}
+    Output/Figures/Fig_Event_Study_Cox_ref_m{1,2}.{pdf,png}
+    Output/Estimation_Results/Event_Study_Fits_active_at_treatment.rds
+    logs/02d_Event_Studies_*.log
+
+  Expected wall time:
+    Local R1 coder session: ~20-30 min
+    Server estimation: ~30-60 min (Cox ES with strata + factor terms is slow
+      but should NOT hit the Missouri overflow because per-year-split has more
+      degrees of freedom than two-episode split)
+
+  Heads-up for R1 (architect notes from T005 experience that may apply):
+    - Use stats::naresid not survival::naresid (helper file already fixed)
+    - Cox formula MUST NOT include factor(panel_year) IF combined with
+      strata(cell_id) -- empirically rank-deficient
+    - Cox ES uses build_active_cox_es_split (per-year split) which has
+      proper calendar-year structure; the ES tau dummies vary within
+      cell-stratum and IS identifiable
+    - Mandate controls: keep in OLS ES; OMIT from Cox ES (same logic as T005)
+
+═══════════════════════════════════════════════════
+[Previous checkpoint preserved below]
+═══════════════════════════════════════════════════
+
 # HANDOFF -- 2026-05-19 (Tickets 005-008 specs done; T005 R1 attempt 2 ready for server)
 # Written by: Opus (architect for T005-T008)
 # Session type: Drafted 4-ticket 02b reduced-form refactor; T005 R1 attempt 1

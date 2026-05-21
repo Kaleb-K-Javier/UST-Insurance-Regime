@@ -1,7 +1,12 @@
 # TICKET 005 — 02b refactor: stepped DiD (OLS + Cox), wild bootstrap inference
 # Created: 2026-05-19
-# Status: AWAITING_IMPLEMENTATION
-# Attempt: 0
+# Status: PASS (2026-05-20, attempt 4)
+# Attempt: 4
+# Reviewer: Opus
+# Final design: 7-col OLS + 4-col Cox (Cox revised down from 7 during attempts 2-4
+#               due to identification/numerical issues unique to single-treated-state
+#               DiD on this data; final design is the maximally-identifiable Cox
+#               stepped table). All deviations documented in code + table notes.
 
 ═══════════════════════════════════════════════════
 ECONOMIC MOTIVATION
@@ -740,23 +745,89 @@ LOG (7):
 ═══════════════════════════════════════════════════
 ATTEMPT LOG
 ═══════════════════════════════════════════════════
-[Filled by reviewer after each R1 attempt. Leave blank until first attempt.]
 
-### Attempt 1 — [DATE]
-Transcript: 005_transcript.txt
-Result: [PASS | TRANSLATION_FAIL | PSEUDOCODE_FAIL]
+### Attempt 1 — 2026-05-19 (Sonnet 4.6 Pro)
+Result: PSEUDOCODE_FAIL — Cox identification
+- OLS Steps 1-3: PASS (all 7 specs + bootstraps, reproducible)
+- Cox cols 1, 3, 4: β=NA (strata(state/facility/tank) zeros the score for β
+  in a single-treated-state DiD; treatment is invariant within stratum)
+- Cox col 5: robust SE=1.8e35 (numerical collapse from cell-strata + year covariate)
 
-Criteria:
-- [ ] [criterion]: [result]
+### Attempt 2 — 2026-05-19 evening (Sonnet 4.6 Pro)
+Architect spec revised:
+- Cox redesigned to 4 cols: factor(state); factor(state)+factor(cell_id);
+  factor(state)+strata(cell_id); factor(state)+strata(cell_id)+factor(panel_year)
+- Cox cols 2 and 3 use covariate/strata-only forms; col 4 adds year covariate
+Local OLS verified end-to-end (col 7 main: beta=0.02061 on the Apr-14 prototype).
+Cox cols 2-4 timed out on local; server compute required.
 
-[If TRANSLATION_FAIL]:
-Correction prompt for R1:
-  "[paste into new R1 session]"
+### Attempt 3 — 2026-05-20 morning (server run)
+- OLS clean on canonical birth-CEM panel (col 7 main: beta=0.01584).
+- Cox col 1 OK (beta=0.017, robust SE=0.448 - small-G sandwich is uninformative).
+- Cox col 2 (factor(state)+factor(cell_id)): TIMED OUT (Hessian inversion on
+  1083 cell levels x 728K episodes is infeasible in coxph).
 
-[If PSEUDOCODE_FAIL]:
-Question for Opus:
-  "[one sentence — what is underspecified]"
+Architect call: dropped factor(cell_id)-covariate variant entirely; cell
+absorption goes through strata only. Down to 3 distinct cols.
 
----
-### Attempt 2 — [DATE]
-[same format]
+### Attempt 4a — 2026-05-20 ~16:00 (server run)
+- naresid bug: survival::naresid does not exist (function lives in stats::).
+  Fixed in helper.
+- Cox col 3 (factor(state)+strata(cell_id)+factor(panel_year)): robust SE
+  ~1e79 (rank-deficient because factor(panel_year) is collinear with the
+  cell-specific non-parametric baseline hazard h_{0,c}(t)).
+
+Architect call: dropped factor(panel_year)-on-top-of-strata variant.
+Down to 2 distinct cols.
+
+### Attempt 4b — 2026-05-20 ~16:10 (server run, 2-col Cox)
+- User asked for more granular cell-stratification robustness cols.
+- Expanded to 5-col Cox: state; state+year; state+strata(vintage);
+  state+strata(mm); state+strata(cell).
+
+### Attempt 4c — 2026-05-20 ~16:20 (server run, 5-col Cox)
+- Col 2 (factor(state)+factor(panel_year)) overflowed exp(). Root cause:
+  Missouri's state-FE coefficient diverges to infinity once year dummies
+  enter the design (MO-specific anomaly in episode-midpoint-year distribution).
+- Also dropped mandate controls from Cox: in two-episode split, panel_year
+  is episode-midpoint year, so mandate dummies become near-perfect predictors
+  of failure indicator.
+
+Architect call: dropped year-dummy col. Final 4 cols: state; state+strata(vintage);
+state+strata(mm); state+strata(cell).
+
+### Attempt 4 final — 2026-05-20 ~16:25 (server run, 4-col Cox) — PASS
+- All 4 Cox specs fit cleanly, all bootstraps complete.
+- Walk-in story: HR 1.65 (naive) -> 1.47 (vintage strata) -> 1.55 (mm strata)
+  -> 1.44 (cell strata, MAIN). All p_boot < 0.001.
+- OLS unchanged from attempt 3: col 7 main beta=0.01584, SE_boot=0.00400.
+
+Reviewer verdict (Opus, 2026-05-20): PASS.
+
+Headline numbers landed:
+  OLS col (7) main: beta = 0.01584, SE_boot = 0.00400, CI [0.0101, 0.0216]
+                    -> +1.58 pp annual closure probability
+  Cox col (4) main: beta = 0.36561, SE_boot = 0.11677, CI [0.249, 0.482]
+                    -> HR = 1.44 (44% higher closure hazard)
+
+Deliverables verified on Z mount:
+  Output/Tables/T_Stepped_DiD_OLS.tex                            (2483 B, 7 cols)
+  Output/Tables/T_Stepped_DiD_Cox.tex                            (3601 B, 4 cols)
+  Output/Tables/T_Stepped_DiD_Bootstrap_Diagnostics.csv          (11 rows + header)
+  Output/Estimation_Results/Stepped_DiD_Fits_active_at_treatment.rds (1.0 GB)
+  logs/02c_Stepped_DiD_20260520_161704.log
+
+Spec-vs-implementation deviations (all architect iterations, documented):
+  1. Cox cols: 7 spec -> 4 final. Identification + numerical constraints.
+  2. OLS bootstrap: score variant (not residual variant per CGM). Required
+     because boottest fails on high-cardinality cell_vintage_year_fe.
+  3. Cox mandates: omitted. Misaligned with two-episode panel_year semantics.
+  4. Cox col 4 main (was col 7 in spec); .qmd updated to reference col (4).
+
+Lessons for future tickets (added to project memory implicitly):
+  - For Cox in single-treated-state DiD: strata can only be on units that
+    contain both T and C tanks (cells via matching).
+  - Two-episode Cox splits invalidate calendar-year-indexed covariates.
+  - Never use survival::naresid; use stats::naresid (helper file fixed).
+  - coxph chokes on high-dim factor() in the design matrix even when OLS
+    handles the same FE structure fine via projection-based demeaning.

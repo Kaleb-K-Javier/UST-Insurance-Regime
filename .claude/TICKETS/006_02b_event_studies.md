@@ -1,8 +1,10 @@
 # TICKET 006 — 02b refactor: event studies (OLS + Cox), ref = -1 and -2
 # Created: 2026-05-19
-# Status: AWAITING_IMPLEMENTATION
+# Status: AWAITING_IMPLEMENTATION (T005 dependencies all LANDED 2026-05-20)
 # Attempt: 0
-# Depends on: 005 (helper file + sample build)
+# Depends on: 005 (helper file exists, sample/Cox-split builders work, wild
+#             bootstrap wrappers work, naresid bug fixed, mandate-in-Cox lesson
+#             absorbed into Eq. 2 below)
 
 ═══════════════════════════════════════════════════
 ECONOMIC MOTIVATION
@@ -78,25 +80,53 @@ Eq. 2 — Cox event study, generic form:
     coxph(Surv(t_enter, t_exit, failure) ~
             es_tau_minus_14 + ... + es_tau_minus_2 + (omit -1)
                  + es_tau_0 + es_tau_1 + ... + es_tau_22
-            + mandate_release_det + mandate_spill_overfill + mandate_integrity
-            + factor(state) + factor(panel_year)
-            + strata(cell_id),
+            + factor(state) + strata(cell_id),
           data = cox_es_active, cluster = state, ties = "efron")
 
   For ref = -2 the omitted dummy shifts accordingly.
 
-  IMPORTANT — Cox identification in single-treated-state DiD:
-  The Cox ES MUST NOT stratify on panel_id, state, or tank_panel_id.
-  Within any such stratum, every es_tau_τ dummy is a deterministic
-  function of calendar time (1 only when rel_year(t) == τ for Texas
-  units; always 0 for control units), so within-stratum risk sets
-  contain at-risk observations with identical es_tau values and the
-  partial-likelihood score for β_τ is zero. Identification requires
-  strata that contain BOTH Texas and control tanks at risk — which
-  cell_id provides by construction (matched cells). Use
-  factor(state) as a covariate (not a stratum) to absorb state-level
-  baseline differences. This mirrors the Cox spec in Ticket 005
-  col (4) (main).
+  CRITICAL — Cox spec lessons from T005 (must be carried into T006):
+
+  (a) The Cox ES MUST NOT stratify on panel_id, state, or tank_panel_id.
+      Within any such stratum, every es_tau_τ dummy is a deterministic
+      function of calendar time (1 only when rel_year(t) == τ for Texas
+      units; always 0 for control units), so within-stratum risk sets
+      contain at-risk observations with identical es_tau values and the
+      partial-likelihood score for β_τ is zero. Identification requires
+      strata that contain BOTH Texas and control tanks at risk — which
+      cell_id provides by construction (matched cells). Use
+      factor(state) as a covariate (not a stratum) to absorb state-level
+      baseline differences. This mirrors the Cox spec in Ticket 005
+      col (4) (main).
+
+  (b) DO NOT include `factor(panel_year)` as a Cox covariate. In the
+      static stepped table (T005 attempt 4c), `factor(state) +
+      factor(panel_year)` without strata caused Missouri's state-FE
+      coefficient to diverge to infinity (exp() overflow); and
+      `factor(state) + strata(cell_id) + factor(panel_year)` was
+      rank-deficient (robust SE ~1e79). The per-year-split data
+      structure in the event study has more degrees of freedom than
+      the two-episode split, so factor(panel_year) MIGHT be tractable
+      in principle — but the es_tau_τ dummies themselves already
+      capture calendar-year variation in the treatment effect (each
+      τ corresponds to a specific calendar year), so factor(panel_year)
+      is at best redundant and at worst rank-deficient. Omit it.
+
+  (c) DO NOT include the mandate controls in the Cox ES. In T005 these
+      were dropped from all Cox specs because the two-episode split
+      makes `panel_year` correlated with failure time, turning the
+      mandate dummies into near-perfect predictors of the failure
+      indicator. The per-year-split has cleaner panel_year semantics,
+      BUT the mandate dummies are still essentially calendar-year-by-
+      state indicators that risk near-collinearity with the es_tau
+      dummies (which are texas × calendar-year indicators). Safer
+      to omit from Cox and document the OLS-vs-Cox asymmetry in the
+      table notes, mirroring T005.
+
+  (d) When extracting the Cox score for the bootstrap, use stats::naresid,
+      NOT survival::naresid (the latter does not exist as an exported
+      function). The helper file Code/Helpers/reduced_form_utils.R has
+      this already correct from T005's fix.
 
 Eq. 3 — Plotting convention:
   - x-axis: rel_year ∈ [min, max], typically [-14, +22]
@@ -242,10 +272,14 @@ assert: all(sapply(m_es_ols, function(m) inherits(m, "fixest")))
       sprintf("es_tau_%d", ref_tau)
     }
     keep_vars <- setdiff(es_vars, ref_name)
+    # CRITICAL (lessons from T005, see Eq. 2 above):
+    #   - NO mandate controls (omit ctrl_rhs entirely for Cox)
+    #   - NO factor(panel_year) on top of strata(cell_id)
+    #     (rank-deficient against cell-specific baseline hazard;
+    #      es_tau dummies already encode calendar-year variation)
     rhs <- paste(c(
       paste(keep_vars, collapse = " + "),
-      ctrl_rhs,
-      "factor(state) + factor(panel_year) + strata(cell_id)"
+      "factor(state) + strata(cell_id)"
     ), collapse = " + ")
     as.formula(sprintf("Surv(t_enter, t_exit, failure) ~ %s", rhs))
   }
@@ -302,9 +336,10 @@ table with one row per τ (rel_year):
   - Notes: "Cox PH event-study coefficients (log hazard ratios). SEs
     are robust cluster-sandwich (Lin-Wei 1989), clustered at state.
     Reference τ shown with --- in that column. Main specification
-    matches col (7) of T_Stepped_DiD_Cox.tex: strata(panel_id) +
-    factor(cell_id) + factor(panel_year). Sample: active-at-treatment
-    tanks, unweighted."
+    matches col (4) of T_Stepped_DiD_Cox.tex: factor(state) +
+    strata(cell_id). Mandate controls omitted (same rationale as
+    in the stepped Cox table — see T_Stepped_DiD_Cox.tex notes).
+    Sample: active-at-treatment tanks, unweighted."
 
   write_tex(c(...), "T_Event_Study_Cox.tex")
 
@@ -373,10 +408,10 @@ R-IMPLEMENTATION NOTES
   SE is sufficient and bootstrap on a 36-coefficient ES is overkill).
 - here::here() for all paths
 - Hard error propagation: no tryCatch/try silencing
-- Cox col 7 mirror (factor(cell_id) + factor(panel_year) + strata(panel_id))
-  produces a high-dimensional design matrix. coxph handles it via sparse
-  internals but will be slow (~10-30 min per fit). Two fits in this
-  ticket → ~30-60 min total. Run on server.
+- Cox ES main spec is factor(state) + strata(cell_id) per T005 lessons.
+  Each fit is ~10-30 min (~100K events split across ~1000 cell strata,
+  each with its own non-parametric baseline hazard, ~36 es_tau coefficients
+  to estimate). Two fits in this ticket → ~30-60 min total. Run on server.
 - es_tau_<n> naming convention: existing 02b uses
   "es_tau_minus_<n>" for negative τ and "es_tau_<n>" for non-negative
   τ (no leading "plus_"). Match this exactly so downstream regex
