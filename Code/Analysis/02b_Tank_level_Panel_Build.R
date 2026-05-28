@@ -858,13 +858,51 @@ cat("========================================\n")
 cat("S12: FACILITY-YEAR PANEL\n")
 cat("========================================\n\n")
 
+# ---- T007 Phase 1: Churn-symmetry fix ----
+# Build a single churn-free panel used for ALL three count aggregations
+# (n_tanks_active, n_closures, n_installs).  first_year_churn == 1 tanks
+# install and close in the same calendar year; they are economically
+# meaningless and create a counting asymmetry when only excluded from
+# closures but still counted in n_tanks_active and n_installs.
+cat("T007 Phase1: Creating churn-filtered panel for S12 aggregations...\n")
+
+n_total_ty  <- nrow(tank_year_panel)
+n_churn_ty  <- tank_year_panel[first_year_churn == 1L, .N]
+n_fy_churn  <- tank_year_panel[first_year_churn == 1L,
+                                uniqueN(paste(panel_id, panel_year))]
+n_fy_total  <- uniqueN(paste(tank_year_panel$panel_id,
+                              tank_year_panel$panel_year))
+
+log_step(sprintf("Churn filter stats:"))
+log_step(sprintf("  Total tank-years in raw panel_dt:           %s",  fmt_n(n_total_ty)), 1)
+log_step(sprintf("  Tank-years flagged as first_year_churn:     %s (%.2f%%)",
+                  fmt_n(n_churn_ty), 100 * n_churn_ty / n_total_ty), 1)
+log_step(sprintf("  Facility-years with >=1 churn tank-year:   %s (%.2f%% of %s facility-years)",
+                  fmt_n(n_fy_churn), 100 * n_fy_churn / n_fy_total,
+                  fmt_n(n_fy_total)), 1)
+
+tank_year_panel_clean <- tank_year_panel[first_year_churn == 0L | is.na(first_year_churn)]
+log_step(sprintf("  Rows in tank_year_panel_clean: %s (removed %s churn rows)",
+                  fmt_n(nrow(tank_year_panel_clean)),
+                  fmt_n(nrow(tank_year_panel) - nrow(tank_year_panel_clean))), 1)
+
+# Churn-free install source for S12.3 (study_tanks has no first_year_churn flag)
+study_tanks_no_churn <- study_tanks[
+  is.na(tank_closed_date) | year(tank_installed_date) != year(tank_closed_date)
+]
+log_step(sprintf("  study_tanks_no_churn: %s of %s tanks (removed %s churn installs)",
+                  fmt_n(nrow(study_tanks_no_churn)), fmt_n(nrow(study_tanks)),
+                  fmt_n(nrow(study_tanks) - nrow(study_tanks_no_churn))), 1)
+cat("\n")
+
 # ---- S12.1 Core facility-year aggregation ----
-# n_tanks_active = tanks present at ANY point during year (includes closures)
+# n_tanks_active = tanks present at ANY point during year, EXCLUDING first-year-churn
+# tanks (tanks that install and close in the same calendar year).
 # EOY stocks computed in S12.2 by subtracting closures.
 
-cat("S12.1: Core stock aggregation...\n")
+cat("S12.1: Core stock aggregation (churn-filtered)...\n")
 
-fac_stock <- tank_year_panel[
+fac_stock <- tank_year_panel_clean[
   state %in% STUDY_STATES,
   .(
     n_tanks_active        = .N,
@@ -977,8 +1015,10 @@ fac_stock[, `:=`(
 )]
 
 # ---- S12.3 Installation events ----
-cat("S12.3: Installation events...\n")
-installs_by_fac_yr <- study_tanks[
+# Uses study_tanks_no_churn (churn installs excluded) to match the
+# first_year_churn exclusion applied in S12.1 and S12.1 closures.
+cat("S12.3: Installation events (churn-filtered)...\n")
+installs_by_fac_yr <- study_tanks_no_churn[
   !is.na(tank_installed_date),
   .(
     n_installs         = .N,
@@ -992,6 +1032,33 @@ fac_stock <- merge(fac_stock, installs_by_fac_yr,
                    by = c("panel_id", "panel_year"), all.x = TRUE)
 for (v in c("n_installs", "n_dw_installs", "n_sw_installs", "capacity_installed"))
   fac_stock[is.na(get(v)), (v) := 0L]
+
+# ---- T007 Phase 1, Step 1.3: Lead-year consistency check ----
+# For each facility, n_tanks_active in year t+1 should equal n_tanks_eoy in
+# year t (EOY stock becomes next-year's opening stock). Failures indicate
+# residual panel noise (silent disappearances) that the churn fix can't address.
+cat("T007 Phase1 Step 1.3: Lead-year consistency check...\n")
+setorder(fac_stock, panel_id, panel_year)
+fac_stock[, .n_active_lead := shift(n_tanks_active, -1L, type = "lead"), by = panel_id]
+n_check  <- fac_stock[!is.na(.n_active_lead), .N]
+n_fail   <- fac_stock[!is.na(.n_active_lead) & .n_active_lead != n_tanks_eoy, .N]
+pct_fail <- if (n_check > 0L) 100 * n_fail / n_check else 0
+log_step(sprintf("Lead consistency: %s of %s consecutive-year pairs pass (%.2f%% fail)",
+                  fmt_n(n_check - n_fail), fmt_n(n_check), pct_fail))
+if (pct_fail > 1) {
+  fail_detail <- fac_stock[!is.na(.n_active_lead) & .n_active_lead != n_tanks_eoy,
+                            .(state = first(state), gap = .n_active_lead - n_tanks_eoy),
+                            by = .(panel_id, panel_year)][
+    order(-abs(gap))]
+  cat(sprintf("  WARNING: %.2f%% failure rate exceeds 1%% threshold.\n", pct_fail))
+  cat("  Top-10 failing facility-years by |gap|:\n")
+  print(head(fail_detail, 10L))
+  warning(sprintf("T007 lead-consistency: %.2f%% failure rate — investigate residual panel noise",
+                  pct_fail))
+} else {
+  log_step(sprintf("  PASS: failure rate %.2f%% < 1%% threshold", pct_fail), 1)
+}
+fac_stock[, .n_active_lead := NULL]   # cleanup temp column
 
 # ---- S12.4 Closure type classification: replacement vs. permanent ----
 # Forward-looking by construction. Outcome decomposition only - NOT a regressor.
@@ -1958,6 +2025,21 @@ ctrl_means_dt <- data.table(
 )
 fwrite(ctrl_means_dt, file.path(OUTPUT_TABLES, "Diag_ControlMeans.csv"))
 cat("\n")
+
+
+#### S17b T007 Phase 1 Backup ####
+# Preserve pre-T007 facility_panel.csv before overwriting.
+cat("T007 Phase1: Backing up facility_panel.csv to _pre_T007/...\n")
+pre_t007_dir <- file.path(ANALYSIS_DIR, "_pre_T007")
+dir.create(pre_t007_dir, recursive = TRUE, showWarnings = FALSE)
+fp_backup <- file.path(pre_t007_dir, "facility_panel.csv")
+fp_current <- file.path(ANALYSIS_DIR, "facility_panel.csv")
+if (file.exists(fp_current)) {
+  file.copy(fp_current, fp_backup, overwrite = TRUE)
+  log_step(sprintf("  Backed up: %s", fp_backup))
+} else {
+  log_step("  No existing facility_panel.csv to back up (first run).")
+}
 
 
 #### S18 Save Outputs ####
