@@ -263,6 +263,17 @@ Our primary outcome measures use four robustness specifications to classify tank
 | **AZ** | Excluded (Treated) | 28,544 | 9,100 | Good quality |
 | **OR** | Excluded (Other) | 30,900 | 8,565 | Good quality |
 
+## ⚠️ Structural-Estimation Known-Issue States (degenerate state FE)
+
+Separate from the raw-data recovery status above, two states are flagged as **known-issue states in the structural model**: their state fixed effects are degenerate because of near-zero observed exit/replacement events. Listed here so they are not lost — these rows are scheduled for review during the raw-data work (early-mid June 2026).
+
+| State | Recovery row | Estimation issue | Why |
+|-------|--------------|------------------|-----|
+| **MO** | Special Status (📦 Database Acquired) | `alpha_MO` pins at the +20 bound on **every** FE fit (incl. the T016 gammafree fit) | Zero observed exits in MO state cells → the state FE is unidentified. Confirmed structural in T007 (not a churn artifact). |
+| **SD** | High Priority (80% Closure) | `alpha_SD` anomalously large (~2.27 in T003) with near-zero exit/replace events | Sparse exit/replace events; likely compounded by the 80%-closure raw-data gap noted in the High Priority table above. |
+
+**To do (raw-data work):** when re-parsing MO (Access database) and re-downloading SD (DANR tanks/spills), add **both** to the state-check list — verify whether the near-zero exit/replace counts are a true data feature or a closure-date/coverage gap in the raw records. If the event counts change after recovery, the degenerate alphas may resolve, and these rows should be updated.
+
 ---
 
 ## Summary Statistics
