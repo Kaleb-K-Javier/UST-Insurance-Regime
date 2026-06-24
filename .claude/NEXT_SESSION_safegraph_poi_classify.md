@@ -24,14 +24,20 @@ Pick the language deliberately and tell the researcher why; then honor (1) and (
 - Local, GitHub `main`, and the server (ucbare2) are all at commit `7d33f20` — fully synced. All the GIS/Dewey tooling above is committed.
 - Topology: code authored on LOCAL Windows clone (`C:\Users\kaleb\Documents\ust_ins_move_to_github`); the Dewey download + heavy parquet reduce RUN ON THE SERVER (`C:\Users\kalebkja\ust_ins_move_to_github`), which is where the data and DEWEY_API_KEY live. Both track origin/main.
 
+## IMPORTANT — we are REBUILDING the spatial filter, not reusing it (researcher decision 2026-06-24)
+The raw FULL national SafeGraph Global Places is ALREADY DOWNLOADED (researcher pulled it via the Dewey CLL): 144 parquet files, ~21 GB, at `C:\Users\kalebkja\dewey-downloads\global-places-poi-geometry\` (→ D:; gitignored). The `_reduced_near_ust\safegraph_places_near_ust\` dir is EMPTY — we are NOT using the old reduce. **The existing near-UST reduce in `dewey_pull_reduce.py` is SUSPECT and must be rebuilt + validated, not trusted.** Why it's wrong (verified by reading the code, [dewey_pull_reduce.py:214](Code/GIS/dewey/dewey_pull_reduce.py:214) `build_facility_grid` + [:259](Code/GIS/dewey/dewey_pull_reduce.py:259) `_reduce_files`):
+  - It is a GRID-BIN membership test (cell = `floor(lat/0.0025)_floor(lon/0.0025)`, +3×3 neighbor block), NOT a distance buffer. Bins ≠ circles → hard edge effects, lopsided capture near cell corners.
+  - Capture radius is anisotropic/latitude-dependent: 0.0025° ≈ 0.278 km N–S but `0.278×cos(lat)` E–W (~0.25 km south, ~0.18 km north) — the "≈0.5 km" comment overstates it.
+  - REAL RISK: that radius can be tighter than the EPA geocoding error. Where facility coords are coarse (ZIP/city-centroid; TX/AZ/CT flagged uneven), the true SafeGraph POI is dropped and the k-NN can never recover it → match loss correlated with coordinate quality.
+  - REBUILD = true distance filter (project to meters / duckdb `ST_DWithin`) with a deliberate buffer + a CAPTURE-RATE validation (what share of known gas-station facilities find a POI; sensitivity to buffer). Keep the raw so the buffer can be set/measured, not assumed.
+
 ## The workflow we're designing (and who does what)
-- **STEP A — DOWNLOAD (researcher runs on the SERVER; I do NOT run it):** I set up the project/output folder and give the exact PowerShell. The user runs `Code\GIS\dewey\run_dewey_pull.ps1` (or the distilled command) to pull `safegraph_places`. It reduces to POIs near UST facilities and writes a small parquet to `DEWEY_Z_ROOT/_reduced_near_ust/safegraph_places_near_ust/`. Env on server: `DEWEY_Z_ROOT=C:\Users\kalebkja\dewey-downloads` (VERIFIED junction → `D:\shares\Users\kalebkja\dewey-downloads`; the whole profile + repo are on D: now, C: paths work transparently — keep the C: path), `UST_MASTER_CSV=...\Data\Processed\Master_Harmonized_UST_Tanks.csv`, `DEWEY_RUN=uvx`, `DEWEY_API_KEY` per-shell.
-**CHECK FIRST — the pull may already be done:** `…\dewey-downloads\_reduced_near_ust\safegraph_places_near_ust\` already exists on the server (as of 2026-06-24). Before re-downloading, list that dir and check for `part_*.parquet` + row count. If the reduced Places extract is already there, STEP A is a no-op and you go straight to STEP B (just point the crosswalk at it). Real pull = `uv run --with duckdb python Code\GIS\dewey\dewey_pull_reduce.py run safegraph_places`. (No-arg run = safe dry run, no download.)
-- **STEP B — CROSSWALK (R):** repoint + run `01_SafeGraph_Crosswalk.R` against the reduced Places parquet → facility↔POI candidates, kept ALL candidates + is_best flag, scored by dist_m + name Jaro-Winkler. SafeGraph Global Places carries BRANDS, NAICS (2017 + 2022 vintages), TOP_CATEGORY/SUB_CATEGORY, lat/long, POLYGON_WKT.
+- **STEP A — DATA: DONE.** Raw national Places is on the server (path above). No further download needed. (Old framing — `dewey_pull_reduce.py run safegraph_places` — is retired for this purpose; we read the raw directly.)
+- **STEP B — SPATIAL FILTER + CROSSWALK (rebuild):** read the 144 raw parquet directly (duckdb/geopandas), facility → POI match with a TRUE distance method (not the grid bins) + name Jaro-Winkler, keep ALL candidates + is_best, scored by dist_m. Validate capture rate. `01_SafeGraph_Crosswalk.R` is a LOGIC reference (its k-NN/JW recipe), NOT to be run as-is — it has the same bin-era assumptions + bug F1 (stale `SG_PARQUET_DIR` triple-`dewey-downloads` path). Language: researcher's choice (Python likely; see LANGUAGE rule above — R→lang comments + a .md required). SafeGraph Global Places carries BRANDS, NAICS (2017 + 2022 vintages), TOP_CATEGORY/SUB_CATEGORY, lat/long, POLYGON_WKT.
 - **STEP C — CLASSIFY (R, new module `05_operator_class.R`):** use matched POI BRAND/NAICS/category + facility_name + fuel flags to label each facility. Operator 4-bin waterfall (SCOPE §7.1): Government/other → Fleet/non-retail → Branded major → Independent retail. Output `gis_05_operator_class.csv`. Needs a hand-validation sample.
 
 ## Locked decisions (don't relitigate)
-- Reduce filter = GEOGRAPHY (near-UST grid), NEVER NAICS (USTs include fleet/muni/farm sites).
+- Spatial filter = GEOGRAPHY (near-UST DISTANCE buffer — rebuilt; NOT the old grid bins), NEVER NAICS (USTs include fleet/muni/farm sites).
 - Crosswalk keeps all candidates + non-exclusive is_best; match = spatial k-NN + name JW (+ address where available).
 - No CERS owner_type in the EPA panel → classification leans on SafeGraph BRAND + name heuristics + fuel flags + a researcher-reviewed brand dictionary (`Code/Helpers/brand_dictionary.R`, NEW).
 - Retired code → Archive/, never delete.
@@ -39,11 +45,11 @@ Pick the language deliberately and tell the researcher why; then honor (1) and (
 ## Open decisions to resolve early (SCOPE §9)
 - Q1 (HARD PREREQ): per-state lat/long coverage in the Master file, especially TX (target state). Thin coords bias the spatial match. Audit coverage before trusting the crosswalk.
 - Q4: approve the 4-bin operator waterfall + brand dictionary; how much hand-validation before it feeds the slide?
-- Q5: download scope — confirm OK to stage SafeGraph Places (small, 72.1M national → tiny after near-UST reduce) onto the server's C: drive.
+- Q5: DONE — raw national Places already staged on the server (D:, gitignored). No download decision left.
 
 ## Start by
-1. Reading the files above and confirming you understand the download→crosswalk→classify chain.
-2. Proposing the concrete folder setup + the exact PowerShell I should run on the server for STEP A (the SafeGraph Places pull), including a dry-run check first.
-3. Flagging Q1 (coordinate coverage audit) as the gate before STEP B, and proposing how to run it.
+1. Reading the files above + the existing reduce code; confirm you understand WHY the old grid-bin filter is suspect (bins-not-circles, anisotropic radius, loss correlated with geocode error).
+2. Proposing the REBUILT spatial filter: a true distance buffer over the raw 144 parquet (duckdb `ST_DWithin` / projected meters), with a capture-rate validation plan. Decide the buffer + how to measure what it drops.
+3. Flagging Q1 (per-state coordinate-quality audit, esp. TX) as the gate — it's the same root cause as the reduce's loss, so do it first and let it inform the buffer.
 
 Do NOT write/run estimation code or commit anything yet — plan and test the workflow first, then we cut tickets in spec_template.md format (number from 028 upward; check `.claude/TICKETS/` for the current max).
