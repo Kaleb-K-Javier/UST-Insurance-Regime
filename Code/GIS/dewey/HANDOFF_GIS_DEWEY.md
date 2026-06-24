@@ -2,13 +2,19 @@
 # Updated: 2026-06-24
 # (design reference: Code/GIS/SCOPE_GIS_Dewey_Linkage.md)
 #
-# INFRA NOTE (2026-06, admin Gary, ucbare2): C: was nearly full (shared ~50 users).
-#   `dewey-downloads` (~65 GB) was moved to D: (`D:\shares\Users\kalebkja\...`) with a
-#   JUNCTION left behind — the old C:\Users\kalebkja\dewey-downloads path still works
-#   unchanged, and new downloads under it now physically land on D:. POLICY FLIPPED:
-#   keep large data on D: going forward (the old "C: only / D: not allowed" rule is dead).
-#   Scripts keep the C: junction path (works); do NOT hardcode a guessed D: path —
-#   confirm the exact D: target with admin (Gary until 2026-07-01, then Eric).
+# INFRA NOTE (2026-06, admin Gary, ucbare2; VERIFIED 2026-06-24): C: was nearly full
+#   (shared ~50 users). The whole C:\Users\kalebkja profile is junctioned folder-by-folder
+#   to D:\shares\Users\kalebkja\. VERIFIED junction targets:
+#     C:\Users\kalebkja\dewey-downloads        -> D:\shares\Users\kalebkja\dewey-downloads
+#     C:\Users\kalebkja\ust_ins_move_to_github -> D:\shares\Users\kalebkja\ust_ins_move_to_github
+#       (this REPO physically lives on D:; `git rev-parse --show-toplevel` => D:/shares/...)
+#     C:\Users\kalebkja\Car Subs Data          -> D:\shares\Users\kalebkja\Car Subs Data
+#   D:\shares\Users\kalebkja\C_Drive_Portal\dewey-downloads is ANOTHER alias (junction) to
+#   the SAME D:\shares\Users\kalebkja\dewey-downloads (old Z: mapping artifact, not a 2nd copy).
+#   The C: paths work transparently (peak free: C: 235 GB, D: 2,583 GB). POLICY FLIPPED:
+#   keep large data on D: (the old "C: only / D: not allowed" rule is dead). Scripts keep the
+#   C: junction path (verified -> D:); the D: physical root above is the canonical truth.
+#   Admin: Gary until 2026-07-01, then Eric.
 
 ═══════════════════════════════════════════════════
 RESUME HERE (next session)

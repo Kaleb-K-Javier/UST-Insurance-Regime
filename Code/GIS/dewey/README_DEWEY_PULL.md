@@ -45,10 +45,12 @@ bash probe_system.sh        # paste the output back; it sets the choices below
 
 ## Step 2 — run (ucbare2 Windows server, via uv)
 Confirmed env: `uv` 0.10.12, `uv run python` → 3.13, `uv run --with duckdb` → duckdb 1.5.3.
-STORAGE (updated 2026-06, admin Gary): large data now lives on **D:** (C: is small/shared).
-`dewey-downloads` was physically moved to D: (`D:\shares\Users\kalebkja\...`) with a
-**junction left behind**, so the old `C:\Users\kalebkja\dewey-downloads` path still works
-unchanged and downloads under it now land on D: automatically — keep using it below.
+STORAGE (admin Gary, VERIFIED 2026-06-24): large data lives on **D:** (C: is small/shared).
+The whole `C:\Users\kalebkja` profile is junctioned to `D:\shares\Users\kalebkja\`; specifically
+`C:\Users\kalebkja\dewey-downloads` -> `D:\shares\Users\kalebkja\dewey-downloads` (and the repo
+itself -> `D:\shares\Users\kalebkja\ust_ins_move_to_github`). The C: path works unchanged and
+lands on D: automatically — keep using it below (or target `D:\shares\Users\kalebkja\dewey-downloads`
+directly; same place). Free: C: 235 GB, D: 2,583 GB.
 Stream-and-reduce never stages the full dataset (peak disk = one chunk + small outputs).
 PowerShell:
 ```powershell
