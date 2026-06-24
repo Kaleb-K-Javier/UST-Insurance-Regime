@@ -53,3 +53,6 @@ Code/GIS/dewey_api.txt
 # DuckDB temp files
 .tmp/
 *.tmp
+
+# Run logs (local-only workflow artifacts)
+logs/

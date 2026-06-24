@@ -1,0 +1,1348 @@
+<h1 id="paper-framing-bullet-outline">Paper Framing &amp; Bullet
+Outline</h1>
+<h2
+id="internalizing-environmental-risk-insurance-design-and-firm-behavior-in-hazardous-industries"><em>Internalizing
+Environmental Risk: Insurance Design and Firm Behavior in Hazardous
+Industries</em></h2>
+<p><strong>Author:</strong> Kaleb K. Javier</p>
+<hr />
+<h1 id="introduction-1">1. Introduction (§1)</h1>
+<h2 id="the-problem-usts-scale-human-cost">¶1 — The problem (USTs,
+scale, human cost)</h2>
+<ul>
+<li>USTs are the leading documented source of groundwater contamination
+in the U.S. (EPA 2024). EPA had confirmed <strong>~528,000
+leaks</strong> by Sept 2015 — for scale, the National Priorities List
+has 1,323 Superfund sites (Marcus 2021).</li>
+<li>~500,000 USTs currently operate nationwide, ~80% under gas stations,
+holding gasoline and diesel.</li>
+<li><strong>~60% of UST facilities experience at least one leak</strong>
+during their operating life (Marcus 2021).</li>
+<li><strong>&gt;75% of leaking sites involve groundwater
+contamination</strong>; one gallon of leaked gasoline can render up to 1
+million gallons of water undrinkable.</li>
+<li><strong>Half the U.S. population and nearly all rural residents rely
+on groundwater for drinking water</strong>.</li>
+<li>Gestational exposure to a leaking UST raises low birthweight and
+preterm birth by <strong>7–8%</strong> (Marcus 2021), comparable in
+magnitude to the food-stamp program or E-ZPass adoption.</li>
+<li>Cleanup cost: <strong>median $136k, mean $403k</strong> (2023 USD, n
+= 12,541 pooled across six control states). Federal and state
+remediation outlays exceed $1B/year (Marcus 2021).</li>
+</ul>
+<h2 id="risk-is-heterogeneous-observable-and-predictable">¶2 — Risk is
+heterogeneous, observable, and predictable</h2>
+<ul>
+<li><strong>Heterogeneous.</strong> At age 24+, single-walled tanks leak
+at 12.9 per 1,000 facility-years vs 6.5 for double-walled (~2× ratio).
+Within single-walled, the age-hazard gradient runs from 2.9 → 12.9 per
+1k across age bins 3–5 through 24+ (~4.5× steeper risk with age). Within
+double-walled, the same gradient runs 3.1 → 6.5 (~2×; much flatter).
+Source: 3.93M pre-treatment facility-years, 27,455 first-release
+events.</li>
+<li><strong>Observable.</strong> Tank age and wall construction are
+recorded at the facility level in state and EPA inventories and have
+been for 30+ years. This is the “insurer can observe care” condition
+that makes compulsory insurance work in Shavell (2004).</li>
+<li><strong>Predictable.</strong> A hazard model conditioned on age ×
+wall + state FE has clean out-of-sample performance and tracks the
+Mid-Continent rate-filing schedule along the same risk dimensions.</li>
+<li><strong>What the three facts buy the paper</strong>:
+<ol type="1">
+<li>There is real differential risk for risk-rated pricing to
+reach.</li>
+<li>The owner’s incentive can be interpreted as a response to a
+risk-adjusted price, not a nominal label.</li>
+<li>Empirical model and rate-filing schedule can be validated against
+each other.</li>
+<li>The welfare-ceiling question (how far the priced regime can take us)
+reduces to how much of full social damage the observable attributes
+capture.</li>
+</ol></li>
+</ul>
+<h2 id="the-legal-and-policy-lever">¶3 — The legal and policy lever</h2>
+<ul>
+<li><strong>Strict liability.</strong> Under federal environmental law
+(CERCLA, RCRA Subtitle I) and parallel state law, UST owners are
+strictly liable for cleanup costs and third-party damages from releases.
+In plain terms: the owner pays regardless of fault — even if they
+followed every regulation and could not have prevented the leak. The EPA
+and state regulators enforce this regime through corrective-action
+orders and fines, and it is this underlying liability that makes
+insurance economically meaningful in the first place.</li>
+<li><strong>Federal Financial Responsibility rule (1988, 40 CFR §280
+Subpart H)</strong>: every UST owner must demonstrate $1M per-occurrence
+coverage so that funds are available when liability is triggered.
+Federal law does not specify the form of that coverage.</li>
+<li><strong>38 states</strong>: public trust fund pools every tank in
+the state at the same per-tank annual fee, no conditioning on risk
+attributes.</li>
+<li><strong>Texas (post-1999) + 7 others + DC + territories</strong>:
+private insurance market. Premiums condition on tank age, wall
+construction, piping, leak-detection technology, fuel volume, and
+operator claims history (Mid-Continent rate filings, SERFF
+2006–2024).</li>
+</ul>
+<p>The private-market premium schedule takes the form</p>
+<p><span
+class="math display"><em>P</em><sub><em>i</em><em>j</em><em>t</em></sub> = Base<sub><em>t</em></sub> × ILF<sub><em>i</em><em>t</em></sub> × (1 + ∑<sub><em>k</em></sub><em>λ</em><sub><em>k</em>, <em>t</em></sub><em>X</em><sub><em>i</em><em>j</em><em>t</em>, <em>k</em></sub>),</span></p>
+<p>where <span class="math inline">Base<sub><em>t</em></sub></span> is
+the per-tank base rate in filing period <span
+class="math inline"><em>t</em></span>, <span
+class="math inline">ILF<sub><em>i</em><em>t</em></sub></span> is the
+increased-limit factor (held fixed at the federal-minimum $1M/$1M
+coverage), <span
+class="math inline"><em>X</em><sub><em>i</em><em>j</em><em>t</em>, <em>k</em></sub></span>
+are the priced characteristics, and <span
+class="math inline"><em>λ</em><sub><em>k</em>, <em>t</em></sub></span>
+are filed credits and debits.</p>
+<ul>
+<li>Under a flat fund, the marginal cost to an owner of operating a
+riskier tank is zero. Under risk-rated pricing it is positive and rising
+in observable risk.</li>
+</ul>
+<h2 id="research-questions">¶4 — Research questions</h2>
+<ul>
+<li><strong>Q1: How does switching the financial-responsibility regime
+from flat-fee public insurance to risk-rated private insurance change
+firm behavior on tank closure, replacement, and confirmed-release
+outcomes?</strong></li>
+<li><strong>Q2: How much of the first-best social welfare gain does the
+risk-rated regime capture, and what determines the residual gap to
+first-best?</strong></li>
+</ul>
+<h2 id="setting-data-design">¶5 — Setting, data, design</h2>
+<ul>
+<li>Texas’s December 1998 closure of the Petroleum Storage Tank
+Remediation Fund (driven by fiscal insolvency, not environmental
+policy).</li>
+<li>~9.8M tank-years, 1990–2021, linking EPA inventories + TCEQ admin
+microdata + 18 control states that retained public funds.</li>
+<li>Identification: make-model matching on the observable risk
+attributes private insurers price (age × wall × fuel × capacity ×
+install cohort), with facility fixed effects and cell × year fixed
+effects:</li>
+</ul>
+<p><span
+class="math display"><em>Y</em><sub><em>i</em><em>t</em></sub> = <em>β</em> ⋅ (Texas<sub><em>f</em>(<em>i</em>)</sub> × Post<sub><em>t</em></sub>) + <em>α</em><sub><em>i</em></sub> + <em>δ</em><sub><em>c</em>(<em>i</em>)<em>t</em></sub> + <em>ε</em><sub><em>i</em><em>t</em></sub>.</span></p>
+<h2 id="results-1-reduced-form">¶6 — Results 1 (reduced form)</h2>
+<ul>
+<li>Closure: <strong>+1.58 pp</strong> on a 2.0% baseline (~80%
+increase); Cox HR 1.25.</li>
+<li>Vintage heterogeneity: pre-1989 install cohort <strong>+3.1
+pp</strong>, post-1988 +0.6 pp → 4× larger response in the high-risk
+single-walled stock.</li>
+<li>LUST discoveries: <strong>−1.27 pp</strong> on a 1.73%
+baseline.</li>
+<li>Composition: among closing facilities, replacement share rises from
+12.0% → 18.3% (+53% relative); aggregate tank counts ~unchanged. The
+fleet is being upgraded, not shrunk.</li>
+</ul>
+<h2 id="results-2-structural-welfare">¶7 — Results 2 (structural
+welfare)</h2>
+<ul>
+<li>DDC model: <span
+class="math inline"><em>κ̂</em> ≈ 26<em>R</em></span>, <span
+class="math inline"><em>K̂</em> ≈ 5<em>R</em></span>, <span
+class="math inline"><em>γ̂</em><sub><em>p</em></sub> = −0.29</span>,
+<span
+class="math inline"><em>γ̂</em><sub><em>r</em></sub> = 0.16</span>.</li>
+<li>Three counterfactual extensions at $E = <span
+class="math inline">17<em>k</em>/<em>r</em><em>e</em><em>l</em><em>e</em><em>a</em><em>s</em><em>e</em> : −<em>S</em><em>u</em><em>b</em><em>s</em><em>i</em><em>d</em><em>y</em>(</span>K
+0.5K$): reduces welfare
+<ul>
+<li>Pigouvian health-damage surcharge: reduces welfare</li>
+<li>Age-25 mandate: roughly neutral</li>
+</ul></li>
+<li>→ Priced regime captures the welfare gain reachable through the
+actuarial channel. The residual is bounded by what doesn’t generate
+claims.</li>
+</ul>
+<h2 id="contribution-3-paper-neighborhood">¶8 — Contribution / 3-paper
+neighborhood</h2>
+<ul>
+<li>First empirical test of switching financial-responsibility coverage
+from flat-fee public to risk-rated private with within-facility panel
+variation and a sharp regulatory discontinuity.</li>
+<li>Sits next to <strong>Boomhower (2019)</strong> — bonding
+requirements in TX oil &amp; gas, judgment-proof channel — and
+<strong>Mulder (2022)</strong> — NFIP flood risk classification, with
+information + price channels. This paper isolates the <strong>pure
+pricing channel</strong> in a setting where the information channel is
+muted (owners know their own age + wall).</li>
+<li>Pairs reduced-form firm-response evidence with a structural welfare
+decomposition that identifies the unpriced channel (third-party health
+damages) bounding the welfare reach of insurance pricing.</li>
+</ul>
+<hr />
+<h1 id="related-literature-2">2. Related Literature (§2)</h1>
+<h2
+id="branch-1-shavell-policy-instrument-tree-why-pricing-matters">Branch
+1 — Shavell policy-instrument tree (why pricing matters)</h2>
+<ul>
+<li>Strict liability disciplines firms only when the marginal injurer
+faces marginal expected damage (Shavell 1982).</li>
+<li>Judgment-proof problem (Shavell 1986): when injurer assets fall
+below the social cost of harm, liability fails to internalize.</li>
+<li>Two policy responses (Shavell 2004): minimum asset/bond
+requirements, and compulsory liability insurance. The latter dominates
+when insurers can verify risk-relevant attributes.</li>
+<li>Insurance mandates as a substitute for fines and process-mandate
+regulation (Yin, Pfaff, Kunreuther 2011): an insurance instrument can
+deliver internalization that ex-post fines (limited by bankruptcy) and
+ex-ante process mandates (limited by monitoring capacity) cannot.</li>
+<li>Shavell anchors the <em>why</em> of the paper: risk-rated compulsory
+insurance is the canonical fix for hazardous industries with
+limited-liability injurers, and the empirical question is how well it
+works in practice.</li>
+</ul>
+<h2
+id="branch-2-diamond-second-best-instrument-choice-how-well-pricing-works">Branch
+2 — Diamond second-best instrument choice (how well pricing works)</h2>
+<ul>
+<li>Diamond (1973): when marginal damages are heterogeneous but the
+instrument can only condition on a subset of damage-relevant attributes,
+the second-best tax is a demand-derivative-weighted average of
+personalized Pigouvian taxes.</li>
+<li>Knittel &amp; Sandler (2018): empirical implementation for gasoline
+tax targeting local air pollution; dirtier cars are more elastic, so the
+second-best gas tax exceeds average marginal damage per gallon.</li>
+<li>Jacobsen, Knittel, Sallee &amp; van Benthem (2020):
+sufficient-statistic R² for the welfare reach of a restricted policy —
+the deadweight loss of a policy that conditions on subset A of
+damage-relevant attributes (when full damages depend on A and B) is
+summarized by the R² of full damages regressed on A across the regulated
+population.</li>
+<li>Goulder &amp; Parry (2008): standard reference for instrument choice
+in environmental policy.</li>
+<li>Fowlie, Reguant &amp; Ryan (2016): structural-IO sibling —
+entry/exit + externality under market structure; closest methodological
+cousin to the dynamic-structural welfare arithmetic in §11–12.</li>
+</ul>
+<h2
+id="branch-3-empirical-environmental-insurance-and-financial-assurance">Branch
+3 — Empirical environmental insurance and financial assurance</h2>
+<ul>
+<li>Boomhower (2019): TX oil &amp; gas insurance/bonding requirement;
+identifies the judgment-proof channel via firm-size composition. Closest
+empirical sibling for the hazardous-industry-with-bankruptcy-risk
+question.</li>
+<li>Mulder (2022): NFIP flood risk reclassification; identifies both an
+information channel (homeowners learn their risk) and a price channel
+(premiums rise). Closest empirical sibling for the “switch in pricing of
+mandated coverage” question.</li>
+<li>Yin, Kunreuther &amp; White (2011): Michigan’s mid-1990s switch from
+public assurance fund to private market; state-level aggregate counts;
+~20% leak reduction.</li>
+<li>Yin, Pfaff &amp; Kunreuther (2011): theoretical and case-study
+argument that insurance mandates outperform ex-post fines and ex-ante
+process mandates for UST risk.</li>
+<li>Yin et al. (2007), Ringleb &amp; Wiggins (1990), Alberini &amp;
+Austin (2002): firm-size response to liability/regulation in hazardous
+industries.</li>
+</ul>
+<h2 id="methodology-backdrop-one-sentence">Methodology backdrop (one
+sentence)</h2>
+<ul>
+<li>The rating-regime literature (Pauly 1974, Rothschild-Stiglitz 1976,
+Einav-Finkelstein selection markets, Nelson 2025) provides the
+methodological backdrop for comparing community-rated to
+experience-rated insurance, but the welfare object here is firm
+precaution under mandatory coverage, not consumer insurance
+valuation.</li>
+</ul>
+<h2 id="ust-specific-literature">UST-specific literature</h2>
+<ul>
+<li>Health and amenity damages: Marcus (2021) — gestational LBW; Zabel
+&amp; Guignet (2012), Guignet &amp; Walsh (2017), Guignet et al. (2018)
+— hedonic property-value impacts.</li>
+<li>Older empirical UST work (Yin et al. 2007, 2011) — superseded by the
+panel-data approach here.</li>
+</ul>
+<hr />
+<h1 id="institutional-background-3">3. Institutional Background
+(§3)</h1>
+<h2 id="what-usts-are-physical-characteristics-regulatory-lock-in">§3.1
+What USTs are, physical characteristics, regulatory lock-in</h2>
+<ul>
+<li>Definition: tank + connected piping with ≥10% volume
+underground.</li>
+<li>Physical risk: corrosion of bare-metal/fiberglass tanks in direct
+contact with soil.</li>
+<li>Wall construction is binary and irreversible: single-walled vs
+double-walled. Retrofitting is a full tank replacement, not an
+upgrade.</li>
+<li>40 CFR Part 280: vintage-differentiated standards. Pre-1988 tanks
+grandfathered; any modification triggers reclassification under current
+(more stringent) standards.</li>
+<li>Connection to vintage-differentiated regulation literature (Stavins
+2005, Gruenspecht 1982, Bushnell 2012, Heutel 2011, Sallee &amp;
+Jacobsen 2023): the regulatory environment makes the binary
+close-vs-operate choice the operative behavioral margin.</li>
+<li>Aggregate composition of active fleet 1985–2020: SW share fell from
+83% (1985) to 73% (1998 deadline) to 63% (2020); turnover is slow.</li>
+<li><strong>Implication</strong>: environmental risk in this setting is
+driven by the pace of incumbent SW retirement, not by new entrants.
+Stock-management problem, not new-flow regulation.</li>
+</ul>
+<h2 id="the-legal-framework-strict-liability-for-releases">§3.2 The
+legal framework: strict liability for releases</h2>
+<ul>
+<li><strong>Strict liability under federal and state law.</strong> Under
+the Resource Conservation and Recovery Act Subtitle I, the Comprehensive
+Environmental Response, Compensation, and Liability Act (Superfund), and
+parallel state environmental statutes, the owner or operator of an UST
+is strictly liable for the cost of cleaning up a release and for any
+third-party damages it causes.</li>
+<li><strong>What “strict liability” means in plain terms.</strong> The
+owner must pay even if they did nothing wrong — even if they followed
+every regulation, hired licensed installers, conducted required
+inspections, and could not have prevented the leak. There is no
+negligence requirement and no defense based on care. A release happens;
+the owner is on the hook.</li>
+<li><strong>Enforcement.</strong> The EPA and state environmental
+agencies enforce this regime through corrective-action orders (the owner
+is directed to remediate the site), cost-recovery actions (the agency
+cleans the site and bills the owner), and administrative or civil fines
+for noncompliance with the technical and reporting requirements that
+frame the liability.</li>
+<li><strong>Why this matters for the paper.</strong> The
+strict-liability regime is the <em>reason</em> compulsory insurance is
+economically meaningful. If owners were not strictly liable, the
+financial cost of a release would be uncertain and contestable, and an
+insurance mandate would have no clear object. Because the liability
+<em>is</em> strict, every release is a financial event whose magnitude
+is bounded by cleanup cost and third-party damages — exactly the object
+insurers price.</li>
+<li><strong>What the law does <em>not</em> internalize
+directly.</strong> Strict liability covers cleanup and third-party
+damages that can be pursued in court (property, sometimes water-supply
+replacement). It does <em>not</em> automatically deliver compensation
+for diffuse third-party health damages — the chronic, low-dose exposures
+Marcus (2021) documents — because the link between a particular release
+and a particular health outcome is difficult to establish in litigation.
+This is the legal foundation of the <span
+class="math inline"><em>L</em></span>-vs-<span
+class="math inline"><em>E</em></span> wedge that runs through §4 and
+§13.</li>
+</ul>
+<h2 id="federal-compliance-mandate-and-pre-treatment-dynamics">§3.3
+Federal compliance mandate and pre-treatment dynamics</h2>
+<ul>
+<li>1984 HSWA → 1988 EPA technical standards → December 22, 1998 federal
+compliance deadline.</li>
+<li>Annual facility-level closure rates spike sharply 1996–1998 due to
+federal mandate.</li>
+<li>Texas’s staggered upgrade schedule (1989–1993) — pre-treatment
+confound for pre-1988 cohorts.</li>
+</ul>
+<h2 id="financial-responsibility-rule-and-state-trust-fund-regime">§3.4
+Financial Responsibility rule and state trust fund regime</h2>
+<ul>
+<li>1988 Financial Responsibility Rule (40 CFR §280 Subpart H): $1M
+per-occurrence + $1M/$2M aggregate coverage requirement.</li>
+<li>State trust funds emerged as insurer-of-last-resort for small
+operators when private market couldn’t supply coverage in late
+1980s.</li>
+<li>38 states: active or phased-out funds.</li>
+<li>Defining feature: uniform per-tank fee, no risk conditioning.
+Pooling equilibrium crowds out risk-rated private alternatives for
+high-risk tanks.</li>
+</ul>
+<h2 id="texass-1999-policy-transition">§3.5 Texas’s 1999 policy
+transition</h2>
+<ul>
+<li>Petroleum Storage Tank Remediation Fund (PSTRF), 1989.</li>
+<li>By 1995, actuarial assessments showed insolvency from accumulated
+legacy claims.</li>
+<li>HB 2587 (1995): sunset of PSTRF effective December 22, 1998 — same
+date as federal compliance deadline.</li>
+<li>All TX UST owners required to secure private insurance or qualify
+for self-insurance (asset test).</li>
+<li>Driving force was fiscal, not environmental.</li>
+</ul>
+<h2 id="post-transition-private-market">§3.6 Post-transition private
+market</h2>
+<ul>
+<li>2007–2021: 89.8% of TX retail USTs use private commercial insurance;
+10.2% self-insure; &lt;3% other.</li>
+<li>Transition was rapid and near-complete within first post-reform
+year.</li>
+<li>Market structure: concentrated and stable; top-5 carrier share + HHI
+roughly flat over 14 years.</li>
+<li>Premium reconstruction from Mid-Continent Casualty SERFF rate
+filings (2006–2024); conditioning variables include tank age bin, wall,
+piping, leak-detection technology, fuel volume, and operator claims
+history.</li>
+</ul>
+<hr />
+<h1 id="theoretical-framework-4">4. Theoretical Framework (§4)</h1>
+<p><em>Plain-prose first; theory-named idea second.</em></p>
+<h2 id="strict-liability-judgment-proof-problem">§4.1 Strict liability +
+judgment-proof problem</h2>
+<ul>
+<li>Most single-station UST operators have less in assets than a single
+release costs to clean up (qualitative; cite Boomhower 2019 for the
+parallel oil-and-gas evidence).</li>
+<li>Under pure strict liability, expected liability bounded by firm
+assets; care and entry decisions are undersupplied.</li>
+<li>Federal FR rule requires compulsory insurance coverage to restore
+the link between operating risky equipment and bearing its cost —
+<em>if</em> the premium reflects how risky the equipment actually
+is.</li>
+<li><em>Theory framing</em>: this is Shavell’s (1986, 2004)
+compulsory-insurance solution to the judgment-proof problem. The
+dominance of compulsory insurance over pure asset/bond requirements
+rests on the observable-care condition — which the heterogeneity /
+observability / predictability facts in §1 confirm holds in this
+setting.</li>
+</ul>
+<h2 id="what-insurers-price-and-what-they-dont">§4.2 What insurers
+price, and what they don’t</h2>
+<ul>
+<li>Premium-setting requires the insurer to have actuarial data on
+losses by attribute. The Texas schedule conditions on age × wall ×
+piping × leak-detection × claims history — the dimensions for which
+there is enough loss data to construct rates.</li>
+<li>Premium does <em>not</em> condition on: water-table depth, soil
+hydrology, distance to municipal wells, downgradient residential
+population density — the spatial attributes that drive the third-party
+health damage Marcus (2021) documents.</li>
+<li>→ The priced regime captures cleanup cost <span
+class="math inline"><em>L</em></span> (which generates insurer payouts
+and feeds rate-making) but not health damage <span
+class="math inline"><em>E</em></span> (which doesn’t generate claims
+because release→diagnosis causation is hard to prove in
+litigation).</li>
+<li><em>Theory framing</em>: this is the Diamond (1973)
+restricted-instrument problem — the priced policy conditions on a strict
+subset of attributes that determine the full social marginal damage.
+Diamond shows the second-best instrument is welfare-improving relative
+to no conditioning; how <em>much</em> better depends on how well the
+priced dimensions correlate with full social damage (Jacobsen, Knittel,
+Sallee, van Benthem 2020).</li>
+</ul>
+<h2 id="how-owners-respond-to-the-price-signal">§4.3 How owners respond
+to the price signal</h2>
+<ul>
+<li>Four behavioral margins from the earlier theoretical writeup
+(<code>LUST_and_Insurance_Javier</code>):
+<ol type="1">
+<li><strong>Entry</strong>: which technology to install at facility
+creation. Under flat fund, entry composition unaffected by risk. Under
+risk-rated pricing, higher-risk entrants face higher lifetime cost →
+composition shifts toward safer technology.</li>
+<li><strong>Technology choice</strong>: in this setting, retrofit is
+binary and prohibitively expensive (vintage-differentiated regulation).
+The technology margin operates at entry and replacement only.</li>
+<li><strong>Replacement</strong>: incumbent decides whether to replace
+existing tank with new one (resets age, allows technology upgrade).
+Under flat fund, no premium incentive to replace. Under risk-rated
+pricing, aging tanks face rising premiums → replacement becomes more
+attractive.</li>
+<li><strong>Exit (closure)</strong>: incumbent decides whether to
+continue operation. Optimal exit when flow profit ≤ flow cost. Under
+risk-rated pricing, <span class="math inline">∂</span>cost<span
+class="math inline">/∂</span>age &gt; 0 → exit threshold falls (firms
+exit sooner).</li>
+</ol></li>
+</ul>
+<h2 id="welfare-ceiling-informal-framing">§4.4 Welfare ceiling —
+informal framing</h2>
+<ul>
+<li>Total welfare loss from imperfect pricing can be decomposed into
+four DWL components corresponding to the four margins.</li>
+<li>The priced regime closes the gap between flat-fee and first-best on
+the dimensions its conditioning set can reach (cleanup cost <span
+class="math inline"><em>L</em></span>).</li>
+<li>The residual gap is determined by the dimensions outside the priced
+conditioning set (health damage <span
+class="math inline"><em>E</em></span>).</li>
+<li><em>Theory framing</em>: the welfare reach is the
+Jacobsen-Knittel-Sallee-van Benthem sufficient-statistic R² — the
+correlation between the priced wedge and full social damage across the
+regulated cells bounds the fraction of first-best welfare the priced
+regime can deliver.</li>
+</ul>
+<h2 id="testable-predictions">§4.5 Testable predictions</h2>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Margin</th>
+<th>Theory predicts under RBP</th>
+<th>Empirical specification</th>
+<th>Where tested</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Closure</td>
+<td>Higher exit hazard; concentrated in priced-high-risk cells</td>
+<td>Cox + DiD</td>
+<td>§9.1</td>
+</tr>
+<tr>
+<td>Replacement</td>
+<td>Higher replacement rate; concentrated in older single-walled</td>
+<td>Conditional-on-closing decomposition</td>
+<td>§9.3</td>
+</tr>
+<tr>
+<td>Leak detection</td>
+<td>Lower confirmed releases (selection + precaution)</td>
+<td>LUST DiD</td>
+<td>§9.2</td>
+</tr>
+<tr>
+<td>Heterogeneity by operator capacity</td>
+<td>Larger effect for high-capacity (multi-site, branded,
+self-insured)</td>
+<td>Triple-interaction DiD; structural type fit</td>
+<td>§11–12</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="data-5">5. Data (§5)</h1>
+<h2 id="source-records">§5.1 Source records</h2>
+<ul>
+<li>EPA UST/LUST databases (federal-level inventory and
+confirmed-release reporting)</li>
+<li>Texas Commission on Environmental Quality (TCEQ) administrative
+microdata</li>
+<li>18 control-state UST/LUST databases (assembled state-by-state)</li>
+<li>Mid-Continent Casualty SERFF rate filings (2006–2024) for premium
+reconstruction</li>
+</ul>
+<h2 id="panel-construction">§5.2 Panel construction</h2>
+<ul>
+<li>Tank-level panel built up to facility-level for some specs</li>
+<li>Time coverage: 1990–2021</li>
+<li>Unit of observation: tank-year (~9.8M observations); also
+facility-year for descriptive work</li>
+</ul>
+<h2 id="study-states-and-matched-sample">§5.3 Study states and matched
+sample</h2>
+<ul>
+<li>Make-model matching cells: age × wall × fuel × capacity × install
+cohort</li>
+<li>Texas tanks matched to control-state counterparts within cell</li>
+</ul>
+<h2 id="outcome-variables">§5.4 Outcome variables</h2>
+<ul>
+<li>Annual closure indicator (tank exits the active fleet)</li>
+<li>Confirmed release (“LUST event”) indicator</li>
+<li>Replacement indicator (closure → new tank install at same facility
+within 6 months)</li>
+</ul>
+<h3 id="table-1-sample-descriptive-statistics">Table 1 — Sample
+descriptive statistics</h3>
+<p><strong>Notes:</strong> Sample is the make-model matched tank-year
+panel, 1990–2021. Columns 1–2 report means and standard deviations for
+Texas-installed tanks; columns 3–4 report the same for tanks in the 18
+matched control states; column 5 reports the standardized difference.
+The sample is restricted to tanks alive at the reform date (December 22,
+1998) and matched within cells defined by tank age bin × wall
+construction × fuel type × capacity quartile × install-year cohort.
+Pre-treatment balance across the priced risk attributes is preserved by
+construction; remaining differences in operator-level characteristics
+are absorbed by facility fixed effects in the estimation. Wall-type
+composition is reported separately because the schedule prices this
+dimension most heavily; the over-representation of single-walled tanks
+in Texas (relative to controls) drives the headline heterogeneity in
+§9.</p>
+<hr />
+<h1 id="risk-heterogeneity-and-the-actuarial-foundation-6">6. Risk
+Heterogeneity and the Actuarial Foundation (§6)</h1>
+<h2 id="release-probability-is-predictable-from-observables">§6.1
+Release probability is predictable from observables</h2>
+<p>The hazard model estimates the annual first-release probability
+conditional on observed tank attributes:</p>
+<p><span
+class="math display"><em>h</em>(<em>t</em> ∣ <em>x</em><sub><em>i</em></sub>) = <em>P</em>(first
+confirmed release in year <em>t</em> ∣ no prior
+release, <em>x</em><sub><em>i</em></sub>),</span></p>
+<p>where <span
+class="math inline"><em>x</em><sub><em>i</em></sub></span> contains
+3-year tank-age bins fully interacted with wall construction, state
+fixed effects, and portfolio controls (fuel type, capacity, piping).
+Estimation uses penalized logistic regression with lasso variable
+selection and inverse-frequency weights for the 0.70% base event rate.
+Out-of-sample evaluation uses 10-fold cross-validation with post-hoc
+recalibration. Sample: 3.93M pre-treatment facility-years, 27,455
+confirmed first-release events.</p>
+<h3
+id="figure-1-single-walled-tanks-drive-the-agehazard-gradient">Figure 1
+— Single-walled tanks drive the age–hazard gradient</h3>
+<p><strong>Notes:</strong> Predicted annual first-release hazard rate by
+tank age bin and wall construction, from the penalized logistic hazard
+model fit on 3.93M pre-treatment facility-years. The horizontal axis is
+tank age in three-year bins; the vertical axis is the predicted hazard
+per 1,000 facility-years. Single-walled tanks (orange) display a steep
+age gradient — from 2.9 per 1,000 at ages 3–5 to 12.9 per 1,000 at ages
+24+, a ~4.5× rise. Double-walled tanks (blue) display a much flatter
+gradient — from 3.1 to 6.5, a ~2× rise. Shaded bands are out-of-sample
+95% prediction intervals. The figure documents the two empirical facts
+the actuarial schedule responds to: hazard rises with age (steeply for
+SW, mildly for DW) and is higher for SW than DW at every age.</p>
+<h3
+id="figure-2-premiums-track-the-risk-the-hazard-model-predicts">Figure 2
+— Premiums track the risk the hazard model predicts</h3>
+<p><strong>Notes:</strong> Cell-level Mid-Continent Casualty premium
+(vertical axis) plotted against the hazard-model–predicted first-release
+probability (horizontal axis), across all (age × wall × piping ×
+leak-detection) cells in the Texas private-insurance schedule. Premium
+is the annual per-tank rate at federal-minimum $1M/$1M coverage;
+predicted hazard is the out-of-sample hazard from the model in §6.1.
+Marker shape distinguishes single- vs double-walled cells; color
+indicates piping-system age. The schedule prices age and wall in
+directions consistent with the empirical hazard gradient: premiums rise
+with predicted release probability, and the SW–DW separation in premiums
+mirrors the SW–DW separation in hazard. The figure does <em>not</em>
+claim that premiums equal marginal social damage; it documents that the
+priced wedge is real along the dimensions the model can also
+predict.</p>
+<h2 id="realized-cleanup-cost-distribution">§6.3 Realized cleanup cost
+distribution</h2>
+<p>Pooled stats across six control states with usable claims records (n
+= 12,541, 2023 USD): median <strong>$136,249</strong>, mean
+<strong>$403,319</strong>, 75th percentile <strong>$494,962</strong>,
+95th percentile <strong>$1,737,650</strong>.</p>
+<h3 id="figure-3-distribution-of-realized-cleanup-costs">Figure 3 —
+Distribution of realized cleanup costs</h3>
+<p><strong>Notes:</strong> Kernel density of realized cleanup costs
+across 12,541 confirmed releases in six control states (Colorado,
+Louisiana, New Mexico, Pennsylvania, Tennessee, Utah), inflated to 2023
+USD. The horizontal axis is on a log scale. The orange dashed vertical
+line marks the pooled median ($136,249); the gold dot-dashed line marks
+the pooled mean ($403,319). The distribution is right-skewed: the median
+is roughly one-third of the mean, and the 95th percentile exceeds $1.7M.
+State-level summary statistics are reported in Appendix Table A.1;
+cross-state heterogeneity is modest in shape but meaningful in scale
+(Louisiana median $240k; New Mexico median $57k).</p>
+<hr />
+<h1 id="the-make-model-comparison-sample-7">7. The Make-Model Comparison
+Sample (§7)</h1>
+<h2 id="the-composition-problem">§7.1 The composition problem</h2>
+<ul>
+<li>Naive TX vs control comparison contaminated by differential fleet
+composition (TX has more SW pre-reform, different age
+distribution).</li>
+<li>Need to compare apples-to-apples on the dimensions the schedule
+prices.</li>
+</ul>
+<h2 id="constructing-the-matched-sample">§7.2 Constructing the matched
+sample</h2>
+<ul>
+<li>Cells defined by tank age × wall × fuel × capacity × install
+cohort.</li>
+<li>Texas tanks matched to control-state counterparts within cell;
+unmatched tanks dropped.</li>
+</ul>
+<h2 id="why-tank-level-measurement">§7.3 Why tank-level measurement</h2>
+<ul>
+<li>Closure decision is tank-level (a facility may close some tanks,
+replace others).</li>
+<li>Facility-level measurement averages across heterogeneous tank
+decisions.</li>
+</ul>
+<h2 id="pre-treatment-balance">§7.4 Pre-treatment balance</h2>
+<ul>
+<li>Pre-treatment trends in matched sample reported in Appendix B.</li>
+<li>Event-study pre-period flat (see Figure 4).</li>
+</ul>
+<hr />
+<h1 id="empirical-framework-8">8. Empirical Framework (§8)</h1>
+<h2 id="estimation-strategy">§8.1 Estimation strategy</h2>
+<p><strong>Static OLS difference-in-differences.</strong> The baseline
+specification is</p>
+<p><span
+class="math display"><em>Y</em><sub><em>i</em><em>t</em></sub> = <em>β</em> (Texas<sub><em>f</em>(<em>i</em>)</sub> × Post<sub><em>t</em></sub>) + <strong>γ</strong><sup>′</sup><em>M</em><sub><em>i</em><em>t</em></sub> + <em>α</em><sub><em>i</em></sub> + <em>δ</em><sub><em>c</em>(<em>i</em>) <em>t</em></sub> + <em>ε</em><sub><em>i</em><em>t</em></sub>,</span></p>
+<p>where <span
+class="math inline"><em>Y</em><sub><em>i</em><em>t</em></sub></span> is
+the closure indicator for tank <span
+class="math inline"><em>i</em></span> in year <span
+class="math inline"><em>t</em></span>, <span
+class="math inline">Texas<sub><em>f</em>(<em>i</em>)</sub></span>
+indicates that facility <span
+class="math inline"><em>f</em>(<em>i</em>)</span> is in Texas, <span
+class="math inline">Post<sub><em>t</em></sub> = <strong>1</strong>[<em>t</em> ≥ 1999]</span>,
+<span
+class="math inline"><em>M</em><sub><em>i</em><em>t</em></sub></span> is
+a vector of federal compliance-mandate controls (release-detection,
+spill-overfill, integrity-protection deadlines), <span
+class="math inline"><em>α</em><sub><em>i</em></sub></span> are tank or
+facility fixed effects, and <span
+class="math inline"><em>δ</em><sub><em>c</em>(<em>i</em>) <em>t</em></sub></span>
+are cell-by-year fixed effects with <span
+class="math inline"><em>c</em></span> indexing make-model–vintage cells.
+Standard errors are clustered at the state level and supplemented with
+wild-cluster bootstrap (see §9.1).</p>
+<p><strong>Cox proportional-hazards model.</strong> The tank-level
+survival specification is</p>
+<p><span
+class="math display"><em>h</em><sub><em>i</em></sub>(<em>t</em>) = <em>h</em><sub>0, <em>s</em>(<em>i</em>)</sub>(<em>t</em>) exp {<em>β</em> (Texas<sub><em>f</em>(<em>i</em>)</sub> × Post<sub><em>t</em></sub>) + <strong>η</strong><sup>′</sup> state-dummies<sub><em>s</em>(<em>i</em>)</sub>},</span></p>
+<p>where <span
+class="math inline"><em>h</em><sub>0, <em>s</em>(<em>i</em>)</sub>(<em>t</em>)</span>
+is the baseline hazard, optionally stratified on install year,
+make-model cell, or full make-model–vintage cell. Estimation uses
+Efron’s method for ties; standard errors clustered at the state level
+and supplemented with wild-score bootstrap.</p>
+<p><strong>Event study.</strong> Dynamic effects are estimated by</p>
+<p><span
+class="math display"><em>Y</em><sub><em>i</em><em>t</em></sub> = ∑<sub><em>τ</em> ≠ −1</sub><em>β</em><sub><em>τ</em></sub> (Texas<sub><em>f</em>(<em>i</em>)</sub> × <strong>1</strong>[<em>t</em> − 1998 = <em>τ</em>]) + <em>α</em><sub><em>i</em></sub> + <em>δ</em><sub><em>c</em>(<em>i</em>) <em>t</em></sub> + <em>ε</em><sub><em>i</em><em>t</em></sub>.</span></p>
+<p>The reference period is <span
+class="math inline"><em>τ</em> = −1</span> (calendar year 1997).</p>
+<h2 id="threats-to-identification">§8.2 Threats to identification</h2>
+<ul>
+<li><strong>Federal mandate</strong>: Dec 1998 compliance deadline
+affects both groups; identification rests on differential response
+within cells the schedule prices.</li>
+<li><strong>Texas-specific upgrade schedule (1989–1993)</strong>:
+pre-treatment confound for pre-1988 cohorts; address via sample
+restriction and cohort-specific event studies.</li>
+<li><strong>Anticipation</strong>: closure spike could precede 1998 if
+owners anticipate fund closure. Event-study pre-trends are flat.</li>
+<li><strong>Unobserved heterogeneity</strong>: facility FE absorbs
+time-invariant; cell × year FE absorbs common shocks within risk
+cells.</li>
+<li><strong>Reverse causality</strong>: fund closure driven by fiscal
+insolvency, not by trends in TX risk landscape.</li>
+</ul>
+<hr />
+<h1 id="reduced-form-results-9">9. Reduced-Form Results (§9)</h1>
+<h2 id="tank-closure-stepped-did">§9.1 Tank closure — stepped DiD</h2>
+<p>The headline closure result is a difference-in-differences estimate
+of <span class="math inline"><em>β</em></span> in the static OLS
+specification of §8.1, applied to the make-model matched
+alive-at-treatment tank-year sample. Seven OLS specifications walk
+through fixed-effects structure, and four Cox specifications walk
+through baseline-hazard stratification. The main OLS specification is
+Column 7 (tank fixed effects plus cell × year fixed effects); the main
+Cox specification is Column 4 (state fixed effects plus stratification
+on the full make-model–vintage cell).</p>
+<h3 id="table-2-stepped-did-on-tank-closure-ols">Table 2 — Stepped DiD
+on tank closure (OLS)</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>Column</th>
+<th>Tank/Facility FE</th>
+<th>Cell FE</th>
+<th>Year FE</th>
+<th>Cell × Year FE</th>
+<th>Mandate controls</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>(1)</td>
+<td>—</td>
+<td>—</td>
+<td>panel_year</td>
+<td>—</td>
+<td>Y</td>
+</tr>
+<tr>
+<td>(2)</td>
+<td>—</td>
+<td>cell_id</td>
+<td>panel_year</td>
+<td>—</td>
+<td>Y</td>
+</tr>
+<tr>
+<td>(3)</td>
+<td>panel_id (facility)</td>
+<td>—</td>
+<td>panel_year</td>
+<td>—</td>
+<td>Y</td>
+</tr>
+<tr>
+<td>(4)</td>
+<td>tank_panel_id</td>
+<td>—</td>
+<td>panel_year</td>
+<td>—</td>
+<td>Y</td>
+</tr>
+<tr>
+<td>(5)</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>cell × year</td>
+<td>Y</td>
+</tr>
+<tr>
+<td>(6)</td>
+<td>tank_panel_id</td>
+<td>—</td>
+<td>—</td>
+<td>cell × year</td>
+<td>Y</td>
+</tr>
+<tr>
+<td>(7) <strong>main</strong></td>
+<td>panel_id (facility)</td>
+<td>—</td>
+<td>—</td>
+<td>cell × year</td>
+<td>Y</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes:</strong> Outcome is the annual tank-closure indicator.
+All specifications include state fixed effects when no facility/tank FE
+is present, and three federal-mandate dummies (release-detection,
+spill-overfill, integrity-protection deadlines) interacted with each
+tank’s calendar-year compliance status. Standard errors are clustered at
+the state level; wild-cluster bootstrap p-values and 95% confidence
+intervals are reported in the second standard-error row. Sample is the
+alive-at-reform make-model matched tank-year panel. Column (7) is the
+headline specification: facility fixed effects absorb time-invariant
+operator characteristics, and cell × make-model–vintage × year fixed
+effects absorb any common shock affecting all tanks of the same
+observable risk profile in the same year. The point estimate of +1.58 pp
+in column (7) is the within-cell, within-facility differential response
+of Texas tanks to the reform.</p>
+<h3
+id="table-3-stepped-did-on-tank-closure-cox-proportional-hazards">Table
+3 — Stepped DiD on tank closure (Cox proportional hazards)</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Column</th>
+<th>State control</th>
+<th>Baseline hazard stratification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>(1)</td>
+<td>factor(state)</td>
+<td>None</td>
+</tr>
+<tr>
+<td>(2)</td>
+<td>factor(state)</td>
+<td>strata(install_yr_int)</td>
+</tr>
+<tr>
+<td>(3)</td>
+<td>factor(state)</td>
+<td>strata(make_model_noage)</td>
+</tr>
+<tr>
+<td>(4) <strong>main</strong></td>
+<td>factor(state)</td>
+<td>strata(cell_id) — full make-model–vintage cell</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes:</strong> Estimation uses Efron’s method for ties on
+the two-episode Cox split of the alive-at-reform sample. Baseline
+hazards are stratified at progressively finer granularity moving across
+columns. Cox specifications omit the three federal-mandate dummies
+present in the OLS table, because in the two-episode Cox split
+panel_year is the episode midpoint year and is mechanically correlated
+with the failure indicator, driving mandate-dummy coefficients to ±∞;
+the OLS table’s panel_year is the calendar year and admits the controls
+cleanly. Standard errors are robust and clustered at the state level;
+wild-score bootstrap p-values and 95% confidence intervals are reported
+in the second standard-error row. Column (4) is the headline
+specification: the baseline hazard is allowed to vary nonparametrically
+across the full set of make-model–vintage cells, so identification of
+<span class="math inline"><em>β</em></span> comes only from the
+within-cell differential timing of Texas tanks’ exits.</p>
+<h3
+id="figure-4-dynamic-closure-response-in-texas-relative-to-matched-controls">Figure
+4 — Dynamic closure response in Texas relative to matched controls</h3>
+<p><strong>Notes:</strong> Event-study coefficients <span
+class="math inline"><em>β̂</em><sub><em>τ</em></sub></span> from the
+dynamic specification in §8.1, plotted against event time <span
+class="math inline"><em>τ</em> = <em>t</em> − 1998</span>. The reference
+period is <span class="math inline"><em>τ</em> = −1</span> (calendar
+year 1997). The outcome is the annual tank-closure indicator; the
+specification includes facility fixed effects and make-model–vintage ×
+year fixed effects, with standard errors clustered at the state level.
+The vertical dashed line at <span
+class="math inline"><em>τ</em> = 0</span> marks December 22, 1998 — the
+federal compliance deadline and the Texas Petroleum Storage Tank
+Remediation Fund closure date. Pre-reform coefficients are statistically
+indistinguishable from zero, supporting parallel trends in the closure
+outcome between Texas and matched control-state tanks. Post-reform
+coefficients rise sharply between 1999 and 2003 and stabilize at
+approximately 1.6 percentage points above the matched control baseline.
+The dynamic profile is consistent with risk-rated pricing operating
+immediately upon regime switch and persisting indefinitely.</p>
+<h2 id="confirmed-releases-lust-discoveries">§9.2 Confirmed releases
+(LUST discoveries)</h2>
+<p>The LUST discovery specification replaces <span
+class="math inline"><em>Y</em><sub><em>i</em><em>t</em></sub></span> in
+the static OLS equation with an indicator for a confirmed release.
+Headline result: a <strong>−1.27 pp decline on a 1.73%
+baseline</strong>. Decomposition into background (steady-state
+operational) and inspection-triggered (regulatory audit) channels — both
+decline.</p>
+<h3 id="table-4-lust-discovery-did">Table 4 — LUST discovery DiD</h3>
+<p><strong>Notes:</strong> Outcome is the annual confirmed-release
+indicator at the tank level. Columns walk through fixed-effects
+structure as in Table 2. Sample is the make-model matched panel
+excluding tanks with prior confirmed releases (first-release hazard).
+Background-vs-inspection decomposition uses TCEQ inspection-event
+records linked to release notifications; the corresponding event-study
+figure is in Appendix C.</p>
+<h2 id="composition-shift-to-replacement">§9.3 Composition shift to
+replacement</h2>
+<p>Conditional on closing, the replacement share — the fraction of
+closed facilities that install a new tank within six months at the same
+site — rises from <strong>12.0% to 18.3%</strong> under the risk-rated
+regime (+53% relative). Aggregate active tank counts are essentially
+unchanged.</p>
+<h3 id="table-5-composition-of-closure-decisions">Table 5 — Composition
+of closure decisions</h3>
+<p><strong>Notes:</strong> The estimating sample is the subsample of
+facility-years in which a closure event occurs. The outcome is an
+indicator for “closure with replacement” — a closure event followed by a
+new tank installation at the same facility within six months. The
+coefficient on Texas × Post measures the within-facility shift in the
+conditional probability that a closure is followed by a replacement
+rather than a permanent exit. Specifications include facility fixed
+effects and make-model–vintage × year fixed effects; standard errors
+clustered at the state level. Because the conditioning event (closure)
+is itself endogenous to the reform, the composition estimate should be
+interpreted alongside the unconditional closure result in Table 2 — the
+joint pattern (closure rises, replacement-conditional-on-closing rises)
+implies the reform shifts behavior toward upgrading rather than
+exiting.</p>
+<h2 id="heterogeneity-by-install-vintage">§9.4 Heterogeneity by install
+vintage</h2>
+<h3 id="table-6-closure-heterogeneity-by-install-vintage">Table 6 —
+Closure heterogeneity by install vintage</h3>
+<p><strong>Notes:</strong> Outcome is the annual tank-closure indicator.
+The reported coefficients are <span
+class="math inline"><em>β̂</em><sub>0</sub></span> on Texas × Post
+(post-1988 install cohort baseline) and <span
+class="math inline"><em>β̂</em><sub>1</sub></span> on the
+triple-interaction with the pre-1989 install-cohort dummy. The implied
+pre-1989 ATT is <span
+class="math inline"><em>β̂</em><sub>0</sub> + <em>β̂</em><sub>1</sub> ≈ +3.1</span>
+pp; the implied post-1988 ATT is <span
+class="math inline"><em>β̂</em><sub>0</sub> ≈ +0.6</span>
+pp. Specifications include facility fixed effects and make-model–vintage
+× year fixed effects. The 4× larger response in the pre-1989 cohort —
+the single-walled stock the rate schedule prices most heavily — is the
+empirical signature of risk-rated pricing rather than a generic Texas
+economic shock.</p>
+<h3 id="figure-5-att-on-closure-by-install-vintage">Figure 5 — ATT on
+closure by install vintage</h3>
+<p><strong>Notes:</strong> Forest plot of difference-in-differences
+point estimates and 95% confidence intervals, separately by install-year
+cohort. The horizontal axis is the estimated ATT in percentage points;
+the vertical axis lists install-year cohorts from oldest to youngest.
+The vertical line at zero marks the null. Each row is a separate
+regression on the cohort-restricted subsample, with the same
+fixed-effects structure as Table 6 column (7). The pattern is monotone:
+older install cohorts (1970s–1980s, predominantly single-walled) show
+the largest closure response under risk-rated pricing; younger install
+cohorts (1990s–2000s, predominantly double-walled) show coefficients
+near zero. The pattern is consistent with the priced wedge being largest
+in the older single-walled stock.</p>
+<hr />
+<h1 id="discussion-of-reduced-form-results-10">10. Discussion of
+Reduced-Form Results (§10)</h1>
+<ul>
+<li>The empirical pattern matches the predictions of pricing-induced
+firm response: closure rises, replacement-conditional-on-closing rises,
+releases fall, and the response concentrates in the cells the schedule
+prices most heavily.</li>
+<li>The concentration in pre-1989 SW is the empirical signature of the
+priced regime — generic Texas economic shocks would not selectively
+affect the cells the rate schedule weights.</li>
+<li>Magnitude is large in absolute terms (~80% closure increase) but the
+question of whether this captures the bulk of available welfare gains
+needs the structural model.</li>
+</ul>
+<hr />
+<h1 id="dynamic-discrete-choice-model-11">11. Dynamic Discrete Choice
+Model (§11)</h1>
+<h2 id="agents-problem">§11.1 Agent’s problem</h2>
+<p>Each period, a facility chooses among three actions: maintain the
+existing tank, exit (close permanently), or replace (close and install a
+new double-walled tank). The Bellman equation for the conditional value
+function is</p>
+<p><span
+class="math display"><em>V</em>(<em>s</em>) = max { <em>u</em><sub><em>M</em></sub>(<em>s</em>) + <em>β</em> 𝔼 [<em>V</em>(<em>s</em><sup>′</sup>) ∣ <em>s</em>, maintain], <em>u</em><sub><em>E</em></sub>(<em>s</em>), <em>u</em><sub><em>R</em></sub>(<em>s</em>) + <em>β</em> 𝔼 [<em>V</em>(<em>s</em><sup>′</sup>) ∣ <em>s</em>, replace]},</span></p>
+<p>where <span class="math inline"><em>s</em></span> is the state, <span
+class="math inline"><em>β</em> = 0.95</span> is the annual discount
+factor, and <span
+class="math inline"><em>u</em><sub><em>M</em></sub>, <em>u</em><sub><em>E</em></sub>, <em>u</em><sub><em>R</em></sub></span>
+are flow utilities of maintaining, exiting, and replacing.</p>
+<h2 id="state-space-and-transitions">§11.2 State space and
+transitions</h2>
+<p>State: <span
+class="math inline"><em>s</em> = (<em>a</em>, <em>W</em>, <em>R</em>, <em>ε</em>)</span>,
+where <span class="math inline"><em>a</em></span> is the tank-age bin (9
+levels), <span class="math inline"><em>W</em></span> is wall
+construction (2 levels), <span class="math inline"><em>R</em></span> is
+regime (2 levels: flat-fund vs risk-rated). With idiosyncratic logit
+shocks <span class="math inline"><em>ε</em></span>, the deterministic
+state has <span class="math inline">9 × 2 × 2 = 36</span> cells; the
+replacement-only model uses <span
+class="math inline">8 × 2 × 2 = 32</span> cells. Age advances
+deterministically while maintaining; wall is fixed (no retrofit); regime
+is fixed by state.</p>
+<h2 id="flow-payoffs-four-parameter-specification">§11.3 Flow payoffs —
+four-parameter specification</h2>
+<p>In the baseline four-parameter model, flow utilities are common
+across wall types and regimes:</p>
+<p><span
+class="math display"><em>u</em><sub><em>M</em></sub>(<em>s</em>) = 1 + <em>γ</em><sub><em>p</em></sub> ⋅ <em>P</em>(<em>a</em>, <em>W</em>, <em>R</em>) − <em>γ</em><sub><em>r</em></sub> ⋅ <em>h</em>(<em>a</em>, <em>W</em>) ⋅ <em>L</em>,</span></p>
+<p><span
+class="math display"><em>u</em><sub><em>E</em></sub>(<em>s</em>) = <em>κ</em>,</span></p>
+<p><span
+class="math display"><em>u</em><sub><em>R</em></sub>(<em>s</em>) = −<em>K</em>,</span></p>
+<p>where <span
+class="math inline"><em>P</em>(<em>a</em>, <em>W</em>, <em>R</em>)</span>
+is the annual premium at state <span
+class="math inline"><em>s</em></span>, <span
+class="math inline"><em>h</em>(<em>a</em>, <em>W</em>)</span> is the
+annual first-release hazard, <span class="math inline"><em>L</em></span>
+is the average cleanup cost per release, and the leading <span
+class="math inline">1</span> in <span
+class="math inline"><em>u</em><sub><em>M</em></sub></span> is annual net
+revenue <span class="math inline"><em>R</em></span> normalized to one
+model unit. The parameter vector is <span
+class="math inline"><em>θ</em> = (<em>κ</em>, <em>K</em>, <em>γ</em><sub><em>p</em></sub>, <em>γ</em><sub><em>r</em></sub>)</span>,
+with <span class="math inline"><em>γ</em><sub><em>p</em></sub></span>
+measuring premium sensitivity (expected sign: negative) and <span
+class="math inline"><em>γ</em><sub><em>r</em></sub></span> measuring the
+degree to which owners internalize the expected cleanup cost component
+of a release (expected sign: positive, with <span
+class="math inline"><em>γ</em><sub><em>r</em></sub> = 1</span>
+corresponding to full internalization of <span
+class="math inline"><em>L</em></span>).</p>
+<h2 id="flow-payoffs-eight-parameter-specification-robustness">§11.4
+Flow payoffs — eight-parameter specification (robustness)</h2>
+<p>The eight-parameter extension allows scrap value and replacement cost
+to vary by wall construction, and allows premium sensitivity and risk
+internalization to vary by regime:</p>
+<p><span
+class="math display"><em>u</em><sub><em>M</em></sub>(<em>s</em>) = 1 + <em>γ</em><sub><em>p</em>, <em>R</em></sub> ⋅ <em>P</em>(<em>a</em>, <em>W</em>, <em>R</em>) − <em>γ</em><sub><em>r</em>, <em>R</em></sub> ⋅ <em>h</em>(<em>a</em>, <em>W</em>) ⋅ <em>L</em>,</span></p>
+<p><span
+class="math display"><em>u</em><sub><em>E</em></sub>(<em>s</em>) = <em>κ</em><sub><em>W</em></sub>,</span></p>
+<p><span
+class="math display"><em>u</em><sub><em>R</em></sub>(<em>s</em>) = −<em>K</em><sub><em>W</em></sub>.</span></p>
+<p>The parameter vector is <span
+class="math inline"><em>θ</em> = (<em>κ</em><sub><em>S</em><em>W</em></sub>, <em>κ</em><sub><em>D</em><em>W</em></sub>, <em>K</em><sub><em>S</em><em>W</em></sub>, <em>K</em><sub><em>D</em><em>W</em></sub>, <em>γ</em><sub><em>p</em>, <em>F</em><em>F</em></sub>, <em>γ</em><sub><em>p</em>, <em>R</em><em>B</em></sub>, <em>γ</em><sub><em>r</em>, <em>F</em><em>F</em></sub>, <em>γ</em><sub><em>r</em>, <em>R</em><em>B</em></sub>)</span>.
+The wall-specific scrap and replacement costs allow the model to fit the
+SW vs DW closure-vs-replacement composition separately; the
+regime-specific <span class="math inline"><em>γ</em></span> parameters
+allow the model to express different degrees of cost internalization
+under flat-fund and risk-rated regimes. A further 25-parameter extension
+layers 17 state fixed effects on the maintenance flow utility to capture
+residual regional heterogeneity; reported in Appendix D.</p>
+<h2 id="identification">§11.5 Identification</h2>
+<ul>
+<li><span class="math inline"><em>κ</em></span> identified from observed
+exit rate at each state.</li>
+<li><span class="math inline"><em>K</em></span> identified from observed
+replacement rate at each state.</li>
+<li><span class="math inline"><em>γ</em><sub><em>p</em></sub></span>
+identified from premium variation across cells and over rate-filing
+periods.</li>
+<li><span class="math inline"><em>γ</em><sub><em>r</em></sub></span>
+identified from hazard variation across cells (age × wall) holding
+premium fixed.</li>
+</ul>
+<h2 id="estimation">§11.6 Estimation</h2>
+<ul>
+<li>Nested Pseudo-Likelihood (Aguirregabiria–Mira / Hotz–Miller).</li>
+<li>Inner-loop CCP updates and Bellman iteration in C++ for speed.</li>
+<li>Tolerances: <span
+class="math inline">tol<sub><em>θ</em></sub> = 10<sup>−8</sup></span>,
+<span
+class="math inline">tol<sub><em>P</em></sub> = 10<sup>−7</sup></span>,
+max NPL iterations 600.</li>
+</ul>
+<h2 id="counterfactual-scenarios">§11.7 Counterfactual scenarios</h2>
+<ul>
+<li><strong>Subsidy</strong>: <span
+class="math inline"><em>K</em> → 0.5<em>K</em></span> (replacement cost
+halved by government grant).</li>
+<li><strong>Pigouvian surcharge</strong>: add <span
+class="math inline"><em>h</em>(<em>a</em>) ⋅ <em>E</em></span> to the
+maintain flow cost, with <span
+class="math inline"><em>E</em> = 17, 000</span> from Marcus (2021).</li>
+<li><strong>Mandate</strong>: force the maintenance choice probability
+to zero for tanks aged <span class="math inline"> ≥ 25</span>. For each
+scenario: recompute optimal conditional choice probabilities, simulate
+the long-run fleet steady state, and compute present-value welfare
+separately for firm surplus, government outlay, and environmental
+damage.</li>
+</ul>
+<hr />
+<h1 id="structural-results-and-welfare-12">12. Structural Results and
+Welfare (§12)</h1>
+<h2 id="parameter-estimates">§12.1 Parameter estimates</h2>
+<h3
+id="table-7-structural-parameter-estimates-four-parameter-model">Table 7
+— Structural parameter estimates (four-parameter model)</h3>
+<p><strong>Notes:</strong> Nested Pseudo-Likelihood estimates of <span
+class="math inline"><em>θ</em> = (<em>κ</em>, <em>K</em>, <em>γ</em><sub><em>p</em></sub>, <em>γ</em><sub><em>r</em></sub>)</span>
+for the four-parameter dynamic discrete-choice model in §11.3. Standard
+errors in parentheses are computed by the Aguirregabiria-Mira sandwich
+formula. Estimation sample is Texas facility-years over 1999–2018
+(post-reform equilibrium), mapped onto the 32 (age × wall × regime)
+state cells. Parameters are reported in units of annual net revenue
+<span class="math inline"><em>R</em></span>; the calibration anchor
+<span class="math inline"><em>R</em> ≈ $10, 000</span> per facility per
+year yields dollar translations as shown. The estimated <span
+class="math inline"><em>γ̂</em><sub><em>r</em></sub> = 0.16</span> is
+small relative to the fully-internalized benchmark of 1, indicating that
+owners respond to risk-priced premiums as a price signal but do not
+behave as if they fully bear the expected cleanup cost.</p>
+<h3
+id="table-8-structural-parameter-estimates-eight-parameter-model-robustness">Table
+8 — Structural parameter estimates (eight-parameter model,
+robustness)</h3>
+<p><strong>Notes:</strong> Estimates of <span
+class="math inline"><em>θ</em> = (<em>κ</em><sub><em>S</em><em>W</em></sub>, <em>κ</em><sub><em>D</em><em>W</em></sub>, <em>K</em><sub><em>S</em><em>W</em></sub>, <em>K</em><sub><em>D</em><em>W</em></sub>, <em>γ</em><sub><em>p</em>, <em>F</em><em>F</em></sub>, <em>γ</em><sub><em>p</em>, <em>R</em><em>B</em></sub>, <em>γ</em><sub><em>r</em>, <em>F</em><em>F</em></sub>, <em>γ</em><sub><em>r</em>, <em>R</em><em>B</em></sub>)</span>
+for the eight-parameter extension in §11.4. The wall-specific <span
+class="math inline"><em>κ</em><sub><em>W</em></sub></span> and <span
+class="math inline"><em>K</em><sub><em>W</em></sub></span> allow the
+model to match SW vs DW closure and replacement rates separately; the
+regime-specific <span
+class="math inline"><em>γ</em><sub>⋅, <em>R</em></sub></span> allow
+internalization to differ under flat-fund and risk-rated regimes.
+Reported alongside the four-parameter baseline (Table 7) to assess
+sensitivity of the welfare counterfactuals to functional-form
+flexibility.</p>
+<h2 id="model-fit">§12.2 Model fit</h2>
+<ul>
+<li>CCP fit by cell ([04g_Per_Cell_Fit_Numbers_Wide.csv]) and aggregate
+action-share fit by year and treatment status
+([04e_Action_Shares_by_Year.png]).</li>
+<li>Pre/post action shares match data within ~1 percentage point in
+major cells.</li>
+</ul>
+<h2 id="counterfactual-welfare-arithmetic">§12.3 Counterfactual welfare
+arithmetic</h2>
+<h3
+id="figure-6-welfare-decomposition-across-counterfactual-policies">Figure
+6 — Welfare decomposition across counterfactual policies</h3>
+<p><strong>Notes:</strong> Present-value welfare change (per-tank, model
+units, <span class="math inline"><em>E</em> = $17, 000</span> per
+release) under three counterfactual extensions of the risk-rated regime,
+decomposed into three components: firm surplus (operating profit net of
+premium and replacement cost), environmental damage avoided (cleanup
+cost <span class="math inline"><em>L</em></span> plus health damage
+<span class="math inline"><em>E</em></span>), and government outlay
+(subsidy payments or mandate-implementation cost). The status quo is the
+post-1999 Texas risk-rated regime; bars show the welfare change relative
+to that baseline. All three counterfactual policies — replacement
+subsidy (<span class="math inline"><em>K</em> → 0.5<em>K</em></span>),
+Pigouvian health-damage surcharge added to maintenance cost, and age-25
+closure mandate — fail to deliver positive welfare gains at the
+calibrated <span class="math inline"><em>E</em></span>. The
+decomposition makes visible <em>why</em>: the subsidy’s government
+outlay outweighs its firm-surplus and damage-avoidance gains; the
+Pigouvian surcharge induces over-closure relative to the risk-rated
+optimum; the mandate is roughly neutral, redistributing from incumbents
+to the government without net welfare change.</p>
+<h2 id="limitations">§12.4 Limitations</h2>
+<ul>
+<li>Static premium schedule (no insurer learning over time).</li>
+<li>Unobserved operator heterogeneity (4p model abstracts; 8p+FE
+extension partial fix).</li>
+<li>Marcus health-damage calibration assumes uniform per-release <span
+class="math inline"><em>E</em></span> — spatial heterogeneity in damage
+not modeled in this paper.</li>
+</ul>
+<hr />
+<h1 id="discussion-13">13. Discussion (§13)</h1>
+<h2 id="risk-rated-pricing-is-a-partial-fix">Risk-rated pricing is a
+partial fix</h2>
+<ul>
+<li>The priced regime delivers what theory says on the dimensions
+actuarial premium-setting can reach: closure of risky cells, replacement
+composition shift, leak reduction.</li>
+<li>The welfare reach is bounded by what shows up in claims data.</li>
+</ul>
+<h2 id="why-the-three-counterfactuals-fail-at-17krelease">Why the three
+counterfactuals fail at $17k/release</h2>
+<ul>
+<li>Subsidy: doesn’t condition on risk; subsidizes replacement across
+all cells, including those that would replace anyway.</li>
+<li>Pigouvian add-on: layers an additional charge but doesn’t change the
+conditioning set of the schedule; the residual variance in damage is
+uncorrelated with the priced wedge.</li>
+<li>Mandate: too blunt; forces exit at age 25 regardless of underlying
+risk profile or owner’s outside options.</li>
+</ul>
+<h2 id="what-would-close-the-residual-wedge">What would close the
+residual wedge</h2>
+<ul>
+<li>Extending the actuarial conditioning set to spatial attributes
+(proximity to drinking-water wells, downgradient population density) —
+administratively novel but technically feasible.</li>
+<li>Layering a complementary regulatory instrument that conditions on
+the missing dimension — geographically-targeted retirement program,
+vulnerability-weighted retirement subsidy.</li>
+</ul>
+<h2 id="broader-environmental-policy-debate">Broader
+environmental-policy debate</h2>
+<ul>
+<li>Connects to the long-running discussion of market mechanisms vs
+direct regulation for environmental risk (Goulder &amp; Parry 2008,
+Kellogg &amp; Reguant 2021).</li>
+<li>Risk-rated insurance is a market mechanism that works on the
+dimensions it can reach; it is not a substitute for direct regulation on
+the dimensions outside its actuarial domain.</li>
+<li>Bounded endorsement: insurance pricing should be the first-line
+policy where the conditioning set is rich enough to capture most of the
+social damage; complementary regulation is required where it isn’t.</li>
+</ul>
+<h2 id="connection-to-boomhower-and-mulder">Connection to Boomhower and
+Mulder</h2>
+<ul>
+<li>Boomhower: bonding requirement that screens out judgment-proof
+firms. Different policy lever (asset requirement); different setting
+(oil &amp; gas); same underlying judgment-proof problem.</li>
+<li>Mulder: NFIP shift toward risk classification with information
+channel. Closer policy lever (insurance pricing); different setting
+(floods); has information channel that this paper’s setting mutes.</li>
+<li>Together with this paper: three empirical tests of different
+features of compulsory financial-responsibility instruments in different
+hazardous-capital settings.</li>
+</ul>
+<hr />
+<h1 id="conclusion-14">14. Conclusion (§14)</h1>
+<ul>
+<li>Risk-rated pricing of compulsory liability insurance moves firm
+behavior on the margins theory predicts, with magnitudes large enough to
+materially shift the fleet composition over a decade.</li>
+<li>The welfare reach of insurance pricing alone is bounded by what
+insurer claims data can observe and price — in this setting, primarily
+cleanup cost rather than health damage.</li>
+<li>Where the priced conditioning set captures the bulk of social
+damage, risk-rated insurance can serve as a first-line policy
+instrument. Where it does not, complementary regulatory instruments
+conditioning on the missing dimensions are required.</li>
+<li>Three siblings — Boomhower (asset-requirement leg), Mulder (price +
+information in floods), this paper (pure-pricing leg in USTs) — together
+suggest that the appropriate financial-responsibility instrument depends
+on which channel binds in the particular hazardous-capital setting.</li>
+</ul>
+<hr />
+<h1 id="appendix">Appendix</h1>
+<h2 id="a.-data-appendix">A. Data appendix</h2>
+<ul>
+<li>Full sample to analysis sample (sample restriction flow)</li>
+<li>Balanced-in-missingness check</li>
+<li>State-by-state data quality</li>
+<li>Texas’s unique federal mandate upgrade schedule</li>
+<li>State-by-state claims cost distributions</li>
+</ul>
+<h2 id="b.-robustness">B. Robustness</h2>
+<ul>
+<li>8-parameter and 8p+FE structural specifications</li>
+<li>Alternative control state selections</li>
+<li>Pre-1988 cohort sensitivity</li>
+<li>Alternative matching cell definitions</li>
+</ul>
+<h2 id="c.-premium-reconstruction">C. Premium reconstruction</h2>
+<ul>
+<li>Mid-Continent Casualty SERFF filing detail</li>
+<li>Increased-limit factor calibration</li>
+<li>Control-state premium proxy from fund records</li>
+</ul>
+<h2 id="d.-structural-model-robustness">D. Structural model
+robustness</h2>
+<ul>
+<li>Welfare counterfactuals at alternative <span
+class="math inline"><em>E</em></span> values ($0, $5k, $17k, $50k)</li>
+<li>Sensitivity to discount factor, scrap-value normalization</li>
+<li>Wall-specific, regime-specific, and 25-parameter extensions</li>
+</ul>
+<hr />
+<h1 id="reference-theory-citation-map">Reference: theory-citation
+map</h1>
+<ul>
+<li><strong>Shavell 1982, 1986, 2004</strong> — why pricing matters
+(judgment-proof + compulsory insurance + observable care)</li>
+<li><strong>Diamond 1973</strong> — welfare arithmetic when instrument
+conditions on subset of damage attributes</li>
+<li><strong>Knittel &amp; Sandler 2018</strong> — empirical sibling for
+elasticity-damage correlation in Diamond framework</li>
+<li><strong>Jacobsen, Knittel, Sallee, van Benthem 2020</strong> — R²
+sufficient statistic for restricted-instrument welfare reach</li>
+<li><strong>Goulder &amp; Parry 2008</strong> — instrument-choice
+review</li>
+<li><strong>Fowlie, Reguant &amp; Ryan 2016</strong> — structural-IO
+sibling for welfare arithmetic under entry/exit + externality</li>
+<li><strong>Yin, Pfaff &amp; Kunreuther 2011</strong> —
+insurance-mandate-vs-other-instruments comparison for USTs</li>
+<li><strong>Yin, Kunreuther &amp; White 2011</strong> — Michigan UST
+aggregate precedent</li>
+<li><strong>Marcus 2021</strong> — health damages from UST leaks; source
+of <span class="math inline"><em>E</em></span> calibration</li>
+<li><strong>Boyd 1997</strong> — retrospective insurance / financial
+assurance literature</li>
+</ul>
+<h1 id="reference-three-paper-neighborhood">Reference: three-paper
+neighborhood</h1>
+<ul>
+<li><strong>Boomhower (2019)</strong>: TX oil &amp; gas, bonding
+requirement, judgment-proof channel via firm-size composition.
+<em>Asset-requirement leg of compulsory FR.</em></li>
+<li><strong>Mulder (2022)</strong>: NFIP flood risk classification
+reform. Information + price channels. <em>Insurance-pricing leg with
+information dimension.</em></li>
+<li><strong>This paper</strong>: TX USTs, public-fund →
+private-insurance switch. <em>Pure pricing channel, no information
+channel.</em></li>
+</ul>
+<h1 id="reference-writing-style-notes">Reference: writing style
+notes</h1>
+<ul>
+<li>Diamond / second-best / sufficient-statistic vocabulary belongs in
+§4 (theory) and §13 (discussion). Avoid in intro and reduced-form
+sections; the reader expects theoretical names where they’re doing
+interpretive work, not as set-dressing.</li>
+<li>Empirical claims about premium-vs-MSD mispricing come from the
+structural model in §12, not from descriptive comparisons of expected
+loss to premium. The intro and §6 establish only that the schedule
+tracks predicted hazard along the dimensions both condition on.</li>
+<li>Lead each section with institutional fact or behavioral finding;
+bring in theoretical concept as the closing interpretive frame, not the
+opening hook.</li>
+<li>“Strict liability” is the legal regime; in §3.2 it is explained in
+plain English (owner pays regardless of fault). In §4.1 it is connected
+to the Shavell framework as theory.</li>
+<li>Display equations are centered on their own lines (not embedded in
+bullets). Bullets are for institutional facts, lists of conditions, and
+tabular content; equations and figures get their own typographic real
+estate.</li>
+</ul>

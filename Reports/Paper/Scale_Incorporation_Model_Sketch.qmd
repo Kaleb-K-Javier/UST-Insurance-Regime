@@ -1,0 +1,1709 @@
+﻿---
+title: "From a Single-Tank to a Scale-Incorporation Model"
+subtitle: "Where the six-parameter replacement model strains, and a portfolio sketch that fixes it"
+author: "Kaleb Javier"
+date: "`r Sys.Date()`"
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    linestretch: 1.15
+    toc: true
+    number-sections: true
+    keep-tex: true
+    include-in-header:
+      text: |
+        \usepackage{amsmath}
+        \usepackage{amssymb}
+        \usepackage{booktabs}
+        \usepackage{float}
+        \usepackage{longtable}
+---
+
+# Purpose
+
+This note is a design sketch, not a results report. It does two things:
+
+1. Sets out the **worries** with the current six-parameter (6p) replacement
+   model --- the ways its single-tank state abstraction strains against the
+   multi-tank portfolio dynamics in the data, with the evidence from the
+   Ticket 013 (beginning-of-year, BOY) diagnostics.
+2. Sketches a **scale-incorporation model**: a facility-level dynamic discrete
+   choice model whose state is the facility's *portfolio of tanks* rather than a
+   single representative tank, with a size-specific operating payoff and an
+   explicit partial-closure / downsizing margin.
+
+Nothing here changes the estimator or the live pipeline. It is the
+architect-level economic design to be turned into an implementation ticket only
+after the open empirical checks in Section 6 are run.
+
+\medskip
+
+A unit reminder carried throughout: one model unit $= \$10{,}000$ per year. The
+current model normalizes the operating payoff to one such unit per *facility*;
+the scale model re-bases this to a payoff per unit of *tank capacity* (Section
+4.3), which is the load-bearing change for welfare.
+
+# The six-parameter model in one paragraph
+
+The 6p model treats a facility as a **single tank** moving through a discretized
+state: an age bin $b \in \{1,\dots,8\}$, a wall type $w \in \{\text{SW},
+\text{DW}\}$, and a regime $g \in \{\text{FF}, \text{RB}\}$ ($8 \times 2 \times 2
+= 32$ cells). Each year the facility chooses one of three actions: **maintain**,
+**exit**, or **replace** (install a new tank, which resets age to bin 1). Flow
+utility while operating is
+
+$$
+u_M \;=\; \underbrace{1}_{R,\ \text{normalized}} \;+\; \gamma_{p}\, P
+\;-\; \gamma_{r}\, h,
+\qquad u_E = \kappa, \qquad u_R = -K,
+$$
+
+with the risk-based premium $P$ and expected hazard loss $h$ entering the
+maintain payoff only. This is the textbook Rust architecture: a scalar state
+discretized into bins, with one unit (here, one facility) occupying one bin.
+
+# Where it strains: worries with the single-tank abstraction
+
+The problem is that a facility is **not** one tank. It is a portfolio of tanks
+of different ages, wall types, and sizes. The 6p model collapses that portfolio
+to a single **average-age** cell, and that collapse is the source of every
+worry below.
+
+## The average-age collapse is lossy and non-monotonic {#sec-avg}
+
+A facility with one brand-new tank and one thirty-year-old tank is placed at a
+*middle* age bin --- it looks like a homogeneous, middle-aged single tank. The
+old tank, which is the hazard and removal candidate, is invisible; the hazard is
+computed off the wrong (averaged) age. Worse, as tanks are added or pruned the
+average moves **non-monotonically** across years even when no individual tank's
+status changed, generating spurious state transitions.
+
+## Replace transitions are almost never on-support
+
+The single-tank `F_replace` resets the facility's *average* age to bin 1. But a
+one-tank swap at a multi-tank facility barely moves the average, so the modeled
+post-replacement state rarely matches the data. The Ticket 013 diagnostics
+quantify this: **98.3% of replacement transitions land off-support**
+(5,310 of 5,404). The replacement margin --- the very object the model exists to
+study --- is essentially never represented correctly for multi-tank facilities.
+
+## Partial closure is mislabeled as maintain
+
+Closing *some* tanks while continuing to operate ("partial closure" or
+downsizing) has no action in the 6p model. It gets folded into **maintain**, and
+shows up as an average-age jump under a maintain label. After BOY stamping fixed
+the wall dimension, the residual maintain off-support is **0.685%** (14,652
+rows), of which 14,121 are exactly these partial-closure age jumps. Small in
+mass, but it is a *structural* gap, not a coding error: the single-tank
+maintain transition cannot represent it.
+
+## The double-walled replace margin: degeneracy resolved, churn-vs-replacement remains
+
+Under the earlier end-of-year stamping the DW conditional-replace share was
+pinned at one ($\Pr(\text{replace} \mid \text{close}) = 1$ for all DW cells),
+because DW exits --- a DW facility has zero tanks at year-end --- were routed out
+of the DW cells by the worst-tank rule. **Beginning-of-year stamping (Ticket
+013) resolved that degeneracy:** the DW cells now retain their exits (all-DW
+closures split 3,773 exit / 745 replace, so $\Pr(\text{replace}\mid\text{close})
+\approx 0.17$), and $K_{\text{DW}}$ is now identified off real within-DW
+variation rather than off the close rate and functional form alone. What the
+single-tank model *still* cannot do is separate a genuine like-for-like
+replacement from within-facility tank churn (one DW tank swapped at a large,
+DW-heavy facility): that separation is the replacement transition itself, which
+remains 98% off-support (above), and only the portfolio state recovers it.
+
+## It cannot generate the size-dependent regime response
+
+The headline reduced-form fact is that the flat-fee-to-risk-based (FF$\to$RB)
+response is **size-dependent and sign-reversing**: about $+6.2$ percentage
+points at facilities with 4+ tanks, but $-4.9$ to $-6.9$ points at 2--3 tank
+facilities. A single-tank model facing a common regime shock can scale a
+response by size but cannot **flip its sign**. A sign reversal points to a
+margin that exists at large facilities and not at small ones --- partial
+downsizing --- which the 6p model does not contain.
+
+## Consequence for the counterfactuals
+
+The four target counterfactuals are not equally exposed. The replacement-subsidy
+CF leans directly on the margin that is 98% off-support, and the size-HTE
+("Texas stays flat-fee") and age-mandate CFs need per-tank age that the average
+collapses. The table summarizes the exposure.
+
+\begin{table}[H]
+\centering
+\caption{Counterfactual exposure to the single-tank abstraction.}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Counterfactual & Margin it leans on & 6p exposure \\
+\midrule
+TX stays flat-fee (size HTE) & size-dependent close/replace & high (sign reversal) \\
+Pigouvian / first best & per-tank marginal damage & low (additive premium) \\
+Replacement subsidy curve & replacement transition & \textbf{high} (98\% off-support) \\
+Removal mandate at age $A$ & per-tank age at threshold & high (average collapse) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textit{Notes:} Pigouvian is least exposed because the risk-based
+premium is computed per tank and summed to the facility, so its internalization
+is additive and framing-invariant. The other three each require a portfolio or
+per-tank object the single-tank state does not carry.
+
+\newpage
+
+# The portfolio model
+
+The model exists to answer four counterfactuals: Texas stays flat-fee; a
+first-best Pigouvian contract; a single-walled replacement subsidy; and an
+age-$A$ removal mandate. It is judged by coverage of the margins those
+counterfactuals move, not by goodness of fit. Every design choice below traces
+to an exhibit in Part 3 or a counterfactual requirement in Part 4.
+
+## State
+
+$$
+s = (n,\, G,\, \rho), \qquad n \in \mathbb{N}_0^{16}
+$$
+
+$n$ is a vector of tank counts over 16 categories formed by wall type
+(single- or double-walled) crossed with eight five-year age bins; $G$ is the
+facility's capacity quartile bin; $\rho$ is the insurance regime, fixed over
+the facility's life. The owner thinks about tanks the way the insurer prices
+them and leaks happen --- through construction type and age --- and thinks about
+scale in gallons. The model's bookkeeping records this as counts per category:
+tanks within one (wall, age-bin) category are interchangeable (evidence: X5).
+
+## First-stage objects
+
+All of the following are measured from data; none are estimated in the NPL step.
+
+- **Empirical cell prices $\bar p_c$.** The average premium actually paid by
+  single-cell Texas facility-years (all tanks in one (wall, age-bin) category),
+  2006 era; one price per cell (X3 empirical card table).
+- **FF contract lookup.** Each control state's own flat-fee contract
+  $(\tau_s, D_s)$ --- per-tank fee and deductible --- time-averaged for
+  stationarity. Texas has no registry-recorded per-tank fee;
+  $D_{\text{TX}} = \$5{,}000$ is assumed. **Kansas and Maryland are excluded
+  from estimation**, on the evidence of the ASTSWMO state-fund surveys the
+  premium file itself cites: both states' funds functioned as *cleanup* funds
+  but did not satisfy federal financial responsibility --- Kansas operators
+  were required to carry private third-party liability coverage (K.S.A.
+  65-34,117), and the ASTSWMO 2002 Table 2 footnote states Maryland owners
+  "need private insurance or be self-insured." The operator-facing premium in
+  both states is therefore private and unrecorded. Kansas is a noted
+  robustness candidate for re-inclusion: its fund deductible *is* recorded
+  ($\$3{,}000$ plus $\$500$ per tank --- a deductible with a count slope),
+  usable under the stated assumption that its private liability premium is
+  composition-invariant and absorbed by the Kansas fixed effect.^[Per-state contracts cost no
+  parameters and no extra computation: the engine already solves per state for
+  the fixed effects, and the contract variation survives the state fixed effects
+  because contracts enter multiplied by within-state-varying quantities ---
+  $\tau_s$ as a slope on $N(n)$, $D_s$ as a slope on $H(n)$. An additive
+  fixed effect absorbs levels, not slopes.]
+
+  **Identification threats.** The slope-based identification compares hazard-
+  and count-responsiveness across states with different contracts, so it is
+  exposed to anything that makes those responsiveness differences for other
+  reasons. Three concrete threats: (i) contract terms may be set in response to
+  the state's tank stock --- a state with riskier old tanks choosing a higher
+  deductible bends the slope comparison (reverse causality); (ii) enforcement
+  and inspection intensity may co-vary with contract stringency, so behavior
+  attributed to the deductible could partly reflect inspections; (iii) fund
+  payout reliability differs across states --- a slow- or unreliably-paying
+  fund changes the owner's effective exposure beyond the stated $D$. Mitigations,
+  stated without overselling: state fixed effects absorb level confounders, year
+  fixed effects absorb common shocks, and the regime channel is cross-validated
+  by the DiD; threats (i)--(iii) are why the welfare results lean hardest on the
+  within-Texas and regime-contrast variation, with the cross-state slopes as
+  supporting evidence. Zero-fee states still contribute to $\hat\gamma_r$
+  through their deductibles.
+
+- **Facility-level hazard $h^{ML}$.** The leak data is facility-level and
+  cannot support per-tank rates; the assumption is stated as such.
+- **Per-tank aging kernel $\Lambda$.** Empirical age-bin transition probabilities
+  (X4 age-transition table).
+- **Capacity kernel $\Gamma_G(\cdot \mid G,\, m-k)$.** Empirical capacity-bin
+  transition probabilities, conditioned on net tank change $m - k$ (X4
+  G-transition table; to be re-estimated on this conditioning in the estimator
+  first stage --- removing 3 and installing 2 is not the same event as removing
+  4 and installing 1).
+- **Removal rule $r(n,k)$.** Defined in Section 4.4 below.
+
+## Perceived quantities
+
+$$
+N(n) = \sum_c n_c \qquad P(n,\rho) = \begin{cases} \sum_c n_c\, \bar p_c &
+\rho = \mathrm{RB} \\ \tau_s\, N(n) & \rho = \mathrm{FF} \end{cases}
+$$
+
+$$
+H(n) = h^{ML}\!\left(\bar a(n),\, w(n)\right) \qquad
+OOP(n) = H(n) \cdot \min\{D,\, L\}
+$$
+
+$P$ is the actual average insurance bill by construction --- empirical prices
+under risk-based pricing, a per-tank flat fee under flat-fee. $H$ is "a leak
+at my facility this year," read off the risk model at the portfolio's
+average-age band and majority wall type --- no finer than the data support.
+$OOP$ is the contract: when a leak occurs, the owner pays the deductible up to
+the cleanup cost; the minimum is nearly always $D$ since cleanup
+$L \approx \$300{,}000$.
+
+## Actions: the $(k,m)$ menu
+
+$$
+\mathcal{A}(s) = \{(k,m) : 0 \le k \le N(n),\; 0 \le m \le \bar m\} \cup \{X\}
+$$
+
+$(0,0)$ is maintain; $(k,0)$ with $k > 0$ is downsize; $(k, m \ge 1)$ is
+replace or consolidate; $X$ is full exit. Expansion is outside the model
+(fenced; evidence: X1).
+
+The menu works like wings priced per wing: each $(k,m)$ is just another option,
+and two per-unit costs price every line; the model never predicts $k$ or $m$,
+the owner chooses them. Only 13.7\% of replacements remove exactly one tank;
+the modal replacement removes 3 and installs 2 (X7b). The removal rule
+identifies which tanks leave:
+
+$$
+\text{the } k \text{ removed tanks are the oldest single-walled; if fewer than }
+k \text{ exist, the oldest double-walled fill the remainder}
+$$
+
+$$
+n' = n - r(n,k) + m\, e_{DW,1}
+$$
+
+New installs are double-walled by law --- a regulation enforced in every sample
+state and confirmed in X9.
+
+## Flow payoffs
+
+**Sign convention.** All money outflows carry explicit minus signs. $\gamma_p$
+and $\gamma_r$ are positive dollar-to-utility exchange rates. The restriction
+$\gamma_p = \gamma_r$ --- that a certain premium dollar and an expected
+out-of-pocket dollar enter utility identically --- is a testable restriction the
+data can reject; differences indicate salience effects or risk-weighting.
+
+For an operating action with post-action composition $n'$:
+
+$$
+u_{(k,m)}(s) = \varphi_G + \alpha_g - \gamma_p\, P(n',\rho)
+- \gamma_r\, OOP(n') - k\, c^{rem} - m\, c^{inst}
+$$
+
+For full exit:
+
+$$
+u_X(s) = \kappa_1\, N(n), \qquad \kappa_0 := 0
+$$
+
+Setting $\kappa_0 := 0$ is a units choice: it pins the scale of the value
+function and frees $\varphi_G$ to measure the level of operating payoffs in
+model units.
+
+## Laws of motion
+
+The $k$ tanks identified by $r(n,k)$ leave; $m$ new double-walled tanks enter
+at age bin 1. Each surviving tank advances one bin at year-end via the aging
+kernel $\Lambda$; the bin-8 absorbing state captures tanks that age out of the
+grid. Capacity $G$ transitions via $\Gamma_G(\cdot \mid G,\, m-k)$; it is
+degenerate at $(0,0)$. Full exit is absorbing; $\rho$ is fixed. Every object
+here is an exhibit in Part 3, not an assumption.
+
+## Choice structure
+
+$$
+v_a(s) = u_a(s) + \beta \sum_{s'} F_a(s' \mid s)\, V(s'), \qquad \beta = 0.95
+$$
+
+$$
+IV(s) = \lambda \log \sum_{(k,m) \ne (0,0)} e^{v_{(k,m)}(s)/\lambda}
+$$
+
+$$
+V(s) = \log\!\left( e^{v_{(0,0)}(s)} + e^{IV(s)} + e^{v_X(s)} \right)
+$$
+
+$$
+P\!\left((k,m) \mid s\right) = \frac{e^{IV(s)}}{e^{v_{(0,0)}} + e^{IV} +
+e^{v_X}} \times \frac{e^{v_{(k,m)}/\lambda}}{\sum_{(k',m') \ne (0,0)}
+e^{v_{(k',m')}/\lambda}}
+$$
+
+Each option carries an idiosyncratic draw --- what the owner knows that we
+don't (a retirement plan, a lease renewal, a contractor quote); the owner is
+rational, the randomness is our ignorance. The three top-level options
+(maintain, any tank-work, exit) each have an independent draw; the tank-work
+options share an additional draw parameterized by $\lambda$, reflecting the
+common circumstances that make an owner willing to touch their tanks at all (the
+same contractor visit, the same permit window). $\lambda \in (0,1]$; at
+$\lambda = 1$ the model collapses to a flat logit over all options --- a special
+case the data can choose. The menu's payoff structure already makes nearby
+$(k,m)$ pairs close substitutes; $\lambda$ carries only the residual
+shared-circumstances channel beyond what payoffs imply.
+
+## Parameters and estimation
+
+$$
+\theta = \left(\varphi_G,\; \gamma_p,\; \gamma_r,\; c^{rem},\; c^{inst},\;
+\kappa_1,\; \lambda,\; \{\alpha_g\}\right)
+$$
+
+$$
+\hat\theta = \arg\max_\theta \sum_{i,t} \log P\!\left(a_{it} \mid s_{it};\,
+\theta\right)
+$$
+
+Estimated by nested pseudo-likelihood (NPL); the inclusive-value machinery is
+already in the library. Identification, one line each:
+
+- $\gamma_p$: contract contrasts --- regime gap \$709 at matched composition
+  (X11); re-filings; cross-state per-tank fees.
+- $\gamma_r$: hazard variation times deductible levels --- within Texas $D$ is
+  flat so identification runs through $H(n)$ varying with composition;
+  cross-state $D$ moves OOP levels.
+- $\gamma_p = \gamma_r$: testable.
+- $c^{rem},\, c^{inst}$: the $(k,m)$ frequency distribution (X7b).
+- $\kappa_1$: exit-size gradient --- large facilities exit less (odds ratio 0.48;
+  X2).
+- $\lambda$: co-movement of tank-work options in excess of what observed payoffs
+  explain.
+
+Eight economics parameters plus state fixed effects $\{\alpha_g\}$ on a state
+space two orders of magnitude richer than the 6p model --- parameters did not
+grow because the removal identity is predictable and costs are per-unit.
+
+## Untestable and conventional assumptions
+
+- Shock distribution shape (type-1 extreme value at every nest level).
+- $\beta = 0.95$ --- annual discount factor (about a 5 percent annual rate);
+  conventional, with sensitivity in Part 4. NOTE (2026-06-21): the model uses
+  annual discounting. An earlier monthly value of 0.9957 has been replaced by
+  the annual 0.95 here; the estimation config must be reconciled to 0.95 before
+  the next portfolio fit.
+- Owners' beliefs equal the estimated hazard and aging processes.
+- Stationarity: no anticipation of ban dates or policy changes.
+- Facility-level hazard resolution: the leak data cannot support per-tank rates
+  (data limitation, stated explicitly).
+- Linear utility in money.
+- $\kappa_0 := 0$: units normalization.
+
+## The welfare wedge
+
+A leak at facility $i$ costs society $L + E$: cleanup cost $L$ plus external
+damages $E$ beyond cleanup. Under contract $(P, D)$, the owner bears
+$\min\{D, L\} = D$ directly; the insurer or fund bears $L - D$. Under
+risk-based pricing, $L - D$ is priced back into $P$ to the extent the card
+tracks the facility's own hazard. Under a flat fee, $L - D$ is socialized and
+does not vary with the facility's hazard. The external damage $E$ is borne by
+nobody in the market under either regime.
+
+The owner's private marginal cost of own-hazard $H(n)$:
+
+*Risk-based.* Differentiating $\gamma_p P + \gamma_r OOP$ with respect to $H$:
+the facility internalizes $D$ directly through the OOP channel, plus $L - D$
+through the actuarial premium channel to the extent the card tracks $H$. The
+X3 flatness finding --- the empirical schedule is much compressed relative to
+the filed card --- implies this pass-through is partial.
+
+*Flat-fee.* The per-tank fee $\tau_s$ does not vary with $H$; the facility
+internalizes only $\gamma_r \cdot D \cdot \partial H/\partial \text{action}$.
+The term $L - D$ and all of $E$ are fully external.
+
+The first-best counterfactual (CF2) sets the facility's total private exposure
+equal to $H(n)(L + E)$ at the margin. The wedge policy can close:
+
+- FF wedge per unit hazard: $(L - D) + E$.
+- RB wedge: $E$ plus the under-pass-through of $(L - D)$ implied by the
+  compressed empirical card.
+
+Welfare tables report $\text{SocialWelfare} = \text{ProducerSurplus} -
+\text{ExternalDamage} - \text{GovtOutlay}$ under each contract, with $E$
+calibrated at $E = \$50{,}000$ per leak event and a band reported around the
+calibration.
+
+\newpage
+
+# Bringing in revenue: a measured operating payoff tied to the portfolio {#sec-rev}
+
+*Design addition, not yet in the estimator. The closest template is Sweeting (2013):
+build the per-period revenue as a function of the firm's own state from outside data,
+plug it in, and let the dynamic step estimate only the costs. Gowrisankaran and Rysman
+(2012) supply the piece Sweeting holds fixed --- how to let the external market move over
+time without breaking stationarity.*
+
+## The gap
+
+The operating payoff today is a free constant by capacity bin, $\varphi_G$, plus a state
+level $\alpha_g$. Nothing tells the model what a facility actually earns, so the dollar
+weights and every welfare number rest only on the two insurance terms --- the premium
+($\gamma_p$) and the deductible-driven out-of-pocket cost ($\gamma_r$). We want the data
+to say how much each dollar a facility faces --- premium, deductible, and revenue ---
+moves its behavior. For that the model needs a measured revenue that varies with things
+we observe. We are not trying to test whether a dollar of each is valued the same; that
+equality is a fact we would report, and "force them equal" is a counterfactual, not the
+estimation target.
+
+## The Sweeting move: measure revenue as a function of the state, then plug it in
+
+Sweeting does not estimate station revenue inside his dynamic model. He builds it first,
+from outside data (listeners by demographic $\times$ advertising price per listener), as a
+function of the state, and inserts it; the dynamic step then estimates only the
+repositioning and scope costs. This model already treats premiums, hazard, and the
+transition kernels exactly this way --- measured first, with NPL estimating the rest ---
+so revenue fits the same architecture. We replace the free operating constant with a
+measured revenue object:
+
+$$
+u_{(k,m)}(s) = \psi\, R(G',\, z_\ell,\, m_t) + \alpha_g
+- \gamma_p P(n',\rho) - \gamma_r\, OOP(n') - k\,c^{rem} - m\,c^{inst},
+$$
+
+where $R(\cdot)$ is per-period operating revenue, measured in the first stage, and $\psi$
+is the one number we estimate from it --- how much a dollar of revenue moves behavior, on
+the same footing as $\gamma_p$ and $\gamma_r$. Revenue scales with the facility's overall
+size; the portfolio composition $n$ continues to drive costs, hazard, and the premium ---
+a clean split between the revenue side (scale) and the risk/cost side (composition). The
+three inputs to $R$ are:
+
+- $G'$ --- the facility's own (post-action) capacity, gallons of storage, already a state.
+  This is the analogue of Sweeting's "own product": revenue scales with the facility's own
+  size.
+- $z_\ell$ --- local market characteristics the firm's action does not change: local
+  demand (county fuel volume or population) and local competition (the county count of
+  gasoline stations, NAICS 447). More nearby stations means less throughput per station,
+  exactly as Sweeting's price per listener falls with more same-format rivals.
+- $m_t$ --- the local fuel margin (retail $-$ wholesale $-$ tax), the time-varying piece.
+
+The piece we cannot read directly is the facility's own throughput --- gallons sold are
+not in the data. Write it as a share of the local market:
+
+$$
+Q_{i,t} = \text{share}_{i,t} \times Q^{\text{mkt}}_{t},
+\qquad R(G', z_\ell, m_t) = m_t \times Q_{i,t},
+$$
+
+where $Q^{\text{mkt}}_t$ is total gallons in the local market (county or state, from EIA)
+and $\text{share}_{i,t}$ is the facility's slice of local gas demand. The level comes from
+EIA, which we trust; only the split across stations has to be inferred. Two signals carry
+the share, with a clear division of labor:
+
+- **Demand features observed for the whole panel** --- own capacity $G'$, local competition
+  (county station count), population density, and road exposure (e.g., adjacent-road
+  traffic counts). Available every year, including the back years and for facilities that
+  later exit, so these carry the baseline allocation: more capacity, busier road, fewer
+  rivals $\Rightarrow$ a larger share.
+- **Place-level foot-traffic or card-spend shares** --- the directly-measured slice of
+  local visits or spend among nearby gas stations (Advan / Dewey-type place data). This is
+  the ideal share signal because it sees demand quality that capacity misses, but it exists
+  only for the recent years (roughly 2018 on) and only for stations alive then.
+
+### Using the foot-traffic signal honestly
+
+The tempting move is to fit a share model on the recent foot-traffic years and project it
+back to 1999. We do not lean on that, for two reasons. First, **selection**: facilities
+that exited before the foot-traffic era have no foot-traffic ever, and those exiters are
+exactly the outcome the model studies --- so the recent panel is the wrong population to
+learn their shares from. Second, a share is relative to whoever else is in the local
+market, and market rosters change over time, so a relationship fit on recent markets need
+not transfer to earlier, differently-populated ones.
+
+So the foot-traffic data does the two jobs it *can* do credibly, instead of the back-cast
+it cannot:
+
+1. **Validate and calibrate the baseline allocation.** On the overlap years, check how well
+   the whole-panel demand features reproduce the observed foot-traffic shares. If they track
+   it, the feature-based allocation is trustworthy for the back years --- where features,
+   unlike foot-traffic, are observed for every facility, exiters included; if not, we learn
+   the bias and which feature is missing.
+2. **Discipline the recent slice as a moment.** Require the model's implied revenue shares
+   to match observed foot-traffic shares on the years they exist --- the Sweeting /
+   micro-moment device --- adding information where it is real without extrapolating it
+   where it is not.
+
+The back-year allocation therefore rests on features observed throughout the panel; the
+foot-traffic data checks and disciplines that allocation on the recent overlap rather than
+being projected backward. One assumption remains: the feature-to-share mapping validated on
+recent survivors is taken to apply to the earlier exiters too --- milder than back-casting
+foot-traffic, which is impossible for facilities that were already gone. The simplest
+fallback, if the overlap match is poor or the place data is unavailable, is a capacity-only
+split, $\text{share}_i \propto G_i$ within the local market.
+
+## Why this disciplines the margins the model exists to study
+
+Revenue is evaluated at the post-action capacity $G'$, the same convention the model
+already uses for the premium $P(n',\rho)$ and out-of-pocket cost $OOP(n')$. So when a
+facility downsizes or exits it gives up revenue immediately --- a smaller post-action
+portfolio earns less --- and again through the continuation value, because future capacity
+is lower through the existing kernel $\Gamma_G(\cdot \mid G, m-k)$. (This is one place we
+depart from Sweeting, whose revenue sits on the pre-action state and so cancels within the
+period, biting only through continuation; the post-action convention makes the immediate
+revenue cost of shrinking explicit and matches how premiums are already priced.) Either
+way the downsize, replace, and exit margins --- the whole reason this model exists --- are
+tied to measured dollars rather than a free constant, and the cost parameters $c^{rem}$,
+$c^{inst}$, $\kappa_1$ are identified by their trade-off against real revenue.
+
+## The external piece: letting the margin move without breaking stationarity
+
+The margin $m_t$ trends and cycles, and a stationary model cannot hold calendar time.
+There are two stationary ways to handle it --- this is the Gowrisankaran-Rysman
+contribution:
+
+- **Hold it fixed (Sweeting).** The firm treats the current margin as permanent. Simplest;
+  the state space is unchanged; defensible when the real, detrended margin is roughly flat
+  over the sample, as Sweeting found for radio.
+- **Mean-revert (Gowrisankaran and Rysman).** The firm expects the margin to revert to a
+  long-run level through a simple AR(1) converging to a steady state --- their exact device
+  for representing an evolving industry inside a stationary model. It captures boom and
+  bust expectations at the cost of one low-dimensional process the firm forecasts.
+
+Either way the year is only a key to look up $m_t$; it never enters the value function.
+
+## What it buys, and the choices still open
+
+This buys a revenue weight $\psi$ the data pins down alongside $\gamma_p$ and $\gamma_r$;
+cost parameters identified against measured dollars; the size margins disciplined by
+revenue; and welfare in real dollars. $\psi$ is identified by how exit and downsizing
+respond to measured revenue differences --- across facilities (own capacity, local demand,
+local competition) and over time (the margin) --- with the cross-section the thicker
+source. If facilities act on local revenue surprises we do not observe, identification
+leans on the innovation in revenue rather than its level (Sweeting's device) and on the
+cross-sectional competition and demand variation.
+
+Five design choices to settle before the estimator spec:
+
+1. Does the measured $R$ replace the free $\varphi_G$ entirely (Sweeting: yes), or sit
+   alongside a residual level? Keeping both is collinear in capacity, so replacing is
+   cleaner; the state fixed effect $\alpha_g$ stays to absorb any residual state-level
+   operating level.
+2. Which whole-panel demand features carry the baseline share allocation (capacity, road
+   exposure, density, competition), and how much weight the foot-traffic overlap gets in
+   calibrating it. The back-cast of foot-traffic itself is set aside (selection on pre-2018
+   exiters); foot-traffic validates and disciplines, it does not extrapolate backward.
+3. Fixed versus mean-reverting margin.
+4. Whether $z_\ell$ (local demand, competition) enters as a fixed facility characteristic
+   or, where it moves over the sample, as a slow state.
+5. Within-year timing: revenue on the post-action capacity $G'$ (consistent with the
+   premium) or on the pre-action capacity (Sweeting).
+
+\newpage
+
+# Identification of the structural parameters {#sec-identification}
+
+The parameter vector is $\theta=(\kappa_1,\psi,\gamma_p,\gamma_r,c^{\mathrm{rem}},
+c^{\mathrm{inst}},\lambda,\{\alpha_g\})$. This section is a constructive
+identification argument: each parameter is shown to be a known function of objects
+the data deliver. The logic is Hotz and Miller (1993). Observed conditional choice
+probabilities (CCPs) pin differences in conditional value functions; the terminal
+exit action eliminates the unobserved continuation value; what remains is a single
+equation, linear in the parameters, whose coefficients are the structural objects
+scaled by the *observed* contract terms (the linear-instrumental-variable
+representation of Kalouptsidi, Scott, and Souza-Rodrigues). The cross-state contract
+design --- different per-tank fees and deductibles, and Texas's risk-rated card ---
+supplies the variation; the state fixed effects absorb only level confounders, never
+the contract-scaled slopes.
+
+## What the data deliver
+
+Write a facility's geographic state as $g$, with regime
+$\rho(g)\in\{\mathrm{FF},\mathrm{RB}\}$, per-tank flat fee $\tau_g$ (zero in the
+no-fee states), deductible $D_g$, and a state fixed effect $\alpha_g$ in the
+operating payoff. The dynamic state is $s=(n,G,\rho)$, with composition $n$, total
+tank count $N(n)=\sum_c n_c$, and capacity bin $G$ --- a *separate* state object
+from $n$, since tank size is orthogonal to wall and age. Estimation observes, for
+every cell $s$: the CCPs $\{P(a\mid s)\}$ over maintain $M=(0,0)$, exit $X$, and the
+tank-work options $(k,m)\in W$; the transition kernels; and the first-stage
+primitives revenue $R(G)$, premium $P(n,\rho)$, hazard $H(n)$, out-of-pocket
+$OOP(n)=H(n)\min\{D_g,L\}$, and the contracts $(\tau_g,D_g,\bar p_c)$.
+
+Flow payoffs, with the contracts written out:
+$$
+u_M(s)=\psi R(G)+\alpha_g-\gamma_p P(n,\rho)-\gamma_r OOP(n),\qquad
+u_X(s)=\kappa_1 N(n),
+$$
+$$
+u_{(k,m)}(s)=\psi R(G')+\alpha_g-\gamma_p P(n',\rho)-\gamma_r OOP(n')
+-k\,c^{\mathrm{rem}}-m\,c^{\mathrm{inst}},
+$$
+with exit absorbing ($\kappa_0:=0$, no continuation). Conditional value functions
+are $v_a(s)=u_a(s)+\beta\,\mathbb{E}[V(s')\mid s,a]$, with $v_X(s)=\kappa_1 N(n)$,
+and $V(s)=\log\!\big(e^{v_M}+e^{IV}+e^{v_X}\big)$,
+$IV(s)=\lambda\log\sum_{(k,m)\in W}e^{v_{(k,m)}/\lambda}$.
+
+## Step 1: the inversions
+
+For two top-level alternatives, the Hotz--Miller inversion gives the log
+choice-probability ratio as the conditional-value difference, with no nest scale
+($M$ and $X$ are singleton top nests):
+$$
+\log\frac{P(a\mid s)}{P(b\mid s)}=v_a(s)-v_b(s),\qquad a,b\in\{M,X\}.
+$$
+For two options inside the tank-work nest the same difference appears, divided by
+the nest scale:
+$$
+\log\frac{P(a\mid s)}{P(b\mid s)}=\frac{v_a(s)-v_b(s)}{\lambda},\qquad a,b\in W.
+$$
+
+## Step 2: eliminating the continuation value
+
+The exit-vs-maintain inversion is
+$$
+L(s)\equiv\log\frac{P(X\mid s)}{P(M\mid s)}
+=v_X(s)-v_M(s)=\kappa_1 N(n)-u_M(s)-\beta\,\mathbb{E}[V(s')\mid s,M].
+$$
+The continuation $\mathbb{E}[V(s')\mid s,M]$ is not observed. Eliminate it with the
+Hotz--Miller representation evaluated at exit, which is terminal: for any future
+state $s'$,
+$$
+V(s')=v_X(s')-\log P(X\mid s')=\kappa_1 N(n')-\log P(X\mid s'),
+$$
+because exiting at $s'$ pays $\kappa_1 N(n')$ and ends the program. Taking
+expectations under the maintain transition,
+$$
+\mathbb{E}[V(s')\mid s,M]
+=\kappa_1\,\mathbb{E}[N(n')\mid s,M]-\mathbb{E}[\log P(X\mid s')\mid s,M],
+$$
+both terms observed (the aging kernel and future exit CCPs). Substituting and
+collecting the $\kappa_1$ terms:
+$$
+\begin{aligned}
+L(s)&=\kappa_1 N(n)-u_M(s)
+-\beta\big(\kappa_1\,\mathbb{E}[N(n')\mid s,M]-\mathbb{E}[\log P(X\mid s')\mid s,M]\big)\\
+&=\kappa_1\big(N(n)-\beta\,\mathbb{E}[N(n')\mid s,M]\big)
+-u_M(s)+\beta\,\mathbb{E}[\log P(X\mid s')\mid s,M].
+\end{aligned}
+$$
+
+## Step 3: the estimating equation
+
+Move the observed continuation term left and substitute $u_M$. Define the observed
+dependent variable and the observed discounted net count
+$$
+Y(s)\equiv L(s)-\beta\,\mathbb{E}[\log P(X\mid s')\mid s,M],\qquad
+\tilde N(s)\equiv N(n)-\beta\,\mathbb{E}[N(n')\mid s,M].
+$$
+Then
+$$
+\boxed{\;Y(s)=\kappa_1\,\tilde N(s)-\psi R(G)-\alpha_g+\gamma_p P(n,\rho)
++\gamma_r OOP(n)\;}
+$$
+This is a linear regression: a fully observed left-hand side on observed regressors
+$\{\tilde N,R,P,OOP\}$ and state fixed effects. The coefficients are the structural
+parameters --- $\kappa_1$ on $\tilde N$, $-\psi$ on $R$, $\gamma_p$ on $P$,
+$\gamma_r$ on $OOP$. No value function remains; the dynamics live entirely in $Y$
+and $\tilde N$, both built from CCPs and the kernel. Each parameter is identified
+exactly as a regression coefficient is --- the partial effect of its own regressor,
+provided that regressor varies independently of the others (the rank condition). The
+rest of the section names the variation that delivers each.
+
+## Step 4: contracts and the cross-state design
+
+Substitute the contract forms $P(n,\mathrm{FF})=\tau_g N(n)$ and $OOP(n)=D_g H(n)$
+into the boxed equation for a flat-fee state:
+$$
+Y(s)=\kappa_1\,\tilde N(s)+\gamma_p\,\tau_g\,N(n)+\gamma_r\,D_g\,H(n)
+-\psi R(G)-\alpha_g.
+$$
+The contracts $(\tau_g,D_g)$ enter as *state-specific multipliers on within-state
+quantities* --- the fee on count, the deductible on hazard. The fixed effect
+$\alpha_g$ is an additive intercept: it absorbs the level of behavior in each state
+but cannot absorb a multiplier on a within-state-varying regressor. This is the
+formal content of "a fixed effect absorbs levels, not slopes," and it is why the
+*cross-state* contract variation, not within-state variation alone, is the engine of
+identification for $\gamma_p$ and $\gamma_r$.
+
+## Identification of each parameter
+
+**$\kappa_1$ (exit value per tank).** In the no-fee states $\tau_g=0$, so the
+premium drops and
+$Y(s)=\kappa_1\tilde N(s)+\gamma_r D_g H(n)-\psi R(G)-\alpha_g$; the coefficient on
+$\tilde N$ is $\kappa_1$, uncontaminated by the premium. So $\kappa_1$ is identified
+by the exit-vs-maintain response to (discounted net) tank count where insurance puts
+no price on holding a tank, holding capacity and hazard fixed. It separates from
+$\psi$ because $\tilde N$ (count) and $R(G)$ (capacity) are independent regressors
+--- count varies at fixed capacity, capacity at fixed composition --- a separation
+unavailable in the single-tank model, where the two coincide.
+
+**$\gamma_p$ (premium sensitivity).** The coefficient on the premium $P$. Two
+independent sources identify it. First, the *cross-state fees*: with $P=\tau_g N$,
+the regressor $\gamma_p\tau_g N$ scales with $\tau_g$ while the $\kappa_1$ regressor
+$\tilde N$ does not, so pooling states of different $\tau_g$ (the no-fee states
+fixing $\kappa_1$, the fee states adding $\gamma_p\tau_g N$) breaks the count
+collinearity and pins $\gamma_p$. Second, the *Texas card*: under risk rating
+$P=\sum_c n_c\bar p_c$ varies with the wall/age composition at fixed count --- the
+only premium variation orthogonal to count in the data, and the only one that
+represents a risk-priced premium. The fixed effect leaves both untouched, since each
+enters as a slope.
+
+**$\gamma_r$ (out-of-pocket sensitivity).** The coefficient on $OOP=D_g H(n)$. The
+*cross-state deductibles* $D_g$ scale the hazard slope, so the cross-state
+difference in the behavior-vs-hazard gradient identifies $\gamma_r$; within Texas,
+where $D$ is flat, hazard variation across compositions gives a second reading.
+Separation from $\gamma_p$ rests on the flat-fee states --- whose premium is flat in
+risk, so their hazard variation carries no premium-risk confound --- and on the
+Texas card's discrete age-steps and re-filings, which move the premium independently
+of smooth hazard.
+
+**$\psi$ (revenue weight).** The coefficient on $R(G)$, common across states.
+Identified by facilities of the same wall/age composition $n$ but different total
+capacity, hence different measured revenue, at which the operating-vs-exit odds
+shift through $\psi R$ while exit carries no revenue term. Replacing $\psi R(G)$ by
+free capacity-bin constants $\varphi_G$ returns the same argument with capacity
+dummies in place of measured revenue; using measured $R$ is the over-identifying
+restriction that fixes the dollar scale.
+
+**$c^{\mathrm{rem}},c^{\mathrm{inst}}$ (per-unit removal and install costs).** From
+the within-nest inversion at adjacent menu points. For $a=(k,m)$, $b=(k-1,m)$ (one
+extra removal), eliminating the continuation as in Step 2,
+$$
+\lambda\log\frac{P_{(k,m)}}{P_{(k-1,m)}}+\beta\,\Delta_k\mathbb{E}[\log P(X\mid s')]
+=-c^{\mathrm{rem}}+\psi\,\Delta_k R-\gamma_p\,\Delta_k P-\gamma_r\,\Delta_k OOP
++\beta\kappa_1\,\Delta_k\mathbb{E}[N'],
+$$
+where $\Delta_k$ is the change from removing one more tank under the removal rule.
+The left side is observed (given the four parameters above); $c^{\mathrm{rem}}$ is
+the per-removal intercept once the revenue, premium, hazard, and continuation
+changes that one tank induces are netted out. The install cost $c^{\mathrm{inst}}$ is
+identical with $b=(k,m-1)$ and $\Delta_m$ for $\Delta_k$ --- the replace-versus-
+downsize margin. Both are identified up to the nest scale $\lambda$, since they enter
+the within-nest log-odds divided by $\lambda$.
+
+## The role of Texas's risk rating {#sec-id-texas}
+
+Texas is the only risk-rated state, and it does work no flat-fee state can. In a
+flat-fee state the premium $\tau_g N$ moves only with count, so it is collinear with
+the exit-scrap channel $\kappa_1$ and reveals nothing about how facilities respond
+to a premium that reflects their *own hazard*. Texas's card makes the premium vary
+with the wall/age composition at fixed count, which (i) supplies premium variation
+orthogonal to count, giving an identification of $\gamma_p$ independent of the
+cross-fee channel and of $\kappa_1$; (ii) is the sole observation of behavior under
+risk pricing --- the exact object the "Texas stays flat-fee" (CF1) and first-best
+(CF2) counterfactuals require; and (iii) lets the card's age-steps and re-filings,
+which outrun smooth hazard, separate $\gamma_p$ from $\gamma_r$ within a risk-priced
+regime. The flat-fee states identify $\kappa_1$, the count-fee component of
+$\gamma_p$, and a clean $\gamma_r$; Texas adds the risk-priced-premium response the
+policy questions turn on.
+
+## Threats to identification
+
+The cross-state design is exposed where contracts are not exogenous to behavior.
+Three threats: contract terms set in response to a state's tank stock (a state with
+older, riskier tanks choosing a higher deductible bends the $\gamma_r$ slope);
+enforcement or inspection intensity co-moving with contract stringency; and
+differences in fund payout reliability that change effective exposure beyond the
+stated $D_g$. The state fixed effects absorb level confounders and year effects
+absorb common shocks, but neither addresses a confounder that co-moves with the
+contract *slope*. Identification therefore leans hardest on the within-Texas card
+and hazard variation, with the cross-state contract slopes as corroborating
+evidence, and the regime channel is cross-validated by the difference-in-differences
+work reported elsewhere.
+
+\newpage
+
+# The assumption evidence suite {#sec-ae}
+
+*This section supersedes the open checks in the sketch above. Every empirical
+claim comes from the rebuilt evidence suite (scripts `AE01`--`AE08`, Ticket
+021), purpose-built so that each model assumption has exactly one exhibit,
+computed on one common sample with one common action definition. Earlier
+diagnostic versions (the M- and E-series) remain on disk as the audit trail.
+Each exhibit below carries the model assumption as a centered equation, a brief
+statement of why the model needs it and how the evidence supports it, then
+three short paragraphs: why we run the analysis; how exactly it is computed;
+and what the result says --- first in plain terms, then for the model assumption
+it supports.*
+
+## Sample and conventions used by every analysis below {#sec-ae-conventions}
+
+All analyses run on the same facility-year panel: every facility-year from
+1999 onward with at least one tank at the beginning of the year (2.35 million
+facility-years; 21 states; Texas is the only risk-priced state). A facility's
+beginning-of-year (BOY) portfolio is described by counts of tanks over 16
+categories: wall type (single- or double-walled) crossed with eight five-year
+age bins --- the same age bins the estimation pipeline already uses. Each
+facility-year is assigned exactly one of five behaviors, in this order of
+precedence: **Exit** (every tank closed), **Replace** (closed at least one
+tank and installed at least one, still operating), **Downsize** (closed at
+least one tank, installed none, still operating), **Expansion** (installed
+without closing anything), and **Maintain** (no change). Expansion is counted
+but never pooled with the model's actions. Analyses that condition on the
+insurance regime restrict to the estimation sample (Texas 2006+ plus control
+states); purely physical analyses use the full panel. Every regression reports
+standard errors clustered by state (18 clusters).
+
+## What facilities do in a year {#sec-ae-x1}
+
+$$
+\mathcal{A}(s) = \{(k,m)\} \cup \{X\}
+$$
+
+The model prices four actions: maintain, downsize, replace, exit. This exhibit
+confirms all four are real, countable behaviors in the data. One note on
+the model's multinomial structure: the choice among all options is modeled as a
+single multinomial choice; the evidence regressions below use binary logits
+(one action versus all others) because clustered standard errors are native
+there and, with 97.5\% of facility-years at maintain, the two approaches are
+numerically near-identical at the rare margins.
+
+**Why.** The model cannot price an action that is absent from the data. The
+table establishes that rare actions are rare the way heart attacks are rare ---
+low annual probability, large absolute counts. It also records expansion
+separately, justifying its exclusion from the action set.
+
+**How it is computed.** Each facility-year in the full panel is assigned one
+behavior using the closure and install flags from the facility panel, with the
+precedence order above. Counts of tanks removed and installed within the year
+come from the tank-level BOY build (a tank is "removed in year $t$" if it was
+present at the start of $t$ and has a closure event in $t$; "installed in $t$"
+if its install year is $t$). The table reports event counts and shares of
+facility-years; the simultaneity row counts facility-years with two-plus
+removals and two-plus installs.
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Facility-year behavior frequencies}
+\input{../../Output/Tables/AE_X1_Action_Frequencies.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Full 1999+ panel, 2.35M facility-years. Panel A
+assigns each facility-year one behavior by the precedence order Exit, Replace,
+Downsize, Expansion, Maintain. Panel B counts facility-years with at least two
+tank removals and at least two installs in the same calendar year. Per-size
+columns are in \texttt{AE\_X1\_Action\_Frequencies.csv}.\par}
+\end{table}
+```
+
+**What it says.** Facilities do nothing 97.5\% of the time --- and when they
+act, full exit (40,304 events) dominates, but downsizing (7,325) and
+replacement (6,422) are each thousands of events, with downsizing slightly the
+more common. For the model: every action the model prices has thousands of
+observations behind its cost parameter, and the 4,295 facility-years that
+remove and install multiple tanks at once mean even a fixed mobilization cost
+is not ruled out by the data. The 4,409 expansion years justify fencing
+expansion off rather than forcing it into a model action.
+
+## Size changes what facilities do, holding everything else fixed {#sec-ae-x2}
+
+$$
+n \in s
+$$
+
+Tank counts are a state variable. The exhibit compares behavior within the
+existing 32 (age, wall, regime) cells: if size shifts behavior within those
+cells, it must be in the state. The three size odds ratios --- 0.48 exit, 27.1
+downsize, 3.6 replace --- each come from a regression that absorbs every cell
+fixed effect, so they reflect comparisons of same-cell owners of different sizes.
+
+**Why.** The current model's state has no notion of facility size: a one-tank
+and a five-tank facility in the same (age, wall, regime) cell are forced to
+behave identically. If size shifts behavior within those cells, size must be in
+the state. This is the single most important fact motivating the portfolio
+model, so it gets both a regression (the formal statement) and a figure (the
+raw pattern).
+
+**How it is computed.** On the estimation sample, for each of the three
+non-maintain margins separately, we run a binary logit of "did this
+facility-year take that action" on facility-size indicators (2, 3, 4+ tanks,
+with 1 tank as the base), including a fixed effect for every one of the 32
+(age $\times$ wall $\times$ regime) state cells --- so size is compared only
+within cells, never across them. The table reports odds ratios: an entry of 2
+means that action is twice as likely at that size as at a one-tank facility in
+the same cell. The figure shows the same pattern without any model: raw action
+shares by age bin, drawn separately by size and wall type.
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Action odds by facility size, within state cells}
+\input{../../Output/Tables/AE_X2_Size_Logit.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Binary logit per margin (vs.\ all other
+behaviors), fixed effect for each of the 32 state cells, SE clustered by state
+(18). Odds ratios relative to one-tank facilities; stars: *** p$<$.01,
+** p$<$.05, * p$<$.1. Estimation sample; per-margin sample sizes in
+\texttt{AE\_X2\_Size\_Logit.csv}.\par}
+\end{table}
+```
+
+```{=latex}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.88\textwidth]{../../Output/Figures/AE_X2_CCP_by_Size.pdf}
+\caption{Action shares by age, size, and wall}
+\par\vspace{2pt}
+{\footnotesize\textit{Notes:} Each line is a facility-size class (darker
+$=$ larger); rows are the three non-maintain behaviors; columns are wall type.
+Vertical axes differ by row because base rates differ by an order of magnitude.
+Estimation sample, raw shares with no controls.\par}
+\end{figure}
+```
+
+**What it says.** Hold the state cell fixed and move only size: a 4+-tank
+facility is half as likely to exit as a one-tank facility (odds ratio 0.48) but
+twenty-seven times as likely to downsize (27.1) and three-and-a-half times as
+likely to replace (3.6). In plain terms: big facilities don't leave the
+industry, they prune and recycle their tanks; small facilities can only stay or
+go. For the model: behavior is not just shifted by size, it is reversed across
+margins --- no reweighting of a sizeless model can reproduce that, so tank
+counts must be a state variable. This is the load-bearing exhibit for the
+portfolio state.
+
+## A facility's tanks are nearly identical to each other {#sec-ae-x5}
+
+$$
+\text{tanks within a (wall, age band) category are interchangeable}
+$$
+
+This is bookkeeping, not a claim about behavior: the model's agent cannot tell
+two same-category tanks apart --- and neither can the real owner's bill or risk,
+since price and hazard are constant within a category. The exhibit measures how
+often real portfolios violate category boundaries and finds the answer, for most
+facilities, is almost never.
+
+**Why.** The portfolio state describes a facility by counts of tanks per (wall,
+age-bin) category, not tank-by-tank. That description loses information only
+when a facility's tanks differ from each other within a category boundary --- so
+this exhibit measures how alike a facility's tanks actually are. It is the
+feasibility check for using 16 categories instead of a full tank-level record.
+
+**How it is computed.** For each facility-year on the estimation sample we take
+the oldest and youngest tank ages and the all-single-walled / all-double-walled
+flags from the facility panel. A facility-year is "age-homogeneous" if its
+oldest and youngest tank fall in the same five-year bin, "wall-homogeneous" if
+all tanks share one wall type, and "both" if both hold. The figure plots the
+share of facility-years passing each test, by facility size.
+
+```{=latex}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{../../Output/Figures/AE_X5_Homogeneity.pdf}
+\caption{Within-facility tank homogeneity by size}
+\par\vspace{2pt}
+{\footnotesize\textit{Notes:} Bars are the share of facility-years whose tanks
+are all one wall type, all within one five-year age bin, or both. Estimation
+sample; counts by size in \texttt{AE\_X5\_Homogeneity.csv}. The median
+within-facility age range is zero years at every size.\par}
+\end{figure}
+```
+
+**What it says.** At the median facility, the age gap between the oldest and
+youngest tank is zero years --- tanks are installed together, in batches. Even
+at 4+-tank facilities, 64.5\% of facility-years have every tank in a single
+(wall, age-bin) category; at small facilities it is above 90\%. In plain terms:
+a facility is usually "three single-walled tanks from 1988," not a museum of
+vintages. For the model: describing a facility by category counts is exactly
+right for the large majority of facility-years and only coarsens the
+heterogeneous tail of big facilities --- which is precisely where counts (rather
+than one representative tank) still carry the relevant information.
+
+## Capacity moves like Rust's mileage {#sec-ae-x4}
+
+$$
+G' \sim \Gamma_G(\cdot \mid G,\ m - k), \quad \text{degenerate at } (0,0)
+$$
+
+Total gallons is the scale variable for operating revenue. The model discretizes
+it into quartile bins --- exactly as Rust discretizes bus mileage --- and
+requires the empirical transition matrix. The two tables below provide that
+object: the age-bin kernel and the capacity-bin kernel together. The key finding
+is that the maintain bin is nearly absorbing (diagonal 0.998), while downsize
+and replace see genuine bin movement (stay 0.564 and 0.465 respectively).
+
+**Why.** The transition matrix is the law of motion itself. An earlier read took
+the near-zero median capacity change at replacements as evidence the capacity bin
+was frozen there too; the transition matrix, which is what the model actually
+consumes, shows genuine bin-crossing at replace and downsize that the median hid.
+
+**How it is computed.** Total facility capacity is split at sample quartiles into
+four bins. The age-transition table records, for consecutive facility-year pairs
+by action, the fraction of individual tank-events staying in each age band versus
+advancing. The capacity-transition table records (this year's bin, next year's
+bin) probabilities separately for Maintain, Downsize, and Replace facility-years.
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Age-bin transition kernel by action}
+\input{../../Output/Tables/AE_X4_Age_Transition.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Rows are beginning-of-year age bands (1--8);
+columns are the following year's band. Stay probabilities range 0.725--0.828
+across bands 1--7; band 8 is absorbing by construction. Computed on
+consecutive-year tank records; estimation sample.\par}
+\end{table}
+```
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Capacity-bin transition matrix by action}
+\input{../../Output/Tables/AE_X4_G_Transition.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Rows are this year's capacity quartile bin;
+columns are next year's; entries are row probabilities. Estimated separately
+on facility-years coded Maintain, Downsize, and Replace (consecutive-year pairs,
+estimation sample). Counts in \texttt{AE\_X4\_G\_Transition.csv}.\par}
+\end{table}
+```
+
+**What it says.** Under maintain, the capacity bin is frozen: 0.998 of maintain
+years stay in their bin. Under the partial actions the bin genuinely moves: only
+0.564 of downsize years and 0.465 of replace years stay put. In plain terms:
+capacity is a fixed attribute until the facility touches its tanks. For the
+model: the capacity kernel $\Gamma_G$ enters the law of motion only at downsize
+and replace; at maintain it is degenerate. The kernel will be re-estimated
+conditioned on net tank change $m - k$ in the estimator's first stage --- a
+remove-3/install-2 event is a physically different event from remove-4/install-1.
+
+## When one tank among several is removed, it is the single-walled one {#sec-ae-x6}
+
+$$
+\text{the } k \text{ removed tanks are the oldest single-walled; if fewer than }
+k \text{ exist, the oldest double-walled fill the remainder}
+$$
+
+Owners remove the riskiest tank from their portfolio. The conditional logit
+below compares, within the same facility in the same year, the closed tank
+against its surviving neighbors. The wall and age coefficients translate directly
+into the removal rule the model uses.
+
+**Why.** The model's transition rule for partial actions needs to know which tank
+leaves. This exhibit estimates, within facilities that removed exactly one of
+their several tanks, what distinguishes the removed tank from its surviving
+neighbors --- the direct evidence behind the removal rule.
+
+**How it is computed.** From the tank-level panel we keep facility-years with
+two or more active tanks of which exactly one closed (19,744 events; 76,626
+candidate tanks). A conditional logit compares the closed tank to the surviving
+tanks of the same facility in the same year --- everything facility-level cancels
+because the comparison never crosses facilities. Regressors: tank age, a
+single-walled indicator, capacity in thousands of gallons; SE clustered by state.
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Which tank is removed: within-facility comparison}
+\input{../../Output/Tables/AE_X6_WhichTank.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Conditional logit; each removal is compared only
+against the same facility-year's surviving tanks. 19,744 events, 76,626
+tank-alternatives, SE clustered by state (18).\par}
+\end{table}
+```
+
+```{=latex}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\textwidth]{../../Output/Figures/AE_X6_WhichTank_Forest.pdf}
+\caption{Removal odds ratios, within facility}
+\par\vspace{2pt}
+{\footnotesize\textit{Notes:} Points are odds ratios from the conditional logit
+in the table above; bars are 95 percent confidence intervals on state-clustered
+standard errors. The dashed line at one marks no effect.\par}
+\end{figure}
+```
+
+**What it says.** Within the same facility, the removed tank is single-walled at
+2.85-to-1 odds, each year of age adds 4.4\% to its removal odds, and its size is
+irrelevant (odds ratio 1.000). In plain terms: when an owner culls one tank from
+the herd, they cull the risky construction type, with a mild preference for the
+oldest --- never simply the smallest. The wall coefficient is worth about 24
+years of age, which is why the rule puts every single-walled bin ahead of the
+double-walled ones. For the model: this justifies a removal rule stated on
+exactly the two dimensions the state tracks (wall, then age) and justifies
+leaving capacity out of the rule.
+
+## The rule predicts which tanks leave {#sec-ae-x7a}
+
+$$
+r(n,k)\ \text{is the identity rule;}\ k\ \text{and}\ m\ \text{are choices}
+$$
+
+The rule correctly names the removed categories in 84\% of events; its
+load-bearing half --- single-walled before double-walled --- fails in only 2.8\%.
+The miss-cost table closes the remaining worry quantitatively: even when the
+rule misses, the pricing and hazard consequences are small. This closes the
+big-facility downsizing worry quantitatively.
+
+**Why.** The model assumes removals follow the stated rule. This exhibit checks
+the rule against every real removal event in the units the model uses --- which
+(wall, age-bin) categories lost tanks --- and separately asks how many tanks
+facilities remove at once. The two questions are distinct: the rule fixes which
+tanks leave given their number; the number is a choice (see X7b).
+
+**How it is computed.** For every Downsize or Replace facility-year we know how
+many tanks were removed ($k$) and from which categories. The rule's prediction
+is mechanical: walk the categories in priority order (single-walled
+oldest-to-youngest, then double-walled likewise) and take the first $k$ tanks
+the facility owns. An event is an exact match if predicted and actual categories
+coincide. Two failure types are tallied: removing any double-walled tank while
+keeping a single-walled one (a wall miss --- the part the economics leans on),
+and removing from a younger bin while keeping an older same-wall bin (an age
+miss). The miss-cost table computes, for events where the rule mispredicts, the
+implied premium error and hazard error.
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Removal-rule fidelity by action and size}
+\input{../../Output/Tables/AE_X7_Removal_Fidelity.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Match is the share of events whose removed
+categories exactly equal the rule's prediction. Wrong wall is the share removing
+a double-walled tank while keeping a single-walled one; remaining misses are
+age-bin misses, almost all one bin away. Per-$k$ detail in
+\texttt{AE\_X7\_Removal\_Fidelity.csv}; removed-count vs.\ top-priority-group
+comparison in \texttt{AE\_X7\_Shed\_vs\_Block.csv}.\par}
+\end{table}
+```
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Premium and hazard error at rule misses}
+\input{../../Output/Tables/AE_X7_Miss_Cost.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Among events where the rule mispredicts the
+removed category, premium error is the difference between the predicted and
+actual per-tank premium implied by the composition; hazard error is the
+analogous difference in facility hazard probability. Card-based premium errors
+are upper bounds; the empirical card is flatter.\par}
+\end{table}
+```
+
+```{=latex}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{../../Output/Figures/AE_X7_Kernel_Heat.pdf}
+\caption{Predicted versus realized removal category}
+\par\vspace{2pt}
+{\footnotesize\textit{Notes:} Rows and columns are the 16 (wall, age-bin)
+categories ordered by removal priority; shading is the share of removals the
+rule predicted in the column category that actually came from the row category.
+90.5 percent of all removed tanks sit on the diagonal.\par}
+\end{figure}
+```
+
+**What it says.** The rule names the exact removed categories in 84\% of all
+events, and its load-bearing half --- single-walled before double-walled ---
+fails in only 2.8\%. The heat map shows the misses sit one age bin off the
+diagonal. The miss-cost table closes the big-facility downsizing worry
+quantitatively: conditional on a miss, the mean premium error is \$71/yr
+(p90 \$142) on annual bills of \$500--\$1{,}065, and the hazard error is 0.14
+percentage points; unconditionally the miss cost is approximately \$11/yr ---
+1--2\% of the bill. These are upper bounds because the empirical premium card
+is flatter than the filed card. The wall part of the rule holds equally well for
+replace and downsize (3--6\% misses across both); even the 16\% of events where
+the age part misses impose negligible pricing consequences. For the model: the
+removal identity is deterministic and its errors are small enough to treat as
+measurement noise, not structural misspecification.
+
+## How many tanks: a chosen intensity {#sec-ae-x7b}
+
+$$
+k,\, m\ \text{are choices; only}\ r(n,k)\ \text{is a rule}
+$$
+
+The count of tanks removed ($k$) and installed ($m$) is not predicted by any
+rule --- it is the chosen intensity of the action. The menu works like wings
+priced per wing: each $(k,m)$ pair is just another option, and two per-unit
+costs price every line; the model never predicts $k$ or $m$, the owner chooses
+them.
+
+**Why.** The number of tanks involved in a replacement or downsize is the object
+priced by $c^{rem}$ and $c^{inst}$. Confirming it varies freely over the data,
+rather than concentrating at one-for-one swaps, justifies per-unit costs rather
+than a fixed-menu price.
+
+**How it is computed.** For every Replace and Downsize facility-year, the table
+cross-tabulates the count of tanks removed ($k$) against the count installed
+($m$, zero for downsize events).
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{$(k,m)$ cross-tabulation: tanks removed and installed per event}
+\input{../../Output/Tables/AE_X7_KM_Menu.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Replace events (rows $m \ge 1$) and Downsize
+events ($m = 0$). Counts of facility-years. Only 13.7\% of replacements are
+one-for-one swaps; the modal replacement removes 3 tanks and installs 2. Detail
+in \texttt{AE\_X7\_KM\_Menu.csv}.\par}
+\end{table}
+```
+
+**What it says.** Only 13.7\% of replacements remove exactly one tank; the
+modal replacement removes 3 and installs 2. Downsize events span a similarly
+wide range of $k$ values. In plain terms: replacement is not a one-tank event
+and its scale is not fixed. For the model: two per-unit cost parameters
+($c^{rem}$ and $c^{inst}$) price a wide menu of intensities, and their
+identification comes from the variation in $(k,m)$ counts visible here.
+
+## Replacement recycles capacity; it does not reset the facility {#sec-ae-x8}
+
+$$
+n' = n - r(n,k) + m\, e_{DW,1} \quad (\text{no reset})
+$$
+
+This exhibit exists to kill the old reset-to-zero replace transition and pin
+"tanks out, tanks in, scale carried." The current 6p model's replace transition
+rebuilds the facility from scratch --- and 98\% of real replacements land
+somewhere that transition says is impossible. The new transition carries the
+portfolio along.
+
+**Why.** If replacement reset the state, the post-action composition would be
+deterministic and there would be no role for capacity or age heterogeneity
+surviving a replacement. The data show replacement is recycling --- the facility
+keeps its scale and refreshes a tank.
+
+**How it is computed.** The population is facility-years that closed at least one
+tank and kept operating --- nothing else. Events split into "swap" (at least one
+install that year) and "shrink" (none). For each event we compute the percent
+change in total capacity, the net change in tank count, and --- at the tank level
+--- whether a single-walled tank was removed and a double-walled one installed.
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{What replacement does to the portfolio}
+\input{../../Output/Tables/AE_X8_Recycle.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Closure-years only (operating, at least one tank
+closed). Swap $=$ at least one install the same year. Count chg is the net
+tank-count change; Med cap chg the median percent capacity change; Shed SW inst
+DW the tank-level share removing single-walled and installing double-walled.
+Swap-minus-shrink differences: capacity $+84.4$ points (SE 15.7), count $+0.91$
+tanks (SE 0.15), state-clustered
+(\texttt{AE\_X8\_Recycle\_Tests.csv}).\par}
+\end{table}
+```
+
+```{=latex}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{../../Output/Figures/AE_X8_Capacity_Density.pdf}
+\caption{Capacity change at swap versus shrink events}
+\par\vspace{2pt}
+{\footnotesize\textit{Notes:} Densities of the percent change in total facility
+capacity over the event year, for swap (removed and installed) and shrink
+(removed only) events. Display trimmed to $(-100, 200)$ percent; closure-years
+only.\par}
+\end{figure}
+```
+
+**What it says.** When a facility swaps, its capacity barely moves --- the
+median change is $+6.9$\%, $0.0$\%, and $-9.7$\% at net count changes of 0,
+$-1$, $-2$ --- while shrink-only events destroy capacity ($-14$\%, $-39$\%,
+$-58$\% at the same count changes). Swapping adds 84 percentage points of
+capacity retention relative to shrinking. In plain terms: replacement is
+recycling --- the facility keeps its scale and refreshes a tank. For the model:
+the replace transition removes one tank by the rule and adds one new tank,
+carrying the portfolio along; nothing resets.
+
+## New tanks are double-walled --- by regulation {#sec-ae-x9}
+
+$$
+\text{installs} = e_{DW,1}
+$$
+
+Every new tank placed in the model enters as a double-walled unit in age bin 1.
+This is an institutional fact: every sample state has banned new single-walled
+installs, and the installs that earlier looked like rule violations were almost
+entirely legal pre-ban events.
+
+**Why.** The model's replace action installs a double-walled tank, with no choice
+about it. This exhibit shows that assumption is regulation, not preference, and
+pins the 6\% post-ban single-walled install rate as a registry wall-coding issue
+rather than genuine violations.
+
+**How it is computed.** Among Replace facility-years at facilities holding at
+least one single-walled tank, each event is classified at the tank level into
+three exhaustive classes: removed single-walled and installed double-walled (the
+rule); removed single-walled and installed single-walled (legal only pre-ban);
+removed double-walled only (a genuine violation). Each event is stamped pre- or
+post- its own state's verified ban date. The figure plots the double-walled share
+of all installs by year, Texas versus control states, with tick marks at the ban
+dates.
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Replacement install decomposition by ban timing}
+\input{../../Output/Tables/AE_X9_Install_Decomposition.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} 5,802 Replace events at facilities holding at
+least one single-walled tank. Classes are tank-level acts, mutually exclusive
+and exhaustive. Ban dates are the email-verified state list (Texas
+2009-01-01). Shares are of all 5,802 events.\par}
+\end{table}
+```
+
+```{=latex}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{../../Output/Figures/AE_X9_Install_DW_Share.pdf}
+\caption{Double-walled share of new installs}
+\par\vspace{2pt}
+{\footnotesize\textit{Notes:} Double-walled share of all tank installs by
+calendar year, Texas versus control states. Bottom tick marks are state
+single-walled-install ban effective dates (1989--2017; most 2007--2009).\par}
+\end{figure}
+```
+
+**What it says.** Single-walled installs at replacing facilities collapse from
+31.1\% of events before the installing state's ban to 2.7\% after --- the
+regulation bites visibly in the figure as every state's line saturates at 100\%.
+Genuine violations of the removal rule (replacing a double-walled tank while
+keeping a single-walled one) are 1.3\% of events, pre- and post-ban alike. For
+the model: "the new tank is double-walled" is an institutional fact; the model
+stays stationary because no counterfactual we run changes the ban. The 6\% of
+post-ban events still coded single-walled-install is flagged as a registry
+wall-coding issue, not behavior.
+
+## The pricing regime moves the action margins {#sec-ae-x10}
+
+$$
+P(\text{action} \mid s,\, \rho)\ \text{differs by regime}
+$$
+
+Under risk-based pricing, downsizing falls by half, upgrade-replacement roughly
+doubles, and exit rises --- three margins, three different responses. These are
+the margins the counterfactuals move (Part 4).
+
+**Why.** If downsizing and replacing were interchangeable bookkeeping, the
+insurance regime should not move them differently. This exhibit tests whether
+risk-based pricing shifts which margin facilities use --- the evidence that the
+margins are economically distinct actions worth pricing separately.
+
+**How it is computed.** Three separate binary logits on the estimation sample,
+each with year fixed effects and (age bin, wall, size) controls, SE clustered by
+state. Downsize and exit use the full sample with a risk-based regime indicator.
+The replace margin is estimated only on facilities holding a single-walled tank
+--- there, replacing is upgrading by the removal rule, so a single regime
+coefficient answers the question. (An earlier version interacted regime with wall
+type and produced unstable coefficients from a nearly empty cell; this design
+avoids the interaction.) Texas is the only risk-priced state, so these are
+descriptive contrasts; causal regime claims rest on the difference-in-differences
+work elsewhere.
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Regime contrasts by action margin}
+\input{../../Output/Tables/AE_X10_Regime_Margins.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Binary logit per margin with year fixed effects
+and age/wall/size controls; SE clustered by state (18). Replace row estimated
+on facilities holding at least one single-walled tank. RB present in one state
+(Texas); treat as descriptive. The Texas 2009 install ban partially overlaps the
+upgrade margin after 2009.\par}
+\end{table}
+```
+
+**What it says.** Under risk pricing, downsizing falls by half (odds ratio 0.49),
+upgrade-replacement at single-walled facilities roughly doubles (2.14), and exit
+rises (1.63) --- three margins, three different responses, all significant with
+year effects absorbed. In plain terms: when old risky tanks become expensive to
+insure, owners stop quietly shrinking and start either upgrading the risky tank
+or leaving altogether. For the model: an action set that folded downsizing into
+"maintain" (the current model) hides a margin the policy lever demonstrably
+moves; the four-action set prices all three responses, which is exactly what the
+counterfactuals need.
+
+## What facilities actually pay {#sec-ae-x3}
+
+$$
+P(n,\rho) = \sum_c n_c\, \bar p_c \ (RB), \quad \tau_s N(n) \ (FF)
+$$
+
+The model prices portfolios using the average premium facilities actually paid
+per cell --- not the filed card. Three exhibits establish this object: first, the
+facility-level picture of how total bills relate to portfolio age; second, the
+comparison of filed and empirical cards; third, the identification scatter showing
+premium variation beyond hazard that separates $\hat\gamma_p$ from $\hat\gamma_r$.
+
+**Why.** The model prices a portfolio by summing a per-tank price over its (wall,
+age-bin) categories, so the pricing exhibit should be exactly that object measured
+in the data. The filed rate card is shown beside it because the comparison is
+itself a finding: the card is steep in age, but realized bills are much flatter.
+
+**How it is computed.** *Figure 1 (facility totals by age):* For Texas
+single-category facility-years (all tanks in one (wall, age-bin) cell, which are
+86.6\% of Texas facility-years), total annual premium is plotted against the
+common age bin. Flat-fee states' total bills are plotted at their state's
+per-tank fee times tank count. Note: older portfolios hold approximately twice as
+many tanks on average; part of the total-bill gradient is count, not per-tank
+price. Mixed-composition facilities have no single age bin and so are excluded
+from this figure --- which is precisely why the model prices by composition
+rather than average age. *Filed and empirical card tables:* The filed table
+evaluates the 2006 filed schedule for a standard tank in each cell; the empirical
+table averages the engine-rated per-tank premium among single-cell Texas
+facility-years (245,578 observations) within each cell. *Scatter:* for every
+distinct observed composition, the average premium index against facility hazard
+$H(n)$ (ML model at portfolio composition), one point per composition sized by
+facility-years.
+
+```{=latex}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{../../Output/Figures/AE_X3_Premium_by_Age.pdf}
+\caption{Total facility premium by age band}
+\par\vspace{2pt}
+{\footnotesize\textit{Notes:} Texas single-category facility-years (all tanks in
+one (wall, age-bin) cell; 86.6\% of Texas facility-years); flat-fee
+control-state totals plotted at state fee $\times$ tank count. Single-walled TX
+totals rise from approximately \$500 to \$1{,}065 across age bands; flat-fee
+lines are flat by construction. Older portfolios hold $\approx$2$\times$ more
+tanks on average --- part of the gradient is count, not per-tank price.
+Mixed-composition facilities are excluded because they have no single age bin,
+which is why the model prices by composition.\par}
+\end{figure}
+```
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Filed rate card, dollars per tank-year (2006 era)}
+\input{../../Output/Tables/AE_X3_RateCard.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Columns are the eight five-year age bins. Standard
+tank: \$300 base, statutory liability factor 1.18, age load by bin, double-walled
+credit $-0.20$; equipment, status, and deductible factors at neutral defaults.
+Later re-filings extend old-age loads upward
+(\texttt{AE\_X3\_RateCard.csv}).\par}
+\end{table}
+```
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Average premium actually paid, by cell (2006 era)}
+\input{../../Output/Tables/AE_X3_Empirical_Premium.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Average engine-rated per-tank premium among
+single-cell Texas facility-years (all tanks in one (wall, age-bin) category),
+2006-era years; facility-year counts beneath each average. Old double-walled
+cells (bins 7--8) are thin (n=381/206) --- the DW crossover in those bands is
+noise and selection, not a genuine age-load reversal. All eras and dispersion in
+\texttt{AE\_X3\_Empirical\_Premium.csv}.\par}
+\end{table}
+```
+
+```{=latex}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{../../Output/Figures/AE_X3_Premium_vs_Hazard.pdf}
+\caption{Two pricing worlds over one state}
+\par\vspace{2pt}
+{\footnotesize\textit{Notes:} Premium index against facility hazard $H(n)$ (ML
+model at portfolio composition), one point per observed portfolio composition;
+point size is the number of facility-years with that composition. Teal:
+risk-priced (Texas). Orange: flat-fee control states, where the bill is the
+per-tank fee times the count and is zero in the six states charging operators
+nothing.\par}
+\end{figure}
+```
+
+**What it says.** The filed card climbs from \$319 to \$443 per tank-year as a
+single-walled tank ages, with a \$71 double-walled discount. What facilities
+actually pay climbs barely at all: single-walled cells average \$278--310 across
+every age bin, double-walled \$265--320, and the realized wall gap is \$15--30.
+In old double-walled bins 7--8 the crossover is noise and selection --- those
+cells are thin (n=381/206 facility-years). A candidate explanation: out-of-service
+status credits on old tanks and equipment credits offset the age loads in
+practice. For pricing: $\bar p_c$ will be the empirical averages, not the filed
+card rates. For identification: $\hat\gamma_p$ leans less on the compressed
+cross-cell gradient and more on the regime gap (\$708.8 at matched composition;
+X11) and the re-filings that moved the schedule over time.
+
+## Is there premium variation beyond hazard and size? {#sec-ae-x11}
+
+$$
+\text{Corr}(P,\, H \mid \text{controls}) < 1
+$$
+
+Within risk-priced Texas, 26.7\% of the premium index's variation survives
+controls for hazard, tank count, capacity, and year; at matched composition,
+risk pricing costs a facility \$708.8 more per year (SE \$127.5). These are the
+corrected-$H$ estimates, where $H$ is the facility-level hazard from the ML
+model evaluated at the actual portfolio composition. The residual variation is
+what separates $\hat\gamma_p$ from $\hat\gamma_r$.
+
+**Why.** Price sensitivity and risk sensitivity are separate parameters, and
+they can be told apart only if premiums move independently of hazard. This table
+asks the question directly on the constructed premium index.
+
+**How it is computed.** Each facility-year's premium index is built from its
+actual composition: under risk pricing, the per-cell price summed over the
+facility's tanks; under flat fees, the state's per-tank fee times the tank count.
+Regressions of the index on portfolio hazard $H(n)$, tank count, capacity, and
+year fixed effects run separately for the risk-priced sample, all flat-fee rows,
+fee-positive flat-fee rows, and pooled (the pooled row adds the regime indicator:
+the premium gap at matched composition). Zero-fee flat-fee states: Kansas,
+Maryland, Minnesota, Oklahoma, South Dakota, and Virginia (40.2\% of flat-fee
+facility-years).
+
+```{=latex}
+\begin{table}[H]
+\centering
+\caption{Premium regressions: residual variation and the regime gap}
+\input{../../Output/Tables/AE_X11_Premium_Regressions.tex}
+\par\vspace{4pt}
+{\footnotesize\textit{Notes:} Year fixed effects throughout; SE clustered by
+state except the RB row (one state). Resid/SD(P) is the residual SD as a share
+of the premium SD --- the variation left after hazard, count, capacity, and year.
+Hazard is the facility-level ML-model construction at portfolio composition.
+Zero-fee flat-fee states: KS, MD, MN, OK, SD, VA (40.2\% of flat-fee
+facility-years). Per-tank engine fit by era in
+\texttt{AE\_X11\_RateCard\_Fit\_PerTank.csv}; correlations in
+\texttt{AE\_X11\_Correlations.csv}.\par}
+\end{table}
+```
+
+**What it says.** Within risk-priced Texas, 26.7\% of the premium index's
+variation survives the controls --- the card's discrete age steps and re-filings
+move the bill in ways hazard and size cannot mimic --- and at matched composition,
+risk pricing costs a facility \$708.8 more per year (SE \$127.5). In plain
+terms: there are two genuinely different prices for the same physical facility,
+and even within the risk-priced world the schedule has kinks that risk itself
+does not track. For the model: that is the variation that separates
+$\hat\gamma_p$ from $\hat\gamma_r$.
+
+## The state space is small in practice {#sec-ae-x12}
+
+$$
+368\ \text{compositions cover}\ 95\%\ \text{of facility-years}
+$$
+
+The portfolio state is defined over a large combinatorial space, but real
+facilities are small and their tanks are alike. The coverage curve below shows
+368 portfolio types cover 95\% of facility-years, and 86.6\% of facility-years
+are a single-category facility. Computation and data coverage are non-issues.
+
+**Why.** The portfolio state sounds enormous (every possible count vector over
+16 categories). This exhibit shows it is not: a few hundred portfolio types
+describe nearly everything.
+
+**How it is computed.** Every facility-year's composition is written as its
+16-category count vector; identical vectors are pooled and ranked by how many
+facility-years share them. The curve plots the cumulative share of facility-years
+covered against the number of distinct compositions, log scale.
+
+```{=latex}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{../../Output/Figures/AE_X12_Coverage.pdf}
+\caption{Coverage of facility-years by composition rank}
+\par\vspace{2pt}
+{\footnotesize\textit{Notes:} Cumulative share of facility-years covered by the
+most common portfolio compositions, by rank (log scale). Dashed lines at 95 and
+99 percent. 12,781 distinct compositions observed; 368 cover 95 percent of
+facility-years; 86.6 percent of facility-years occupy a single category.\par}
+\end{figure}
+```
+
+**What it says.** Just 368 of the 12,781 observed portfolio types cover 95\% of
+all facility-years, and most facility-years (86.6\%) are a single category ---
+"$n$ tanks, all alike." In plain terms: the state space is big on paper and
+small in life. For the model: the value function is cheap to compute, every
+commonly visited state has abundant data behind its choice probabilities, and
+the exotic compositions the model can represent but the data rarely visits matter
+only in counterfactuals --- which is exactly when you want the model, not the
+data, to extrapolate.
+
+\newpage
+
+# What the counterfactuals need, and how far the data lets them go
+
+Each counterfactual is a surgical change to one object in the model. For each,
+the paragraphs below describe the surgery, the margins it activates and which
+exhibits cover them, and the data resolution the result carries.
+
+## CF1: Texas stays flat-fee
+
+**The surgery.** Transplant the whole contract $C = (\tau, D)$ --- not just the
+premium level but also the deductible --- from the risk-based world to a flat-fee
+world. The bound is realized through real control-state contracts: the lower
+bound is a zero-fee state (zero per-tank fee but still carrying its own
+deductible --- CF1-low is not "insurance vanishes"); the upper bound is the
+highest-fee control contract; the mean contract is the central estimate. The
+deductible transplant moves the OOP term as well as the premium, so both the
+$\gamma_p$ and the $\gamma_r$ channels are priced in the counterfactual.
+
+**Margins and evidence.** The CF runs through the regime sensitivity of all
+three non-maintain margins (X10): how downsize, replace, and exit respond to the
+premium and deductible levels in the flat-fee contracts. The size-dependent
+direction of the response (X2) is the key heterogeneity the CF must reproduce.
+Premium identification (X11) and the pricing object (X3) underlie $\hat\gamma_p$;
+hazard and deductible variation underlie $\hat\gamma_r$.
+
+*Bounded, not point-identified --- Texas's counterfactual flat-fee contract is
+unobserved, so we report the range spanned by actual control-state contracts.*
+
+## CF2: First-best contract
+
+**The surgery.** Set the facility's total private exposure equal to
+$H(n)(L + E)$ at the margin --- the social marginal cost of its hazard --- and
+find the contract that implements this. The welfare wedge derivation in Part 2
+specifies the wedge under each regime: the FF wedge is $(L-D) + E$ per unit
+hazard; the RB wedge is $E$ plus the under-pass-through of $(L-D)$ from the
+compressed empirical card. The $\gamma_p$ versus $\gamma_r$ distinction matters:
+the instrument that delivers a dollar of Pigouvian correction is not neutral ---
+a premium-channel dollar acts through $\gamma_p$ and a deductible-channel dollar
+through $\gamma_r$, and if the two are not equal the first-best contract form is
+not indeterminate.
+
+**Margins and evidence.** The CF requires that $H(n)$ respond to the contract at
+the margin, which is covered by X10 and X11. The external damage calibration
+($E = \$50{,}000$) is the binding assumption --- the model does not estimate $E$
+from the data.
+
+*E is calibrated, not estimated; welfare reported at the calibration and a band.*
+
+## CF3: Single-walled replacement subsidy
+
+**The surgery.** Lower $c^{inst}$ (or equivalently subsidize the $(k,m)$
+options that include removal of a single-walled tank). The subsidy runs through
+the full $(k,m)$ menu, activating the replace margin for facilities currently on
+the maintain or downsize margin. The menu evidence (X7b) shows the relevant
+intensity range: the modal replacement removes 3 and installs 2, so the subsidy
+applies to a wide range of events. The removal rule (X6, X7a) identifies which
+tanks leave and thus which composition improvements the subsidy delivers.
+
+**Margins and evidence.** The response depends on how many facilities are close
+to the replacement margin (X1, X7b), how the rule governs which tanks go (X6,
+X7a), and how the nest parameter $\lambda$ apportions new replacements between
+firms that would have acted anyway and firms that would not have. When the
+subsidy creates new replacements, the model must apportion them between firms
+that would have removed tanks anyway and firms that would have done nothing. One
+estimated parameter governs that split, so we report the subsidy's effects both
+at its estimated value and with it switched off --- showing the reader how much
+of the conclusion rides on it.
+
+*The model reports subsidy effects at the estimated $\hat\lambda$ and with
+$\lambda = 1$ (flat logit); the gap between those two is what rides on the nest
+parameter.*
+
+## CF4: Age-$A$ removal mandate
+
+**The surgery.** Delete the options in $\mathcal{A}(s)$ that would leave a tank
+in age bins above $A$ in the post-action state $n'$. Because the state tracks
+tank counts by age bin, the mandate is feasible to implement in the model: the
+policymaker can observe and enforce the bin count, and the facility can comply
+either by removing old tanks (any $(k,m)$ with $k \ge n_{old}$) or by the cheap
+compliance path of removing old tanks without replacement (pure downsize,
+$(k,0)$). The cheap compliance margin is present in the model --- and in the data
+(X7b shows downsize events span a wide range of $k$) --- which means the CF will
+find cost-minimizing compliance paths, not just wholesale replacement.
+
+**Margins and evidence.** The mandate's risk benefit is measured by how much
+$H(n)$ falls when old-tank count is reduced (X4 aging kernel). The compliance
+cost runs through the removal and exit margins (X1, X2, X7).
+
+*The mandate's risk benefit is measured at the resolution of the leak data ---
+facility-level --- so the model credits removing an old tank with the facility's
+hazard improvement, not a tank-specific one. No estimate from this data can do
+better.*

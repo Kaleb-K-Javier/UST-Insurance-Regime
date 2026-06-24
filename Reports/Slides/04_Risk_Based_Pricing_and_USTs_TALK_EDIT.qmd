@@ -1,0 +1,2199 @@
+---
+title: "Internalizing Environmental Risk: Insurance Design and Firm Behavior in Hazardous Industries"
+subtitle: ""
+author: "Kaleb K. Javier"
+format:
+  beamer:
+    template: "my-template.tex"
+    keep-tex: true
+    aspectratio: 169
+    pdf-engine: xelatex
+    header-includes:
+      - |
+        \providecommand{\estc}[1]{\textcolor[HTML]{1B7837}{#1}}
+theme-bg-color: "0D2D52"
+---
+
+
+
+
+## Strict liability is the primary instrument for environmental harm
+
+\BerkeleyLightMode
+
+- The firm pays for what it causes, regardless of fault --- across oil \& gas (OPA 1990), surface mining (SMCRA 1977), and hazardous substances (CERCLA 1980, RCRA 1976)
+- Works when firms can be held fully accountable --- breaks down when they cannot (Shavell 1986, 2007)
+- Shavell (2004): two instruments to restore accountability:
+    - Minimum Asset / bonding requirements
+    - **Compulsory liability insurance** --- where the premium does the deterrence work, *if* the insurer can price on risk-relevant attributes
+
+\vfill
+
+\centering\textbf{This paper examines the design and efficacy of compulsory liability insurance as a financial responsibility instrument in environmental hazard settings.}
+
+---
+
+## Does insurance design change firm behavior?
+
+\BerkeleyLightMode
+
+**Setting**
+
+- USTs --- retail petroleum storage, $\sim$\,140,000 facilities, the most common source of groundwater contamination in the US (EPA 2024)
+- Compulsory insurance the law since 1988 (RCRA Subtitle I, \$1M floor)
+- **Clean shock:** Texas exits its flat-fee fund December 22, 1998 --- 26,000 facilities enter risk-rated private insurance overnight
+- 9.8M tank-years of EPA panel data spanning both regimes
+
+\vspace{0.2cm}
+**Three questions**
+
+- **Q1 --- Observability:** Is release risk predictable from observable tank characteristics?
+- **Q2 --- Behavior:** Does risk-based pricing change closure, replacement, and release outcomes?
+- **Q3 --- Welfare:** How much of the first-best welfare gain does risk-rated pricing capture?
+
+---
+
+## What is an underground storage tank?
+
+\BerkeleyLightMode
+
+[ADD FIGURE HERE]
+
+---
+
+
+## Related literature
+
+\BerkeleyLightMode
+
+\small
+
+**Liability regimes, financial responsibility, and UST policy**
+
+Shavell (1986, 2004, 2007); Yin, Kunreuther \& White (2011); Yin, Pfaff \& Kunreuther (2011, 2007); Boomhower (2019); Ho, Hsu, Cha \& Rivera (2018)
+
+*First firm-level panel analysis of insurance design --- risk-rated vs. flat-fee --- as a financial responsibility instrument; clean policy shock; structural welfare decomposition*
+
+\medskip
+
+**Environmental economics and environmental risk**
+
+Fowlie, Reguant \& Ryan (2016); Muehlenbachs (2015); Blundell, Gowrisankaran \& Langer (2020); Kellogg \& Reguant (2021)
+
+*Dynamic structural model of firm behavior under environmental regulation; welfare decomposition bounding gap to first-best*
+
+\medskip
+
+**IO of selection markets: risk-based and cost-based pricing**
+
+Einav, Finkelstein \& Mahoney (2021); Einav, Finkelstein \& Cullen (2010); Bundorf, Levin \& Mahoney (2012); Handel, Hendel \& Whinston (2015); Mahoney \& Weyl (2017)
+
+*[PLACEHOLDER]*
+
+
+##
+
+\BerkeleyMode
+
+::: {.layout-statement}
+\begin{center}
+\Huge \textbf{Setting, Data, and Observability}
+\end{center}
+:::
+
+---
+
+## Who operates USTs?
+
+\BerkeleyLightMode
+
+\vspace{0.3cm}
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{lcc}
+\hline
+\textbf{Operator type} & \textbf{Share of facilities} & \textbf{Share of tanks} \\
+\hline
+Independent retail (gas station / c-store) & [XX]\% & [XX]\% \\
+Branded / major oil company                & [XX]\% & [XX]\% \\
+Fleet / non-retail (trucking, municipal)   & [XX]\% & [XX]\% \\
+Government / other                         & [XX]\% & [XX]\% \\
+\hline
+\end{tabular}
+\end{center}
+
+- **[xyz type is dominat type in sample]** --- retail gas stations, truck stops, and fleet facilities account for [XX]\% of operators; branded majors are a minority
+- $\sim$\,140,000 active facilities at peak; $\sim$\,550,000 tanks nationwide
+- Median facility: [X] active tanks, [XXX]k gallons total capacity
+
+---
+
+
+## Release risk varies with observable tank traits
+
+\BerkeleyLightMode
+
+- Annual release probability is driven by **tank age** and **wall construction**
+- Single-walled steel: no secondary containment, corrodes gradually, hazard rises steeply with age
+- Double-walled: interstitial monitoring space, hazard flat and low across all ages
+- Key observables: age, wall type, piping, leak-detection technology --- exactly what an underwriter can verify
+
+\vfill
+\centering\small\textit{Whether the private market prices this heterogeneity is an empirical question --- answered after we set up the data.}
+
+---
+
+## The harm is silent, slow, and diffuse --- tort law cannot reach it
+
+\BerkeleyLightMode
+
+- No secondary containment, no visible event, no immediate victim
+- Benzene and petroleum migrate silently into groundwater; by detection the plume may have traveled hundreds of feet
+- Diffuse victims, delayed injury, causation hard to establish --- private tort law does not operate here
+- Health damages $\sim$\,\$17k per release (Marcus 2021) generate no insurance claim: contamination unobservable, victims cannot sue
+
+\vfill
+\centering\small\textit{The regulatory system --- compulsory insurance --- is the only operative instrument.}
+
+---
+
+## Releases are costly to cleanup budgets and human health
+
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[height=0.72\textheight,keepaspectratio]{../../Output/Figures/Figure_cost_distribution_pooled.png}
+\end{center}
+
+\vfill
+\centering\small\textit{$\sim$\,550,000 confirmed releases since 1988. Median cleanup \$136k; mean \$403k. Right tail dominates expected loss.}
+
+---
+
+## The choice set is effectively binary: operate or exit
+
+\BerkeleyLightMode
+
+
+\vspace{0.15cm}
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{p{2.8cm}p{3.2cm}p{5.0cm}}
+\hline
+\textbf{Action} & \textbf{Risk effect} & \textbf{Why it is closed off} \\
+\hline
+Spill / corrosion protection  & Partial reduction      & Mandated by 1998 EPA deadline; near-universal by reform \\[4pt]
+Leak-detection upgrade        & Monitoring only        & Mandated by 1993 EPA deadline; near-universal by reform \\[4pt]
+Partial wall upgrade          & Could reduce risk      & Triggers full facility reclassification under 40 CFR Part 280 --- cost dwarfs any premium saving \\[4pt]
+Replace with new DW tank      & Large reduction        & $\sim$\$55k/tank; viable but rare \\[4pt]
+\textbf{Remove / close}       & \textbf{Eliminates hazard} & \textbf{The operative margin} \\
+\hline
+\end{tabular}
+\end{center}
+
+\vspace{0.15cm}
+Federal compliance deadlines (1988--1998) mandated spill protection, corrosion control, and leak detection. By the time of the reform, these margins were largely exhausted.
+
+\centering\small Only \textbf{0.003\%} of active Texas facilities ever retrofitted tank construction prior to terminal closure, 1998--2021. \textbf{Removal is the only lever.}
+
+---
+
+## Financial responsibility: three approaches in practice
+
+\BerkeleyLightMode
+
+RCRA Subtitle I (1988) requires all UST operators to demonstrate financial capacity to cover a confirmed release --- a federal \$1M floor. Three approaches exist:
+
+\vspace{0.15cm}
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{p{3.2cm}p{2.6cm}p{5.2cm}}
+\hline
+\textbf{Approach} & \textbf{Examples} & \textbf{Price signal to operator} \\
+\hline
+\textbf{No state fund} \newline (private market only) & OR, WA & Depends on private insurer; no coordinated premium mandate \\[6pt]
+\textbf{Flat-fee state fund} \newline (pooled trust) & 38 states, incl.\ TX pre-1998 & \textbf{None:} flat per-tank fee regardless of age, wall type, or leak history $\Rightarrow \partial P / \partial \text{age} = 0$ \\[6pt]
+\textbf{Risk-rated private insurance} \newline (compulsory) & TX post-Dec 1998 & \textbf{Strong:} premium rises with age, wall construction, piping $\Rightarrow \partial P / \partial \text{age} > 0$ \\
+\hline
+\end{tabular}
+\end{center}
+
+\vfill
+\centering\small\textit{Texas exits its flat-fee fund December 22, 1998 $\rightarrow$ 26,000 facilities enter risk-rated private insurance overnight.}
+
+---
+
+
+
+## Data: three collection efforts, 18 usable states
+
+\BerkeleyLightMode
+
+\begin{itemize}
+  \item \textbf{State + EPA administrative records} --- UST inventory and confirmed releases from all 50 states and EPA LUST Finder; tank-level attributes (install date, wall type, piping, leak detection) and cleanup dispositions
+
+  \item \textbf{Texas record requests} --- TX UST registry; FR insurance contract data and carrier-level coverage composition, 1993--2021
+
+  \item \textbf{TX insurance rate filings} --- Mid-Continent Casualty SERFF filings, 2006--2024; reconstructs the risk-based premium schedule $P(s)$ at the tank level from base rates, ILFs, and attribute credits/debits
+\end{itemize}
+
+\vspace{0.25cm}
+\textbf{Why 18 states?} 20 of 38 flat-fee states dropped: missing closure dates, install dates, or wall construction variables. The 17 controls plus Texas have complete records across all three dimensions.
+
+---
+
+
+
+\LightMode
+
+```{=latex}
+\hypertarget{baseline-table}{}
+\vspace{0.1cm}
+\input{../../Output/Tables/T_Baseline_Characteristics_Slide.tex}
+```
+
+\vspace{0.1cm}
+\centering\scriptsize\textit{18 study states; alive-at-reform = facilities with $\geq 1$ tank active on Dec 22, 1998. Wall, vintage, and age computed over tanks active at reform; profile averages over all study facility-years. Capacity is the median (robust to large-facility outliers).}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[baseline-tanks][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Tank-size distribution $\rightarrow$}%
+  \hspace{3pt}%
+  \navbutton[baseline-cap][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Capacity distribution $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+
+## Risk is predictable: the age-hazard gradient (setup)
+
+\BerkeleyLightMode
+
+**Estimand.** Annual first-release hazard in the never-yet-leaked risk set:
+
+$$
+h(t \mid x) \;=\; P\bigl(\,\text{first confirmed release in year } t \mid \text{no prior release}, \; x\,\bigr)
+$$
+
+In plain words: given what an underwriter can observe at the start of a policy year, what's the probability of a claim?
+
+**Model.** Penalized logistic regression on the pre-treatment panel:
+
+- $x$: 3-year age bins fully interacted with wall construction; state FE; fuel and portfolio controls
+- Lasso variable selection; inverse-frequency weights for the 0.70\% base rate
+- Out-of-sample CV (10 folds); post-hoc recalibration to the empirical event rate
+
+**Sample.** 3.93M pre-treatment facility-years; $27{,}455$ confirmed first-release events.
+
+$\hat h(x)$ feeds the next figure and the structural-model hazard $h(a_t, W_i)$.
+
+---
+
+## Single-walled tanks drive the age-hazard gradient
+
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_CV_CellRisk.png}
+\end{center}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[cell-gof][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Goodness of fit $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+## The insurance market: how Texas premiums are built
+
+\BerkeleyLightMode
+
+**Texas** --- rebuilt from marjor Texas UST Insurer's rate filings (SERFF, 2006--2024):
+
+$$P_{ijt} \;=\; \text{Base}_t \;\times\; \text{ILF}_{it} \;\times\; \Bigl(1 \;+\; \sum_{k} \lambda_{k,t}\, X_{ijt,k}\Bigr)$$
+
+- $\text{Base}_t$: per-tank base rate, four filing periods
+- $\text{ILF}_{it}$: increased-limit factor; fix coverage at federal-minimum \$1M/\$1M
+- $X_{ijt}$: tank age, wall, piping, leak-detection technology
+- $\lambda_{k,t}$: additive credits/debits from the filed schedule
+
+**Control states** --- state financial-responsibility fund records: a per-tank annual assessment, largely flat across years and tank characteristics.
+
+---
+
+## Premiums track the risk we can predict
+
+\BerkeleyLightMode
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[height=0.80\textheight,keepaspectratio]{../../Output/Figures/Figure_Premium_vs_Hazard_Raw.png}
+\end{center}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[premium-vs-el][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Predicted per-tank EL $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+## Premium divergence: Texas vs. control states (1992--2020)
+
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/04e_Premium_by_Year_Treatment.png}
+\end{center}
+
+\vspace{0.1cm}
+\centering\small\textit{Flat and parallel before 1998; sharp Texas divergence after the reform. Sets up the DiD without showing it.}
+
+---
+
+
+
+
+##
+
+\BerkeleyMode
+
+::: {.layout-statement}
+\begin{center}
+\Huge \textbf{Reduced Form Evidence}
+\end{center}
+:::
+
+---
+
+
+## Research design: DiD with facility FE and cell-by-year FE
+
+\BerkeleyLightMode
+
+**Static DiD.**
+
+$$Y_{it} \;=\; \beta\,(\text{Texas}_{f(i)} \times \text{Post}_t) \;+\; \alpha_i \;+\; \delta_{ct} \;+\; \varepsilon_{it}$$
+
+**Event study.**
+
+$$Y_{it} \;=\; \sum_{\tau \neq -1} \beta_\tau \cdot \bigl(\text{Texas}_{f(i)} \times \mathbf{1}[t - 1998 = \tau]\bigr) \;+\; \alpha_i \;+\; \delta_{ct} \;+\; \varepsilon_{it}$$
+
+- $\alpha_i$: facility FE. $\delta_{ct}$: cell$\times$year FE with $c = \{\text{wall}\times\text{fuel}\times\text{capacity}\times\text{install cohort}\}$
+- *Identifying variation:* within a single tank-vintage cell, in the same calendar year, $\beta$ is the change in the Texas-vs-control closure-rate gap before vs.\ after Dec 22, 1998
+
+---
+
+
+## Event study: closure response in Texas
+
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Fig_ES_Full.pdf}
+\end{center}
+
+\vspace{0.1cm}
+\centering\small\textit{Pre-trends flat; sharp break at Dec 22, 1998; sustained post-treatment effect.}
+
+---
+
+
+## ATT on Tank Closure: $+1.58$ pp on a $2.0\%$ Baseline
+
+\BerkeleyLightMode
+
+```{=latex}
+\vspace{0.15cm}
+\begin{center}
+\begingroup
+\scriptsize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{0.95}
+\input{../../Output/Tables/T_DiD_Stepped_Full.tex}
+\endgroup
+\end{center}
+```
+
+\vfill
+
+\centering
+\textit{Cols add facility FE, then cell$\times$year FE. Col (3) is the headline.}
+
+---
+
+
+## Heterogeneity: Pre-89 Vintage Drives the Effect
+
+\BerkeleyLightMode
+
+```{=latex}
+\vspace{-0.1cm}
+\begin{center}
+\begingroup
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.7}
+\input{../../Output/Tables/T_HTE_DiD_Vintage.tex}
+\endgroup
+\end{center}
+```
+
+\centering\scriptsize
+\textit{Pre-89 ATT $= \hat\beta_0 + \hat\beta_1 \approx +3.1$ pp; post-88 ATT $= \hat\beta_0 \approx +0.6$ pp.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[vintage-forest][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{ATT by install year $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## LUST discovery falls under risk-based pricing
+
+\BerkeleyLightMode
+
+```{=latex}
+\vspace{0.2cm}
+\begin{center}
+\begingroup
+\footnotesize
+\renewcommand{\arraystretch}{1.05}
+\input{../../Output/Tables/T_LUST_Incumbent_Slide.tex}
+\endgroup
+\end{center}
+```
+
+\vspace{0.1cm}
+\centering\small\textit{Leak discovery falls $1.27$ pp on a $1.73\%$ base; both routine-monitoring and closure-inspection findings decline.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[lust-es][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{LUST event study $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Closure composition shifts toward replacement
+
+\BerkeleyLightMode
+
+```{=latex}
+\vspace{0.05cm}
+\begin{center}
+\begingroup
+\let\small\scriptsize
+\scriptsize
+\renewcommand{\arraystretch}{0.85}
+\input{../../Output/Tables/T2b_Enriched_Slide.tex}
+\endgroup
+\end{center}
+```
+
+\vspace{0.05cm}
+\centering\scriptsize\textit{Among closing facilities, RBP raises the replacement (upgrade) share and lowers permanent closures --- the margin the structural model recovers.}
+
+---
+
+
+## What the reduced form cannot tell us
+
+\BerkeleyLightMode
+
+\textbf{The DiD identifies an average treatment effect. Three questions it cannot answer:}
+
+\vspace{0.2cm}
+
+\begin{enumerate}
+
+\item \textbf{How large are the welfare effects in dollar terms?} The DiD gives us a closure-rate gap; it does not give us a present-value welfare number on which to compare policies.
+
+\item \textbf{What would alternative policies --- subsidy, Pigouvian surcharge, age mandate --- actually do?} These policies were not implemented in Texas. Their welfare consequences are counterfactual.
+
+\item \textbf{How far are we from first-best, and why?} RBP is a partial fix: premiums price what the insurer can claim, but health damages are structurally unpriced. Quantifying the residual wedge requires the structural primitives.
+
+\end{enumerate}
+
+\vfill
+
+\textbf{Recovering the structural parameters ($\kappa$, $K$, $\gamma_p$, $\gamma_r$) is the only way to answer these. The structural model is not an add-on --- it is required.}
+
+---
+
+
+
+##
+
+\BerkeleyMode
+
+::: {.layout-statement}
+\begin{center}
+\Huge \textbf{Structural Model and Counterfactuals}
+\end{center}
+:::
+
+---
+
+
+## A dynamic discrete-choice model of tank operations
+
+\BerkeleyLightMode
+
+- Each period, a facility chooses one of three actions: **Maintain**, **Exit**, or **Replace**
+- The choice trades off current flow payoffs against the continuation value of future operation
+- Framework: optimal stopping (Rust 1987); estimated by Nested Pseudo-Likelihood (Aguirregabiria \& Mira 2007)
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[model-coding][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{How the model codes each action $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Flow utilities: one payoff per action
+
+\BerkeleyLightMode
+
+```{=latex}
+\begin{align*}
+u^M(s,g) &= \underbrace{1}_{\text{net rev.}} + \estc{\gamma_{\text{price}}}\,P(s) - \estc{\gamma_{\text{risk}}}\,h(s) + \alpha_g
+  &&\text{\small(maintain)}\\[2pt]
+u^E(s)   &= \estc{\kappa_{w(s)}} &&\text{\small(exit / scrap)}\\[2pt]
+u^R(s,g) &= -\estc{K_{w(s)}} + \alpha_g &&\text{\small(replace)}
+\end{align*}
+```
+
+\vspace{0.15cm}
+
+- $P(s)$ premium (SERFF filings), $h(s)$ leak hazard (risk model) --- both vary by (age, wall, regime)
+- **Estimated** (in \estc{green}): $\estc{\kappa_w}$ scrap value, $\estc{K_w}$ replacement cost, $\estc{\gamma_{\text{price}}}$ price sensitivity, $\estc{\gamma_{\text{risk}}}$ risk internalization
+- $\alpha_g$ state$\times$regime stay FE --- a measurement correction, profiled out; it does not enter the counterfactual
+
+\vfill
+\centering\small\textit{Net revenue $R$ normalized to \$10k/yr/facility; all values in this scale.}
+
+---
+
+
+## Keep, scrap, or replace: the dynamic stopping problem
+
+\BerkeleyLightMode
+
+$$V(s) = \max \Bigl\{\; \underbrace{u^M(s) + \beta\,\mathbb{E}[V(s')\mid s]}_{\text{Maintain}}, \;\; \underbrace{\kappa_{w(s)}}_{\text{Exit}}, \;\; \underbrace{-K_{w(s)} + \beta\,\mathbb{E}[V(s_{\text{new}})]}_{\text{Replace}} \;\Bigr\}$$
+
+\vspace{0.1cm}
+
+- **Maintain** --- flow payoff today, keep the option to operate next year
+- **Exit** --- take $\kappa_w$ and leave (absorbing)
+- **Replace** --- pay $K_w$, restart with a new DW tank at age 0
+
+\vspace{0.15cm}
+
+**Regime.** Flat fees: premium flat in age $\Rightarrow$ aging carries no price penalty. Risk-based: premium rises with age $\Rightarrow$ continuation value falls $\Rightarrow$ firms exit/replace sooner.
+
+\vfill
+\centering\small\textit{Stopping rule: close once scrap value exceeds the value of continuing; RBP lowers the age at which that binds.}
+
+---
+
+
+## The same tank in two worlds
+
+\BerkeleyLightMode
+
+\textbf{A thought experiment.} Take one tank --- 28 years old, single-walled, same leak risk in either world --- and drop it into each pricing regime:
+
+\vspace{0.3cm}
+
+```{=latex}
+\begin{center}
+\large
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{lcc}
+\toprule
+ & \textbf{Flat-fee world} & \textbf{Risk-based world} \\
+ & \small (control state) & \small (Texas) \\
+\midrule
+Annual premium       & \$130 (flat)  & \alert{\$380} (rises with age) \\
+Leak risk $h(s)$     & high          & high \emph{(same)} \\
+\midrule
+$\Rightarrow$ closes the tank & sometimes & \alert{much more often} \\
+\bottomrule
+\end{tabular}
+\end{center}
+```
+
+\vspace{0.3cm}
+
+- It already closes \emph{sometimes} under flat fees --- that response to \textbf{risk alone} is $\gamma_{\text{risk}}$
+- The \alert{extra} closing once the premium jumps, risk unchanged, is $\gamma_{\text{price}}$
+
+\vfill
+\centering\small\textit{Same tank, same risk --- only the premium differs. The within-regime response gives risk; the across-regime gap gives price.}
+
+---
+
+
+## D $\times$ hazard: the variation that identifies the $\gamma$'s
+
+\BerkeleyLightMode
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.74\textheight,keepaspectratio]{../../Output/Figures/AE09_OOP_by_Age_Pooled.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Flat-fee cells (orange) sit at low deductibles across the hazard range; risk-based cells (teal) price the hazard. Deductible variation at given hazard pins $\gamma_{\text{price}}$; the hazard spread pins $\gamma_{\text{risk}}$.}
+
+---
+
+
+## What identifies each parameter
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{identif-main}{}
+```
+
+\vspace{0.2cm}
+
+```{=latex}
+\begin{center}
+\normalsize
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{p{2.8cm}p{8.5cm}}
+\hline
+\textbf{Parameter} & \textbf{Moment in the data} \\
+\hline
+$\kappa_{SW},\,\kappa_{DW}$ & Exit rate by wall type --- higher scrap value $\Rightarrow$ more exit \\
+$K_{SW},\,K_{DW}$ & Replace-vs-exit share among closing facilities, by wall \\
+$\gamma_{\text{price}}$ & Choice-share response to premium variation across cells \\
+$\gamma_{\text{risk}}$ & Residual age--exit gradient once premium is accounted for \\
+$\alpha_g$ & Group-level stay rate (profiled out --- measurement only) \\
+\hline
+\end{tabular}
+\end{center}
+```
+
+\vfill
+\centering\small\textit{The cross-regime contrast (FF: only hazard varies; RB: both vary) is what separates $\gamma_{\text{price}}$ from $\gamma_{\text{risk}}$.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[identif-exit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\kappa$ exit share $\rightarrow$}%
+  \hspace{3pt}%
+  \navbutton[identif-replace][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$K$ replace share $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Structural estimating sample
+
+\BerkeleyLightMode
+
+**Unit of observation.** Facility-year. One row per facility per year, 1999--2018.
+
+**Sample.** Texas 2006+ (post-RB implementation) plus 17 control states 1999+. The structural model fits the *equilibrium* of the risk-based regime --- TX is the regime that's actually priced.
+
+- N $\approx$ 2.28M facility-years after data cleaning
+- Choices observed: maintain / exit / replace; mapped onto 32 state cells $(a, W, R)$
+- Premiums $p_t$ from Mid-Continent rate-filing reconstruction; hazards $h(a_t)$ from the first-release-prediction model
+
+---
+
+
+## Parameter estimates: 6-parameter NPL with profiled state FE
+
+\BerkeleyLightMode
+
+
+```{=latex}
+\vspace{0.05cm}
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{10pt}
+\renewcommand{\arraystretch}{0.88}
+\begin{tabular}{lc}
+\toprule
+ & \textbf{Estimate} \\
+\midrule
+$\hat{\kappa}_{SW}$ \;\, scrap value, single-walled   & \$252{,}349 \\
+                                                      & (\$1{,}213) \\
+$\hat{\kappa}_{DW}$ \;\, scrap value, double-walled   & \$243{,}800 \\
+                                                      & (\$1{,}239) \\
+$\hat{K}_{SW}$ \;\, replacement cost, single-walled   & \$51{,}383 \\
+                                                      & (\$176) \\
+$\hat{K}_{DW}$ \;\, replacement cost, double-walled   & \$51{,}162 \\
+                                                      & (\$372) \\
+$\hat{\gamma}_{\text{price}}$ \;\, price sensitivity   & $-2.163$ \\
+                                                      & $(0.205)$ \\
+$\hat{\gamma}_{\text{risk}}$ \;\, risk internalization & $+0.114$ \\
+                                                      & $(0.005)$ \\
+\midrule
+Log-likelihood            & $-227{,}240$ \\
+Facility-years            & $2{,}282{,}735$ \\
+State stay fixed effects  & $18$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+```
+
+\vspace{0.05cm}
+\centering\scriptsize\textit{Standard errors in parentheses (Aguirregabiria--Mira 2002 profile likelihood). $\kappa$ and $K$ in dollars; $K$ standard errors via the delta method on the log scale. Both $\gamma$ are highly significant ($t=-10.6$ and $21.6$).}
+
+---
+
+
+## What the estimates say
+
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+
+- **$\hat\kappa_{SW}\approx\$252$k, $\hat\kappa_{DW}\approx\$244$k.** Scrap value on exit --- close across wall types after the cleanup.
+
+- **$\hat K_{SW}\approx\hat K_{DW}\approx\$51$k.** New-tank cost barely moves with wall type --- wall matters through hazard and premium, not installation.
+
+- **$\hat\gamma_{\text{price}}=-2.16$.** Firms respond strongly to the premium signal: higher premiums push toward exit and replacement.
+
+- **$\hat\gamma_{\text{risk}}=+0.114$, small.** Firms act on only a sliver of expected leak damage --- most is externalized. \textbf{That wedge is what the counterfactuals quantify.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[fit-sw][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Model fit $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Each policy changes one term in the payoff
+
+\BerkeleyLightMode
+
+\small
+
+\textbf{Baseline (risk-based):}\quad $u^M(s) = 1 + \gamma_{\text{price}}\,P(s) - \gamma_{\text{risk}}\,h(s) + \alpha_g$
+
+\vspace{0.18cm}
+\textbf{CF1 --- Flat-fee:}\quad $u^M(s) = 1 + \gamma_{\text{price}}\,\alert{\bar{P}} - \gamma_{\text{risk}}\,h(s)$
+
+\vspace{0.18cm}
+\textbf{CF2 --- Replacement subsidy:}\quad $u^R(s) = -\,\alert{(1 - s^*)}\,K_w,\quad \alert{s^* = 0.50}$
+
+\vspace{0.18cm}
+\textbf{CF3 --- Pigouvian:}\quad $u^M(s) = 1 + \gamma_{\text{price}}\,P(s) - \gamma_{\text{risk}}\,h(s) \;\alert{-\; h(s)\,E}$
+
+\vspace{0.18cm}
+\textbf{CF4 --- Age mandate:}\quad $u^M(s) = \alert{-\infty}$ \;\, for tanks $25+$ years old
+
+\vfill
+\centering\small\textit{Each policy re-solves $V$ and the stationary fleet; only the \alert{highlighted} term moves.}
+
+---
+
+
+## Welfare accounting
+
+\BerkeleyLightMode
+
+\vspace{0.4cm}
+
+$$\Delta W = \underbrace{\sum_s \pi(s)\,\Delta V(s)}_{\Delta\text{ Firm surplus}} \;-\; \underbrace{\sum_s \pi(s)\sum_t \beta^t h(s_t)\,(L+E)}_{\Delta\text{ External damage}} \;-\; \underbrace{\Delta\text{Govt outlay}}_{\text{subsidy only}}$$
+
+\vspace{0.4cm}
+
+- **Firm surplus** --- change in the discounted value to operators
+- **External damage** --- unpriced cleanup $+$ health harm, $L+E$ per expected release
+- **Govt outlay** --- subsidy cost (CF2 only)
+
+\vfill
+\centering\small\textit{$E=\$17$k (health) or \$50k (with unmeasured damages). State fixed effects do not enter the counterfactual re-solve.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-summary][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Model vs.\ data: the limitation $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Counterfactual welfare: change in firm surplus, external damage, and outlay
+
+\BerkeleyLightMode
+
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=0.72\textheight,keepaspectratio]{../../Output/Figures/04v_Welfare_BarChart_Clean.pdf}
+\end{center}
+
+\vspace{0.1cm}
+\centering\small\textit{Change in each welfare component relative to the risk-based baseline, by counterfactual ($\$$/facility, present value, $E=\$50$k). Bars above zero improve on the baseline.}
+
+---
+
+
+## Counterfactual welfare summary
+
+\BerkeleyLightMode
+
+
+```{=latex}
+\vspace{0.3cm}
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Counterfactual} & \textbf{$\Delta$Firm} & \textbf{$\Delta$External} & \textbf{$\Delta$Govt} & \textbf{$\Delta$Social} \\
+                        & \textbf{surplus}      & \textbf{damage}          & \textbf{outlay}        & \textbf{welfare}        \\
+\midrule
+CF1 --- Flat-fee        & $+9{,}213$  & $+120$     & $0$         & $+9{,}092$  \\
+CF2 --- Replace subsidy & $+5{,}148$  & $-261$     & $+18{,}170$ & $-12{,}761$ \\
+CF3 --- Pigouvian       & $-6{,}521$  & $-194$     & $0$         & $-6{,}327$  \\
+CF4 --- Age mandate     & $-13{,}686$ & $-4{,}297$ & $0$         & $-9{,}389$  \\
+\bottomrule
+\end{tabular}
+\end{center}
+```
+
+\vfill
+\centering\small\textit{$\Delta$ vs. the risk-based baseline; $\$$/facility present value, $E=\$50$k. Positive = improvement over the baseline.}
+
+---
+
+
+## Takeaways
+
+\BerkeleyLightMode
+
+1. **Risk is observable.** The age-hazard gradient is steep for single-walled tanks and flat for double-walled. Shavell's observability condition is satisfied in this market.
+
+2. **Risk-based pricing shifts behavior.** $+1.58$ pp annual closure ATT; $\sim$\,4× larger in the pre-1989 SW-heavy stock that the premium schedule actually prices. Composition shifts toward the replacement margin (12\% → 18\%). LUST discovery falls through both background and inspection-triggered channels.
+
+3. **Welfare gap to first-best persists.** [PLACEHOLDER: directional claim about the four counterfactuals at $E = \$17$k, pending 6p re-run. Even after the reform, the health-externality component remains structurally unpriced --- actuarial premiums cannot price what no claimant recovers.]
+
+---
+
+
+
+
+## Appendix: The Agent's Decision (toy model) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{toy-agent}{}
+```
+
+**The Choice.** Each period $t$, the facility chooses $d_t \in \{\text{Maintain}, \text{Close}\}$.
+
+**The Trade-off.**
+
+- **Maintain:** Earn net revenue, pay insurance premiums.
+- **Close:** Exit and recover scrap value $\kappa$ (liquidity of land).
+
+**Flow Utility (Maintain).**
+
+$$
+u(a) = \underbrace{R}_{\text{Net Revenue}} - \underbrace{C_j(a)}_{\text{Insurance Premium}}
+$$
+
+*Simplifying assumption (full coverage):* environmental risk enters as an *ex-ante* premium cost, not an *ex-post* shock.
+
+\vspace{0.2cm}
+\centering\small\textit{Two-action stopping model used in early presentations --- included for completeness; superseded by the three-action DCC in the main deck.}
+
+---
+
+
+## Appendix: The Dynamic Problem (toy model) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{toy-dynproblem}{}
+```
+
+**Bellman equation.**
+
+$$
+V(a) = \max \Bigl\{\, \underbrace{u(a) + \beta\, \mathbb{E}[V(a') \mid a]}_{\text{value of maintaining}}, \;\; \underbrace{\kappa}_{\text{scrap value}}\,\Bigr\}
+$$
+
+**Continuation value.** The value of keeping the tank active today to preserve the option of operating tomorrow:
+
+$$
+V_{\text{cont}}(a) = u(a) + \beta\, \mathbb{E}[V(a') \mid a]
+$$
+
+**Optimal stopping rule.** Close if $V_{\text{cont}}(a) < \kappa$.
+
+---
+
+
+## Appendix: The Policy Lever: Insurance Regimes (toy model) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{toy-policylever}{}
+```
+
+**1. Uniform Premium Pooling ($F$) --- 38 states.**
+
+- Premium: constant $\bar P$, regardless of age or risk.
+- Marginal cost of aging: $\;\partial C / \partial a = 0$. No incentive to close aging tanks.
+
+**2. Risk-Based Pricing ($RB$) --- Texas post-1999.**
+
+- Premium: rises with the leak hazard, $C(a) = \lambda \cdot h(a) \cdot L$.
+- Marginal cost of aging: $\;\partial C / \partial a > 0$. Aging tanks become increasingly costly.
+
+---
+
+
+## Appendix: What's the First Best? (toy model) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{toy-firstbest}{}
+```
+
+**Social planner's objective.** Internalize remediation costs ($L$) *and* health externalities ($E$):
+
+$$
+u_{\text{SOC}}(a) = R - h(a) \cdot (\underbrace{L}_{\text{Remediation}} + \underbrace{E}_{\text{Health}})
+$$
+
+**Why risk-based pricing falls short.**
+
+- Actuarial premiums reflect insurer claims data $\rightarrow$ only remediation costs ($L$)
+- Health damages ($E$) generate no third-party claims: contamination is unobservable (Marcus, 2021)
+- $\Rightarrow$ Even fair risk-based pricing leaves $E$ externalized
+
+**Implication.** $V_{\text{RB}}(a) > V_{\text{SOC}}(a)$ --- RBP induces *some* closures, but not enough.
+
+---
+
+
+## Appendix: Three Facts to Keep in Mind (toy model) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{toy-threefacts}{}
+```
+
+**1. Asset depreciation.** Rising leak risk drives tank value strictly down in age ($V'(a) < 0$). The regime determines whether private incentives align with this social decay.
+
+**2. Inefficient retention (Uniform Premium).** Static costs $\bar P$ imply zero marginal cost of aging. Firms ignore risk and retain assets longest: $a^*_{\text{UP}}$.
+
+**3. Partial correction (Risk-Based).** Rising premiums $h(a)\,L$ imply positive marginal cost of aging. Closure accelerates to $a^*_{\text{RB}}$, but still $> a^*_{\text{SOC}}$ due to unpriced health damages.
+
+\begin{center}
+\Large
+$a^*_{\text{SOC}} \;<\; a^*_{\text{RB}} \;<\; a^*_{\text{UP}}$
+\end{center}
+
+---
+
+
+## Appendix: Social Optimum Exit Threshold (toy model) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{toy-socexit}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Slide_Fig_2_SOC_Exit.pdf}
+\end{center}
+
+---
+
+
+## Appendix: Risk-Based vs. Social Optimum (toy model) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{toy-rbvssoc}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Slide_Fig_3_SOC_RB_Comparison.pdf}
+\end{center}
+
+---
+
+
+## Appendix: Uniform Premium vs. Social Optimum (toy model) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{toy-ffvssoc}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Slide_Fig_5_SOC_FF_Comparison.pdf}
+\end{center}
+
+---
+
+
+## Appendix: Deadweight Loss Across Regimes (toy model) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{toy-dwl}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Slide_Fig_7_Combined_DWL.pdf}
+\end{center}
+
+---
+
+
+
+## Appendix: FR Compliance: TX is a Private-Insurance Market {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{fr-compliance}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/FigureA_TX_FR_Coverage_Composition.pdf}
+\end{center}
+
+---
+
+
+## Appendix: Market Structure: Concentrated and Stable {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{market-hhi}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_TX_FR_Top5_Dominance_HHI.pdf}
+\end{center}
+
+---
+
+
+
+## Appendix: Cell-Level Goodness of Fit {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{cell-gof}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_CV_CellRisk_GoF.png}
+\end{center}
+
+---
+
+
+## Appendix: ATT by Installation Vintage {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{vintage-forest}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Fig_Vintage_Forest.pdf}
+\end{center}
+
+---
+
+
+## Appendix: Premium vs. Per-Tank Expected Loss {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{premium-vs-el}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_Premium_vs_EL_Raw.png}
+\end{center}
+
+---
+
+
+## Appendix: LUST Event Study --- Total Leak Discovery {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{lust-es}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_ES_LUSTTotal_Appendix.pdf}
+\end{center}
+
+---
+
+
+## Appendix: Subsidy Curve {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/04j_4p_Subsidy_Curve.pdf}
+\end{center}
+
+---
+
+
+
+## Appendix: Exit share among closures, by age and wall {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{identif-exit}{}
+```
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[width=0.9\textwidth,height=0.7\textheight,keepaspectratio]{../../Output/Figures/04q_Identif_ExitShare.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{The level and age-profile of full exit identify the scrap values $\kappa_{SW}, \kappa_{DW}$.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[identif-main][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Conditional replace share among closures {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{identif-replace}{}
+```
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[width=0.9\textwidth,height=0.7\textheight,keepaspectratio]{../../Output/Figures/04q_Identif_ReplaceShare.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Both wall types show genuine exit-vs-replace variation, which identifies $K_{SW}$ and $K_{DW}$.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[identif-main][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Model fit --- SW panel {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{fit-sw}{}
+```
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.74\textheight,keepaspectratio]{../../Output/Figures/04o_Fit_6p_SW.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Solid lines: model-implied CCPs; open circles: empirical cell shares. 32 cells fit simultaneously across three actions; SW panel.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[fit-dw][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{DW fit $\rightarrow$}%
+  \hspace{4pt}%
+  \navbutton[fit-resid][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Per-cell residuals $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Model fit --- DW panel {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{fit-dw}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/04o_Fit_6p_DW.png}
+\end{center}
+
+---
+
+
+## Appendix: Per-cell fit residuals (6p) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{fit-resid}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/04o_Fit_6p_AllCells_Residuals.png}
+\end{center}
+
+---
+
+
+## Appendix: Facility size at reform --- Texas vs.\ controls {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{baseline-tanks}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.72\textwidth,height=0.62\textheight,keepaspectratio]{../../Output/Figures/Fig_Baseline_TanksAtReform.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Tank count per incumbent facility on Dec 22, 1998. Texas facilities skew larger (more 3--4 tank facilities); controls have more single-tank facilities.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[baseline-table][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+  \hspace{3pt}%
+  \navbutton[baseline-cap][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Capacity $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Facility capacity at reform --- Texas vs.\ controls {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{baseline-cap}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.72\textwidth,height=0.62\textheight,keepaspectratio]{../../Output/Figures/Fig_Baseline_CapacityAtReform.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Total tank capacity per incumbent facility on Dec 22, 1998 (clipped at 60k gal). Controls have a large mass of small single-tank facilities; Texas capacity is shifted right.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[baseline-table][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+## Appendix: What the model captures --- and where it strains {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-summary}{}
+
+\small
+\textbf{The model.} Single-agent optimal-stopping DDC. Each \emph{facility} $=$ one representative tank on a 32-cell grid (age $\times$ wall $\times$ regime); each year it chooses \textbf{maintain / exit / replace}.
+\vspace{0.1cm}
+\textbf{Captures well.} The dominant margin --- \textbf{exit} as tanks age, and its response to the premium. Full exits are coded correctly; $\gamma_{\text{price}}$ and $\gamma_{\text{risk}}$ are identified off this well-measured margin.
+\vspace{0.1cm}
+\textbf{Strains} --- all from one assumption, \emph{a facility is a portfolio, not one tank}:
+\begin{itemize}\setlength{\itemsep}{1pt}
+\item \textbf{No partial-closure action} --- downsizing (close one tank, keep operating) is coded Maintain. Small overall (0.36\%), concentrated at large facilities.
+\item \textbf{Mis-specified ``replace'' transition} --- real upgrades are partial, so 98\% land off the model's reset-to-one-new-tank support.
+\item \textbf{Omitted state (facility size)} --- choice probabilities vary by size; the model averages over it.
+\end{itemize}
+
+\vfill
+\centering\footnotesize\textit{Clean: maintain / exit / premium. Strained: the portfolio (size $+$ downsizing) margin and the replace transition.}
+```
+
+---
+
+
+## Appendix: How rare is any non-maintain action? {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-freq}{}
+```
+
+\textbf{Movement is rare.} 98\% of facility-years are pure maintain; only $\sim$\,2\% close anything. The model is identified off that thin closure margin --- but with 2.28M facility-years it is still well-measured.
+
+\vspace{0.2cm}
+
+```{=latex}
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{lrr}
+\toprule
+\textbf{The model's three actions} & \textbf{Facility-years} & \textbf{Share} \\
+\midrule
+Maintain                    & 2{,}237{,}292 & 98.07\% \\
+Exit (close, no install)    & 37{,}967      & 1.66\% \\
+Replace (close $+$ install) & 6{,}183       & 0.27\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+```
+
+\vfill
+\centering\small\textit{A clean partition of every facility-year. Replacement is the rarest action, $0.27\%$ --- closures are too rare to chop into many bins, so we keep three actions.}
+
+---
+
+
+## Appendix: How the model codes each facility-year {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{model-coding}{}
+```
+
+\textbf{The model reads one representative tank per facility} and labels each year by what the facility did. Let $c_{it}=1$ if the facility closes $\geq 1$ tank, and $n_{it}$ = new tanks installed that year:
+
+```{=latex}
+\begin{align*}
+\textbf{Maintain} &: \quad c_{it} = 0 \\
+\textbf{Exit}     &: \quad c_{it} = 1,\quad n_{it} = 0,\quad \text{facility ends} \\
+\textbf{Replace}  &: \quad c_{it} = 1,\quad n_{it} \geq 1
+\end{align*}
+```
+
+\vspace{0.1cm}
+
+\textbf{What these labels miss:} a facility that closes one tank of several but keeps operating is coded \textbf{Maintain}; a pure downsizing (close, no install) is coded \textbf{Exit} if it was single-tank, or \textbf{Maintain} if multi-tank. There is \emph{no} ``shrink'' action.
+
+\vfill
+\centering\small\textit{Next: how often the labels and the underlying events disagree.}
+
+---
+
+
+## Appendix: What facilities do, and how the model bins it {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\vspace{0.3cm}
+\input{../../Output/Tables/04z_ActionMap_Taxonomy.tex}
+```
+
+\vspace{0.1cm}
+\centering\small\textit{Rows $=$ what facilities actually \emph{do}; ``Model bin'' $=$ the 3-action label the estimator assigns. The two daggered rows are where the coding loses information --- downsizing and the upgrade/same-wall distinction. \emph{Next: how the regime moves each margin.}}
+
+---
+
+
+## Appendix: Where the regime bites --- FF vs.\ RB {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\vspace{0.3cm}
+\input{../../Output/Tables/04z_ActionMap_RegimeRates_split.tex}
+```
+
+\vspace{0.1cm}
+\centering\small\textit{The same rows, split by regime --- this is the identifying variation the structural premium and risk coefficients are estimated from.}
+
+---
+
+
+## Appendix: Why one tank is not one facility {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-limit}{}
+```
+
+\textbf{The model is a single tank.} Each facility is collapsed to one tank on a 32-cell grid (age $\times$ wall $\times$ regime), choosing keep / exit / replace --- where ``replace'' means \emph{reset to one brand-new tank}.
+
+\vspace{0.15cm}
+
+\textbf{But a facility is a portfolio of tanks}, acted on one at a time. Three things follow that a single tank cannot represent:
+
+\begin{enumerate}
+  \item \textbf{No partial closure.} Big facilities close one tank of several --- the model only has ``keep all'' or ``close all.''
+  \item \textbf{A facility can ``get younger.''} Scrap its oldest tank and its average age \emph{falls} --- impossible for one aging tank.
+  \item \textbf{``Replace'' rarely resets anything.} Replace one tank and the rest remain, so the facility almost never becomes ``one new tank.''
+\end{enumerate}
+
+\vspace{0.1cm}
+\centering\small\textit{Size is a real, fixed dimension the model leaves out --- 98--99\% of facilities keep the same tank count year to year. Next: the data behind each problem, and how the model could be fixed.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-size][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Varies by size $\rightarrow$}%
+  \hspace{3pt}%
+  \navbutton[portfolio-replace][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{``Replace'' $\rightarrow$}%
+  \hspace{3pt}%
+  \navbutton[portfolio-offsupport][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Ruled-out moves $\rightarrow$}%
+  \hspace{3pt}%
+  \navbutton[portfolio-fix][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{How to fix $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: How the model could capture this {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-fix}{}
+```
+
+\textbf{Three ways to bring the portfolio into the model, in increasing cost:}
+
+\begin{enumerate}
+  \item \textbf{Size as a fixed state dimension.} Add facility size (1 / 2 / 3 / 4+ tanks) to the state, with premiums and hazards re-aggregated by size. Size is 98--99\% sticky, so it can enter as a fixed type --- no new transition to estimate. \emph{Captures the size-varying choice probabilities; cheapest, and the natural first step.}
+  \item \textbf{A partial-closure action.} Add a fourth choice --- close some tanks, keep operating --- so downsizing is modeled directly instead of being forced into exit or replace. \emph{Captures the downsizing margin itself.}
+  \item \textbf{A full portfolio model.} Track the facility as a collection of tanks with a joint state. \emph{Most faithful, most complex.}
+\end{enumerate}
+
+\vfill
+\centering\small\textit{Planned path: size-as-state first, then the partial-closure action. Both leave the premium/hazard channels --- the clean part of the current estimates --- intact.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Facility size is a near-fixed attribute {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.78\textwidth,height=0.6\textheight,keepaspectratio]{../../Output/Figures/04ag_FixedType_Survival.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{The fixed-type test is not the one-year stay rate ($99\%$) --- size must stay put over a facility's whole spell (mean 16 yrs). It does: $\sim$\,92\% of facilities never change their \textbf{tank-count} bin and $\sim$\,94\% never change their \textbf{capacity} bin. Capacity is stickier (consolidation drops a tank but holds capacity), so it is the natural fixed-type size state --- entered with no transition to estimate.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Within-facility homogeneity --- one tank summarizes the rest {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.82\textwidth,height=0.56\textheight,keepaspectratio]{../../Output/Figures/04ah_Homogeneity_bySize.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{The other half of ``size as a fixed type'': is one representative tank a faithful summary? Across facility-years, $81.5\%$ have all tanks in one wall type \emph{and} one 5-year age bin --- the exact support of the state. The median facility at every size has \emph{zero} age spread (tanks installed together); heterogeneity is an age-spread phenomenon that emerges only at \textbf{4+}-tank facilities ($62\%$ homogeneous). So the single representative tank is exact for the bulk of facility-years --- the histogram earns its keep only in the large-facility tail.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Which tank do they shed? The margin is predictable {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.82\textwidth,height=0.56\textheight,keepaspectratio]{../../Output/Figures/04ai_WhichTank_Shed.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{When a multi-tank facility closes \emph{one} tank, it is not random: it is the \textbf{single-walled} tank ($79\%$ in mixed facilities vs.\ $52\%$ by chance), the \textbf{smallest} ($70\%$ vs.\ $32\%$), and more weakly the oldest. So even at large heterogeneous facilities the acted-on tank is predictable --- the model can carry the portfolio with a \emph{marginal-tank} state (the small SW tank) and a capacity-preserving step-down transition, no full histogram needed.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Choice probabilities fan out by facility size {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-size}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.82\textwidth,height=0.5\textheight,keepaspectratio]{../../Output/Figures/04u_CCP_by_Size.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Empirical choice probabilities by facility size (point size $=$ cell sample size). \textbf{Exit} concentrates at single-tank facilities; \textbf{``replace''} concentrates at large facilities and \emph{young} tanks --- portfolio churn, not tanks wearing out. The single-tank model has one probability per cell and cannot represent this spread.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Single-walled CCPs across regimes {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-ccp-sw}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.82\textwidth,height=0.5\textheight,keepaspectratio]{../../Output/Figures/04u_CCP_SW_byRegime.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Single-walled tanks, flat-fee vs.\ risk-based. Under risk-based pricing, exit rises steeply at old ages (middle panel) --- the premium channel the structural model captures cleanly.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Double-walled CCPs across regimes {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-ccp-dw}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.82\textwidth,height=0.5\textheight,keepaspectratio]{../../Output/Figures/04u_CCP_DW_byRegime.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Double-walled tanks, flat-fee vs.\ risk-based (canonical estimation-panel coding). Both exit and replacement rise with tank age; risk-based pricing steepens the old-age response.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Where closures go, by facility size {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-replace}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.86\textwidth,height=0.52\textheight,keepaspectratio]{../../Output/Figures/04w_Replace_Decomp.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{The three closure events by facility size. Upgrades $\to$ Replace (left) and full exits $\to$ Exit (middle) are coded correctly. \textbf{Downsizing} (right; closed a tank but kept operating) is hidden in Maintain --- and it rises sharply with facility size, the omitted-state (portfolio) problem. \emph{Note the differing $y$-scales.}}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+  \hspace{3pt}%
+  \navbutton[portfolio-maintain][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Maintain decomp $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Where closures go, by regime (FF vs.\ RB) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-replace-regime}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.86\textwidth,height=0.52\textheight,keepaspectratio]{../../Output/Figures/04y_Replace_Decomp_byRegime.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{The same three events, split by regime. Under risk-based pricing the old-tank jump is mostly \textbf{full exit} (middle; coded Exit --- captured cleanly). \textbf{Downsizing} (right; hidden in Maintain) is the smaller, uncaptured margin --- and is not even RB-driven. The model captures the dominant RB response; the gap is the partial-downsizing margin.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+  \hspace{3pt}%
+  \navbutton[portfolio-replace-fit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Model fit $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Model fit --- Exit (the margin that matters) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[width=0.78\textwidth,height=0.62\textheight,keepaspectratio]{../../Output/Figures/04ad_ModelFit_Exit.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Exit is the dominant non-maintain action (1.7\% of years) and the channel the welfare results run through. The model captures its shape --- rising with age, higher under RB at old tanks --- though it undershoots single-walled flat-fee exit at mid-ages.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Model fit --- Maintain {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[width=0.78\textwidth,height=0.62\textheight,keepaspectratio]{../../Output/Figures/04ad_ModelFit_Maintain.png}
+\end{center}
+
+
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Model fit --- Replace (rare, low-stakes) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-replace-fit}{}
+```
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[width=0.78\textwidth,height=0.62\textheight,keepaspectratio]{../../Output/Figures/04ad_ModelFit_Replace.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Replace is only $0.27\%$ of years. The model smooths the empirical old-RB bump (e.g.\ SW-RB reaches $\sim$\,0.9\% at 35+ vs a model line near $0.35\%$), but because the action is so rare this has little leverage on the estimates --- \textbf{exit is the margin that matters, and it is captured.}}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: What the model calls ``maintain'' --- hidden partial closures {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-maintain}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.86\textwidth,height=0.52\textheight,keepaspectratio]{../../Output/Figures/04w_Maintain_Decomp.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Almost all of ``maintain'' is genuine (left $\approx$ middle). The sliver that is not is \textbf{partial closures} --- a facility dropped a tank but kept operating, so it is coded maintain (right). That sliver \emph{scales with facility size}: $\sim$\,1.1\% per year at 4+-tank facilities vs.\ $\sim$\,0.05\% at single-tank facilities. The margin the model misses is, mechanically, a \textbf{size} dimension.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: At ``replace'' events, facilities shed tanks {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-hist}{}
+```
+
+\vspace{0.05cm}
+\begin{center}
+\includegraphics[width=0.66\textwidth,height=0.37\textheight,keepaspectratio]{../../Output/Figures/04ac_ReplaceTankChange_Hist.png}
+
+\includegraphics[width=0.66\textwidth,height=0.37\textheight,keepaspectratio]{../../Output/Figures/04ac_ReplaceCapChange_Hist.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{At the 26{,}253 ``replace'' events: tank count mostly \emph{falls} (top), yet total capacity is largely \emph{maintained} (bottom). So the common changes ($0$ and $-1$ tanks) are \textbf{consolidations} --- fewer, larger tanks --- not the single-tank reset the model assumes.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Tank loss and capacity loss move together {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-cov}{}
+```
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{../../Output/Figures/04ac_ReplaceTankVsCapacity_BinScatter.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Capacity change vs.\ tank-count change at ``replace'' events. Losing one tank holds capacity roughly flat (consolidation --- fewer, larger tanks); losing several cuts capacity sharply (true shrinking). Either way the facility is \emph{resized}, not reset to one new tank.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Downsizing corrupts the state, not just the action {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{portfolio-offsupport}{}
+```
+
+\vspace{0.15cm}
+\begin{center}
+\includegraphics[width=0.85\textwidth,height=0.6\textheight,keepaspectratio]{../../Output/Figures/04ab_StateViolations_inMaintain.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Model Maintain holds wall fixed and ages the tank $+1$. The downsizing years coded Maintain break both: $\sim$\,15\% flip \textbf{SW$\to$DW} (drop the SW tank, only DW remains --- 65\% of these flips closed an SW tank) and $\sim$\,20\% jump \emph{backward} in age (drop the oldest tank). True maintains do neither. The off-support transitions are not just a mislabeled action --- the state itself moves where Maintain forbids.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Does the reduced form share this problem? {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+\textbf{No --- the reduced form is facility-level and portfolio-aware.} It splits closures into three separate, well-defined facility outcomes:
+
+\begin{itemize}
+  \item \textbf{Full exit} --- the facility disappears; all tanks gone.
+  \item \textbf{Upgrade} --- a tank closed \emph{and} a new tank installed the same year.
+  \item \textbf{Shrink} --- a tank removed with \emph{no} install; the facility keeps operating, smaller.
+\end{itemize}
+
+A facility can be coded as \emph{both} upgrade and shrink in one year. None of these impose a single-tank reset.
+
+\vfill
+\centering\small\textit{So the reduced-form ``composition shifts toward replacement'' result is sound. The single-tank reset that misses 98\% of replacements is specific to the structural model.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[portfolio-limit][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: TX-on-FF counterfactual --- SW action shares {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{cf-overlay-sw}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/04o_Fit_6p_CF_Overlay_SW.png}
+\end{center}
+
+---
+
+
+## Appendix: TX-on-FF counterfactual --- DW action shares {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{cf-overlay-dw}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/04o_Fit_6p_CF_Overlay_DW.png}
+\end{center}
+
+---
+
+
+## Appendix: TX-on-FF counterfactual --- removal-age distribution {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{cf-removal-age}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/04o_CF_RemovalAge_Distribution_TX.png}
+\end{center}
+
+---
+
+
+
+## A dynamic discrete-choice model of tank operations {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+
+
+\textbf{Scale-incorporation model.} A facility is a \emph{portfolio} of tanks, not one representative tank.
+
+- **State** $s=(n,\,G,\,\rho)$: tank counts $n$ over 16 categories (wall $\times$ 8 age bins), capacity quartile $G$, fixed regime $\rho$
+- Each period, choose from the menu $(k,m)$ --- remove $k$ tanks (where $0 \le k \le n$), install $m$ new ones:
+    - $(0,0)$ **maintain** (keep all tanks)
+    - $(k,0)$ **downsize** (remove some tanks, $0 < k < n$)
+    - $(k,m\ge 1)$ **replace/consolidate** (remove $k$, install $m$ newer ones)
+    - $k=n$ **full exit** (exit the portfolio entirely)
+- The choice trades the current flow payoff against the continuation value of the *portfolio*
+
+
+\vfill
+\centering\small\textit{The single-tank model's keep / exit / replace becomes a per-unit-priced menu over the whole portfolio --- recovering the downsizing margin and the size-dependent regime response.}
+
+
+
+
+---
+
+
+## Flow utilities: one payoff per action {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\begin{align*}
+u_{(k,m)}(s) &= \estc{\varphi_G} + \alpha_g - \estc{\gamma_{\text{price}}}\,P(n',\rho) - \estc{\gamma_{\text{risk}}}\,\mathrm{OOP}(n') - \estc{c^{\text{rem}}}\,k - \estc{c^{\text{inst}}}\,m &&\text{\small(operate)}\\[3pt]
+u_X(s) &= \estc{\kappa_1}\,N(n) &&\text{\small(full exit)}
+\end{align*}
+```
+
+\vspace{0.1cm}
+
+- $P(n,\rho)=\sum_c n_c\,\bar p_c$ (risk-based, empirical cell prices) or $\tau_s\,N(n)$ (flat fee); $\;\mathrm{OOP}(n)=H(n)\,\min\{D,L\}=H(n)\,D$
+- **Estimated** (in \estc{green}): $\estc{\varphi_G}$ operating payoff by size, $\estc{\gamma_{\text{price}}}$ price / $\estc{\gamma_{\text{risk}}}$ risk sensitivity, $\estc{c^{\text{rem}}},\,\estc{c^{\text{inst}}}$ per-tank removal / install costs, $\estc{\kappa_1}$ exit-size gradient, $\estc{\lambda}$ nest
+- $\alpha_g$ state FE --- enters the operating payoff only
+
+
+
+\vfill
+\centering\small\textit{Two per-unit costs price the whole $(k,m)$ menu --- the owner chooses $k$ and $m$; the model never predicts them. One model unit $=\$10$k/yr/facility.}
+
+---
+
+
+## Keep, scrap, or replace: the dynamic stopping problem {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+$$
+v_a(s) = u_a(s) + \beta\sum_{s'} F_a(s'\mid s)\,V(s'), \qquad \beta = 0.9957
+$$
+
+```{=latex}
+\begin{align*}
+\text{tank-work nest:}\quad IV(s) &= \estc{\lambda}\,\log\!\!\sum_{(k,m)\ne(0,0)}\!\! e^{\,v_{(k,m)}(s)/\estc{\lambda}}\\[2pt]
+V(s) &= \log\!\Big( e^{\,v_{(0,0)}(s)} \;+\; e^{\,IV(s)} \;+\; e^{\,v_X(s)} \Big)
+\end{align*}
+```
+
+- **Maintain** $(0,0)$ --- flow payoff today, keep the portfolio and its option value
+- **Tank-work** --- the $(k,m)$ menu (downsize / replace / consolidate), bundled by a shared draw $\estc{\lambda}$: captures theunobserved factors the facility owners knows that effects the tank work decision 
+- **Exit** $X$ --- take $\kappa_1 N(n)$ and leave (absorbing)
+
+---
+
+
+
+
+## \textbf{From facility-year to $(k,m)$.} How the model codes each action {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{model-coding-pm}{}
+```
+ Let $k_{it}$ = tanks closed and $m_{it}$ = tanks installed in year $t$. Each facility-year gets exactly one action, by precedence:
+
+```{=latex}
+\begin{align*}
+\textbf{Exit } X         &: \quad \text{every tank closed} \\
+\textbf{Replace } (k,m\ge 1) &: \quad k_{it}\ge 1,\;\; m_{it}\ge 1,\;\; \text{still operating} \\
+\textbf{Downsize } (k,0) &: \quad k_{it}\ge 1,\;\; m_{it}=0,\;\; \text{still operating} \\
+\textbf{Maintain } (0,0) &: \quad k_{it}=0
+\end{align*}
+```
+
+(Expansion, install without closing(0,m) is not allowed in the action set.)
+
+\vspace{0.1cm}
+
+- **State** coded from the beginning-of-year portfolio: counts $n$ over 16 (wall $\times$ age) cells, capacity bin $G$, regime $\rho$
+- **Which tanks leave** is the rule $r(n,k)$ --- oldest single-walled first --- *not* a choice; only the counts $k,\,m$ are chosen
+- The new tank enters double-walled at age bin 1 (regulation)
+
+\vfill
+\centering\small\textit{Downsizing --- coded ``maintain'' or ``exit'' in the single-tank model --- is now its own action; the same panel, re-binned onto the four-action menu.}
+
+---
+
+## Laws of motion
+
+\BerkeleyLightMode
+
+
+ Removal rule $r(n,k)$: the $k$ oldest single-walled tanks leave first; installs enter double-walled at age bin 1; survivors age via $\Lambda$; capacity moves via $\Gamma_G(\cdot\mid G,\,m{-}k)$.
+
+\vfill
+\centering\small\textit{Risk-based pricing raises the cost of carrying old single-walled tanks $\Rightarrow$ the owner downsizes or upgrades the risky tank sooner --- the margin the single-tank reset could not represent.}
+
+---
+
+
+## \textbf{A thought experiment.} The same tank in two worlds {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+ Take one identical  facility  same leak hazard $H$ and drop it into each regime's contract (premium \emph{and} deductible):
+[WANT THIS TO BE A VERY SIMPLE MATH EXAMPLE WITH THE TABLE?]
+
+---
+
+
+## Premium $\times$ age: the variation that identifies $\gamma_{\text{price}}$ {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[width=0.97\textwidth,height=0.72\textheight,keepaspectratio]{../../Output/Figures/AE09_Premium_by_Age_State.pdf}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{Mean total facility premium by representative age band, one line per state, faceted by size (count held fixed, walls pooled). Texas (risk-based, bold) rises with age; every flat-fee state is flat in age ($P=\tau_s N$). The cross-state slope contrast at a given age and size is what pins $\gamma_{\text{price}}$.}
+
+---
+
+
+## Deductible $\times$ hazard: the variation that identifies $\gamma_{\text{risk}}$ {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.74\textheight,keepaspectratio]{../../Output/Figures/AE09_OOP_by_Age_Pooled.png}
+\end{center}
+
+\vspace{0.05cm}
+\centering\small\textit{One point per state: deductible $D_s$ (vertical) against mean facility hazard (horizontal); whiskers span the within-state 10--90\% hazard range. Since $\mathrm{OOP}=\gamma_{\text{risk}}\,H(n)\,D_s$, the across-state deductible spread $\times$ the within-state hazard spread identifies $\gamma_{\text{risk}}$. Zero-deductible states (MN, SD, OK, VA) sit on the floor and contribute nothing.}
+
+---

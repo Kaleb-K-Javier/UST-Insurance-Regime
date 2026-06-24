@@ -1,0 +1,658 @@
+---
+format:
+  pdf:
+    documentclass: article
+    cite-method: natbib
+    biblio-style: plainnat
+    link-citations: true
+    fontsize: 12pt
+    fig-pos: "p"
+    number-sections: true
+    include-in-header: PERC_preamble.tex
+    include-before-body: PERC_before-body.tex
+bibliography: UST-lit-fixed.bib
+fig-cap-location: bottom
+geometry: margin=1in
+---
+
+
+
+
+```{r}
+#| label: setup
+#| include: false
+#| message: false
+#| warning: false
+
+#| label: setup
+#| include: false
+# 1. Load custom environment variables (RENV_PATHS_*)
+.libPaths(c("C:/Users/kaleb/Documents/ust_ins_move_to_github/staging_library", .libPaths()))
+
+# 2. Load required packages
+library(tidyverse)
+# 2. FORCE the root identification
+# This looks for the directory containing the 'Reports' folder
+here::i_am("Reports/Paper/01_LUST_Insurance_Draft.qmd")
+
+# 3. DEBUG: Print the detected root to your render console
+# If this doesn't say ".../ust_ins_move_to_github", here is the problem.
+message("CHECKPOINT: Project root is: ", here::here())
+# 2. Load all required packages
+library(here)
+library(tidyverse)
+library(kableExtra)
+# Add any other packages your script requires below
+```
+
+
+\clearpage
+
+<!-- https://www.twdb.texas.gov/mapping/gisdata.asp - gis dat -->
+
+# Purpose {#sec-intro}
+
+From oil spills to surface mining to hazardous substance releases, U.S. environmental law relies on strict liability to assign the cost of harm to the firms that cause it (OPA 1990; SMCRA 1977; CERCLA 1980; RCRA 1976). Alongside these liability rules, federal law requires firms to demonstrate they can pay for the harm they cause, through bonding requirements, minimum asset standards, or compulsory insurance. When firms meet their liability through compulsory insurance, how that insurance is priced determines whether they have any incentive to reduce risk. This paper examines the design and efficacy of compulsory liability insurance as a financial responsibility instrument in environmental hazard settings.
+
+
+**Setting.** Every gas station in the United States stores its fuel in
+underground storage tanks (USTs). There are roughly 140,000 active retail
+facilities and 550,000 tanks nationwide. Leaks from these tanks (LUSTs) are the
+leading documented source of groundwater contamination in the country
+[@epa_underground_2024]. Cleanup is expensive: the median cost per site
+exceeds \$136,000 and the mean exceeds \$400,000 [@marcus_going_2021].
+The risk of a leak is not random. It rises sharply with how old a tank is
+and whether it has a single or double wall, two characteristics an insurer
+can observe and verify. Federal law (RCRA Subtitle I) has required every
+UST owner to carry at least \$1 million in financial responsibility
+coverage since 1988. Thirty-eight states satisfy this requirement through
+flat-fee public trust funds that charge every facility the same annual fee
+regardless of tank age, wall type, or leak history, giving owners no
+financial reason to retire old, risky tanks [@astswmo_archive]. Texas
+provides a clean experiment. On December 22, 1998, the state closed its
+flat-fee fund overnight and approximately 26,000 active facilities entered
+risk-rated private insurance in a single day, where premiums rise with tank
+age and wall type. The transition was driven by fiscal insolvency, not by
+any change in the riskiness of Texas facilities.
+
+
+**Three questions.** The paper addresses three questions in sequence.
+
+**Q1: Observability.** Is release risk predictable from observable tank characteristics? Risk-based pricing can only discipline behavior if the characteristics insurers observe genuinely predict environmental liability. I test this using a penalized logistic regression on 3.93 million pre-treatment facility-years across 18 study states, predicting the annual probability of a facility's first confirmed release as a function of tank age, wall construction type, and their interactions, with out-of-sample predictions obtained via 10-fold cross-validation. This is a logical precondition for the rest of the analysis. If observable characteristics carry no actuarial content, the Texas premium schedule is noise rather than signal.
+
+**Q2: Behavior.** Does risk-based pricing change closure, replacement, and release outcomes? I estimate the effect of the Texas transition using a difference-in-differences design with facility fixed effects and cell-by-year fixed effects, where cells are defined by wall type, fuel type, capacity, and installation cohort. These are the exact dimensions the private market prices. The control group comprises 17 states that retained flat-fee coverage throughout the study window and have complete administrative records. The panel covers 9.8 million tank-years spanning both regimes. The central identifying prediction, derived from the dynamic discrete-choice model of optimal stopping in @sec-structural-model, is that any behavioral response should be concentrated among older, single-walled facilities where the premium gradient is steepest. A general Texas-specific economic shock would shift closure rates uniformly across all facility types. The theory predicts a specific, risk-profile-shaped pattern of heterogeneity. That falsifiable prediction is the primary identification test.
+
+**Q3: Welfare.** How much of the first-best welfare gain does risk-rated pricing capture? Actuarial premiums price what insurers can claim. They cannot price the health externalities from groundwater contamination because contamination is rarely detected in time to establish third-party liability. I plan to use a dynamic discrete-choice structural model estimated on the post-reform panel to decompose the behavioral response into a price channel and a risk-internalization channel, and to compare the welfare consequences of alternative instruments (a Pigouvian surcharge, a replacement subsidy, and an age mandate) against the risk-based pricing baseline. Estimation is currently in progress and will be the focus of ongoing work after the initial workshop.
+
+Together, the three questions form a sequential argument: the market has the information needed to price risk (Q1), risk-based pricing changes what firms do (Q2), and the behavioral change closes part, but not all, of the gap to the social optimum (Q3).
+
+# Background
+
+**Related Literature**
+
+
+
+A well-established body of theoretical work suggests that strict liability rules can be an effective policy instrument for environmental risks, particularly when paired with insurance contracts that align a firm's private incentives with social costs [@shavell_liability_1984; @shavell_model_1984; @shavell_liability_1982; @polinsky_strict_1980; @boyd_retroactive_1997; @shavell_chapter_2007]. A crucial condition for this alignment is the insurer's ability to accurately price the risk of environmental harm. This paper provides the first empirical test of this principle in the context of environmental liability, offering causal estimates of how firms respond to a transition from flat-fee to more efficient, cost-based insurance contracts.
+
+The challenge of pricing environmental risk connects this study to the economics of insurance rating regimes. The pooling equilibrium maintained by uniform-premium state funds is the environmental analog of community rating: premiums are invariant to observable risk, which creates cross-subsidies that suppress precautionary investment and crowd out risk-differentiated private alternatives [@RothschildStiglitz1976; @Pauly1974; @CutlerZeckhauser2000]. Theory predicts that a shift to experience rating generates two behavioral responses. On the selection margin, high-risk facilities face a cost increase and may exit or upgrade. On the moral hazard margin, facilities that remain now face a direct financial return to risk reduction, inducing investment in safer technology. Identifying these margins separately requires within-facility panel variation that aggregate data cannot provide.
+The empirical literature on rating regimes confirms both mechanisms, though rarely in the same market. In health insurance, risk adjustment reforms that moved Medicare Advantage toward experience rating reduced favorable selection but generated gaming responses among plans [@brown_how_2014; @mcwilliams_new_2012]. In credit markets, moving from flat-rate to risk-differentiated pricing improves screening and changes borrower composition [@einav_contract_2012; @einav_impact_2013; @nelson_private_2025], with efficiency gains depending on whether information asymmetries favor the insurer or the insured [@FinkelsteinMcGarry2006; @liberman_equilibrium_2018; @einav_io_2021]. In the environmental insurance context, @yin_risk-based_2011 find that switching from community-rated state funds to private coverage in Michigan reduced leak incidents by over twenty percent. The Texas reform studied here provides a sharper identification environment and facility-level data that allow the selection and moral hazard margins to be separated.
+
+This paper also contributes to the literature on U.S. UST policy. While much of the existing work focuses on estimating the marginal damages of pollution from leaks [@marcus_going_2021; @zabel_hedonic_2012; @guignet_sell_2014; @guignet_impacts_2018; @guignet_contamination_2018; @walsh_contaminated_2017; @guignet_what_2013], this study is complementary, examining the design of management policies intended to prevent those damages.
+
+This research is most closely related to studies of a similar insurance market reform in Michigan by @yin_can_2011, @yin_risk-based_2011, and @yin_environmental_2007. That body of work finds that transitioning to risk-based insurance reduced the number of small firms and reported leaks. However, those analyses relied on aggregate or cross-sectional data, which cannot control for unobserved facility-level heterogeneity and may be susceptible to omitted variable bias. This paper advances on prior work by adopting an empirical strategy similar to other modern studies of environmental liability [@boomhower_drilling_2019]. By using a rich, facility-level panel dataset and a comparison sample matched on observable risk characteristics, I implement difference-in-differences models that control for unobserved facility characteristics and common time shocks, providing more credible causal estimates of how firms adjust their technology, replacement, and exit decisions in response to cost-based pricing.
+
+
+
+# Milestones
+
+This section lists the tangible milestones for the project. They fall into a data and measurement track that builds the inputs, and four analysis milestones that map to the three research questions. Each milestone is a concrete output that can be checked off when it is finished.
+
+## Track D — Data and measurement infrastructure
+
+These build the measurement inputs the three analyses depend on.
+
+- **D1 — Dewey linkage.** Link the facility database to the Dewey database, attaching store revenue, facility classification, and property values to each facility. This is the backbone for bringing revenue into the structural model (M3) and for richer heterogeneity (M2).
+- **D2 — Spatial measures for every facility.** For each facility, build an urban, suburban, or rural classification; a local market-competition measure (rival stations nearby); the count of public drinking-water wells within a set of radii, which is the population whose water is at risk from a release; and the surrounding population, for a population-weighted externality in the welfare calculation (M4).
+- **D3 — Claims data.** Rebuild the trust-fund claims data to the level of the individual claim, then file record requests to additional trust-fund states to widen coverage.
+- **D4 — Rate filings.** Complete the Texas rate-filing collection beyond the largest carrier.
+- **D5 — Data hygiene.** Diagnose and fix the broken records in South Dakota and Missouri, and keep both on the state-check list.
+
+## M1 — Observability and the price of risk (Q1)
+
+- Using the facility-level claims data together with the leak-hazard model, estimate the actuarially fair premium for each facility.
+- Compare that fair premium to what each facility actually pays under its fund, to show how flat-fee funds cross-subsidize risk: high-risk facilities pay less than their fair premium and low-risk facilities pay more, in the states where claims data exist.
+- Report the premium-versus-hazard and premium-versus-expected-loss comparisons as supporting evidence.
+
+## M2 — Behavior and reduced form (Q2)
+
+- Re-estimate the difference-in-differences and the event study at the facility level, not the tank level, and confirm the closure result holds.
+- Estimate stronger heterogeneity by facility size, and by the additional risk dimensions the new spatial and revenue measures make available.
+- Use imputed leak risk from the prediction model as a difference-in-differences outcome, to test whether Texas became empirically safer after the reform, not just whether tanks closed.
+- Finalize inference (wild-cluster bootstrap at the state level) and the leak-discovery event study, and write up the conditional-on-closing caveat for the closure-composition results.
+
+## M3 — Structural estimates (Q3, stage 1)
+
+- Estimate the portfolio model's cost and preference parameters: the scrap value on exit, the per-tank removal and installation costs, and the weights firms place on premiums and on expected liability.
+- Bring the measured store revenue into the model and estimate the weight firms place on it, so that downsizing and exit give up real revenue rather than a free constant.
+
+## M4 — Counterfactuals and welfare (Q3, stage 2)
+
+- Re-solve the model and the long-run fleet under the four policies: a flat-fee regime, a replacement subsidy, a Pigouvian premium, and an age-based removal mandate.
+- Replace the flat per-release damage value with a population-weighted figure built from the spatial measures in D2.
+- Deliver the central result: the sign and size of the flat-fee versus risk-based welfare comparison, how it depends on the assumed per-release damage, and the subsidy rate that maximizes welfare. This is the most important and the most uncertain deliverable.
+
+# Reduced-Form Evidence
+
+This section establishes the two facts the structural model builds on. The first is that release risk is predictable from the tank attributes an insurer can observe. The second is that the move to risk-based pricing changed firm behavior. The first fact is a precondition for risk-based pricing to do anything at all. The second is the causal response the structural model later interprets and values.
+
+## Observable risk and the age-hazard gradient
+
+The object of interest is the annual first-release hazard for a facility that has not yet leaked:
+
+$$h(t \mid x) = P\bigl(\text{first confirmed release in year } t \mid \text{no prior release}, \; x\bigr)$$
+
+In plain terms, given what an underwriter can observe at the start of a policy year, this is the probability of a claim that year.
+
+I estimate this hazard with a penalized logistic regression on the pre-treatment panel. The covariates $x$ are three-year age bins fully interacted with wall construction, state fixed effects, and fuel and portfolio controls. A lasso penalty selects variables. Inverse-frequency weights handle the 0.70 percent base rate. Predictions are taken out of sample from ten-fold cross-validation, then recalibrated to the empirical event rate.
+
+The estimation sample is 3.93 million pre-treatment facility-years with 27,455 confirmed first-release events.
+
+Release risk rises steeply with age for single-wall tanks and stays low and flat for double-wall tanks (\autoref{fig-cv-cellrisk}). The model recovers the cell-level pattern out of sample (\autoref{fig-cv-cellrisk-gof}). This estimate is predictive, not causal. Its job is to show that the attributes an insurer prices on carry real actuarial content. The fitted hazard also feeds the structural model as $H(n')$.
+
+## Pricing observable risk
+
+In Texas I rebuild the premium each facility faces from the rate filings of the largest UST insurer in the state (SERFF, 2006 to 2024). The per-tank premium is
+
+$$P_{ijt} = \text{Base}_t \times \text{ILF}_{it} \times \Bigl(1 + \sum_k \lambda_{k,t}\, X_{ijt,k}\Bigr)$$
+
+$\text{Base}_t$ is the per-tank base rate for one of four filing periods. $\text{ILF}_{it}$ is the increased-limit factor, which I fix at the federal-minimum \$1M per occurrence and \$1M aggregate. $X_{ijt}$ are the rated attributes: tank age, wall, piping, and leak-detection technology. $\lambda_{k,t}$ are the filed credits and debits.
+
+Control states do not rate on risk. Their financial-responsibility funds charge a per-tank annual assessment that is largely flat across years and tank attributes.
+
+The Texas schedule prices the risk the hazard model predicts. Premiums rise with predicted hazard across risk cells (\autoref{fig-premium-vs-hazard}), and realized bills are flatter than the filed card (\autoref{fig-ae-x3-premium-by-age}). This links the observability result to the market: the price actually paid moves with the risk the model can see.
+
+Texas and control premiums are flat and parallel before 1998 and diverge sharply after the reform (\autoref{fig-premium-divergence}). This is the price change whose behavioral effect the difference-in-differences design measures.
+
+## Difference-in-differences design
+
+The static specification is
+
+$$Y_{it} = \beta\,(\text{Texas}_{f(i)} \times \text{Post}_t) + \alpha_i + \delta_{ct} + \varepsilon_{it}$$
+
+$Y_{it}$ is an outcome for tank $i$ in year $t$. $\text{Texas}_{f(i)}$ marks facilities in Texas. $\text{Post}_t$ marks years after the 1998 reform. $\alpha_i$ is a facility fixed effect. $\delta_{ct}$ is a cell-by-year fixed effect, where a cell $c$ is wall type by fuel type by capacity by installation cohort. $\beta$ is the average treatment effect.
+
+The outcomes are tank closure, leak discovery, and the split of closures between replacement and permanent exit.
+
+The event study replaces the single post indicator with one coefficient per year:
+
+$$Y_{it} = \sum_{\tau \neq -1} \beta_\tau \,\bigl(\text{Texas}_{f(i)} \times \mathbf{1}[t - 1998 = \tau]\bigr) + \alpha_i + \delta_{ct} + \varepsilon_{it}$$
+
+The $\beta_\tau$ trace the Texas-versus-control gap year by year relative to 1998. They test for pre-trends and show the timing of the response.
+
+The identifying variation is within a single tank-vintage cell, in the same calendar year. The cell-by-year fixed effect holds wall, fuel, capacity, and vintage fixed and absorbs any shock common to a cell in a given year. $\beta$ is then the change in the Texas-versus-control closure-rate gap before and after the reform.
+
+The model makes a sharper prediction than a simple average effect. Because the premium gradient is steepest for old single-wall tanks, the closure response should be concentrated there. A general Texas economic shock would instead shift closure rates roughly uniformly across tank types. The risk-profile-shaped pattern of the response, not its average size, is the primary test that the reform and not some coincident shock drives the result.
+
+Treatment varies at the state level, so I cluster standard errors by state. With 18 clusters I use the wild cluster bootstrap, score variant (Kline and Santos 2012; 9,999 Rademacher draws, seed 20260519), rather than rely on cluster-robust asymptotics that are unreliable with few clusters.
+
+Three threats matter. The small number of clusters is addressed by the wild cluster bootstrap. Differential pre-trends are tested directly by the event study. The closure-composition outcome conditions on closing, which makes that sample endogenous, so I treat it as descriptive rather than causal.
+
+## Reduced-form results
+
+The reform raises the annual tank-closure probability by 1.58 percentage points on a 2.0 percent baseline (\autoref{tbl-did-stepped}, column 3). The estimate is stable as the specification adds facility fixed effects and then cell-by-year fixed effects.
+
+The event study shows flat pre-trends, a sharp break at the reform, and a sustained effect afterward (\autoref{fig-event-study}).
+
+The response is concentrated in the oldest, single-wall-heavy stock, as the model predicts. Pre-1989 vintage facilities show an effect of about 3.1 percentage points, against about 0.6 for post-1988 vintage (\autoref{tbl-hte-vintage}). This is the risk-profile-shaped heterogeneity the identification rests on.
+
+Leak discovery falls by 1.27 percentage points on a 1.73 percent base (\autoref{tbl-lust}). Both routine-monitoring and closure-inspection findings decline.
+
+Among facilities that close, risk-based pricing raises the share that replace or upgrade and lowers the share that permanently exit (\autoref{tbl-composition}). This is the replacement margin the structural model recovers. The comparison conditions on closing and is reported as descriptive.
+
+The difference-in-differences gives a causal average effect on behavior. It cannot put a dollar value on welfare, price policies that Texas did not run, or measure how far the reform moves behavior toward the social optimum. Those questions require the structural model in the next section.
+
+# Dynamic Structural Model of Tank Portfolio Decisions {#sec-structural-model}
+
+The reduced-form results in earlier sections show that the 1998 Texas regime switch changed closure behavior. These results cannot predict outcomes under a policy that has not been observed, such as a new premium schedule, a removal subsidy, or an age-based mandate. I build a dynamic structural model to answer these questions. In the model, each facility chooses every period how many tanks to remove and how many to install, given its tank stock, the premium and hazard it faces, and the value of continued operation relative to exit. Estimating the model recovers the cost and preference parameters needed to simulate policies that have not yet been tried.
+
+The unit of analysis is the facility, not the tank. A facility does not decide tank by tank whether to close. A facility with five aging tanks decides how many of the five to remove as one decision. The state variable must therefore track the full tank portfolio of each facility, not a single representative tank. A model built around one representative tank cannot tell apart a facility that gradually downsizes an old fleet from a facility that replaces tanks one for one, and these two patterns carry different implications for a removal mandate.
+
+## State space
+
+The portfolio $c$ records the number of tanks a facility holds across 16 categories. These categories cross two wall types, single wall and double wall, with eight age bands. A facility can hold between one and six tanks in total. Counting every combination of tank counts across these categories yields 74,612 distinct portfolios.
+
+$G$ is a four-bin measure of total facility storage capacity. Capacity is kept separate from the portfolio because capacity drives revenue, while tank count and age drive premium and hazard. Two facilities with the same tanks can still differ in scale. Crossing portfolios with capacity bins gives a state space of $74{,}612 \times 4 = 298{,}448$ states.
+
+Two facilities can illustrate what this state space represents. The first holds three tanks: two single-wall tanks in the oldest age band, and one double-wall tank in the youngest age band, with total capacity in the smallest bin. The second holds four tanks, all double-wall, all in a middle age band, with total capacity in the largest bin. These two facilities face different premiums and different hazard under the model, even when they operate under the same regulatory contract, because the premium and hazard functions depend on the full portfolio rather than a summary measure such as total tank count or average age. All firm heterogeneity in the model is captured by where a facility sits in this state space.
+
+## Actions
+
+Each period a facility chooses an action $a = (k, m)$. $k$ is the number of tanks removed. $m$ is the number of tanks installed. Removal follows a fixed order: oldest single-wall tanks first, then oldest double-wall tanks. This order matches the order used in 84 percent of removal events in the data.
+
+Installation is restricted to double-wall tanks. Single-wall installation is not a feasible choice over the relevant part of the sample because federal and state upgrade requirements ended new single-wall installation.\footnote{\label{fn:swban} New single-wall installation was foreclosed by state requirements that new tanks and piping be secondarily contained, that is, double-walled. Most followed the federal secondary-containment requirement added by the Energy Policy Act of 2005 (Pub. L. No. 109--58, tit. XV, subtit. B, the Underground Storage Tank Compliance Act of 2005; codified at 42 U.S.C. \S\ 6991b(i)), which several state UST programs cite directly. Effective dates, verified by the author with each state program, run from 1989 in Massachusetts and 1991 in Maine through 2013 in Kansas, with most concentrated in 2007 to 2009.} There is therefore no separate choice over wall type on the installation side.
+
+This action set covers three behaviors. Maintaining the status quo is $(0,0)$. Downsizing is $(k,0)$. Replacing or upgrading is $(k, m>0)$. Replacement is rarely one for one: only 13.7 percent of replacement events remove exactly one tank, and the most common pattern removes three tanks and installs two (\autoref{fig-km-kernel}). A facility can also exit, which is treated as an absorbing state.
+
+Removal and installation are modeled as one joint choice rather than two separate decisions made in sequence. This choice structure allows a facility's plan to replace tanks to affect how many tanks it removes within the same period. A two-stage model, by contrast, would require a facility to decide whether to close before it could decide whether to reopen, which does not match how replacement unfolds in the data.
+
+Premiums and hazard are evaluated on the fleet that results after the action is taken, before that period's aging. A facility that downsizes therefore sees its premium fall in the same period it removes tanks, not in a later period. This timing matches how insurers actually rerate facilities after a change in tank count.
+
+## Flow utility
+
+A facility that does not exit receives flow utility from operating its post-action fleet $n'$:
+
+$$u^W(s, a) = \phi_G + \alpha_g - \gamma_p \, P^e(n') - \gamma_r \, H(n') \, D^e - k \, c_{\text{rem}} - m \, c_{\text{inst}} \tag{1}$$
+
+In this equation, $\phi_G$ is a baseline operating value that varies with capacity. $\alpha_g$ is a fixed effect for the facility's regulatory environment. $P^e(n')$ is the expected premium given the post-action fleet. $H(n')$ is the expected hazard, or probability of a leak, given the post-action fleet. $D^e$ is the deductible the facility pays out of pocket if a leak occurs. $c_{\text{rem}}$ and $c_{\text{inst}}$ are the per-tank costs of removal and installation. $\gamma_p$ and $\gamma_r$ convert premium and expected liability into the same utility units. This lets the model test whether facilities respond differently to a dollar of premium than to a dollar of expected liability.
+
+$P^e(n')$ is built from the average premiums actually paid in the data, not from the insurer's filed rate card (\autoref{fig-ae-x3-premium-by-age}). Realized premiums are flatter across risk categories than filed rates. Using filed rates instead of realized rates would overstate how much a facility's bill moves when its portfolio changes.
+
+$H(n')$ comes from a separate hazard model estimated at the facility level, using majority wall type and average tank age as inputs. This hazard term is not built by combining tank-level hazards into one facility hazard. Combining tank-level hazards would assume that each tank's leak risk is independent of how many other tanks the facility operates, an assumption the data reject.
+
+A facility that exits the market receives a one-time terminal value:
+
+$$u^X(s) = \kappa_1 \, N(s) \tag{2}$$
+
+$N(s)$ is the number of tanks in the facility's current portfolio. $\kappa_1$ measures how the value of exit scales with portfolio size. A facility shutting down ten tanks, for example, may recover more salvage value than a facility shutting down two.
+
+## Bellman equation and estimation
+
+Facilities are forward looking. Each facility's value function satisfies:
+
+$$V(s) = \max \Big\{ \max_{(k,m)} \big[ u^W(s,a) + \beta \, \mathbb{E}[V(s') \mid s, a] \big],\; u^X(s) \Big\} \tag{3}$$
+
+$\beta = 0.9957$ is the monthly discount factor, consistent with an annual rate of roughly 5 percent. Exit is treated as an absorbing state. Each action carries an independent type-1 extreme value shock, which gives the model closed-form logit choice probabilities conditional on the state.
+
+Estimation proceeds in two stages. In the first stage, the premium schedule, hazard model, capacity transition process, deductibles, and pooled-loss parameter are built directly from the claims, premium, and tank registry data, and held fixed as known inputs. This two-stage approach is standard in this literature. It allows the data on premiums and hazard to be taken as given before asking what cost and preference parameters are consistent with the closure behavior observed under those prices and risks.
+
+The second stage estimates the parameter vector $\theta = (\phi_G, \gamma_p, \gamma_r, c_{\text{rem}}, c_{\text{inst}}, \kappa_1)$. State fixed effects $\alpha_g$ are estimated alongside $\theta$. These fixed effects are dropped before any counterfactual is computed, because they capture level differences across regulatory environments rather than structural behavior.
+
+$\theta$ is estimated using the nested pseudo-likelihood, or NPL, algorithm of Aguirregabiria and Mira. This algorithm avoids solving the full dynamic program at every candidate value of $\theta$. It begins with an initial guess at the conditional choice probabilities, the probability that a facility in a given state takes a given action, built from the choice frequencies observed in the data. Holding these probabilities fixed turns the dynamic programming problem into a static one, because the expected value of each action becomes a closed-form function of $\theta$ alone, and $\theta$ can be estimated by standard maximum likelihood on this pseudo-likelihood.
+
+The algorithm then uses the resulting $\theta$ to recompute the choice probabilities implied by the model, and repeats the first step using these updated probabilities. Estimation continues until $\theta$ and the choice probabilities converge together. This structure is what makes a state space of this size workable. Solving the full value function from scratch at every trial value of $\theta$ inside a numerical optimizer would not be feasible at 298,448 states.
+
+With the choice probabilities fixed at each NPL step, the value function is linear in $\theta$, so each step requires solving the value function once rather than once per candidate parameter value the optimizer tries. The value function itself is solved using an iterative method, BiCGSTAB, with a preconditioner built around the tank-aging structure of the transition matrix, rather than by direct matrix inversion.
+
+The model is estimated jointly across all regulatory environments observed in the data: three historical Texas premium schedules and the contract terms, a flat fee and a deductible, observed in each control state. One parameter vector $\theta$ is shared across all of these environments. This shared structure is the main source of identifying variation in the model, addressed in the next section.
+
+## Identification
+
+Identification of $\theta$ rests on three separate components. The first component is the set of modeling assumptions grounded in patterns observed in the data. The second component is the set of assumptions that follows from choosing a dynamic discrete choice model estimated by NPL. The third component is the actual empirical comparison in the data that pins down the size of each parameter, once the first two components hold. The first two components establish that $\theta$ is identified in principle. The third establishes that $\theta$ is identified in practice, and some parameters rest on stronger variation than others.
+
+### Assumptions grounded in observed data patterns: behavior and the law of motion
+
+These assumptions are grounded in patterns observed directly in the data. The removal order, oldest single-wall tanks first and then oldest double-wall tanks, is observed in 84 percent of removal events. This order is built into the model as a fixed rule rather than estimated as a separate choice. The remaining 16 percent represent a deviation from the rule, with an estimated mean cost of about \$11 per year (\autoref{fig-which-tank}).
+
+Installation is restricted to double-wall tanks because federal and state upgrade requirements ended new single-wall installation (see note~\ref{fn:swban}). In the data the single-wall share of new installs falls from 31 percent before the ban to under 3 percent after. This restriction reflects an institutional constraint rather than a behavioral assumption.
+
+The premium schedule, hazard function, capacity transition process, and deductible are built directly from observed premiums, claims, and tank registry records, and are held fixed rather than estimated jointly with $\theta$. This is possible because these objects are directly observed in the data. The cost and preference parameters in $\theta$, by contrast, are not directly observed and must be estimated.
+
+The flow utility specification keeps the premium term and the expected out-of-pocket term separate. Premium and deductible are distinct contractual features that vary independently across the contracts observed in the data (\autoref{fig-ae-x3-premium-by-age} for premiums; \autoref{fig-oop-by-age} for the deductible and hazard interaction). Treating them as a single combined price would obscure this independent variation.
+
+### Assumptions inherited from the discrete choice model and the NPL estimator
+
+These assumptions are not motivated by anything specific to underground storage tanks. They are the standard conditions that accompany the choice to model this problem as a dynamic discrete choice problem estimated by NPL. The same conditions would apply in any application of this framework.
+
+The shock attached to each action in each period is assumed to be an independent draw from a type-1 extreme value distribution, identically distributed across actions and uncorrelated with the state. This distributional assumption produces closed-form logit choice probabilities. It is a standard feature of this class of model rather than a property specific to this application.
+
+Facilities are assumed to have rational expectations. Each facility knows the contract terms it faces and correctly anticipates the transition process governing its own portfolio. A facility does not form beliefs that systematically diverge from the process that actually generates outcomes.
+
+The NPL algorithm requires that the mapping from a candidate set of choice probabilities to the choice probabilities implied by the model under $\theta$ satisfy standard regularity conditions. These conditions are needed for the alternating procedure described in the Bellman equation and estimation section to converge to the parameter values that generated the data, rather than to an alternative fixed point. Convergence diagnostics are reported with the estimated fit.
+
+### Empirical variation identifying $\theta$
+
+Conditional on the assumptions in the two sections above, each parameter in $\theta$ is identified by a distinct empirical comparison. These comparisons differ in the strength and exogeneity of the underlying variation.
+
+$\gamma_p$ is identified mainly from the 1998 Texas regime switch, when the insolvency of the state fund moved Texas facilities from a flat per-tank fee to a risk-rated premium. The matched-composition premium gap across the switch is about \$710, and the regime change shifts the downsize, replace, and exit margins (\autoref{tbl-regime-margins}). The three later Texas rate filings in 2006, 2014, and 2019, along with fee variation across control states, provide secondary variation. The switch was caused by the fund's aggregate insolvency, not by the risk of any individual facility, which supports a difference-in-differences interpretation of this comparison.
+
+The cross-sectional relationship between premiums and closure within the regulated period provides weaker identification (\autoref{fig-ae-x3-premium-by-age}). Realized premium gradients across risk categories are comparatively flat, reflecting in part the insurer's own rate-setting and unobserved selection into risk categories. $\gamma_p$ is therefore identified primarily from the regime switch rather than from this cross-sectional variation.
+
+$\gamma_r$ is identified from deductible variation across control-state contracts, interacted with estimated hazard (\autoref{fig-oop-by-age}). This comparison is identified net of the state fixed effect and the premium term. It therefore relies on the same comparability assumption that underlies the rest of the model: that facilities under different contracts are otherwise similar, conditional on $\alpha_g$.
+
+$c_{\text{rem}}$ is identified from the relationship between downsizing intensity and the premium and revenue that facilities forgo by downsizing (\autoref{fig-km-kernel}). The precision of this estimate depends on the accuracy of the underlying premium and revenue measures.
+
+$c_{\text{inst}}$ is identified from the pattern of outcomes among closing facilities: the split between replacement, downsizing without replacement, and exit, and the number of tanks installed conditional on replacement (\autoref{fig-km-kernel}). Only 13.7 percent of replacement events are one for one, and the most common pattern removes three tanks and installs two.
+
+$\kappa_1$ is identified from the relationship between exit rates and portfolio size $N$, net of estimated operating value. A steeper gradient implies a stronger effect of size on the value of exiting the market.
+
+$\phi_G$ is identified from the level comparison between continued operation and exit across facilities of different capacity. This comparison isolates the baseline value of operating at a given scale, separate from the cost and risk terms in equation (1).
+
+$\alpha_g$ is not a structural parameter. It is a control that absorbs level differences across regulatory environments, which prevents those differences from being wrongly attributed to $\gamma_p$ or $\gamma_r$. $\alpha_g$ is dropped before any counterfactual is computed.
+
+This identification strategy has three main limitations. Realized premiums are flatter than filed rates, which limits how much of $\gamma_p$ can be identified from cross-sectional variation rather than the regime switch (\autoref{fig-ae-x3-premium-by-age} versus the filed rate card). The hazard model is only as precise as the underlying leak data; its cross-validated fit is reported in the observability section. The removal-order rule matches 84 percent of observed removal events, leaving a small but nonzero share of cases where the rule does not hold.
+
+## Counterfactuals
+
+With $\theta$ estimated, the model is re-solved under four policy changes. Each counterfactual modifies a single term in the baseline payoff and leaves the rest of the model unchanged. State fixed effects $\alpha_g$ are dropped from this comparison, as in the estimation section, since they are a measurement control rather than a structural object. The baseline payoff used for comparison is:
+
+$$u^W(s,a) = \phi_G - \gamma_p \, P^e(n') - \gamma_r \, H(n') \, D^e - k\,c_{\text{rem}} - m\,c_{\text{inst}}$$
+
+Each counterfactual below re-solves the value function $V$ and the resulting steady-state fleet under one change to this equation. Only the bolded term moves.
+
+**CF1: Texas Stays Flat-Fee**
+
+$$u^W(s,a) = \phi_G - \gamma_p\,\mathbf{\bar{P}_\rho(n')} - \gamma_r \, H(n')\,\mathbf{D_\rho} - k\,c_{\text{rem}} - m\,c_{\text{inst}}$$
+
+This counterfactual asks what would happen if Texas had remained on a flat fee. It replaces the risk-rated premium $P^e(n')$ and the Texas deductible $D^e$ with a flat-fee control-state contract, $\bar{P}_\rho(n') = \tau_\rho N(n')$ and $D_\rho$, where $\tau_\rho$ is the flat per-tank fee under contract $\rho$. Control states use different contracts, so this comparison does not point identify a single answer. The counterfactual is instead bounded using the lowest-fee, highest-fee, and average control-state contract.
+
+**CF2: Single-Wall to Double-Wall Replacement Subsidy**
+
+$$u^W(s,a) = \phi_G - \gamma_p \, P^e(n') - \gamma_r \, H(n') \, D^e - k\,c_{\text{rem}} - m\,\mathbf{(1-s)\,c_{\text{inst}}}$$
+
+This counterfactual subsidizes the installation cost facing a facility that upgrades from single-wall to double-wall tanks, cutting $c_{\text{inst}}$ by a proportion $s$. Welfare and closure outcomes are traced across a range of subsidy rates, $s \in [0,1]$.
+
+**CF3: Pigouvian Premium**
+
+$$u^W(s,a) = \phi_G - \gamma_p \, P^e(n') - \gamma_r \, H(n') \, D^e - k\,c_{\text{rem}} - m\,c_{\text{inst}} \;\mathbf{-\;\gamma_r \, H(n') \, E}$$
+
+This counterfactual adds the health externality $E$, the per-release damage not currently priced through the deductible or the pooled loss, to the cost a facility bears from its expected hazard. This counterfactual measures how much of the gap between current and optimal closure behavior is caused by mispriced risk.
+
+**CF4: Age-A Removal Mandate**
+
+$$u^W(s,a) = \mathbf{-\infty} \quad \text{if } n' \text{ retains a tank in age bin} \geq A$$
+
+This counterfactual forces removal of any tank at or above age $A$ by assigning negative infinite payoff to any post-action fleet $n'$ that still holds such a tank, which restricts the feasible action set to mandate-compliant choices. Welfare under the mandate is compared to the more gradual response produced by CF1 through CF3 above.
+
+Welfare in each counterfactual is calculated as firm surplus, minus external health damage, minus any government outlay, in present value. This calculation makes a wedge in the data explicit. The facility pays only the deductible out of pocket. The insurance pool covers the remaining loss. The health externality falls entirely outside both the facility and the pool. Even a fairly priced, risk-rated premium therefore internalizes only the portion of total social cost that is priced through insurance.
+
+Each counterfactual carries its own limitation. The flat-fee counterfactual is bounded rather than point identified. The externality counterfactual depends on an external estimate of per-release health damage, supplemented here with a population-weighted measure built from facility location and surrounding population density. The Pigouvian counterfactual depends on how well the estimated cost parameters extrapolate to a pricing regime not observed in the data. The mandate counterfactual is only as reliable as the facility-level hazard model.
+
+# Data
+
+The current analysis dataset encompasses the universe of UST facilities from 1990 to 2021 across 19 states (AL, AR, ID, IL, KS, LA, MA, ME, MN, MT, NC, NM, OH, OK, PA, SD, TN, TX, VA). The main unit of analysis is the individual UST facility-year. You can see  in \autoref{tbl-baseline-characteristics} the baseline characteristics of the study facilities. \autoref{tbl-variable-definitions} lists each variable, its source, and how it is used.
+
+The dataset is built from three sets of adminstrative databases: State UST admistraive registries and Trust Fund agencies, EPA LUST Finder, and Texas-specific insurance data. The back bone is sthe EPA LUST finder [@EPA2017USTCompendium] which is the epas attempt and building a harmonzied natinal level UST dataset from the state adminstrative records. This attempt left crucurial data gaps in key variable need to execute any valid empirical analysis. 20 of 38 flat-fee states dropped: missing closure dates, install dates, or wall construction variables. The 17 controls plus Texas have complete records across all three dimensions.
+
+Through public record request i have collected two sets of UST insurnace datasets: through Texas deparment of insurance I have collected the rate manuals of largest UST insurance in the state. I am still collecting the other rate manuals from other insurance firms in the state. I am able to link the rate manuals to texas facilites due to the unique granulaity of the texas CEQs UST database. Texas is unique in that they provide granualr level insurance contract details of UST facilties for the past 20 years. This allows me to generate premiums for each faciliy in texas. This combine dwith the ASWATMO state fund survey allows me to produce \autoref{fig-ae-x3-premium-by-age}.
+
+Currelty, from 6 of the 17 Trust fund states I have collected usable UST state trust fund claims data. This data lnks LUST sites to their corresponding insurance claims allowing for a first of its kind multistate LUST claim remediation study. These claims underlie the cleanup-cost distribution in \autoref{fig-cost-distribution}.
+
+\autoref{fig-cost-distribution} shows the distribution of cleanup costs across LUST sites. \autoref{fig-baseline-tanks} shows that Texas facilities skew larger (more 3--4 tank facilities); controls have more single-tank facilities. \autoref{fig-baseline-capacity} shows total tank capacity per incumbent facility on Dec 22, 1998 (clipped at 60k gal); controls have a large mass of small single-tank facilities, while Texas capacity is shifted right.
+
+
+\clearpage
+
+# Tables and Figures {-}
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{table}{Baseline characteristics of study facilities at the reform date (December 22, 1998)}\\label{tbl-baseline-characteristics}
+\\vspace{6pt}
+\\input{%s}
+\\par\\vspace{10pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} 18 study states. Alive-at-reform means facilities with at least one tank active on December 22, 1998. Wall, vintage, and age are computed over tanks active at reform; profile averages are over all study facility-years. Capacity is the median, which is robust to large-facility outliers.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Tables/T_Baseline_Characteristics_Slide.tex")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{table}{Variables and how each is used}\\label{tbl-variable-definitions}
+\\vspace{6pt}
+\\input{%s}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Tables/T_Variable_Definitions.tex")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{table}{How risk-based pricing shifts the closing actions}\\label{tbl-regime-margins}
+\\vspace{6pt}
+\\input{%s}
+\\par\\vspace{10pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} Each row is a separate logit of one action on a risk-based-regime indicator with controls; entries are odds ratios, so a value above one means the action is more likely under risk-based pricing than under a flat fee. Estimated on the full panel. Stars denote significance. This regime contrast is the main variation that identifies the price weight in the structural model.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Tables/AE_X10_Regime_Margins.tex")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{table}{Difference-in-differences estimates of the tank-closure response}\\label{tbl-did-stepped}
+\\vspace{6pt}
+\\input{%s}
+\\par\\vspace{10pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} Effect of the 1998 Texas reform on the annual tank-closure indicator. Columns add facility fixed effects, then controls, then cell-by-year fixed effects; column (4) is the preferred specification. Standard errors clustered by state (18 clusters) in parentheses, with wild-cluster-bootstrap values below. Stars denote significance.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Tables/T_DiD_Stepped_Full.tex")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{table}{Closure response by installation vintage}\\label{tbl-hte-vintage}
+\\vspace{6pt}
+\\input{%s}
+\\par\\vspace{10pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} The closure response split by installation vintage. The pre-1989 effect is the sum of the main effect and the interaction; the post-1988 effect is the main effect alone. Same specification and state-level clustering as the headline difference-in-differences. The larger pre-1989 effect is the risk-profile-shaped heterogeneity the identification rests on.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Tables/T_HTE_DiD_Vintage.tex")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{table}{Effect of risk-based pricing on leak discovery}\\label{tbl-lust}
+\\vspace{6pt}
+\\input{%s}
+\\par\\vspace{10pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} Effect of the reform on the annual leak-discovery indicator and its components. The first column is the pre-reform control mean; the second is the Texas-times-Post coefficient in percentage points. Facility and cell-by-year fixed effects, clustered by state.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Tables/T_LUST_Incumbent_Slide.tex")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{table}{Composition of closures: replacement versus permanent exit}\\label{tbl-composition}
+\\vspace{6pt}
+\\input{%s}
+\\par\\vspace{10pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} Among facilities that close in a given year, the effect of the reform on what they do. The sample conditions on closing and is therefore endogenous, so these are descriptive, not causal. The first column is the pre-reform control mean; the second is the Texas-times-Post coefficient in percentage points.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Tables/T2b_Enriched_Slide.tex")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Total facility premium by tank age band, Texas versus control states}\\label{fig-ae-x3-premium-by-age}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.85\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} Each Texas point is the mean total premium across single-category facility-years in that age band, where premiums are rebuilt at the tank level from the rate filings and summed to the facility; each control point is the state flat fee times the facility tank count, averaged within the band. Take the single-wall Texas line: it rises from about \\$500 for the youngest tanks to roughly \\$1{,}065 for the oldest, while the control lines stay flat across age. That contrast is the object the model treats as priced, since under risk-based pricing the bill climbs with tank age and under a flat fee it does not. Part of the Texas slope reflects older portfolios holding about twice as many tanks, not only a higher per-tank price.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/AE_X3_Premium_by_Age.pdf")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Which tank a facility removes when it downsizes}\\label{fig-which-tank}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.85\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} The figure plots coefficients from a conditional logit, estimated on observed downsizing events, for the probability that a tank of a given age and wall type is the one removed, relative to the youngest double-wall tank. Reading the top of the plot, the oldest single-wall tanks have by far the highest odds of being the tank removed, and the odds fall steadily as tanks get newer and as wall type shifts from single to double. This is the pattern the model encodes as a fixed rule: remove the oldest single-wall tank first, then the oldest double-wall tank. The rule reproduces the tank actually removed in 84 percent of events.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/AE_X6_WhichTank_Forest.pdf")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Joint distribution of tanks removed and installed among closing facilities}\\label{fig-km-kernel}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.85\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} Each cell counts closing facility-years by the number of tanks removed that period (k, rows) against the number installed the same period (m, columns), shaded darker where more events fall. Look at the brightest cell: it sits at remove-three, install-two, off the one-for-one diagonal, and only 13.7 percent of replacements remove and install exactly one tank. Because removal and installation occur together and at varying intensity, the model lets a facility choose the pair (k, m) as one decision rather than first deciding whether to close and then whether to reopen.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/AE_X7_Kernel_Heat.pdf")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Expected out-of-pocket cost by tank age, flat-fee versus risk-based cells}\\label{fig-oop-by-age}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.85\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} Out-of-pocket cost is the predicted leak hazard times the contract deductible, averaged within age band separately for flat-fee and risk-based cells. The risk-based line rises with age because hazard rises with age and the deductible is positive, while the flat-fee line stays low and nearly flat because those funds carry little or no deductible. The vertical gap between the two lines at a given age, holding hazard fixed, is the variation that identifies how much weight firms place on expected out-of-pocket exposure.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/AE09_OOP_by_Age_Pooled.png")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Predicted annual first-release hazard by tank age and wall type}\\label{fig-cv-cellrisk}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.85\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} The curves are average out-of-sample predictions from the cross-validated first-release model, grouped into wall-by-age cells. Follow the single-wall curve: the annual probability of a first confirmed release climbs steadily as tanks age, while the double-wall curve stays low and almost flat throughout. The steep single-wall age gradient is the central observability fact, that the two attributes an underwriter can verify, age and wall, predict releases.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/Figure_CV_CellRisk.png")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Cross-validated fit of the hazard model}\\label{fig-cv-cellrisk-gof}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.8\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} Each point is one wall-by-age cell; its horizontal position is the raw observed first-release rate in the data and its vertical position is the model average out-of-sample prediction for that cell. The points lie close to the 45-degree line, which means the model reproduces the cell-level release rates on data it was not trained on, so its discrimination is not an artifact of overfitting.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/Figure_CV_CellRisk_GoF.png")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Texas premiums against predicted hazard, by risk cell}\\label{fig-premium-vs-hazard}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.8\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} Each point is a risk cell; the horizontal axis is the model predicted hazard for that cell and the vertical axis is the mean Texas premium paid by facilities in it. The points slope upward, so cells the model flags as higher-risk are the cells the market charges more. This links the observability result to prices: the Texas schedule moves with the very risk the hazard model can predict.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/Figure_Premium_vs_Hazard_Raw.png")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Average premium by year, Texas versus control states}\\label{fig-premium-divergence}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.85\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} Each line is the mean per-tank premium by year, one for Texas and one for the pooled control states. Before 1998 the two lines track each other closely and are flat; at the 1998 reform the Texas line jumps and keeps rising while the control line stays flat. That post-1998 divergence is the price change whose behavioral effect the difference-in-differences design estimates.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/04e_Premium_by_Year_Treatment.png")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Event study of tank closure in Texas relative to control states}\\label{fig-event-study}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.85\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} Each point is the estimated Texas-versus-control gap in the annual tank-closure rate for one year, from the event-study specification with 1998 omitted as the base year; bands are 95 percent confidence intervals with standard errors clustered by state. The pre-1998 points sit near zero, which supports parallel trends; the points jump up right after 1998 and stay elevated, which is the sustained closure response to the reform.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/Fig_ES_Full.pdf")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Distribution of cleanup costs per confirmed release (LUST sites, 1988--2021)}\\label{fig-cost-distribution}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.85\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} The histogram pools realized per-release cleanup costs from the trust-fund claims data, deflated to 2023 dollars and plotted on a log scale. The mass is concentrated near the median of about \\$136{,}000, but a long right tail stretches to costs an order of magnitude larger, and that tail pulls the mean up to about \\$400{,}000. This skew is why the model treats cleanup liability as a heavy-tailed structural feature of releases rather than a fixed cost.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/Figure_cost_distribution_pooled.png")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Tank count per incumbent facility at the reform date}\\label{fig-baseline-tanks}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.8\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} The histogram counts incumbent facilities by their number of active tanks on December 22, 1998, separately for Texas and the control states. The Texas distribution carries more mass at three and four tanks, while the control distribution is concentrated at one tank. Texas facilities are therefore larger on average, which matters because the model portfolio state and the premium both scale with the number of tanks.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/Fig_Baseline_TanksAtReform.png")))
+```
+
+```{r}
+#| echo: false
+#| results: asis
+cat(sprintf('\\clearpage
+\\null\\vfill
+\\begin{center}
+\\captionof{figure}{Total tank capacity per incumbent facility at the reform date}\\label{fig-baseline-capacity}
+\\par\\vspace{8pt}
+\\includegraphics[width=0.8\\textwidth,height=0.58\\textheight,keepaspectratio]{%s}
+\\par\\vspace{8pt}
+\\begin{minipage}{0.85\\textwidth}\\small\\textit{Notes:} The histogram counts incumbent facilities by total storage capacity on December 22, 1998, clipped at 60{,}000 gallons, separately for Texas and the controls. The control distribution has a large spike of small single-tank facilities at low capacity, while the Texas distribution is shifted right toward larger total capacity. This scale difference is why the model carries a separate capacity dimension alongside the tank portfolio.\\end{minipage}
+\\end{center}
+\\vfill\\clearpage', here::here("Output/Figures/Fig_Baseline_CapacityAtReform.png")))
+```

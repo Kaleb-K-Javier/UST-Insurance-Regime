@@ -1,0 +1,129 @@
+age_bin,regime,wall,size_bin,mean_total,n
+1,Flat fee (controls),DW,1 tank,125.097957288765,10770
+2,Flat fee (controls),DW,1 tank,122.264022261021,18328
+3,Flat fee (controls),DW,1 tank,127.659523922649,21047
+4,Flat fee (controls),DW,1 tank,134.616446008603,17901
+5,Flat fee (controls),DW,1 tank,138.872930304197,12985
+6,Flat fee (controls),DW,1 tank,140.596764875794,6924
+7,Flat fee (controls),DW,1 tank,176.418100701084,1569
+8,Flat fee (controls),DW,1 tank,172.367120954003,1174
+1,Flat fee (controls),DW,2 tanks,257.116376988984,20425
+2,Flat fee (controls),DW,2 tanks,282.678882594257,25595
+3,Flat fee (controls),DW,2 tanks,308.229769537342,23084
+4,Flat fee (controls),DW,2 tanks,325.333030027298,17584
+5,Flat fee (controls),DW,2 tanks,336.960600018988,10533
+6,Flat fee (controls),DW,2 tanks,353.887931034483,4176
+7,Flat fee (controls),DW,2 tanks,439.922169811321,848
+8,Flat fee (controls),DW,2 tanks,370.942115768463,501
+1,Flat fee (controls),DW,3 tanks,444.636556649296,15543
+2,Flat fee (controls),DW,3 tanks,442.396700356718,20184
+3,Flat fee (controls),DW,3 tanks,452.591913468967,19415
+4,Flat fee (controls),DW,3 tanks,456.960934406757,15154
+5,Flat fee (controls),DW,3 tanks,467.161581137309,10094
+6,Flat fee (controls),DW,3 tanks,510.948090692124,5028
+7,Flat fee (controls),DW,3 tanks,586.794871794872,1170
+8,Flat fee (controls),DW,3 tanks,518.925155925156,481
+1,Flat fee (controls),DW,4 plus tanks,678.784408416696,8697
+2,Flat fee (controls),DW,4 plus tanks,730.89148455162,10616
+3,Flat fee (controls),DW,4 plus tanks,788.159322969368,10871
+4,Flat fee (controls),DW,4 plus tanks,802.881400994105,8651
+5,Flat fee (controls),DW,4 plus tanks,807.746831329217,6154
+6,Flat fee (controls),DW,4 plus tanks,829.541641701618,3338
+7,Flat fee (controls),DW,4 plus tanks,886.401154401155,693
+8,Flat fee (controls),DW,4 plus tanks,704.744107744108,297
+1,Flat fee (controls),SW,1 tank,107.340437990397,8539
+2,Flat fee (controls),SW,1 tank,131.581980519481,18480
+3,Flat fee (controls),SW,1 tank,140.482605407449,31734
+4,Flat fee (controls),SW,1 tank,129.498929696707,41577
+5,Flat fee (controls),SW,1 tank,117.09361273596,46671
+6,Flat fee (controls),SW,1 tank,100.606496283905,47227
+7,Flat fee (controls),SW,1 tank,86.1059624907571,44629
+8,Flat fee (controls),SW,1 tank,71.1507890846327,137311
+1,Flat fee (controls),SW,2 tanks,188.945105727489,14282
+2,Flat fee (controls),SW,2 tanks,220.808273168009,28671
+3,Flat fee (controls),SW,2 tanks,244.596332542507,40464
+4,Flat fee (controls),SW,2 tanks,243.330814387875,46845
+5,Flat fee (controls),SW,2 tanks,231.212208793134,45672
+6,Flat fee (controls),SW,2 tanks,221.430326032524,37941
+7,Flat fee (controls),SW,2 tanks,199.309016499935,30788
+8,Flat fee (controls),SW,2 tanks,180.271210433491,86184
+1,Flat fee (controls),SW,3 tanks,343.579663408243,9923
+2,Flat fee (controls),SW,3 tanks,378.263454206933,22558
+3,Flat fee (controls),SW,3 tanks,391.719208315535,42138
+4,Flat fee (controls),SW,3 tanks,395.039957473199,56435
+5,Flat fee (controls),SW,3 tanks,399.197248172218,59088
+6,Flat fee (controls),SW,3 tanks,403.592301950351,52247
+7,Flat fee (controls),SW,3 tanks,400.557465282185,39389
+8,Flat fee (controls),SW,3 tanks,374.475342869783,67810
+1,Flat fee (controls),SW,4 plus tanks,589.298623481782,6175
+2,Flat fee (controls),SW,4 plus tanks,603.354723827443,14882
+3,Flat fee (controls),SW,4 plus tanks,640.178274080826,32910
+4,Flat fee (controls),SW,4 plus tanks,686.177557095982,46019
+5,Flat fee (controls),SW,4 plus tanks,717.120748147487,44804
+6,Flat fee (controls),SW,4 plus tanks,724.958930402545,38033
+7,Flat fee (controls),SW,4 plus tanks,723.488928741354,27323
+8,Flat fee (controls),SW,4 plus tanks,584.010430881391,53495
+1,Risk-based (TX),DW,1 tank,268.169826325559,3988
+2,Risk-based (TX),DW,1 tank,279.324047895549,3777
+3,Risk-based (TX),DW,1 tank,283.459064589702,3320
+4,Risk-based (TX),DW,1 tank,302.548141823812,3031
+5,Risk-based (TX),DW,1 tank,342.595252265904,1923
+6,Risk-based (TX),DW,1 tank,389.265925784455,833
+7,Risk-based (TX),DW,1 tank,362.578832697201,262
+8,Risk-based (TX),DW,1 tank,392.704117063492,84
+1,Risk-based (TX),DW,2 tanks,541.49585709552,8301
+2,Risk-based (TX),DW,2 tanks,556.730250470563,8466
+3,Risk-based (TX),DW,2 tanks,590.585988382258,6752
+4,Risk-based (TX),DW,2 tanks,621.664418360021,5332
+5,Risk-based (TX),DW,2 tanks,670.9420806783,2746
+6,Risk-based (TX),DW,2 tanks,707.859805286379,881
+7,Risk-based (TX),DW,2 tanks,810.003085399449,295
+8,Risk-based (TX),DW,2 tanks,1207.89090909091,209
+1,Risk-based (TX),DW,3 tanks,845.613032344005,2190
+2,Risk-based (TX),DW,3 tanks,899.476905642521,2893
+3,Risk-based (TX),DW,3 tanks,929.819917613074,3117
+4,Risk-based (TX),DW,3 tanks,923.358196800007,3411
+5,Risk-based (TX),DW,3 tanks,977.294538944451,2838
+6,Risk-based (TX),DW,3 tanks,1047.75453060798,1632
+7,Risk-based (TX),DW,3 tanks,1098.77640567541,789
+8,Risk-based (TX),DW,3 tanks,1156.78213656576,460
+1,Risk-based (TX),DW,4 plus tanks,1399.03667957755,1061
+2,Risk-based (TX),DW,4 plus tanks,1547.63884039349,831
+3,Risk-based (TX),DW,4 plus tanks,1635.95176625189,529
+4,Risk-based (TX),DW,4 plus tanks,1371.68292258522,708
+5,Risk-based (TX),DW,4 plus tanks,1346.25832150556,822
+6,Risk-based (TX),DW,4 plus tanks,1378.34377678572,700
+7,Risk-based (TX),DW,4 plus tanks,1517.23881474034,336
+8,Risk-based (TX),DW,4 plus tanks,1610.24168110111,141
+1,Risk-based (TX),SW,1 tank,279.420953326715,1007
+2,Risk-based (TX),SW,1 tank,290.261480773489,3008
+3,Risk-based (TX),SW,1 tank,297.238189395311,4987
+4,Risk-based (TX),SW,1 tank,295.828287563825,5008
+5,Risk-based (TX),SW,1 tank,308.765355541178,4142
+6,Risk-based (TX),SW,1 tank,321.499337780862,2736
+7,Risk-based (TX),SW,1 tank,362.663573545276,2049
+8,Risk-based (TX),SW,1 tank,453.258804940809,2450
+1,Risk-based (TX),SW,2 tanks,565.269401913872,1672
+2,Risk-based (TX),SW,2 tanks,607.909059516126,5160
+3,Risk-based (TX),SW,2 tanks,631.44675753999,9136
+4,Risk-based (TX),SW,2 tanks,645.017640607297,9586
+5,Risk-based (TX),SW,2 tanks,657.725429132828,8175
+6,Risk-based (TX),SW,2 tanks,641.257065698956,5951
+7,Risk-based (TX),SW,2 tanks,652.600841959602,4976
+8,Risk-based (TX),SW,2 tanks,745.676368884501,6438
+1,Risk-based (TX),SW,3 tanks,845.369078947369,228
+2,Risk-based (TX),SW,3 tanks,937.664355290296,946
+3,Risk-based (TX),SW,3 tanks,944.053340663493,2773
+4,Risk-based (TX),SW,3 tanks,915.180736715729,6397
+5,Risk-based (TX),SW,3 tanks,957.212615728738,13068
+6,Risk-based (TX),SW,3 tanks,997.715532924837,15533
+7,Risk-based (TX),SW,3 tanks,1049.74739471862,13333
+8,Risk-based (TX),SW,3 tanks,1105.34345665667,12558
+1,Risk-based (TX),SW,4 plus tanks,1187.2828125,48
+2,Risk-based (TX),SW,4 plus tanks,1194.52371314477,231
+3,Risk-based (TX),SW,4 plus tanks,1228.45761036707,708
+4,Risk-based (TX),SW,4 plus tanks,1240.61197761135,2372
+5,Risk-based (TX),SW,4 plus tanks,1289.02169112602,7024
+6,Risk-based (TX),SW,4 plus tanks,1367.52670896267,8598
+7,Risk-based (TX),SW,4 plus tanks,1483.1827706421,7024
+8,Risk-based (TX),SW,4 plus tanks,1607.57480267362,5598

@@ -1,0 +1,5 @@
+wall_comp,n_closures,P_R_cond,P_E_cond
+SW pool (all-SW+mixed),35654,0.1436,0.8564
+all-DW,4518,0.1649,0.8351
+all-SW,34874,0.1365,0.8635
+mixed,780,0.4615,0.5385

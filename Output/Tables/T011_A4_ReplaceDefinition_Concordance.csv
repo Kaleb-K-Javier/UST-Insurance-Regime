@@ -1,0 +1,7 @@
+category,N,pct_of_dcm_replacements,pct_of_all_closures,note
+DCM_Replace_total,6210,100,13.9231424599794,all DCM Replace events (I_replace==1)
+DCM_Replace_is_SW2DW,2870,46.2157809983897,6.43468902739788,DCM Replace that are same-year SW->DW (single_to_double_year==1)
+DCM_Replace_broad_not_SW2DW,3340,53.7842190016103,7.4884534325815,DCM Replace that are broad future-install but NOT same-year SW->DW
+broad_replace_NOT_in_DCM_replace,0,0,0,broad replacement flag but NOT coded DCM Replace (should be 0)
+SW2DW_NOT_in_DCM_replace,0,0,0,SW->DW flag but NOT coded DCM Replace (should be 0; sw2dw subset of broad)
+Identity_check_discrepancies,0,0,0,rows where I_replace != replacement_closure_year among closures (should be 0)

@@ -1,0 +1,7 @@
+category,n,pct
+Maintain (model: no close),2237292,98.065
+"Exit (model: close, no install)",37967,1.664
+Replace (model: close + install),6183,0.271
+True upgrade (closure + new install),6183,0.271
+"Shrink (tank removed, no install)",46436,2.035
+Any closure activity (>=1 tank closed),52283,2.292

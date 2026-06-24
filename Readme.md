@@ -274,6 +274,19 @@ Separate from the raw-data recovery status above, two states are flagged as **kn
 
 **To do (raw-data work):** when re-parsing MO (Access database) and re-downloading SD (DANR tanks/spills), add **both** to the state-check list — verify whether the near-zero exit/replace counts are a true data feature or a closure-date/coverage gap in the raw records. If the event counts change after recovery, the degenerate alphas may resolve, and these rows should be updated.
 
+## ⚠️ Tank-Capacity Data Quality (sentinel + implausible values)
+
+Found during the portfolio-model first stage (T023, 2026-06-13). The per-tank `capacity` field in `panel_dt.csv` carries some physically impossible values (largest standard UST ≈ 50,000 gal). These do **not** bias the structural model — capacity enters only as a quartile bin `G`, and these are all genuinely large facilities that bin correctly to the top quartile after per-tank winsorizing at 60,000 gal — but they are a data-quality flag worth fixing at the source.
+
+| State | Bad tanks (>100k gal) | Nature | Read-in clue |
+|-------|----------------------|--------|--------------|
+| **TN** | 762 (757 = value `999999`) | **Sentinel for "large tank, exact unknown"** — NOT a units error | `mm_capacity` bucket = "25k-Plus" is intact; only the numeric field is placeholder `999999`. **Recoverable** by imputing from the bucket. |
+| VA | 58 (2.1–3.8M gal) | Likely genuine errors | Check raw VA capacity units |
+| AR | 13 (1e9–2e9 gal) | Genuine garbage | e.g. `66000153_AR_1` = 2.0e9 with intact "25k-Plus" bucket |
+| TX, MO, KS, MA, MD, ME, OK, OH, LA, NC, CO, MN | ≤6 each | Mixed (100k–3M) | Spot-check raw capacity read-in |
+
+**To do (raw-data work):** (1) **TN** — confirm `999999` is the state's "≥25k, exact unknown" sentinel and impute exact capacity from the `mm_capacity` bucket on re-parse; this is the largest cluster (377 facilities) and is **not** a units error. (2) Other states — spot-check whether the >100k values are unit-conversion read-in errors (e.g. liters→gallons, ×1000). (3) The structural model winsorizes per-tank capacity at 60,000 gal for `G` binning (keeps all facilities); revisit if a future analysis uses capacity continuously.
+
 ---
 
 ## Summary Statistics

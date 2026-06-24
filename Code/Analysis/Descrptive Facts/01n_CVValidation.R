@@ -1432,6 +1432,71 @@ cat(sprintf(
   levels(dcm_hazard$age_bin)[nlevels(dcm_hazard$age_bin)]))
 
 
+#### S12: Lifetime Cumulative First-Release Probability #######################
+#
+# Converts the annual first-release hazard h(age, wall) into a synthetic-cohort
+# LIFETIME cumulative incidence: the probability a facility experiences its
+# first confirmed release over an L-year operating life. This puts the UST leak
+# rate in the SAME UNIT the oil-and-gas well-integrity literature reports
+# (cumulative share of units that ever lose containment) so magnitudes compare.
+#
+# Life table: within each 3-year bin apply that bin's annual hazard for 3 years;
+# the open 24+ bin fills the remaining horizon at its observed average hazard
+# (conservative -- the true hazard keeps rising past 24).
+#   S(L) = prod_bins (1 - h_bin)^(years in bin);  CI(L) = 1 - S(L).
+# Fleet figure weights SW and DW by their facility-year exposure share.
+#
+# Uses obs_dt (observed cell means, model-free) from S7. Swap obs_per1k ->
+# model_per1k and obs_dt -> cell_dt for the model-smoothed version.
+
+LIFE_HORIZONS <- c(24L, 30L, 35L)
+BIN_WIDTH     <- 3L
+OPEN_BIN      <- "24+"
+
+haz_dt <- obs_dt[, .(wall_label, age_bin, h = obs_per1k / 1000, n_fac_years)]
+setorder(haz_dt, wall_label, age_bin)   # age_bin is an ordered factor
+
+lifetime_ci <- function(h_vec, bin_lab, L) {
+  age <- 0L; S <- 1
+  for (i in seq_along(h_vec)) {
+    yy  <- if (bin_lab[i] == OPEN_BIN) max(0L, L - age) else
+             min(BIN_WIDTH, max(0L, L - age))
+    S   <- S * (1 - h_vec[i])^yy
+    age <- age + yy
+  }
+  1 - S
+}
+
+life_rows <- list()
+for (L in LIFE_HORIZONS) {
+  by_wall <- haz_dt[, .(ci = lifetime_ci(h, as.character(age_bin), L),
+                        w  = sum(n_fac_years)), by = wall_label]
+  fleet <- by_wall[, sum(ci * w) / sum(w)]
+  life_rows[[as.character(L)]] <- rbindlist(list(
+    by_wall[, .(horizon = L, group = wall_label, lifetime_leak_prob = ci)],
+    data.table(horizon = L, group = "Fleet (composition-weighted)",
+               lifetime_leak_prob = fleet)
+  ))
+}
+lifetime_leak <- rbindlist(life_rows)
+lifetime_leak[, one_in := 1 / lifetime_leak_prob]
+
+fwrite(lifetime_leak, file.path(OUTPUT_TABLES, "Table_CV_LifetimeLeakProb.csv"))
+cat("\nLifetime cumulative first-release probability (per facility):\n")
+print(lifetime_leak[, .(horizon, group,
+                        pct    = round(lifetime_leak_prob * 100, 1),
+                        one_in = round(one_in, 1))])
+
+fleet30 <- lifetime_leak[horizon == 30L &
+                         group == "Fleet (composition-weighted)",
+                         lifetime_leak_prob]
+cat(sprintf(
+  "\nSLIDE: over a 30-year life, ~%.0f%% of facilities (1 in %.1f) leak; SW %.0f%% vs DW %.0f%%.\n",
+  fleet30 * 100, 1 / fleet30,
+  lifetime_leak[horizon == 30L & group == "Single-Walled", lifetime_leak_prob] * 100,
+  lifetime_leak[horizon == 30L & group == "Double-Walled", lifetime_leak_prob] * 100))
+
+
 #### Summary ##################################################################
 
 cat("\n========================================================\n")

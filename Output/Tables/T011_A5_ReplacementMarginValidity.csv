@@ -1,0 +1,21 @@
+section,category,N,pct_of_replace_events,note
+Timing (years to next install),0,16371,61.2297565171859,base = all replace events
+Timing (years to next install),1,3957,14.7997157497101,base = all replace events
+Timing (years to next install),2-3,2136,7.98892919923701,base = all replace events
+Timing (years to next install),4-5,1166,4.36099786812283,base = all replace events
+Timing (years to next install),6-10,1596,5.96925608707035,base = all replace events
+Timing (years to next install),11+,1246,4.66020869955492,base = all replace events
+Timing (years to next install),NA,265,0.991135879118824,base = all replace events
+Net tank count change (t-1 to t+1),+2 or more,821,3.0706511575719,base = all replace events; 754 missing-neighbor excluded
+Net tank count change (t-1 to t+1),+1,1924,7.19602049594195,base = all replace events; 754 missing-neighbor excluded
+Net tank count change (t-1 to t+1),0,7959,29.7677375921008,base = all replace events; 754 missing-neighbor excluded
+Net tank count change (t-1 to t+1),-1,7128,26.6596850805999,base = all replace events; 754 missing-neighbor excluded
+Net tank count change (t-1 to t+1),-2 or more,8151,30.4858435875379,base = all replace events; 754 missing-neighbor excluded
+Net capacity change pct (t-1 to t+1),expanded >10pct,10916,40.8273179489098,base = all replace events
+Net capacity change pct (t-1 to t+1),flat -10 to +10pct,5890,22.0293974641882,base = all replace events
+Net capacity change pct (t-1 to t+1),modest shrink -25 to -10pct,2883,10.7828103377342,base = all replace events
+Net capacity change pct (t-1 to t+1),substantial shrink below -25pct,6294,23.5404121629203,base = all replace events
+Net capacity change pct (t-1 to t+1),missing capacity data,754,2.82006208624752,base = all replace events
+SW-replacement install timing (SW closure + future install),same year,14446,61.5037465940055,base = P_SWR (23488); single_to_double_year==1 count = 6128
+SW-replacement install timing (SW closure + future install),next year,3510,14.9438010899183,base = P_SWR (23488); single_to_double_year==1 count = 6128
+SW-replacement install timing (SW closure + future install),2 or more years later,5330,22.6924386920981,base = P_SWR (23488); single_to_double_year==1 count = 6128

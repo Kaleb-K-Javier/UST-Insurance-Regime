@@ -1,0 +1,114 @@
+---
+title: "Internalizing Environmental Risk: Insurance Design and Firm Behavior in Hazardous Industries"
+subtitle: ""
+author: "Kaleb K. Javier"
+format:
+  beamer:
+    template: "my-template.tex"
+    keep-tex: true
+    aspectratio: 169
+    pdf-engine: xelatex
+    header-includes:
+      - |
+        \providecommand{\estc}[1]{\textcolor[HTML]{1B7837}{#1}}
+theme-bg-color: "0D2D52"
+---
+
+
+
+#
+
+\LightMode
+\centering
+
+![](../../Data/tank_jpg.jpg){width="100%"}
+
+
+---
+
+
+
+#
+\LightMode
+\centering
+
+![](../../Data/LUST.jpg){width="100%"}
+
+---
+
+## Why Insurance Design Is a First-Order Policy Question
+
+\BerkeleyLightMode
+
+- The firm pays for what it causes, regardless of fault --- across oil \& gas (OPA 1990), surface mining (SMCRA 1977), and hazardous substances (CERCLA 1980, RCRA 1976)
+- Works when firms can be held fully accountable --- breaks down when they cannot (Shavell 1986, 2007)
+- Shavell (2004): two instruments to restore accountability:
+    - Minimum Asset / bonding requirements
+    - **Compulsory liability insurance** --- where the premium does the deterrence work, *if* the insurer can price on risk-relevant attributes
+
+\vfill
+
+\centering\textbf{This paper examines the design and efficacy of compulsory liability insurance as a financial responsibility instrument in environmental hazard settings.}
+
+---
+
+## Does insurance design change firm behavior?
+
+\BerkeleyLightMode
+
+**Setting**
+
+- USTs --- retail petroleum storage, $\sim$\,140,000 facilities, the most common source of groundwater contamination in the US (EPA 2024)
+- Compulsory insurance the law since 1988 (RCRA Subtitle I, \$1M floor)
+- **Clean shock:** Texas exits its flat-fee fund December 22, 1998 --- 26,000 facilities enter risk-rated private insurance overnight
+- 9.8M tank-years of EPA panel data spanning both regimes
+
+\vspace{0.2cm}
+**Three questions**
+
+- **Q1 --- Observability:** Is release risk predictable from observable tank characteristics?
+- **Q2 --- Behavior:** Does risk-based pricing change closure, replacement, and release outcomes?
+- **Q3 --- Welfare:** How much of the first-best welfare gain does risk-rated pricing capture?
+
+---
+
+## What is an underground storage tank?
+
+\BerkeleyLightMode
+
+[ADD FIGURE HERE]
+
+---
+
+
+## Related literature
+
+\BerkeleyLightMode
+
+\small
+
+**Liability regimes, financial responsibility, and UST policy**
+
+Shavell (1986, 2004, 2007); Yin, Kunreuther \& White (2011); Yin, Pfaff \& Kunreuther (2011, 2007); Boomhower (2019); Ho, Hsu, Cha \& Rivera (2018)
+
+*First firm-level panel analysis of insurance design --- risk-rated vs. flat-fee --- as a financial responsibility instrument; clean policy shock; structural welfare decomposition*
+
+\medskip
+
+**Environmental economics and environmental risk**
+
+Fowlie, Reguant \& Ryan (2016); Muehlenbachs (2015); Blundell, Gowrisankaran \& Langer (2020); Kellogg \& Reguant (2021)
+
+*Dynamic structural model of firm behavior under environmental regulation; welfare decomposition bounding gap to first-best*
+
+\medskip
+
+**IO of selection markets: risk-based and cost-based pricing**
+
+Einav, Finkelstein \& Mahoney (2021); Einav, Finkelstein \& Cullen (2010); Bundorf, Levin \& Mahoney (2012); Handel, Hendel \& Whinston (2015); Mahoney \& Weyl (2017)
+
+*[PLACEHOLDER]*
+
+
+
+

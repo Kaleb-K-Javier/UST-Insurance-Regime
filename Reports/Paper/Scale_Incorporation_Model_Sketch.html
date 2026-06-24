@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.4.553">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Kaleb Javier">
+
+<title>scale_incorporation_model_sketch</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="Scale_Incorporation_Model_Sketch_files/libs/clipboard/clipboard.min.js"></script>
+<script src="Scale_Incorporation_Model_Sketch_files/libs/quarto-html/quarto.js"></script>
+<script src="Scale_Incorporation_Model_Sketch_files/libs/quarto-html/popper.min.js"></script>
+<script src="Scale_Incorporation_Model_Sketch_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="Scale_Incorporation_Model_Sketch_files/libs/quarto-html/anchor.min.js"></script>
+<link href="Scale_Incorporation_Model_Sketch_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="Scale_Incorporation_Model_Sketch_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="Scale_Incorporation_Model_Sketch_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="Scale_Incorporation_Model_Sketch_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="Scale_Incorporation_Model_Sketch_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="fullcontent">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">From a Single-Tank to a Scale-Incorporation Model</h1>
+<p class="subtitle lead">Where the six-parameter replacement model strains, and a portfolio sketch that fixes it</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Kaleb Javier </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">Invalid Date</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="purpose" class="level1">
+<h1>Purpose</h1>
+<p>This note is a design sketch, not a results report. It does two things:</p>
+<ol type="1">
+<li>Sets out the <strong>worries</strong> with the current six-parameter (6p) replacement model — the ways its single-tank state abstraction strains against the multi-tank portfolio dynamics in the data, with the evidence from the Ticket 013 (beginning-of-year, BOY) diagnostics.</li>
+<li>Sketches a <strong>scale-incorporation model</strong>: a facility-level dynamic discrete choice model whose state is the facility’s <em>portfolio of tanks</em> rather than a single representative tank, with a size-specific operating payoff and an explicit partial-closure / downsizing margin.</li>
+</ol>
+<p>Nothing here changes the estimator or the live pipeline. It is the architect-level economic design to be turned into an implementation ticket only after the open empirical checks in Section 6 are run.</p>
+<p>A unit reminder carried throughout: one model unit <span class="math inline">\(= \$10{,}000\)</span> per year. The current model normalizes the operating payoff to one such unit per <em>facility</em>; the scale model re-bases this to a payoff per unit of <em>tank capacity</em> (Section 4.3), which is the load-bearing change for welfare.</p>
+</section>
+<section id="the-six-parameter-model-in-one-paragraph" class="level1">
+<h1>The six-parameter model in one paragraph</h1>
+<p>The 6p model treats a facility as a <strong>single tank</strong> moving through a discretized state: an age bin <span class="math inline">\(b \in \{1,\dots,8\}\)</span>, a wall type <span class="math inline">\(w \in \{\text{SW},
+\text{DW}\}\)</span>, and a regime <span class="math inline">\(g \in \{\text{FF}, \text{RB}\}\)</span> (<span class="math inline">\(8 \times 2 \times 2
+= 32\)</span> cells). Each year the facility chooses one of three actions: <strong>maintain</strong>, <strong>exit</strong>, or <strong>replace</strong> (install a new tank, which resets age to bin 1). Flow utility while operating is</p>
+<p><span class="math display">\[
+u_M \;=\; \underbrace{1}_{R,\ \text{normalized}} \;+\; \gamma_{p}\, P
+\;-\; \gamma_{r}\, h,
+\qquad u_E = \kappa, \qquad u_R = -K,
+\]</span></p>
+<p>with the risk-based premium <span class="math inline">\(P\)</span> and expected hazard loss <span class="math inline">\(h\)</span> entering the maintain payoff only. This is the textbook Rust architecture: a scalar state discretized into bins, with one unit (here, one facility) occupying one bin.</p>
+</section>
+<section id="where-it-strains-worries-with-the-single-tank-abstraction" class="level1">
+<h1>Where it strains: worries with the single-tank abstraction</h1>
+<p>The problem is that a facility is <strong>not</strong> one tank. It is a portfolio of tanks of different ages, wall types, and sizes. The 6p model collapses that portfolio to a single <strong>average-age</strong> cell, and that collapse is the source of every worry below.</p>
+<section id="sec-avg" class="level2">
+<h2 class="anchored" data-anchor-id="sec-avg">The average-age collapse is lossy and non-monotonic</h2>
+<p>A facility with one brand-new tank and one thirty-year-old tank is placed at a <em>middle</em> age bin — it looks like a homogeneous, middle-aged single tank. The old tank, which is the hazard and removal candidate, is invisible; the hazard is computed off the wrong (averaged) age. Worse, as tanks are added or pruned the average moves <strong>non-monotonically</strong> across years even when no individual tank’s status changed, generating spurious state transitions.</p>
+</section>
+<section id="replace-transitions-are-almost-never-on-support" class="level2">
+<h2 class="anchored" data-anchor-id="replace-transitions-are-almost-never-on-support">Replace transitions are almost never on-support</h2>
+<p>The single-tank <code>F_replace</code> resets the facility’s <em>average</em> age to bin 1. But a one-tank swap at a multi-tank facility barely moves the average, so the modeled post-replacement state rarely matches the data. The Ticket 013 diagnostics quantify this: <strong>98.3% of replacement transitions land off-support</strong> (5,310 of 5,404). The replacement margin — the very object the model exists to study — is essentially never represented correctly for multi-tank facilities.</p>
+</section>
+<section id="partial-closure-is-mislabeled-as-maintain" class="level2">
+<h2 class="anchored" data-anchor-id="partial-closure-is-mislabeled-as-maintain">Partial closure is mislabeled as maintain</h2>
+<p>Closing <em>some</em> tanks while continuing to operate (“partial closure” or downsizing) has no action in the 6p model. It gets folded into <strong>maintain</strong>, and shows up as an average-age jump under a maintain label. After BOY stamping fixed the wall dimension, the residual maintain off-support is <strong>0.685%</strong> (14,652 rows), of which 14,121 are exactly these partial-closure age jumps. Small in mass, but it is a <em>structural</em> gap, not a coding error: the single-tank maintain transition cannot represent it.</p>
+</section>
+<section id="the-double-walled-replace-margin-degeneracy-resolved-churn-vs-replacement-remains" class="level2">
+<h2 class="anchored" data-anchor-id="the-double-walled-replace-margin-degeneracy-resolved-churn-vs-replacement-remains">The double-walled replace margin: degeneracy resolved, churn-vs-replacement remains</h2>
+<p>Under the earlier end-of-year stamping the DW conditional-replace share was pinned at one (<span class="math inline">\(\Pr(\text{replace} \mid \text{close}) = 1\)</span> for all DW cells), because DW exits — a DW facility has zero tanks at year-end — were routed out of the DW cells by the worst-tank rule. <strong>Beginning-of-year stamping (Ticket 013) resolved that degeneracy:</strong> the DW cells now retain their exits (all-DW closures split 3,773 exit / 745 replace, so <span class="math inline">\(\Pr(\text{replace}\mid\text{close})
+\approx 0.17\)</span>), and <span class="math inline">\(K_{\text{DW}}\)</span> is now identified off real within-DW variation rather than off the close rate and functional form alone. What the single-tank model <em>still</em> cannot do is separate a genuine like-for-like replacement from within-facility tank churn (one DW tank swapped at a large, DW-heavy facility): that separation is the replacement transition itself, which remains 98% off-support (above), and only the portfolio state recovers it.</p>
+</section>
+<section id="it-cannot-generate-the-size-dependent-regime-response" class="level2">
+<h2 class="anchored" data-anchor-id="it-cannot-generate-the-size-dependent-regime-response">It cannot generate the size-dependent regime response</h2>
+<p>The headline reduced-form fact is that the flat-fee-to-risk-based (FF<span class="math inline">\(\to\)</span>RB) response is <strong>size-dependent and sign-reversing</strong>: about <span class="math inline">\(+6.2\)</span> percentage points at facilities with 4+ tanks, but <span class="math inline">\(-4.9\)</span> to <span class="math inline">\(-6.9\)</span> points at 2–3 tank facilities. A single-tank model facing a common regime shock can scale a response by size but cannot <strong>flip its sign</strong>. A sign reversal points to a margin that exists at large facilities and not at small ones — partial downsizing — which the 6p model does not contain.</p>
+</section>
+<section id="consequence-for-the-counterfactuals" class="level2">
+<h2 class="anchored" data-anchor-id="consequence-for-the-counterfactuals">Consequence for the counterfactuals</h2>
+<p>The four target counterfactuals are not equally exposed. The replacement-subsidy CF leans directly on the margin that is 98% off-support, and the size-HTE (“Texas stays flat-fee”) and age-mandate CFs need per-tank age that the average collapses. The table summarizes the exposure.</p>
+<p> Pigouvian is least exposed because the risk-based premium is computed per tank and summed to the facility, so its internalization is additive and framing-invariant. The other three each require a portfolio or per-tank object the single-tank state does not carry.</p>
+</section>
+</section>
+<section id="the-portfolio-model" class="level1">
+<h1>The portfolio model</h1>
+<p>The model exists to answer four counterfactuals: Texas stays flat-fee; a first-best Pigouvian contract; a single-walled replacement subsidy; and an age-<span class="math inline">\(A\)</span> removal mandate. It is judged by coverage of the margins those counterfactuals move, not by goodness of fit. Every design choice below traces to an exhibit in Part 3 or a counterfactual requirement in Part 4.</p>
+<section id="state" class="level2">
+<h2 class="anchored" data-anchor-id="state">State</h2>
+<p><span class="math display">\[
+s = (n,\, G,\, \rho), \qquad n \in \mathbb{N}_0^{16}
+\]</span></p>
+<p><span class="math inline">\(n\)</span> is a vector of tank counts over 16 categories formed by wall type (single- or double-walled) crossed with eight five-year age bins; <span class="math inline">\(G\)</span> is the facility’s capacity quartile bin; <span class="math inline">\(\rho\)</span> is the insurance regime, fixed over the facility’s life. The owner thinks about tanks the way the insurer prices them and leaks happen — through construction type and age — and thinks about scale in gallons. The model’s bookkeeping records this as counts per category: tanks within one (wall, age-bin) category are interchangeable (evidence: X5).</p>
+</section>
+<section id="first-stage-objects" class="level2">
+<h2 class="anchored" data-anchor-id="first-stage-objects">First-stage objects</h2>
+<p>All of the following are measured from data; none are estimated in the NPL step.</p>
+<ul>
+<li><p><strong>Empirical cell prices <span class="math inline">\(\bar p_c\)</span>.</strong> The average premium actually paid by single-cell Texas facility-years (all tanks in one (wall, age-bin) category), 2006 era; one price per cell (X3 empirical card table).</p></li>
+<li><p><strong>FF contract lookup.</strong> Each control state’s own flat-fee contract <span class="math inline">\((\tau_s, D_s)\)</span> — per-tank fee and deductible — time-averaged for stationarity. Texas has no registry-recorded per-tank fee; <span class="math inline">\(D_{\text{TX}} = \$5{,}000\)</span> is assumed. <strong>Kansas and Maryland are excluded from estimation</strong>, on the evidence of the ASTSWMO state-fund surveys the premium file itself cites: both states’ funds functioned as <em>cleanup</em> funds but did not satisfy federal financial responsibility — Kansas operators were required to carry private third-party liability coverage (K.S.A. 65-34,117), and the ASTSWMO 2002 Table 2 footnote states Maryland owners “need private insurance or be self-insured.” The operator-facing premium in both states is therefore private and unrecorded. Kansas is a noted robustness candidate for re-inclusion: its fund deductible <em>is</em> recorded (<span class="math inline">\(\$3{,}000\)</span> plus <span class="math inline">\(\$500\)</span> per tank — a deductible with a count slope), usable under the stated assumption that its private liability premium is composition-invariant and absorbed by the Kansas fixed effect.<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a></p>
+<p><strong>Identification threats.</strong> The slope-based identification compares hazard- and count-responsiveness across states with different contracts, so it is exposed to anything that makes those responsiveness differences for other reasons. Three concrete threats: (i) contract terms may be set in response to the state’s tank stock — a state with riskier old tanks choosing a higher deductible bends the slope comparison (reverse causality); (ii) enforcement and inspection intensity may co-vary with contract stringency, so behavior attributed to the deductible could partly reflect inspections; (iii) fund payout reliability differs across states — a slow- or unreliably-paying fund changes the owner’s effective exposure beyond the stated <span class="math inline">\(D\)</span>. Mitigations, stated without overselling: state fixed effects absorb level confounders, year fixed effects absorb common shocks, and the regime channel is cross-validated by the DiD; threats (i)–(iii) are why the welfare results lean hardest on the within-Texas and regime-contrast variation, with the cross-state slopes as supporting evidence. Zero-fee states still contribute to <span class="math inline">\(\hat\gamma_r\)</span> through their deductibles.</p></li>
+<li><p><strong>Facility-level hazard <span class="math inline">\(h^{ML}\)</span>.</strong> The leak data is facility-level and cannot support per-tank rates; the assumption is stated as such.</p></li>
+<li><p><strong>Per-tank aging kernel <span class="math inline">\(\Lambda\)</span>.</strong> Empirical age-bin transition probabilities (X4 age-transition table).</p></li>
+<li><p><strong>Capacity kernel <span class="math inline">\(\Gamma_G(\cdot \mid G,\, m-k)\)</span>.</strong> Empirical capacity-bin transition probabilities, conditioned on net tank change <span class="math inline">\(m - k\)</span> (X4 G-transition table; to be re-estimated on this conditioning in the estimator first stage — removing 3 and installing 2 is not the same event as removing 4 and installing 1).</p></li>
+<li><p><strong>Removal rule <span class="math inline">\(r(n,k)\)</span>.</strong> Defined in Section 4.4 below.</p></li>
+</ul>
+</section>
+<section id="perceived-quantities" class="level2">
+<h2 class="anchored" data-anchor-id="perceived-quantities">Perceived quantities</h2>
+<p><span class="math display">\[
+N(n) = \sum_c n_c \qquad P(n,\rho) = \begin{cases} \sum_c n_c\, \bar p_c &amp;
+\rho = \mathrm{RB} \\ \tau_s\, N(n) &amp; \rho = \mathrm{FF} \end{cases}
+\]</span></p>
+<p><span class="math display">\[
+H(n) = h^{ML}\!\left(\bar a(n),\, w(n)\right) \qquad
+OOP(n) = H(n) \cdot \min\{D,\, L\}
+\]</span></p>
+<p><span class="math inline">\(P\)</span> is the actual average insurance bill by construction — empirical prices under risk-based pricing, a per-tank flat fee under flat-fee. <span class="math inline">\(H\)</span> is “a leak at my facility this year,” read off the risk model at the portfolio’s average-age band and majority wall type — no finer than the data support. <span class="math inline">\(OOP\)</span> is the contract: when a leak occurs, the owner pays the deductible up to the cleanup cost; the minimum is nearly always <span class="math inline">\(D\)</span> since cleanup <span class="math inline">\(L \approx \$300{,}000\)</span>.</p>
+</section>
+<section id="actions-the-km-menu" class="level2">
+<h2 class="anchored" data-anchor-id="actions-the-km-menu">Actions: the <span class="math inline">\((k,m)\)</span> menu</h2>
+<p><span class="math display">\[
+\mathcal{A}(s) = \{(k,m) : 0 \le k \le N(n),\; 0 \le m \le \bar m\} \cup \{X\}
+\]</span></p>
+<p><span class="math inline">\((0,0)\)</span> is maintain; <span class="math inline">\((k,0)\)</span> with <span class="math inline">\(k &gt; 0\)</span> is downsize; <span class="math inline">\((k, m \ge 1)\)</span> is replace or consolidate; <span class="math inline">\(X\)</span> is full exit. Expansion is outside the model (fenced; evidence: X1).</p>
+<p>The menu works like wings priced per wing: each <span class="math inline">\((k,m)\)</span> is just another option, and two per-unit costs price every line; the model never predicts <span class="math inline">\(k\)</span> or <span class="math inline">\(m\)</span>, the owner chooses them. Only 13.7% of replacements remove exactly one tank; the modal replacement removes 3 and installs 2 (X7b). The removal rule identifies which tanks leave:</p>
+<p><span class="math display">\[
+\text{the } k \text{ removed tanks are the oldest single-walled; if fewer than }
+k \text{ exist, the oldest double-walled fill the remainder}
+\]</span></p>
+<p><span class="math display">\[
+n' = n - r(n,k) + m\, e_{DW,1}
+\]</span></p>
+<p>New installs are double-walled by law — a regulation enforced in every sample state and confirmed in X9.</p>
+</section>
+<section id="flow-payoffs" class="level2">
+<h2 class="anchored" data-anchor-id="flow-payoffs">Flow payoffs</h2>
+<p><strong>Sign convention.</strong> All money outflows carry explicit minus signs. <span class="math inline">\(\gamma_p\)</span> and <span class="math inline">\(\gamma_r\)</span> are positive dollar-to-utility exchange rates. The restriction <span class="math inline">\(\gamma_p = \gamma_r\)</span> — that a certain premium dollar and an expected out-of-pocket dollar enter utility identically — is a testable restriction the data can reject; differences indicate salience effects or risk-weighting.</p>
+<p>For an operating action with post-action composition <span class="math inline">\(n'\)</span>:</p>
+<p><span class="math display">\[
+u_{(k,m)}(s) = \varphi_G + \alpha_g - \gamma_p\, P(n',\rho)
+- \gamma_r\, OOP(n') - k\, c^{rem} - m\, c^{inst}
+\]</span></p>
+<p>For full exit:</p>
+<p><span class="math display">\[
+u_X(s) = \kappa_1\, N(n), \qquad \kappa_0 := 0
+\]</span></p>
+<p>Setting <span class="math inline">\(\kappa_0 := 0\)</span> is a units choice: it pins the scale of the value function and frees <span class="math inline">\(\varphi_G\)</span> to measure the level of operating payoffs in model units.</p>
+</section>
+<section id="laws-of-motion" class="level2">
+<h2 class="anchored" data-anchor-id="laws-of-motion">Laws of motion</h2>
+<p>The <span class="math inline">\(k\)</span> tanks identified by <span class="math inline">\(r(n,k)\)</span> leave; <span class="math inline">\(m\)</span> new double-walled tanks enter at age bin 1. Each surviving tank advances one bin at year-end via the aging kernel <span class="math inline">\(\Lambda\)</span>; the bin-8 absorbing state captures tanks that age out of the grid. Capacity <span class="math inline">\(G\)</span> transitions via <span class="math inline">\(\Gamma_G(\cdot \mid G,\, m-k)\)</span>; it is degenerate at <span class="math inline">\((0,0)\)</span>. Full exit is absorbing; <span class="math inline">\(\rho\)</span> is fixed. Every object here is an exhibit in Part 3, not an assumption.</p>
+</section>
+<section id="choice-structure" class="level2">
+<h2 class="anchored" data-anchor-id="choice-structure">Choice structure</h2>
+<p><span class="math display">\[
+v_a(s) = u_a(s) + \beta \sum_{s'} F_a(s' \mid s)\, V(s'), \qquad \beta = 0.9957
+\]</span></p>
+<p><span class="math display">\[
+IV(s) = \lambda \log \sum_{(k,m) \ne (0,0)} e^{v_{(k,m)}(s)/\lambda}
+\]</span></p>
+<p><span class="math display">\[
+V(s) = \log\!\left( e^{v_{(0,0)}(s)} + e^{IV(s)} + e^{v_X(s)} \right)
+\]</span></p>
+<p><span class="math display">\[
+P\!\left((k,m) \mid s\right) = \frac{e^{IV(s)}}{e^{v_{(0,0)}} + e^{IV} +
+e^{v_X}} \times \frac{e^{v_{(k,m)}/\lambda}}{\sum_{(k',m') \ne (0,0)}
+e^{v_{(k',m')}/\lambda}}
+\]</span></p>
+<p>Each option carries an idiosyncratic draw — what the owner knows that we don’t (a retirement plan, a lease renewal, a contractor quote); the owner is rational, the randomness is our ignorance. The three top-level options (maintain, any tank-work, exit) each have an independent draw; the tank-work options share an additional draw parameterized by <span class="math inline">\(\lambda\)</span>, reflecting the common circumstances that make an owner willing to touch their tanks at all (the same contractor visit, the same permit window). <span class="math inline">\(\lambda \in (0,1]\)</span>; at <span class="math inline">\(\lambda = 1\)</span> the model collapses to a flat logit over all options — a special case the data can choose. The menu’s payoff structure already makes nearby <span class="math inline">\((k,m)\)</span> pairs close substitutes; <span class="math inline">\(\lambda\)</span> carries only the residual shared-circumstances channel beyond what payoffs imply.</p>
+</section>
+<section id="parameters-and-estimation" class="level2">
+<h2 class="anchored" data-anchor-id="parameters-and-estimation">Parameters and estimation</h2>
+<p><span class="math display">\[
+\theta = \left(\varphi_G,\; \gamma_p,\; \gamma_r,\; c^{rem},\; c^{inst},\;
+\kappa_1,\; \lambda,\; \{\alpha_g\}\right)
+\]</span></p>
+<p><span class="math display">\[
+\hat\theta = \arg\max_\theta \sum_{i,t} \log P\!\left(a_{it} \mid s_{it};\,
+\theta\right)
+\]</span></p>
+<p>Estimated by nested pseudo-likelihood (NPL); the inclusive-value machinery is already in the library. Identification, one line each:</p>
+<ul>
+<li><span class="math inline">\(\gamma_p\)</span>: contract contrasts — regime gap $709 at matched composition (X11); re-filings; cross-state per-tank fees.</li>
+<li><span class="math inline">\(\gamma_r\)</span>: hazard variation times deductible levels — within Texas <span class="math inline">\(D\)</span> is flat so identification runs through <span class="math inline">\(H(n)\)</span> varying with composition; cross-state <span class="math inline">\(D\)</span> moves OOP levels.</li>
+<li><span class="math inline">\(\gamma_p = \gamma_r\)</span>: testable.</li>
+<li><span class="math inline">\(c^{rem},\, c^{inst}\)</span>: the <span class="math inline">\((k,m)\)</span> frequency distribution (X7b).</li>
+<li><span class="math inline">\(\kappa_1\)</span>: exit-size gradient — large facilities exit less (odds ratio 0.48; X2).</li>
+<li><span class="math inline">\(\lambda\)</span>: co-movement of tank-work options in excess of what observed payoffs explain.</li>
+</ul>
+<p>Eight economics parameters plus state fixed effects <span class="math inline">\(\{\alpha_g\}\)</span> on a state space two orders of magnitude richer than the 6p model — parameters did not grow because the removal identity is predictable and costs are per-unit.</p>
+</section>
+<section id="untestable-and-conventional-assumptions" class="level2">
+<h2 class="anchored" data-anchor-id="untestable-and-conventional-assumptions">Untestable and conventional assumptions</h2>
+<ul>
+<li>Shock distribution shape (type-1 extreme value at every nest level).</li>
+<li><span class="math inline">\(\beta = 0.9957\)</span> — the value carried by the canonical fit’s configuration, which is authoritative over any stale documentation value (conventional; sensitivity in Part 4).</li>
+<li>Owners’ beliefs equal the estimated hazard and aging processes.</li>
+<li>Stationarity: no anticipation of ban dates or policy changes.</li>
+<li>Facility-level hazard resolution: the leak data cannot support per-tank rates (data limitation, stated explicitly).</li>
+<li>Linear utility in money.</li>
+<li><span class="math inline">\(\kappa_0 := 0\)</span>: units normalization.</li>
+</ul>
+</section>
+<section id="the-welfare-wedge" class="level2">
+<h2 class="anchored" data-anchor-id="the-welfare-wedge">The welfare wedge</h2>
+<p>A leak at facility <span class="math inline">\(i\)</span> costs society <span class="math inline">\(L + E\)</span>: cleanup cost <span class="math inline">\(L\)</span> plus external damages <span class="math inline">\(E\)</span> beyond cleanup. Under contract <span class="math inline">\((P, D)\)</span>, the owner bears <span class="math inline">\(\min\{D, L\} = D\)</span> directly; the insurer or fund bears <span class="math inline">\(L - D\)</span>. Under risk-based pricing, <span class="math inline">\(L - D\)</span> is priced back into <span class="math inline">\(P\)</span> to the extent the card tracks the facility’s own hazard. Under a flat fee, <span class="math inline">\(L - D\)</span> is socialized and does not vary with the facility’s hazard. The external damage <span class="math inline">\(E\)</span> is borne by nobody in the market under either regime.</p>
+<p>The owner’s private marginal cost of own-hazard <span class="math inline">\(H(n)\)</span>:</p>
+<p><em>Risk-based.</em> Differentiating <span class="math inline">\(\gamma_p P + \gamma_r OOP\)</span> with respect to <span class="math inline">\(H\)</span>: the facility internalizes <span class="math inline">\(D\)</span> directly through the OOP channel, plus <span class="math inline">\(L - D\)</span> through the actuarial premium channel to the extent the card tracks <span class="math inline">\(H\)</span>. The X3 flatness finding — the empirical schedule is much compressed relative to the filed card — implies this pass-through is partial.</p>
+<p><em>Flat-fee.</em> The per-tank fee <span class="math inline">\(\tau_s\)</span> does not vary with <span class="math inline">\(H\)</span>; the facility internalizes only <span class="math inline">\(\gamma_r \cdot D \cdot \partial H/\partial \text{action}\)</span>. The term <span class="math inline">\(L - D\)</span> and all of <span class="math inline">\(E\)</span> are fully external.</p>
+<p>The first-best counterfactual (CF2) sets the facility’s total private exposure equal to <span class="math inline">\(H(n)(L + E)\)</span> at the margin. The wedge policy can close:</p>
+<ul>
+<li>FF wedge per unit hazard: <span class="math inline">\((L - D) + E\)</span>.</li>
+<li>RB wedge: <span class="math inline">\(E\)</span> plus the under-pass-through of <span class="math inline">\((L - D)\)</span> implied by the compressed empirical card.</li>
+</ul>
+<p>Welfare tables report <span class="math inline">\(\text{SocialWelfare} = \text{ProducerSurplus} -
+\text{ExternalDamage} - \text{GovtOutlay}\)</span> under each contract, with <span class="math inline">\(E\)</span> calibrated at <span class="math inline">\(E = \$50{,}000\)</span> per leak event and a band reported around the calibration.</p>
+</section>
+</section>
+<section id="sec-rev" class="level1">
+<h1>Bringing in revenue: a measured operating payoff tied to the portfolio</h1>
+<p><em>Design addition, not yet in the estimator. The closest template is Sweeting (2013): build the per-period revenue as a function of the firm’s own state from outside data, plug it in, and let the dynamic step estimate only the costs. Gowrisankaran and Rysman (2012) supply the piece Sweeting holds fixed — how to let the external market move over time without breaking stationarity.</em></p>
+<section id="the-gap" class="level2">
+<h2 class="anchored" data-anchor-id="the-gap">The gap</h2>
+<p>The operating payoff today is a free constant by capacity bin, <span class="math inline">\(\varphi_G\)</span>, plus a state level <span class="math inline">\(\alpha_g\)</span>. Nothing tells the model what a facility actually earns, so the dollar weights and every welfare number rest only on the two insurance terms — the premium (<span class="math inline">\(\gamma_p\)</span>) and the deductible-driven out-of-pocket cost (<span class="math inline">\(\gamma_r\)</span>). We want the data to say how much each dollar a facility faces — premium, deductible, and revenue — moves its behavior. For that the model needs a measured revenue that varies with things we observe. We are not trying to test whether a dollar of each is valued the same; that equality is a fact we would report, and “force them equal” is a counterfactual, not the estimation target.</p>
+</section>
+<section id="the-sweeting-move-measure-revenue-as-a-function-of-the-state-then-plug-it-in" class="level2">
+<h2 class="anchored" data-anchor-id="the-sweeting-move-measure-revenue-as-a-function-of-the-state-then-plug-it-in">The Sweeting move: measure revenue as a function of the state, then plug it in</h2>
+<p>Sweeting does not estimate station revenue inside his dynamic model. He builds it first, from outside data (listeners by demographic <span class="math inline">\(\times\)</span> advertising price per listener), as a function of the state, and inserts it; the dynamic step then estimates only the repositioning and scope costs. This model already treats premiums, hazard, and the transition kernels exactly this way — measured first, with NPL estimating the rest — so revenue fits the same architecture. We replace the free operating constant with a measured revenue object:</p>
+<p><span class="math display">\[
+u_{(k,m)}(s) = \psi\, R(G',\, z_\ell,\, m_t) + \alpha_g
+- \gamma_p P(n',\rho) - \gamma_r\, OOP(n') - k\,c^{rem} - m\,c^{inst},
+\]</span></p>
+<p>where <span class="math inline">\(R(\cdot)\)</span> is per-period operating revenue, measured in the first stage, and <span class="math inline">\(\psi\)</span> is the one number we estimate from it — how much a dollar of revenue moves behavior, on the same footing as <span class="math inline">\(\gamma_p\)</span> and <span class="math inline">\(\gamma_r\)</span>. Revenue scales with the facility’s overall size; the portfolio composition <span class="math inline">\(n\)</span> continues to drive costs, hazard, and the premium — a clean split between the revenue side (scale) and the risk/cost side (composition). The three inputs to <span class="math inline">\(R\)</span> are:</p>
+<ul>
+<li><span class="math inline">\(G'\)</span> — the facility’s own (post-action) capacity, gallons of storage, already a state. This is the analogue of Sweeting’s “own product”: revenue scales with the facility’s own size.</li>
+<li><span class="math inline">\(z_\ell\)</span> — local market characteristics the firm’s action does not change: local demand (county fuel volume or population) and local competition (the county count of gasoline stations, NAICS 447). More nearby stations means less throughput per station, exactly as Sweeting’s price per listener falls with more same-format rivals.</li>
+<li><span class="math inline">\(m_t\)</span> — the local fuel margin (retail <span class="math inline">\(-\)</span> wholesale <span class="math inline">\(-\)</span> tax), the time-varying piece.</li>
+</ul>
+<p>The piece we cannot read directly is the facility’s own throughput — gallons sold are not in the data. Write it as a share of the local market:</p>
+<p><span class="math display">\[
+Q_{i,t} = \text{share}_{i,t} \times Q^{\text{mkt}}_{t},
+\qquad R(G', z_\ell, m_t) = m_t \times Q_{i,t},
+\]</span></p>
+<p>where <span class="math inline">\(Q^{\text{mkt}}_t\)</span> is total gallons in the local market (county or state, from EIA) and <span class="math inline">\(\text{share}_{i,t}\)</span> is the facility’s slice of local gas demand. The level comes from EIA, which we trust; only the split across stations has to be inferred. Two signals carry the share, with a clear division of labor:</p>
+<ul>
+<li><strong>Demand features observed for the whole panel</strong> — own capacity <span class="math inline">\(G'\)</span>, local competition (county station count), population density, and road exposure (e.g., adjacent-road traffic counts). Available every year, including the back years and for facilities that later exit, so these carry the baseline allocation: more capacity, busier road, fewer rivals <span class="math inline">\(\Rightarrow\)</span> a larger share.</li>
+<li><strong>Place-level foot-traffic or card-spend shares</strong> — the directly-measured slice of local visits or spend among nearby gas stations (Advan / Dewey-type place data). This is the ideal share signal because it sees demand quality that capacity misses, but it exists only for the recent years (roughly 2018 on) and only for stations alive then.</li>
+</ul>
+<section id="using-the-foot-traffic-signal-honestly" class="level3">
+<h3 class="anchored" data-anchor-id="using-the-foot-traffic-signal-honestly">Using the foot-traffic signal honestly</h3>
+<p>The tempting move is to fit a share model on the recent foot-traffic years and project it back to 1999. We do not lean on that, for two reasons. First, <strong>selection</strong>: facilities that exited before the foot-traffic era have no foot-traffic ever, and those exiters are exactly the outcome the model studies — so the recent panel is the wrong population to learn their shares from. Second, a share is relative to whoever else is in the local market, and market rosters change over time, so a relationship fit on recent markets need not transfer to earlier, differently-populated ones.</p>
+<p>So the foot-traffic data does the two jobs it <em>can</em> do credibly, instead of the back-cast it cannot:</p>
+<ol type="1">
+<li><strong>Validate and calibrate the baseline allocation.</strong> On the overlap years, check how well the whole-panel demand features reproduce the observed foot-traffic shares. If they track it, the feature-based allocation is trustworthy for the back years — where features, unlike foot-traffic, are observed for every facility, exiters included; if not, we learn the bias and which feature is missing.</li>
+<li><strong>Discipline the recent slice as a moment.</strong> Require the model’s implied revenue shares to match observed foot-traffic shares on the years they exist — the Sweeting / micro-moment device — adding information where it is real without extrapolating it where it is not.</li>
+</ol>
+<p>The back-year allocation therefore rests on features observed throughout the panel; the foot-traffic data checks and disciplines that allocation on the recent overlap rather than being projected backward. One assumption remains: the feature-to-share mapping validated on recent survivors is taken to apply to the earlier exiters too — milder than back-casting foot-traffic, which is impossible for facilities that were already gone. The simplest fallback, if the overlap match is poor or the place data is unavailable, is a capacity-only split, <span class="math inline">\(\text{share}_i \propto G_i\)</span> within the local market.</p>
+</section>
+</section>
+<section id="why-this-disciplines-the-margins-the-model-exists-to-study" class="level2">
+<h2 class="anchored" data-anchor-id="why-this-disciplines-the-margins-the-model-exists-to-study">Why this disciplines the margins the model exists to study</h2>
+<p>Revenue is evaluated at the post-action capacity <span class="math inline">\(G'\)</span>, the same convention the model already uses for the premium <span class="math inline">\(P(n',\rho)\)</span> and out-of-pocket cost <span class="math inline">\(OOP(n')\)</span>. So when a facility downsizes or exits it gives up revenue immediately — a smaller post-action portfolio earns less — and again through the continuation value, because future capacity is lower through the existing kernel <span class="math inline">\(\Gamma_G(\cdot \mid G, m-k)\)</span>. (This is one place we depart from Sweeting, whose revenue sits on the pre-action state and so cancels within the period, biting only through continuation; the post-action convention makes the immediate revenue cost of shrinking explicit and matches how premiums are already priced.) Either way the downsize, replace, and exit margins — the whole reason this model exists — are tied to measured dollars rather than a free constant, and the cost parameters <span class="math inline">\(c^{rem}\)</span>, <span class="math inline">\(c^{inst}\)</span>, <span class="math inline">\(\kappa_1\)</span> are identified by their trade-off against real revenue.</p>
+</section>
+<section id="the-external-piece-letting-the-margin-move-without-breaking-stationarity" class="level2">
+<h2 class="anchored" data-anchor-id="the-external-piece-letting-the-margin-move-without-breaking-stationarity">The external piece: letting the margin move without breaking stationarity</h2>
+<p>The margin <span class="math inline">\(m_t\)</span> trends and cycles, and a stationary model cannot hold calendar time. There are two stationary ways to handle it — this is the Gowrisankaran-Rysman contribution:</p>
+<ul>
+<li><strong>Hold it fixed (Sweeting).</strong> The firm treats the current margin as permanent. Simplest; the state space is unchanged; defensible when the real, detrended margin is roughly flat over the sample, as Sweeting found for radio.</li>
+<li><strong>Mean-revert (Gowrisankaran and Rysman).</strong> The firm expects the margin to revert to a long-run level through a simple AR(1) converging to a steady state — their exact device for representing an evolving industry inside a stationary model. It captures boom and bust expectations at the cost of one low-dimensional process the firm forecasts.</li>
+</ul>
+<p>Either way the year is only a key to look up <span class="math inline">\(m_t\)</span>; it never enters the value function.</p>
+</section>
+<section id="what-it-buys-and-the-choices-still-open" class="level2">
+<h2 class="anchored" data-anchor-id="what-it-buys-and-the-choices-still-open">What it buys, and the choices still open</h2>
+<p>This buys a revenue weight <span class="math inline">\(\psi\)</span> the data pins down alongside <span class="math inline">\(\gamma_p\)</span> and <span class="math inline">\(\gamma_r\)</span>; cost parameters identified against measured dollars; the size margins disciplined by revenue; and welfare in real dollars. <span class="math inline">\(\psi\)</span> is identified by how exit and downsizing respond to measured revenue differences — across facilities (own capacity, local demand, local competition) and over time (the margin) — with the cross-section the thicker source. If facilities act on local revenue surprises we do not observe, identification leans on the innovation in revenue rather than its level (Sweeting’s device) and on the cross-sectional competition and demand variation.</p>
+<p>Five design choices to settle before the estimator spec:</p>
+<ol type="1">
+<li>Does the measured <span class="math inline">\(R\)</span> replace the free <span class="math inline">\(\varphi_G\)</span> entirely (Sweeting: yes), or sit alongside a residual level? Keeping both is collinear in capacity, so replacing is cleaner; the state fixed effect <span class="math inline">\(\alpha_g\)</span> stays to absorb any residual state-level operating level.</li>
+<li>Which whole-panel demand features carry the baseline share allocation (capacity, road exposure, density, competition), and how much weight the foot-traffic overlap gets in calibrating it. The back-cast of foot-traffic itself is set aside (selection on pre-2018 exiters); foot-traffic validates and disciplines, it does not extrapolate backward.</li>
+<li>Fixed versus mean-reverting margin.</li>
+<li>Whether <span class="math inline">\(z_\ell\)</span> (local demand, competition) enters as a fixed facility characteristic or, where it moves over the sample, as a slow state.</li>
+<li>Within-year timing: revenue on the post-action capacity <span class="math inline">\(G'\)</span> (consistent with the premium) or on the pre-action capacity (Sweeting).</li>
+</ol>
+</section>
+</section>
+<section id="sec-identification" class="level1">
+<h1>Identification of the structural parameters</h1>
+<p>The parameter vector is <span class="math inline">\(\theta=(\kappa_1,\psi,\gamma_p,\gamma_r,c^{\mathrm{rem}},
+c^{\mathrm{inst}},\lambda,\{\alpha_g\})\)</span>. This section is a constructive identification argument: each parameter is shown to be a known function of objects the data deliver. The logic is Hotz and Miller (1993). Observed conditional choice probabilities (CCPs) pin differences in conditional value functions; the terminal exit action eliminates the unobserved continuation value; what remains is a single equation, linear in the parameters, whose coefficients are the structural objects scaled by the <em>observed</em> contract terms (the linear-instrumental-variable representation of Kalouptsidi, Scott, and Souza-Rodrigues). The cross-state contract design — different per-tank fees and deductibles, and Texas’s risk-rated card — supplies the variation; the state fixed effects absorb only level confounders, never the contract-scaled slopes.</p>
+<section id="what-the-data-deliver" class="level2">
+<h2 class="anchored" data-anchor-id="what-the-data-deliver">What the data deliver</h2>
+<p>Write a facility’s geographic state as <span class="math inline">\(g\)</span>, with regime <span class="math inline">\(\rho(g)\in\{\mathrm{FF},\mathrm{RB}\}\)</span>, per-tank flat fee <span class="math inline">\(\tau_g\)</span> (zero in the no-fee states), deductible <span class="math inline">\(D_g\)</span>, and a state fixed effect <span class="math inline">\(\alpha_g\)</span> in the operating payoff. The dynamic state is <span class="math inline">\(s=(n,G,\rho)\)</span>, with composition <span class="math inline">\(n\)</span>, total tank count <span class="math inline">\(N(n)=\sum_c n_c\)</span>, and capacity bin <span class="math inline">\(G\)</span> — a <em>separate</em> state object from <span class="math inline">\(n\)</span>, since tank size is orthogonal to wall and age. Estimation observes, for every cell <span class="math inline">\(s\)</span>: the CCPs <span class="math inline">\(\{P(a\mid s)\}\)</span> over maintain <span class="math inline">\(M=(0,0)\)</span>, exit <span class="math inline">\(X\)</span>, and the tank-work options <span class="math inline">\((k,m)\in W\)</span>; the transition kernels; and the first-stage primitives revenue <span class="math inline">\(R(G)\)</span>, premium <span class="math inline">\(P(n,\rho)\)</span>, hazard <span class="math inline">\(H(n)\)</span>, out-of-pocket <span class="math inline">\(OOP(n)=H(n)\min\{D_g,L\}\)</span>, and the contracts <span class="math inline">\((\tau_g,D_g,\bar p_c)\)</span>.</p>
+<p>Flow payoffs, with the contracts written out: <span class="math display">\[
+u_M(s)=\psi R(G)+\alpha_g-\gamma_p P(n,\rho)-\gamma_r OOP(n),\qquad
+u_X(s)=\kappa_1 N(n),
+\]</span> <span class="math display">\[
+u_{(k,m)}(s)=\psi R(G')+\alpha_g-\gamma_p P(n',\rho)-\gamma_r OOP(n')
+-k\,c^{\mathrm{rem}}-m\,c^{\mathrm{inst}},
+\]</span> with exit absorbing (<span class="math inline">\(\kappa_0:=0\)</span>, no continuation). Conditional value functions are <span class="math inline">\(v_a(s)=u_a(s)+\beta\,\mathbb{E}[V(s')\mid s,a]\)</span>, with <span class="math inline">\(v_X(s)=\kappa_1 N(n)\)</span>, and <span class="math inline">\(V(s)=\log\!\big(e^{v_M}+e^{IV}+e^{v_X}\big)\)</span>, <span class="math inline">\(IV(s)=\lambda\log\sum_{(k,m)\in W}e^{v_{(k,m)}/\lambda}\)</span>.</p>
+</section>
+<section id="step-1-the-inversions" class="level2">
+<h2 class="anchored" data-anchor-id="step-1-the-inversions">Step 1: the inversions</h2>
+<p>For two top-level alternatives, the Hotz–Miller inversion gives the log choice-probability ratio as the conditional-value difference, with no nest scale (<span class="math inline">\(M\)</span> and <span class="math inline">\(X\)</span> are singleton top nests): <span class="math display">\[
+\log\frac{P(a\mid s)}{P(b\mid s)}=v_a(s)-v_b(s),\qquad a,b\in\{M,X\}.
+\]</span> For two options inside the tank-work nest the same difference appears, divided by the nest scale: <span class="math display">\[
+\log\frac{P(a\mid s)}{P(b\mid s)}=\frac{v_a(s)-v_b(s)}{\lambda},\qquad a,b\in W.
+\]</span></p>
+</section>
+<section id="step-2-eliminating-the-continuation-value" class="level2">
+<h2 class="anchored" data-anchor-id="step-2-eliminating-the-continuation-value">Step 2: eliminating the continuation value</h2>
+<p>The exit-vs-maintain inversion is <span class="math display">\[
+L(s)\equiv\log\frac{P(X\mid s)}{P(M\mid s)}
+=v_X(s)-v_M(s)=\kappa_1 N(n)-u_M(s)-\beta\,\mathbb{E}[V(s')\mid s,M].
+\]</span> The continuation <span class="math inline">\(\mathbb{E}[V(s')\mid s,M]\)</span> is not observed. Eliminate it with the Hotz–Miller representation evaluated at exit, which is terminal: for any future state <span class="math inline">\(s'\)</span>, <span class="math display">\[
+V(s')=v_X(s')-\log P(X\mid s')=\kappa_1 N(n')-\log P(X\mid s'),
+\]</span> because exiting at <span class="math inline">\(s'\)</span> pays <span class="math inline">\(\kappa_1 N(n')\)</span> and ends the program. Taking expectations under the maintain transition, <span class="math display">\[
+\mathbb{E}[V(s')\mid s,M]
+=\kappa_1\,\mathbb{E}[N(n')\mid s,M]-\mathbb{E}[\log P(X\mid s')\mid s,M],
+\]</span> both terms observed (the aging kernel and future exit CCPs). Substituting and collecting the <span class="math inline">\(\kappa_1\)</span> terms: <span class="math display">\[
+\begin{aligned}
+L(s)&amp;=\kappa_1 N(n)-u_M(s)
+-\beta\big(\kappa_1\,\mathbb{E}[N(n')\mid s,M]-\mathbb{E}[\log P(X\mid s')\mid s,M]\big)\\
+&amp;=\kappa_1\big(N(n)-\beta\,\mathbb{E}[N(n')\mid s,M]\big)
+-u_M(s)+\beta\,\mathbb{E}[\log P(X\mid s')\mid s,M].
+\end{aligned}
+\]</span></p>
+</section>
+<section id="step-3-the-estimating-equation" class="level2">
+<h2 class="anchored" data-anchor-id="step-3-the-estimating-equation">Step 3: the estimating equation</h2>
+<p>Move the observed continuation term left and substitute <span class="math inline">\(u_M\)</span>. Define the observed dependent variable and the observed discounted net count <span class="math display">\[
+Y(s)\equiv L(s)-\beta\,\mathbb{E}[\log P(X\mid s')\mid s,M],\qquad
+\tilde N(s)\equiv N(n)-\beta\,\mathbb{E}[N(n')\mid s,M].
+\]</span> Then <span class="math display">\[
+\boxed{\;Y(s)=\kappa_1\,\tilde N(s)-\psi R(G)-\alpha_g+\gamma_p P(n,\rho)
++\gamma_r OOP(n)\;}
+\]</span> This is a linear regression: a fully observed left-hand side on observed regressors <span class="math inline">\(\{\tilde N,R,P,OOP\}\)</span> and state fixed effects. The coefficients are the structural parameters — <span class="math inline">\(\kappa_1\)</span> on <span class="math inline">\(\tilde N\)</span>, <span class="math inline">\(-\psi\)</span> on <span class="math inline">\(R\)</span>, <span class="math inline">\(\gamma_p\)</span> on <span class="math inline">\(P\)</span>, <span class="math inline">\(\gamma_r\)</span> on <span class="math inline">\(OOP\)</span>. No value function remains; the dynamics live entirely in <span class="math inline">\(Y\)</span> and <span class="math inline">\(\tilde N\)</span>, both built from CCPs and the kernel. Each parameter is identified exactly as a regression coefficient is — the partial effect of its own regressor, provided that regressor varies independently of the others (the rank condition). The rest of the section names the variation that delivers each.</p>
+</section>
+<section id="step-4-contracts-and-the-cross-state-design" class="level2">
+<h2 class="anchored" data-anchor-id="step-4-contracts-and-the-cross-state-design">Step 4: contracts and the cross-state design</h2>
+<p>Substitute the contract forms <span class="math inline">\(P(n,\mathrm{FF})=\tau_g N(n)\)</span> and <span class="math inline">\(OOP(n)=D_g H(n)\)</span> into the boxed equation for a flat-fee state: <span class="math display">\[
+Y(s)=\kappa_1\,\tilde N(s)+\gamma_p\,\tau_g\,N(n)+\gamma_r\,D_g\,H(n)
+-\psi R(G)-\alpha_g.
+\]</span> The contracts <span class="math inline">\((\tau_g,D_g)\)</span> enter as <em>state-specific multipliers on within-state quantities</em> — the fee on count, the deductible on hazard. The fixed effect <span class="math inline">\(\alpha_g\)</span> is an additive intercept: it absorbs the level of behavior in each state but cannot absorb a multiplier on a within-state-varying regressor. This is the formal content of “a fixed effect absorbs levels, not slopes,” and it is why the <em>cross-state</em> contract variation, not within-state variation alone, is the engine of identification for <span class="math inline">\(\gamma_p\)</span> and <span class="math inline">\(\gamma_r\)</span>.</p>
+</section>
+<section id="identification-of-each-parameter" class="level2">
+<h2 class="anchored" data-anchor-id="identification-of-each-parameter">Identification of each parameter</h2>
+<p><strong><span class="math inline">\(\kappa_1\)</span> (exit value per tank).</strong> In the no-fee states <span class="math inline">\(\tau_g=0\)</span>, so the premium drops and <span class="math inline">\(Y(s)=\kappa_1\tilde N(s)+\gamma_r D_g H(n)-\psi R(G)-\alpha_g\)</span>; the coefficient on <span class="math inline">\(\tilde N\)</span> is <span class="math inline">\(\kappa_1\)</span>, uncontaminated by the premium. So <span class="math inline">\(\kappa_1\)</span> is identified by the exit-vs-maintain response to (discounted net) tank count where insurance puts no price on holding a tank, holding capacity and hazard fixed. It separates from <span class="math inline">\(\psi\)</span> because <span class="math inline">\(\tilde N\)</span> (count) and <span class="math inline">\(R(G)\)</span> (capacity) are independent regressors — count varies at fixed capacity, capacity at fixed composition — a separation unavailable in the single-tank model, where the two coincide.</p>
+<p><strong><span class="math inline">\(\gamma_p\)</span> (premium sensitivity).</strong> The coefficient on the premium <span class="math inline">\(P\)</span>. Two independent sources identify it. First, the <em>cross-state fees</em>: with <span class="math inline">\(P=\tau_g N\)</span>, the regressor <span class="math inline">\(\gamma_p\tau_g N\)</span> scales with <span class="math inline">\(\tau_g\)</span> while the <span class="math inline">\(\kappa_1\)</span> regressor <span class="math inline">\(\tilde N\)</span> does not, so pooling states of different <span class="math inline">\(\tau_g\)</span> (the no-fee states fixing <span class="math inline">\(\kappa_1\)</span>, the fee states adding <span class="math inline">\(\gamma_p\tau_g N\)</span>) breaks the count collinearity and pins <span class="math inline">\(\gamma_p\)</span>. Second, the <em>Texas card</em>: under risk rating <span class="math inline">\(P=\sum_c n_c\bar p_c\)</span> varies with the wall/age composition at fixed count — the only premium variation orthogonal to count in the data, and the only one that represents a risk-priced premium. The fixed effect leaves both untouched, since each enters as a slope.</p>
+<p><strong><span class="math inline">\(\gamma_r\)</span> (out-of-pocket sensitivity).</strong> The coefficient on <span class="math inline">\(OOP=D_g H(n)\)</span>. The <em>cross-state deductibles</em> <span class="math inline">\(D_g\)</span> scale the hazard slope, so the cross-state difference in the behavior-vs-hazard gradient identifies <span class="math inline">\(\gamma_r\)</span>; within Texas, where <span class="math inline">\(D\)</span> is flat, hazard variation across compositions gives a second reading. Separation from <span class="math inline">\(\gamma_p\)</span> rests on the flat-fee states — whose premium is flat in risk, so their hazard variation carries no premium-risk confound — and on the Texas card’s discrete age-steps and re-filings, which move the premium independently of smooth hazard.</p>
+<p><strong><span class="math inline">\(\psi\)</span> (revenue weight).</strong> The coefficient on <span class="math inline">\(R(G)\)</span>, common across states. Identified by facilities of the same wall/age composition <span class="math inline">\(n\)</span> but different total capacity, hence different measured revenue, at which the operating-vs-exit odds shift through <span class="math inline">\(\psi R\)</span> while exit carries no revenue term. Replacing <span class="math inline">\(\psi R(G)\)</span> by free capacity-bin constants <span class="math inline">\(\varphi_G\)</span> returns the same argument with capacity dummies in place of measured revenue; using measured <span class="math inline">\(R\)</span> is the over-identifying restriction that fixes the dollar scale.</p>
+<p><strong><span class="math inline">\(c^{\mathrm{rem}},c^{\mathrm{inst}}\)</span> (per-unit removal and install costs).</strong> From the within-nest inversion at adjacent menu points. For <span class="math inline">\(a=(k,m)\)</span>, <span class="math inline">\(b=(k-1,m)\)</span> (one extra removal), eliminating the continuation as in Step 2, <span class="math display">\[
+\lambda\log\frac{P_{(k,m)}}{P_{(k-1,m)}}+\beta\,\Delta_k\mathbb{E}[\log P(X\mid s')]
+=-c^{\mathrm{rem}}+\psi\,\Delta_k R-\gamma_p\,\Delta_k P-\gamma_r\,\Delta_k OOP
++\beta\kappa_1\,\Delta_k\mathbb{E}[N'],
+\]</span> where <span class="math inline">\(\Delta_k\)</span> is the change from removing one more tank under the removal rule. The left side is observed (given the four parameters above); <span class="math inline">\(c^{\mathrm{rem}}\)</span> is the per-removal intercept once the revenue, premium, hazard, and continuation changes that one tank induces are netted out. The install cost <span class="math inline">\(c^{\mathrm{inst}}\)</span> is identical with <span class="math inline">\(b=(k,m-1)\)</span> and <span class="math inline">\(\Delta_m\)</span> for <span class="math inline">\(\Delta_k\)</span> — the replace-versus- downsize margin. Both are identified up to the nest scale <span class="math inline">\(\lambda\)</span>, since they enter the within-nest log-odds divided by <span class="math inline">\(\lambda\)</span>.</p>
+</section>
+<section id="sec-id-texas" class="level2">
+<h2 class="anchored" data-anchor-id="sec-id-texas">The role of Texas’s risk rating</h2>
+<p>Texas is the only risk-rated state, and it does work no flat-fee state can. In a flat-fee state the premium <span class="math inline">\(\tau_g N\)</span> moves only with count, so it is collinear with the exit-scrap channel <span class="math inline">\(\kappa_1\)</span> and reveals nothing about how facilities respond to a premium that reflects their <em>own hazard</em>. Texas’s card makes the premium vary with the wall/age composition at fixed count, which (i) supplies premium variation orthogonal to count, giving an identification of <span class="math inline">\(\gamma_p\)</span> independent of the cross-fee channel and of <span class="math inline">\(\kappa_1\)</span>; (ii) is the sole observation of behavior under risk pricing — the exact object the “Texas stays flat-fee” (CF1) and first-best (CF2) counterfactuals require; and (iii) lets the card’s age-steps and re-filings, which outrun smooth hazard, separate <span class="math inline">\(\gamma_p\)</span> from <span class="math inline">\(\gamma_r\)</span> within a risk-priced regime. The flat-fee states identify <span class="math inline">\(\kappa_1\)</span>, the count-fee component of <span class="math inline">\(\gamma_p\)</span>, and a clean <span class="math inline">\(\gamma_r\)</span>; Texas adds the risk-priced-premium response the policy questions turn on.</p>
+</section>
+<section id="threats-to-identification" class="level2">
+<h2 class="anchored" data-anchor-id="threats-to-identification">Threats to identification</h2>
+<p>The cross-state design is exposed where contracts are not exogenous to behavior. Three threats: contract terms set in response to a state’s tank stock (a state with older, riskier tanks choosing a higher deductible bends the <span class="math inline">\(\gamma_r\)</span> slope); enforcement or inspection intensity co-moving with contract stringency; and differences in fund payout reliability that change effective exposure beyond the stated <span class="math inline">\(D_g\)</span>. The state fixed effects absorb level confounders and year effects absorb common shocks, but neither addresses a confounder that co-moves with the contract <em>slope</em>. Identification therefore leans hardest on the within-Texas card and hazard variation, with the cross-state contract slopes as corroborating evidence, and the regime channel is cross-validated by the difference-in-differences work reported elsewhere.</p>
+</section>
+</section>
+<section id="sec-ae" class="level1">
+<h1>The assumption evidence suite</h1>
+<p><em>This section supersedes the open checks in the sketch above. Every empirical claim comes from the rebuilt evidence suite (scripts <code>AE01</code>–<code>AE08</code>, Ticket 021), purpose-built so that each model assumption has exactly one exhibit, computed on one common sample with one common action definition. Earlier diagnostic versions (the M- and E-series) remain on disk as the audit trail. Each exhibit below carries the model assumption as a centered equation, a brief statement of why the model needs it and how the evidence supports it, then three short paragraphs: why we run the analysis; how exactly it is computed; and what the result says — first in plain terms, then for the model assumption it supports.</em></p>
+<section id="sec-ae-conventions" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-conventions">Sample and conventions used by every analysis below</h2>
+<p>All analyses run on the same facility-year panel: every facility-year from 1999 onward with at least one tank at the beginning of the year (2.35 million facility-years; 21 states; Texas is the only risk-priced state). A facility’s beginning-of-year (BOY) portfolio is described by counts of tanks over 16 categories: wall type (single- or double-walled) crossed with eight five-year age bins — the same age bins the estimation pipeline already uses. Each facility-year is assigned exactly one of five behaviors, in this order of precedence: <strong>Exit</strong> (every tank closed), <strong>Replace</strong> (closed at least one tank and installed at least one, still operating), <strong>Downsize</strong> (closed at least one tank, installed none, still operating), <strong>Expansion</strong> (installed without closing anything), and <strong>Maintain</strong> (no change). Expansion is counted but never pooled with the model’s actions. Analyses that condition on the insurance regime restrict to the estimation sample (Texas 2006+ plus control states); purely physical analyses use the full panel. Every regression reports standard errors clustered by state (18 clusters).</p>
+</section>
+<section id="sec-ae-x1" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x1">What facilities do in a year</h2>
+<p><span class="math display">\[
+\mathcal{A}(s) = \{(k,m)\} \cup \{X\}
+\]</span></p>
+<p>The model prices four actions: maintain, downsize, replace, exit. This exhibit confirms all four are real, countable behaviors in the data. One note on the model’s multinomial structure: the choice among all options is modeled as a single multinomial choice; the evidence regressions below use binary logits (one action versus all others) because clustered standard errors are native there and, with 97.5% of facility-years at maintain, the two approaches are numerically near-identical at the rare margins.</p>
+<p><strong>Why.</strong> The model cannot price an action that is absent from the data. The table establishes that rare actions are rare the way heart attacks are rare — low annual probability, large absolute counts. It also records expansion separately, justifying its exclusion from the action set.</p>
+<p><strong>How it is computed.</strong> Each facility-year in the full panel is assigned one behavior using the closure and install flags from the facility panel, with the precedence order above. Counts of tanks removed and installed within the year come from the tank-level BOY build (a tank is “removed in year <span class="math inline">\(t\)</span>” if it was present at the start of <span class="math inline">\(t\)</span> and has a closure event in <span class="math inline">\(t\)</span>; “installed in <span class="math inline">\(t\)</span>” if its install year is <span class="math inline">\(t\)</span>). The table reports event counts and shares of facility-years; the simultaneity row counts facility-years with two-plus removals and two-plus installs.</p>
+<p><strong>What it says.</strong> Facilities do nothing 97.5% of the time — and when they act, full exit (40,304 events) dominates, but downsizing (7,325) and replacement (6,422) are each thousands of events, with downsizing slightly the more common. For the model: every action the model prices has thousands of observations behind its cost parameter, and the 4,295 facility-years that remove and install multiple tanks at once mean even a fixed mobilization cost is not ruled out by the data. The 4,409 expansion years justify fencing expansion off rather than forcing it into a model action.</p>
+</section>
+<section id="sec-ae-x2" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x2">Size changes what facilities do, holding everything else fixed</h2>
+<p><span class="math display">\[
+n \in s
+\]</span></p>
+<p>Tank counts are a state variable. The exhibit compares behavior within the existing 32 (age, wall, regime) cells: if size shifts behavior within those cells, it must be in the state. The three size odds ratios — 0.48 exit, 27.1 downsize, 3.6 replace — each come from a regression that absorbs every cell fixed effect, so they reflect comparisons of same-cell owners of different sizes.</p>
+<p><strong>Why.</strong> The current model’s state has no notion of facility size: a one-tank and a five-tank facility in the same (age, wall, regime) cell are forced to behave identically. If size shifts behavior within those cells, size must be in the state. This is the single most important fact motivating the portfolio model, so it gets both a regression (the formal statement) and a figure (the raw pattern).</p>
+<p><strong>How it is computed.</strong> On the estimation sample, for each of the three non-maintain margins separately, we run a binary logit of “did this facility-year take that action” on facility-size indicators (2, 3, 4+ tanks, with 1 tank as the base), including a fixed effect for every one of the 32 (age <span class="math inline">\(\times\)</span> wall <span class="math inline">\(\times\)</span> regime) state cells — so size is compared only within cells, never across them. The table reports odds ratios: an entry of 2 means that action is twice as likely at that size as at a one-tank facility in the same cell. The figure shows the same pattern without any model: raw action shares by age bin, drawn separately by size and wall type.</p>
+<p><strong>What it says.</strong> Hold the state cell fixed and move only size: a 4+-tank facility is half as likely to exit as a one-tank facility (odds ratio 0.48) but twenty-seven times as likely to downsize (27.1) and three-and-a-half times as likely to replace (3.6). In plain terms: big facilities don’t leave the industry, they prune and recycle their tanks; small facilities can only stay or go. For the model: behavior is not just shifted by size, it is reversed across margins — no reweighting of a sizeless model can reproduce that, so tank counts must be a state variable. This is the load-bearing exhibit for the portfolio state.</p>
+</section>
+<section id="sec-ae-x5" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x5">A facility’s tanks are nearly identical to each other</h2>
+<p><span class="math display">\[
+\text{tanks within a (wall, age band) category are interchangeable}
+\]</span></p>
+<p>This is bookkeeping, not a claim about behavior: the model’s agent cannot tell two same-category tanks apart — and neither can the real owner’s bill or risk, since price and hazard are constant within a category. The exhibit measures how often real portfolios violate category boundaries and finds the answer, for most facilities, is almost never.</p>
+<p><strong>Why.</strong> The portfolio state describes a facility by counts of tanks per (wall, age-bin) category, not tank-by-tank. That description loses information only when a facility’s tanks differ from each other within a category boundary — so this exhibit measures how alike a facility’s tanks actually are. It is the feasibility check for using 16 categories instead of a full tank-level record.</p>
+<p><strong>How it is computed.</strong> For each facility-year on the estimation sample we take the oldest and youngest tank ages and the all-single-walled / all-double-walled flags from the facility panel. A facility-year is “age-homogeneous” if its oldest and youngest tank fall in the same five-year bin, “wall-homogeneous” if all tanks share one wall type, and “both” if both hold. The figure plots the share of facility-years passing each test, by facility size.</p>
+<p><strong>What it says.</strong> At the median facility, the age gap between the oldest and youngest tank is zero years — tanks are installed together, in batches. Even at 4+-tank facilities, 64.5% of facility-years have every tank in a single (wall, age-bin) category; at small facilities it is above 90%. In plain terms: a facility is usually “three single-walled tanks from 1988,” not a museum of vintages. For the model: describing a facility by category counts is exactly right for the large majority of facility-years and only coarsens the heterogeneous tail of big facilities — which is precisely where counts (rather than one representative tank) still carry the relevant information.</p>
+</section>
+<section id="sec-ae-x4" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x4">Capacity moves like Rust’s mileage</h2>
+<p><span class="math display">\[
+G' \sim \Gamma_G(\cdot \mid G,\ m - k), \quad \text{degenerate at } (0,0)
+\]</span></p>
+<p>Total gallons is the scale variable for operating revenue. The model discretizes it into quartile bins — exactly as Rust discretizes bus mileage — and requires the empirical transition matrix. The two tables below provide that object: the age-bin kernel and the capacity-bin kernel together. The key finding is that the maintain bin is nearly absorbing (diagonal 0.998), while downsize and replace see genuine bin movement (stay 0.564 and 0.465 respectively).</p>
+<p><strong>Why.</strong> The transition matrix is the law of motion itself. An earlier read took the near-zero median capacity change at replacements as evidence the capacity bin was frozen there too; the transition matrix, which is what the model actually consumes, shows genuine bin-crossing at replace and downsize that the median hid.</p>
+<p><strong>How it is computed.</strong> Total facility capacity is split at sample quartiles into four bins. The age-transition table records, for consecutive facility-year pairs by action, the fraction of individual tank-events staying in each age band versus advancing. The capacity-transition table records (this year’s bin, next year’s bin) probabilities separately for Maintain, Downsize, and Replace facility-years.</p>
+<p><strong>What it says.</strong> Under maintain, the capacity bin is frozen: 0.998 of maintain years stay in their bin. Under the partial actions the bin genuinely moves: only 0.564 of downsize years and 0.465 of replace years stay put. In plain terms: capacity is a fixed attribute until the facility touches its tanks. For the model: the capacity kernel <span class="math inline">\(\Gamma_G\)</span> enters the law of motion only at downsize and replace; at maintain it is degenerate. The kernel will be re-estimated conditioned on net tank change <span class="math inline">\(m - k\)</span> in the estimator’s first stage — a remove-3/install-2 event is a physically different event from remove-4/install-1.</p>
+</section>
+<section id="sec-ae-x6" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x6">When one tank among several is removed, it is the single-walled one</h2>
+<p><span class="math display">\[
+\text{the } k \text{ removed tanks are the oldest single-walled; if fewer than }
+k \text{ exist, the oldest double-walled fill the remainder}
+\]</span></p>
+<p>Owners remove the riskiest tank from their portfolio. The conditional logit below compares, within the same facility in the same year, the closed tank against its surviving neighbors. The wall and age coefficients translate directly into the removal rule the model uses.</p>
+<p><strong>Why.</strong> The model’s transition rule for partial actions needs to know which tank leaves. This exhibit estimates, within facilities that removed exactly one of their several tanks, what distinguishes the removed tank from its surviving neighbors — the direct evidence behind the removal rule.</p>
+<p><strong>How it is computed.</strong> From the tank-level panel we keep facility-years with two or more active tanks of which exactly one closed (19,744 events; 76,626 candidate tanks). A conditional logit compares the closed tank to the surviving tanks of the same facility in the same year — everything facility-level cancels because the comparison never crosses facilities. Regressors: tank age, a single-walled indicator, capacity in thousands of gallons; SE clustered by state.</p>
+<p><strong>What it says.</strong> Within the same facility, the removed tank is single-walled at 2.85-to-1 odds, each year of age adds 4.4% to its removal odds, and its size is irrelevant (odds ratio 1.000). In plain terms: when an owner culls one tank from the herd, they cull the risky construction type, with a mild preference for the oldest — never simply the smallest. The wall coefficient is worth about 24 years of age, which is why the rule puts every single-walled bin ahead of the double-walled ones. For the model: this justifies a removal rule stated on exactly the two dimensions the state tracks (wall, then age) and justifies leaving capacity out of the rule.</p>
+</section>
+<section id="sec-ae-x7a" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x7a">The rule predicts which tanks leave</h2>
+<p><span class="math display">\[
+r(n,k)\ \text{is the identity rule;}\ k\ \text{and}\ m\ \text{are choices}
+\]</span></p>
+<p>The rule correctly names the removed categories in 84% of events; its load-bearing half — single-walled before double-walled — fails in only 2.8%. The miss-cost table closes the remaining worry quantitatively: even when the rule misses, the pricing and hazard consequences are small. This closes the big-facility downsizing worry quantitatively.</p>
+<p><strong>Why.</strong> The model assumes removals follow the stated rule. This exhibit checks the rule against every real removal event in the units the model uses — which (wall, age-bin) categories lost tanks — and separately asks how many tanks facilities remove at once. The two questions are distinct: the rule fixes which tanks leave given their number; the number is a choice (see X7b).</p>
+<p><strong>How it is computed.</strong> For every Downsize or Replace facility-year we know how many tanks were removed (<span class="math inline">\(k\)</span>) and from which categories. The rule’s prediction is mechanical: walk the categories in priority order (single-walled oldest-to-youngest, then double-walled likewise) and take the first <span class="math inline">\(k\)</span> tanks the facility owns. An event is an exact match if predicted and actual categories coincide. Two failure types are tallied: removing any double-walled tank while keeping a single-walled one (a wall miss — the part the economics leans on), and removing from a younger bin while keeping an older same-wall bin (an age miss). The miss-cost table computes, for events where the rule mispredicts, the implied premium error and hazard error.</p>
+<p><strong>What it says.</strong> The rule names the exact removed categories in 84% of all events, and its load-bearing half — single-walled before double-walled — fails in only 2.8%. The heat map shows the misses sit one age bin off the diagonal. The miss-cost table closes the big-facility downsizing worry quantitatively: conditional on a miss, the mean premium error is $71/yr (p90 $142) on annual bills of $500–$1{,}065, and the hazard error is 0.14 percentage points; unconditionally the miss cost is approximately $11/yr — 1–2% of the bill. These are upper bounds because the empirical premium card is flatter than the filed card. The wall part of the rule holds equally well for replace and downsize (3–6% misses across both); even the 16% of events where the age part misses impose negligible pricing consequences. For the model: the removal identity is deterministic and its errors are small enough to treat as measurement noise, not structural misspecification.</p>
+</section>
+<section id="sec-ae-x7b" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x7b">How many tanks: a chosen intensity</h2>
+<p><span class="math display">\[
+k,\, m\ \text{are choices; only}\ r(n,k)\ \text{is a rule}
+\]</span></p>
+<p>The count of tanks removed (<span class="math inline">\(k\)</span>) and installed (<span class="math inline">\(m\)</span>) is not predicted by any rule — it is the chosen intensity of the action. The menu works like wings priced per wing: each <span class="math inline">\((k,m)\)</span> pair is just another option, and two per-unit costs price every line; the model never predicts <span class="math inline">\(k\)</span> or <span class="math inline">\(m\)</span>, the owner chooses them.</p>
+<p><strong>Why.</strong> The number of tanks involved in a replacement or downsize is the object priced by <span class="math inline">\(c^{rem}\)</span> and <span class="math inline">\(c^{inst}\)</span>. Confirming it varies freely over the data, rather than concentrating at one-for-one swaps, justifies per-unit costs rather than a fixed-menu price.</p>
+<p><strong>How it is computed.</strong> For every Replace and Downsize facility-year, the table cross-tabulates the count of tanks removed (<span class="math inline">\(k\)</span>) against the count installed (<span class="math inline">\(m\)</span>, zero for downsize events).</p>
+<p><strong>What it says.</strong> Only 13.7% of replacements remove exactly one tank; the modal replacement removes 3 and installs 2. Downsize events span a similarly wide range of <span class="math inline">\(k\)</span> values. In plain terms: replacement is not a one-tank event and its scale is not fixed. For the model: two per-unit cost parameters (<span class="math inline">\(c^{rem}\)</span> and <span class="math inline">\(c^{inst}\)</span>) price a wide menu of intensities, and their identification comes from the variation in <span class="math inline">\((k,m)\)</span> counts visible here.</p>
+</section>
+<section id="sec-ae-x8" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x8">Replacement recycles capacity; it does not reset the facility</h2>
+<p><span class="math display">\[
+n' = n - r(n,k) + m\, e_{DW,1} \quad (\text{no reset})
+\]</span></p>
+<p>This exhibit exists to kill the old reset-to-zero replace transition and pin “tanks out, tanks in, scale carried.” The current 6p model’s replace transition rebuilds the facility from scratch — and 98% of real replacements land somewhere that transition says is impossible. The new transition carries the portfolio along.</p>
+<p><strong>Why.</strong> If replacement reset the state, the post-action composition would be deterministic and there would be no role for capacity or age heterogeneity surviving a replacement. The data show replacement is recycling — the facility keeps its scale and refreshes a tank.</p>
+<p><strong>How it is computed.</strong> The population is facility-years that closed at least one tank and kept operating — nothing else. Events split into “swap” (at least one install that year) and “shrink” (none). For each event we compute the percent change in total capacity, the net change in tank count, and — at the tank level — whether a single-walled tank was removed and a double-walled one installed.</p>
+<p><strong>What it says.</strong> When a facility swaps, its capacity barely moves — the median change is <span class="math inline">\(+6.9\)</span>%, <span class="math inline">\(0.0\)</span>%, and <span class="math inline">\(-9.7\)</span>% at net count changes of 0, <span class="math inline">\(-1\)</span>, <span class="math inline">\(-2\)</span> — while shrink-only events destroy capacity (<span class="math inline">\(-14\)</span>%, <span class="math inline">\(-39\)</span>%, <span class="math inline">\(-58\)</span>% at the same count changes). Swapping adds 84 percentage points of capacity retention relative to shrinking. In plain terms: replacement is recycling — the facility keeps its scale and refreshes a tank. For the model: the replace transition removes one tank by the rule and adds one new tank, carrying the portfolio along; nothing resets.</p>
+</section>
+<section id="sec-ae-x9" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x9">New tanks are double-walled — by regulation</h2>
+<p><span class="math display">\[
+\text{installs} = e_{DW,1}
+\]</span></p>
+<p>Every new tank placed in the model enters as a double-walled unit in age bin 1. This is an institutional fact: every sample state has banned new single-walled installs, and the installs that earlier looked like rule violations were almost entirely legal pre-ban events.</p>
+<p><strong>Why.</strong> The model’s replace action installs a double-walled tank, with no choice about it. This exhibit shows that assumption is regulation, not preference, and pins the 6% post-ban single-walled install rate as a registry wall-coding issue rather than genuine violations.</p>
+<p><strong>How it is computed.</strong> Among Replace facility-years at facilities holding at least one single-walled tank, each event is classified at the tank level into three exhaustive classes: removed single-walled and installed double-walled (the rule); removed single-walled and installed single-walled (legal only pre-ban); removed double-walled only (a genuine violation). Each event is stamped pre- or post- its own state’s verified ban date. The figure plots the double-walled share of all installs by year, Texas versus control states, with tick marks at the ban dates.</p>
+<p><strong>What it says.</strong> Single-walled installs at replacing facilities collapse from 31.1% of events before the installing state’s ban to 2.7% after — the regulation bites visibly in the figure as every state’s line saturates at 100%. Genuine violations of the removal rule (replacing a double-walled tank while keeping a single-walled one) are 1.3% of events, pre- and post-ban alike. For the model: “the new tank is double-walled” is an institutional fact; the model stays stationary because no counterfactual we run changes the ban. The 6% of post-ban events still coded single-walled-install is flagged as a registry wall-coding issue, not behavior.</p>
+</section>
+<section id="sec-ae-x10" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x10">The pricing regime moves the action margins</h2>
+<p><span class="math display">\[
+P(\text{action} \mid s,\, \rho)\ \text{differs by regime}
+\]</span></p>
+<p>Under risk-based pricing, downsizing falls by half, upgrade-replacement roughly doubles, and exit rises — three margins, three different responses. These are the margins the counterfactuals move (Part 4).</p>
+<p><strong>Why.</strong> If downsizing and replacing were interchangeable bookkeeping, the insurance regime should not move them differently. This exhibit tests whether risk-based pricing shifts which margin facilities use — the evidence that the margins are economically distinct actions worth pricing separately.</p>
+<p><strong>How it is computed.</strong> Three separate binary logits on the estimation sample, each with year fixed effects and (age bin, wall, size) controls, SE clustered by state. Downsize and exit use the full sample with a risk-based regime indicator. The replace margin is estimated only on facilities holding a single-walled tank — there, replacing is upgrading by the removal rule, so a single regime coefficient answers the question. (An earlier version interacted regime with wall type and produced unstable coefficients from a nearly empty cell; this design avoids the interaction.) Texas is the only risk-priced state, so these are descriptive contrasts; causal regime claims rest on the difference-in-differences work elsewhere.</p>
+<p><strong>What it says.</strong> Under risk pricing, downsizing falls by half (odds ratio 0.49), upgrade-replacement at single-walled facilities roughly doubles (2.14), and exit rises (1.63) — three margins, three different responses, all significant with year effects absorbed. In plain terms: when old risky tanks become expensive to insure, owners stop quietly shrinking and start either upgrading the risky tank or leaving altogether. For the model: an action set that folded downsizing into “maintain” (the current model) hides a margin the policy lever demonstrably moves; the four-action set prices all three responses, which is exactly what the counterfactuals need.</p>
+</section>
+<section id="sec-ae-x3" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x3">What facilities actually pay</h2>
+<p><span class="math display">\[
+P(n,\rho) = \sum_c n_c\, \bar p_c \ (RB), \quad \tau_s N(n) \ (FF)
+\]</span></p>
+<p>The model prices portfolios using the average premium facilities actually paid per cell — not the filed card. Three exhibits establish this object: first, the facility-level picture of how total bills relate to portfolio age; second, the comparison of filed and empirical cards; third, the identification scatter showing premium variation beyond hazard that separates <span class="math inline">\(\hat\gamma_p\)</span> from <span class="math inline">\(\hat\gamma_r\)</span>.</p>
+<p><strong>Why.</strong> The model prices a portfolio by summing a per-tank price over its (wall, age-bin) categories, so the pricing exhibit should be exactly that object measured in the data. The filed rate card is shown beside it because the comparison is itself a finding: the card is steep in age, but realized bills are much flatter.</p>
+<p><strong>How it is computed.</strong> <em>Figure 1 (facility totals by age):</em> For Texas single-category facility-years (all tanks in one (wall, age-bin) cell, which are 86.6% of Texas facility-years), total annual premium is plotted against the common age bin. Flat-fee states’ total bills are plotted at their state’s per-tank fee times tank count. Note: older portfolios hold approximately twice as many tanks on average; part of the total-bill gradient is count, not per-tank price. Mixed-composition facilities have no single age bin and so are excluded from this figure — which is precisely why the model prices by composition rather than average age. <em>Filed and empirical card tables:</em> The filed table evaluates the 2006 filed schedule for a standard tank in each cell; the empirical table averages the engine-rated per-tank premium among single-cell Texas facility-years (245,578 observations) within each cell. <em>Scatter:</em> for every distinct observed composition, the average premium index against facility hazard <span class="math inline">\(H(n)\)</span> (ML model at portfolio composition), one point per composition sized by facility-years.</p>
+<p><strong>What it says.</strong> The filed card climbs from $319 to $443 per tank-year as a single-walled tank ages, with a $71 double-walled discount. What facilities actually pay climbs barely at all: single-walled cells average $278–310 across every age bin, double-walled $265–320, and the realized wall gap is $15–30. In old double-walled bins 7–8 the crossover is noise and selection — those cells are thin (n=381/206 facility-years). A candidate explanation: out-of-service status credits on old tanks and equipment credits offset the age loads in practice. For pricing: <span class="math inline">\(\bar p_c\)</span> will be the empirical averages, not the filed card rates. For identification: <span class="math inline">\(\hat\gamma_p\)</span> leans less on the compressed cross-cell gradient and more on the regime gap ($708.8 at matched composition; X11) and the re-filings that moved the schedule over time.</p>
+</section>
+<section id="sec-ae-x11" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x11">Is there premium variation beyond hazard and size?</h2>
+<p><span class="math display">\[
+\text{Corr}(P,\, H \mid \text{controls}) &lt; 1
+\]</span></p>
+<p>Within risk-priced Texas, 26.7% of the premium index’s variation survives controls for hazard, tank count, capacity, and year; at matched composition, risk pricing costs a facility $708.8 more per year (SE $127.5). These are the corrected-<span class="math inline">\(H\)</span> estimates, where <span class="math inline">\(H\)</span> is the facility-level hazard from the ML model evaluated at the actual portfolio composition. The residual variation is what separates <span class="math inline">\(\hat\gamma_p\)</span> from <span class="math inline">\(\hat\gamma_r\)</span>.</p>
+<p><strong>Why.</strong> Price sensitivity and risk sensitivity are separate parameters, and they can be told apart only if premiums move independently of hazard. This table asks the question directly on the constructed premium index.</p>
+<p><strong>How it is computed.</strong> Each facility-year’s premium index is built from its actual composition: under risk pricing, the per-cell price summed over the facility’s tanks; under flat fees, the state’s per-tank fee times the tank count. Regressions of the index on portfolio hazard <span class="math inline">\(H(n)\)</span>, tank count, capacity, and year fixed effects run separately for the risk-priced sample, all flat-fee rows, fee-positive flat-fee rows, and pooled (the pooled row adds the regime indicator: the premium gap at matched composition). Zero-fee flat-fee states: Kansas, Maryland, Minnesota, Oklahoma, South Dakota, and Virginia (40.2% of flat-fee facility-years).</p>
+<p><strong>What it says.</strong> Within risk-priced Texas, 26.7% of the premium index’s variation survives the controls — the card’s discrete age steps and re-filings move the bill in ways hazard and size cannot mimic — and at matched composition, risk pricing costs a facility $708.8 more per year (SE $127.5). In plain terms: there are two genuinely different prices for the same physical facility, and even within the risk-priced world the schedule has kinks that risk itself does not track. For the model: that is the variation that separates <span class="math inline">\(\hat\gamma_p\)</span> from <span class="math inline">\(\hat\gamma_r\)</span>.</p>
+</section>
+<section id="sec-ae-x12" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ae-x12">The state space is small in practice</h2>
+<p><span class="math display">\[
+368\ \text{compositions cover}\ 95\%\ \text{of facility-years}
+\]</span></p>
+<p>The portfolio state is defined over a large combinatorial space, but real facilities are small and their tanks are alike. The coverage curve below shows 368 portfolio types cover 95% of facility-years, and 86.6% of facility-years are a single-category facility. Computation and data coverage are non-issues.</p>
+<p><strong>Why.</strong> The portfolio state sounds enormous (every possible count vector over 16 categories). This exhibit shows it is not: a few hundred portfolio types describe nearly everything.</p>
+<p><strong>How it is computed.</strong> Every facility-year’s composition is written as its 16-category count vector; identical vectors are pooled and ranked by how many facility-years share them. The curve plots the cumulative share of facility-years covered against the number of distinct compositions, log scale.</p>
+<p><strong>What it says.</strong> Just 368 of the 12,781 observed portfolio types cover 95% of all facility-years, and most facility-years (86.6%) are a single category — “<span class="math inline">\(n\)</span> tanks, all alike.” In plain terms: the state space is big on paper and small in life. For the model: the value function is cheap to compute, every commonly visited state has abundant data behind its choice probabilities, and the exotic compositions the model can represent but the data rarely visits matter only in counterfactuals — which is exactly when you want the model, not the data, to extrapolate.</p>
+</section>
+</section>
+<section id="what-the-counterfactuals-need-and-how-far-the-data-lets-them-go" class="level1">
+<h1>What the counterfactuals need, and how far the data lets them go</h1>
+<p>Each counterfactual is a surgical change to one object in the model. For each, the paragraphs below describe the surgery, the margins it activates and which exhibits cover them, and the data resolution the result carries.</p>
+<section id="cf1-texas-stays-flat-fee" class="level2">
+<h2 class="anchored" data-anchor-id="cf1-texas-stays-flat-fee">CF1: Texas stays flat-fee</h2>
+<p><strong>The surgery.</strong> Transplant the whole contract <span class="math inline">\(C = (\tau, D)\)</span> — not just the premium level but also the deductible — from the risk-based world to a flat-fee world. The bound is realized through real control-state contracts: the lower bound is a zero-fee state (zero per-tank fee but still carrying its own deductible — CF1-low is not “insurance vanishes”); the upper bound is the highest-fee control contract; the mean contract is the central estimate. The deductible transplant moves the OOP term as well as the premium, so both the <span class="math inline">\(\gamma_p\)</span> and the <span class="math inline">\(\gamma_r\)</span> channels are priced in the counterfactual.</p>
+<p><strong>Margins and evidence.</strong> The CF runs through the regime sensitivity of all three non-maintain margins (X10): how downsize, replace, and exit respond to the premium and deductible levels in the flat-fee contracts. The size-dependent direction of the response (X2) is the key heterogeneity the CF must reproduce. Premium identification (X11) and the pricing object (X3) underlie <span class="math inline">\(\hat\gamma_p\)</span>; hazard and deductible variation underlie <span class="math inline">\(\hat\gamma_r\)</span>.</p>
+<p><em>Bounded, not point-identified — Texas’s counterfactual flat-fee contract is unobserved, so we report the range spanned by actual control-state contracts.</em></p>
+</section>
+<section id="cf2-first-best-contract" class="level2">
+<h2 class="anchored" data-anchor-id="cf2-first-best-contract">CF2: First-best contract</h2>
+<p><strong>The surgery.</strong> Set the facility’s total private exposure equal to <span class="math inline">\(H(n)(L + E)\)</span> at the margin — the social marginal cost of its hazard — and find the contract that implements this. The welfare wedge derivation in Part 2 specifies the wedge under each regime: the FF wedge is <span class="math inline">\((L-D) + E\)</span> per unit hazard; the RB wedge is <span class="math inline">\(E\)</span> plus the under-pass-through of <span class="math inline">\((L-D)\)</span> from the compressed empirical card. The <span class="math inline">\(\gamma_p\)</span> versus <span class="math inline">\(\gamma_r\)</span> distinction matters: the instrument that delivers a dollar of Pigouvian correction is not neutral — a premium-channel dollar acts through <span class="math inline">\(\gamma_p\)</span> and a deductible-channel dollar through <span class="math inline">\(\gamma_r\)</span>, and if the two are not equal the first-best contract form is not indeterminate.</p>
+<p><strong>Margins and evidence.</strong> The CF requires that <span class="math inline">\(H(n)\)</span> respond to the contract at the margin, which is covered by X10 and X11. The external damage calibration (<span class="math inline">\(E = \$50{,}000\)</span>) is the binding assumption — the model does not estimate <span class="math inline">\(E\)</span> from the data.</p>
+<p><em>E is calibrated, not estimated; welfare reported at the calibration and a band.</em></p>
+</section>
+<section id="cf3-single-walled-replacement-subsidy" class="level2">
+<h2 class="anchored" data-anchor-id="cf3-single-walled-replacement-subsidy">CF3: Single-walled replacement subsidy</h2>
+<p><strong>The surgery.</strong> Lower <span class="math inline">\(c^{inst}\)</span> (or equivalently subsidize the <span class="math inline">\((k,m)\)</span> options that include removal of a single-walled tank). The subsidy runs through the full <span class="math inline">\((k,m)\)</span> menu, activating the replace margin for facilities currently on the maintain or downsize margin. The menu evidence (X7b) shows the relevant intensity range: the modal replacement removes 3 and installs 2, so the subsidy applies to a wide range of events. The removal rule (X6, X7a) identifies which tanks leave and thus which composition improvements the subsidy delivers.</p>
+<p><strong>Margins and evidence.</strong> The response depends on how many facilities are close to the replacement margin (X1, X7b), how the rule governs which tanks go (X6, X7a), and how the nest parameter <span class="math inline">\(\lambda\)</span> apportions new replacements between firms that would have acted anyway and firms that would not have. When the subsidy creates new replacements, the model must apportion them between firms that would have removed tanks anyway and firms that would have done nothing. One estimated parameter governs that split, so we report the subsidy’s effects both at its estimated value and with it switched off — showing the reader how much of the conclusion rides on it.</p>
+<p><em>The model reports subsidy effects at the estimated <span class="math inline">\(\hat\lambda\)</span> and with <span class="math inline">\(\lambda = 1\)</span> (flat logit); the gap between those two is what rides on the nest parameter.</em></p>
+</section>
+<section id="cf4-age-a-removal-mandate" class="level2">
+<h2 class="anchored" data-anchor-id="cf4-age-a-removal-mandate">CF4: Age-<span class="math inline">\(A\)</span> removal mandate</h2>
+<p><strong>The surgery.</strong> Delete the options in <span class="math inline">\(\mathcal{A}(s)\)</span> that would leave a tank in age bins above <span class="math inline">\(A\)</span> in the post-action state <span class="math inline">\(n'\)</span>. Because the state tracks tank counts by age bin, the mandate is feasible to implement in the model: the policymaker can observe and enforce the bin count, and the facility can comply either by removing old tanks (any <span class="math inline">\((k,m)\)</span> with <span class="math inline">\(k \ge n_{old}\)</span>) or by the cheap compliance path of removing old tanks without replacement (pure downsize, <span class="math inline">\((k,0)\)</span>). The cheap compliance margin is present in the model — and in the data (X7b shows downsize events span a wide range of <span class="math inline">\(k\)</span>) — which means the CF will find cost-minimizing compliance paths, not just wholesale replacement.</p>
+<p><strong>Margins and evidence.</strong> The mandate’s risk benefit is measured by how much <span class="math inline">\(H(n)\)</span> falls when old-tank count is reduced (X4 aging kernel). The compliance cost runs through the removal and exit margins (X1, X2, X7).</p>
+<p><em>The mandate’s risk benefit is measured at the resolution of the leak data — facility-level — so the model credits removing an old tank with the facility’s hazard improvement, not a tank-specific one. No estimate from this data can do better.</em></p>
+</section>
+</section>
+
+
+<div id="quarto-appendix" class="default"><section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes"><h2 class="anchored quarto-appendix-heading">Footnotes</h2>
+
+<ol>
+<li id="fn1"><p>Per-state contracts cost no parameters and no extra computation: the engine already solves per state for the fixed effects, and the contract variation survives the state fixed effects because contracts enter multiplied by within-state-varying quantities — <span class="math inline">\(\tau_s\)</span> as a slope on <span class="math inline">\(N(n)\)</span>, <span class="math inline">\(D_s\)</span> as a slope on <span class="math inline">\(H(n)\)</span>. An additive fixed effect absorbs levels, not slopes.<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section></div></main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

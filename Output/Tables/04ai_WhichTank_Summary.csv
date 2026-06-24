@@ -1,0 +1,8 @@
+metric,value
+"Mean AGE rank of closed tank (0=youngest,1=oldest)",0.58
+P(closed tank is the OLDEST),0.741
+  vs random baseline ~E[1/n],0.323
+P(closed tank is SINGLE-WALLED | mixed-wall facility),0.792
+  vs base SW share in mixed facilities,0.522
+"Mean CAPACITY rank of closed tank (0=smallest,1=largest)",0.299
+P(closed tank is the SMALLEST capacity),0.701

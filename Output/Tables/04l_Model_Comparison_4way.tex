@@ -1,0 +1,17 @@
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lrrrrrrrr}
+\hline
+Model & $k$ & $N$ & $\log L$ & AIC & BIC & LR vs nested & df & $p$-value \\
+\hline
+4-param & 4 & 2,282,735 & -268,481 & 536,971 & 537,021 & --- & --- & --- \\
+8-param & 8 & 2,282,735 & -261,770 & 523,557 & 523,658 & 13422.2 & 4 & 0 \\
+8-param + FE (M-only, joint) & 25 & 2,282,735 & -251,613 & 503,277 & 503,593 & 20314.1 & 17 & 0 \\
+8-param + FE (stay, profile) & 25 & 2,282,735 & -252,365 & 504,779 & 505,095 & 18811.1 & 17 & 0 \\
+\hline
+\multicolumn{9}{l}{\footnotesize LR tests: 8-param vs 4-param (df=4);
+  8p+FE (M-only, joint) vs 8-param (df=17);
+  8p+FE (stay, profile) vs 8-param (df=17).
+  Rows 3 and 4 are non-nested with each other. Both report k=25 (profile-out
+  does not reduce free parameters of the model, only optimizer dimensionality).}
+\end{tabular}
+}

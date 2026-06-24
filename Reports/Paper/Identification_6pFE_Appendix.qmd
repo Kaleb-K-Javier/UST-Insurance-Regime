@@ -1,0 +1,731 @@
+---
+title: "Econometric Identification of the Six-Parameter Replacement Model with Stay Fixed Effects"
+subtitle: "What is normalized, what is assumed, and what the data identifies"
+author: "Kaleb Javier"
+date: "`r Sys.Date()`"
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    linestretch: 1.15
+    toc: true
+    number-sections: true
+    keep-tex: true
+    fig-cap-location: top
+    fig-pos: "H"
+    include-in-header:
+      text: |
+        \usepackage{amsmath}
+        \usepackage{amssymb}
+        \usepackage{booktabs}
+        \usepackage{float}
+        \usepackage{longtable}
+        \usepackage{graphicx}
+        \usepackage{caption}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, warning = FALSE, message = FALSE,
+  fig.pos = "H", fig.width = 6.5, fig.height = 4.0, dpi = 150
+)
+library(data.table)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(here)
+
+theme_set(theme_minimal(base_size = 10) +
+          theme(legend.position = "top",
+                plot.title = element_text(face = "bold"),
+                plot.subtitle = element_text(color = "grey30"),
+                strip.text = element_text(face = "bold")))
+```
+
+```{r load-fit, include=FALSE}
+# Canonical clean (T007 Phase 3) 6p+stayFE fit; fall back to the dropSDMO fit.
+.fit_candidates <- c(
+  here("Output","Estimation_Results","Model_Replacement_6paramFE_profile_clean_observed.rds"),
+  here("Output","Estimation_Results","Model_Replacement_6paramFE_profile_observed_dropSDMO.rds")
+)
+.fit_path <- .fit_candidates[file.exists(.fit_candidates)][1]
+fit_ok <- !is.na(.fit_path) && length(.fit_path) == 1L
+if (fit_ok) {
+  fit <- readRDS(.fit_path)
+  ca  <- fit$cache
+  lut <- ca$state_lut
+  cell_dt <- data.table(
+    s_idx  = lut$s_idx,
+    A_bin  = lut$A_bin,
+    wall   = ifelse(lut$w_state   == 1L, "SW", "DW"),
+    regime = ifelse(lut$rho_state == 1L, "FF", "RB"),
+    P      = ca$P_vec       * 10000,   # $/yr per tank
+    h      = ca$h_vec,                 # annual leak probability
+    haz    = ca$hazard_loss * 10000    # $/yr expected loss
+  )
+}
+
+# Estimation sample (empirical CCPs for the identification figures)
+.obs_path <- here("Data","Analysis","dcm_obs_panel_observed.csv")
+obs_ok <- file.exists(.obs_path)
+if (obs_ok) {
+  obs <- fread(.obs_path)
+  emp <- obs[, .(
+    n_cell = .N,
+    P_M    = mean(y_it == 0L),
+    P_E    = mean(y_it == 1L & (is.na(I_replace) | I_replace == 0L)),
+    P_R    = mean(y_it == 1L & !is.na(I_replace) & I_replace == 1L),
+    P_close= mean(y_it == 1L)
+  ), by = s_idx]
+  emp[, P_R_cond := P_R / pmax(P_close, 1e-12)]
+  emp[, P_E_cond := P_E / pmax(P_close, 1e-12)]
+  if (fit_ok) emp <- merge(cell_dt, emp, by = "s_idx", all.x = TRUE)
+}
+```
+
+# Purpose and scope
+
+This appendix states, in econometric terms, exactly what the six-parameter
+replacement model with geographic stay fixed effects (the "6p+stayFE"
+specification, `Model_Replacement_6paramFE_profile_clean_observed.rds`)
+assumes, normalizes, and identifies. It separates three categories that are
+easily conflated: (i) *normalizations* that are required for any discrete-choice
+model to be identified; (ii) *sign and support restrictions* that the
+researcher imposes by parameterization and which are testable; and (iii) the
+*identifying variation* in the data that pins each structural parameter.
+
+The model is a single-agent dynamic discrete-choice model over three actions —
+maintain, exit, replace — on a state space of 32 cells (8 age bins $\times$ 2
+wall types $\times$ 2 pricing regimes). Estimation is by nested
+pseudo-likelihood (NPL); the geographic fixed effects are profiled out at each
+NPL iteration.
+
+# The flow utility and choice probabilities
+
+The per-period flow utilities at state $s$ are
+
+$$
+u_M(s) = 1 + \gamma_{\text{price}}\, P(s) - \gamma_{\text{risk}}\, \ell(s),
+\qquad
+u_E(s) = \kappa_{w(s)},
+\qquad
+u_R(s) = -K_{w(s)} = -\exp\!\big(\widetilde{K}_{w(s)}\big),
+$$
+
+where $P(s)$ is the annual premium, $\ell(s) = h(s)\cdot L(s)$ is the annual
+expected leak loss, $w(s)\in\{\text{SW},\text{DW}\}$ is the wall type, and the
+leading constant $1$ in $u_M$ is the normalized annual net revenue
+$R=\$10{,}000$. Premium and hazard enter the **maintain** utility only.
+
+The choice-specific values combine flow utility with discounted continuation:
+
+$$
+v_M(s) = u_M(s) + \beta\, F_M(s,\cdot)\, V,\qquad
+v_E(s) = u_E(s),\qquad
+v_R(s) = u_R(s) + \beta\, F_R(s,\cdot)\, V,
+$$
+
+with $V$ the ex-ante value function solved from the Aguirregabiria–Mira linear
+inversion $V = (I-\beta M)^{-1} R$ (exit is absorbing, so $F_E$ contributes
+nothing to $M$). The conditional choice probabilities are logit:
+$P_j(s) = \exp(v_j(s)/\sigma)\big/\sum_k \exp(v_k(s)/\sigma)$ with $\sigma=1$.
+
+The geographic stay fixed effect $\alpha_g$ (one per control state $g$, with
+$\alpha_{\text{TX}}\equiv 0$) enters at the choice-probability stage and is
+added to the **maintain and replace** values but not exit:
+
+$$
+P_j(s,g) = \frac{\exp\big(v_j(s) + \alpha_g\,\mathbf{1}[j\in\{M,R\}]\big)}
+                {\sum_k \exp\big(v_k(s) + \alpha_g\,\mathbf{1}[k\in\{M,R\}]\big)}.
+$$
+
+This is the literal "stay" interpretation: $\alpha_g$ shifts the value of
+remaining in the industry (maintain or replace) relative to leaving it (exit).
+Crucially, $\alpha_g$ is **not** inside the value-function inversion: $V$ is
+computed from the structural utilities alone. The fixed effect therefore shifts
+contemporaneous stay-vs-exit odds but does not propagate through continuation
+values, and it is dropped entirely in counterfactual equilibrium re-solves
+(the "Semantic 2 / nuisance" convention). Section\ \ref{sec-fe} returns to the
+implications of this choice for the Texas counterfactual.
+
+# What is normalized, assumed, and estimated {#sec-assume}
+
+```{r tbl-assume}
+at <- data.table(
+  quantity = c("$\\sigma^2$ (logit scale)",
+               "$u_M$ constant $=1$ ($=R$)",
+               "$\\beta$ (discount)",
+               "$\\alpha_{\\text{TX}}\\equiv 0$",
+               "$\\kappa_{\\text{SW}}, \\kappa_{\\text{DW}}$",
+               "$K_w = \\exp(\\widetilde{K}_w)$",
+               "$\\gamma_{\\text{price}}$",
+               "$\\gamma_{\\text{risk}}$"),
+  status = c("Normalization (required)",
+             "Normalization (required)",
+             "Fixed a priori",
+             "Normalization (FE reference)",
+             "Estimated, sign free",
+             "Estimated, sign imposed $>0$",
+             "Estimated within bound",
+             "Estimated within bound"),
+  detail = c("Scale not separately identified from utility magnitudes.",
+             "Only utility differences identified; one level pinned.",
+             "Not identified from CCPs alone; set to 0.95.",
+             "Other $\\alpha_g$ are deviations from Texas.",
+             "Enters raw (no transform): data reveals the sign.",
+             "$\\exp(\\cdot)$ forces replacement to be a flow cost.",
+             "Bound $[-3,-1]$; sign $<0$ is definitional (premium is a cost).",
+             "Bound $[0,0.15]$; sign $>0$ is definitional (loss is a bad).")
+)
+kable(at, format = "latex", booktabs = TRUE, escape = FALSE,
+      col.names = c("Quantity","Status","Detail")) |>
+  kable_styling(font_size = 9, latex_options = "hold_position")
+```
+
+\vspace{0.1cm}
+\begin{flushleft}\footnotesize
+\textit{Notes:} Three categories of restriction. Normalizations and $\beta$ are
+required or conventional and carry no economic content beyond the choice of
+units. The two genuine researcher-imposed restrictions are the positivity of
+the replacement cost (via the $\exp$ parameterization) and the box constraints
+on $(\gamma_{\text{price}},\gamma_{\text{risk}})$. The exit value $\kappa_w$ is
+unrestricted in sign. The signs of $\gamma$ follow from the meaning of the
+regressors; the only substantive prior is the floor on $\gamma_{\text{price}}$
+away from zero.
+\end{flushleft}
+
+## Robustness: are the imposed restrictions binding?
+
+The two imposed restrictions are testable by re-estimation. (i) Replace
+$\widetilde{K}_w$ with a free $K_w$ (no $\exp$) and verify $\widehat{K}_w>0$ at
+the optimum; if so, the positivity restriction does not bind. (ii) Widen the
+$\gamma$ bounds to $[-6,0]$ and $[0,1]$ and verify the estimates remain interior
+to the original $[-3,-1]$ and $[0,0.15]$; if so, the box constraints do not
+bind. Reporting both turns an assumption into a verified-innocuous restriction.
+These re-estimations are out of scope for this appendix but should accompany the
+main results table.
+
+# Identification of $\gamma_{\text{price}}$ {#sec-gp}
+
+$\gamma_{\text{price}}$ is identified from variation in the premium $P(s)$ that
+is independent of the hazard $h(s)$. Under flat-fee (FF) pricing the premium is
+set administratively and is (within regime) uncorrelated with the hazard; the FF
+cells therefore trace out the maintain response to price holding risk fixed.
+Under risk-based (RB) pricing the premium covaries with the hazard, so the RB
+cells contribute fit but cannot separate $\gamma_{\text{price}}$ from
+$\gamma_{\text{risk}}$.
+
+Formally, in the static-utility limit the log odds of maintaining against the
+better closure option shift linearly in $P$:
+$\partial \log[P_M/P_{\text{close}}] / \partial P = \gamma_{\text{price}}/\sigma$
+at fixed $\ell$. The FF cells provide the required $P$-variation orthogonal to
+$h$.
+
+```{r fig-Ph}
+#| fig-cap: "Cell-level joint distribution of annual premium and hazard. FF cells span a range of hazards at roughly constant premium (the source of $\\gamma_{\\text{price}}$ identification); RB cells show premium covarying with hazard (fit only)."
+if (exists("cell_dt")) {
+  ggplot(cell_dt, aes(x = h, y = P, color = regime, shape = wall)) +
+    geom_point(size = 3, alpha = 0.85) +
+    scale_color_manual(values = c(FF = "#E76F51", RB = "#2A9D8F")) +
+    scale_y_continuous(labels = scales::dollar) +
+    labs(x = "Annual leak probability  h(s)",
+         y = "Annual premium  P(s)  ($/tank-year)",
+         color = "Regime", shape = "Wall",
+         title = "Price-vs-risk identification geometry",
+         subtitle = "FF cells: vertical slices (h varies at fixed P). RB cells: sloped locus.")
+} else cat("*[fit not available — render after the 6p+FE fit exists]*")
+```
+
+```{r fig-logodds-P}
+#| fig-cap: "Empirical maintain log-odds against premium within FF cells, colored by hazard tercile. A common negative slope across hazard terciles is the reduced-form signature of $\\gamma_{\\text{price}}<0$ identified independently of $h$."
+if (exists("emp") && "P" %in% names(emp)) {
+  d <- emp[regime == "FF" & !is.na(P_M) & n_cell > 0]
+  d[, logodds_M := log(pmax(P_M,1e-6) / pmax(1 - P_M,1e-6))]
+  d[, h_tercile := cut(h, breaks = quantile(h, c(0,1/3,2/3,1), na.rm=TRUE),
+                       include.lowest = TRUE,
+                       labels = c("low h","mid h","high h"))]
+  ggplot(d, aes(x = P, y = logodds_M, color = h_tercile)) +
+    geom_point(aes(size = n_cell), alpha = 0.8) +
+    geom_smooth(method = "lm", se = FALSE, linewidth = 0.7) +
+    scale_x_continuous(labels = scales::dollar) +
+    scale_size_continuous(guide = "none") +
+    labs(x = "Annual premium  P(s)  ($/tank-year)",
+         y = "Empirical maintain log-odds  log[P_M/(1-P_M)]",
+         color = "Hazard tercile",
+         title = "Maintain log-odds vs premium, FF cells",
+         subtitle = "Slope holding hazard fixed identifies gamma_price")
+} else cat("*[estimation sample not available]*")
+```
+
+# Identification of $\gamma_{\text{risk}}$ {#sec-gr}
+
+$\gamma_{\text{risk}}$ is identified from variation in the expected loss
+$\ell(s)=h(s)L(s)$. Two honest caveats apply. First, the hazard is strongly
+correlated with age, which also drives the continuation value; the structural
+separation relies on the modeling restriction that $\ell$ enters the *current*
+maintain payoff while age enters only through $V$. Second, within FF (where $P$
+is flat) the cross-cell hazard variation traces the risk response, but the
+cleanest joint variation in $(P,\ell)$ comes from the RB locus where price and
+risk move together. Identification of $\gamma_{\text{risk}}$ is therefore
+weaker than that of $\gamma_{\text{price}}$ and leans more on functional form;
+the figure in Section\ \ref{sec-gp} (the FF vertical slices and the RB locus)
+is the relevant geometry.
+
+# Identification of the exit values $\kappa_{\text{SW}}, \kappa_{\text{DW}}$ {#sec-kappa}
+
+The exit value $\kappa_w$ is identified by the frequency of full exit relative to
+maintaining, separately by wall type. With $u_E$ constant within wall, $\kappa_w$
+is pinned by how often facilities choose exit given the (state-varying) maintain
+value. The sign is not restricted: a positive $\kappa_w$ means exit carries a
+net flow benefit (scrap value, avoided future premium and risk), a negative one
+means exit is costly.
+
+```{r fig-exit}
+#| fig-cap: "Empirical exit share among closures, P(E | closure), by age and wall. The level and age-profile of full exit identify the exit values $\\kappa_w$."
+if (exists("emp") && "P_E_cond" %in% names(emp)) {
+  d <- emp[!is.na(P_E_cond)]
+  ggplot(d, aes(x = A_bin, y = P_E_cond, color = wall, linetype = regime)) +
+    geom_line(linewidth = 0.8) + geom_point(aes(size = n_cell), alpha = 0.7) +
+    scale_x_continuous(breaks = 1:8,
+      labels = c("0-5","5-10","10-15","15-20","20-25","25-30","30-35","35+")) +
+    scale_size_continuous(guide = "none") +
+    labs(x = "Age bin", y = "P(Exit | closure)", color = "Wall", linetype = "Regime",
+         title = "Exit share among closures, by age and wall",
+         subtitle = "Identifying variation for kappa_SW, kappa_DW")
+} else cat("*[estimation sample not available]*")
+```
+
+# Identification of the replacement costs $K_{\text{SW}}, K_{\text{DW}}$ {#sec-K}
+
+The replacement cost $K_w$ is identified by the conditional replace share among
+closures, $P(R\mid\text{closure})$, by age and wall: a higher conditional
+replace share implies a smaller $K_w$ relative to $\kappa_w$. Under the earlier
+*end-of-year* stamping this collapsed for double-walled cells --- every DW exit
+was routed out of the DW cells (Section\ \ref{sec-worsttank}), leaving DW cells
+with only replaces, so $P(R\mid\text{cl})=1$ mechanically and $K_{\text{DW}}$ was
+identified only off the DW *close rate* under the maintained assumption that
+every close is a replace. **Beginning-of-year (decision-time) stamping
+(Ticket 013) resolves this:** the DW cells now retain their exits, all-DW
+closures split into genuine exits and replaces ($P(R\mid\text{cl})\approx 0.17$
+on the corrected panel, no longer pinned at 1), and $K_{\text{DW}}$ is now
+identified off actual within-DW exit-vs-replace variation rather than functional
+form alone. The residual caveat is no longer wall-routing but the single-tank
+*average-age* reset on replacement (the replace off-support of
+@tbl-audit-d1): the rich partial-closure/replacement margin still awaits the
+portfolio extension before its price responsiveness should be pushed hard.
+
+```{r fig-replace}
+#| fig-cap: "Conditional replace share among closures, P(R | closure), by age, wall, and regime, on the beginning-of-year-stamped panel. With decision-time stamping the DW series is no longer pinned at 1 --- DW cells retain their exits --- so both wall types now carry exit-vs-replace variation identifying $K_{\\text{SW}}$ and $K_{\\text{DW}}$."
+if (exists("emp") && "P_R_cond" %in% names(emp)) {
+  d <- emp[!is.na(P_R_cond)]
+  ggplot(d, aes(x = A_bin, y = P_R_cond, color = wall, linetype = regime)) +
+    geom_line(linewidth = 0.8) + geom_point(aes(size = n_cell), alpha = 0.7) +
+    scale_x_continuous(breaks = 1:8,
+      labels = c("0-5","5-10","10-15","15-20","20-25","25-30","30-35","35+")) +
+    scale_size_continuous(guide = "none") +
+    labs(x = "Age bin", y = "P(Replace | closure)", color = "Wall", linetype = "Regime",
+         title = "Conditional replace share among closures",
+         subtitle = "Beginning-of-year stamping: DW no longer pinned at 1; both walls identify K")
+} else cat("*[estimation sample not available]*")
+```
+
+# The stay fixed effect: identification, normalization, and the Texas counterfactual {#sec-fe}
+
+The geographic stay FE $\alpha_g$ is identified off the residual stay-vs-exit
+margin in state $g$ relative to the Texas baseline ($\alpha_{\text{TX}}\equiv0$).
+Because exit is absorbing and carries no FE, a common shift to the two stay
+actions does **not** cancel from the within-state softmax; the FE is point
+identified off the exit frequency net of the structural prediction.
+
+Two design facts matter for counterfactuals. First, $\alpha_g$ enters the
+choice probabilities but **not** the value-function inversion, so it does not
+alter dynamic incentives; it is a measurement intercept on the stay-vs-exit
+margin. Second, $\alpha_g$ is dropped in counterfactual equilibrium re-solves,
+which use the structural $\theta$ only. For a **Texas** counterfactual this is
+not a mis-leveling, because Texas *is* the reference category: there is no
+Texas-specific intercept to add back. The welfare change is, in addition,
+internally consistent because the FE is absent from both the baseline and the
+counterfactual equilibrium and cancels in the difference.
+
+The one residual concern is that the counterfactual *baseline* is a fresh
+$\alpha=0$ equilibrium re-solve, whereas the estimation-time Texas value
+function was inverted against the geo-weighted equilibrium probabilities. These
+need not coincide exactly. The check is direct: the baseline re-solve should
+reproduce the fitted choice probabilities on the Texas cells.
+
+```{r fe-validation}
+#| fig-cap: "Validation: counterfactual baseline re-solve vs fitted CCPs on Texas cells (s_idx 17-32). Points on the 45-degree line confirm the alpha=0 re-solve reproduces Texas's fitted behavior, i.e. Texas is at the correct level in the counterfactual."
+.cf_path <- here("Output","Estimation_Results","CF_TX_FlatFee_results.rds")
+if (file.exists(.cf_path) && exists("fit") && !is.null(fit$P_hat)) {
+  cfr <- readRDS(.cf_path)
+  tx_s <- 17:32
+  dd <- data.table(
+    fitted   = as.numeric(fit$P_hat[tx_s, ]),
+    resolved = as.numeric(cfr$P_baseline[tx_s, ]),
+    action   = rep(c("maintain","exit","replace"), each = length(tx_s))
+  )
+  max_abs <- dd[, max(abs(fitted - resolved))]
+  ggplot(dd, aes(x = fitted, y = resolved, color = action)) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50") +
+    geom_point(size = 2.4, alpha = 0.85) +
+    labs(x = "Fitted CCP (fit$P_hat, TX cells)",
+         y = "CF baseline re-solve (alpha = 0)",
+         color = "Action",
+         title = "Texas level check: re-solve vs fit",
+         subtitle = sprintf("Max abs discrepancy across TX cells = %.4g", max_abs))
+} else {
+  cat("*[Run 04o_CF_TX_FlatFee.R and ensure fit$P_hat exists to render this check]*")
+}
+```
+
+\vspace{0.1cm}
+\begin{flushleft}\footnotesize
+\textit{Notes:} If the maximum absolute discrepancy is at the convergence
+tolerance ($\sim10^{-7}$), the $\alpha=0$ re-solve reproduces Texas's fitted
+behavior and the counterfactual baseline is correctly leveled for Texas. A
+visible departure from the 45-degree line would indicate that the geo-weighted
+estimation equilibrium and the pure-structural re-solve disagree on the Texas
+cells, in which case welfare *levels* (not the sign of the change) require
+re-examination.
+\end{flushleft}
+
+# Caveat carried throughout: the worst-tank wall classification {#sec-worsttank}
+
+The wall state is assigned by the worst-tank rule (`04b`): a facility is coded
+double-walled only if *all* of its tanks are double-walled; any single
+single-walled tank makes the facility "Mixed" and the facility is coded
+single-walled. Mixed facilities are systematically larger, multi-tank
+facilities that are mid-retrofit. Two consequences propagate into the
+identification above and must be stated wherever SW results are reported:
+
+1. **The SW pool is a composition blend.** It mixes genuine all-SW facilities
+   with large, mostly-double-walled facilities carrying one straggler SW tank.
+   The estimated $\kappa_{\text{SW}}$ and $K_{\text{SW}}$ are therefore averages
+   over a heterogeneous pool, and apparent size-sensitivity of single-walled
+   behavior (for example, the partial-closure rate rising with facility size) is
+   *partly a composition artifact* of the worst-tank rule rather than a pure
+   wall effect.
+
+2. **The apparent $P(R\mid\text{cl})=1$ for double-walled cells was a routing
+   artifact, not a behavioral fact.** Grouping closures by *beginning-of-year*
+   (decision-time) wall composition shows that all-double-walled facilities exit
+   on 83.5\% of their closures --- essentially the same rate as single-walled
+   facilities (86.4\%). DW facilities are not less likely to walk away. The
+   degeneracy arose only because the state had been stamped from the
+   *end-of-year* portfolio: a DW facility that exits has zero tanks at year-end,
+   the worst-tank rule defaulted it to SW, and the exit landed in an SW cell ---
+   so every DW exit was routed out of the DW cells (Section\ \ref{sec-audit}),
+   leaving the DW cells with only replaces ($P(R\mid\text{cl})=1$) and
+   contaminating the SW exit margin with DW-origin exits. Beginning-of-year
+   stamping (Ticket 013) corrects the routing: all-DW closures now split into
+   exits and replaces within the DW cells, the manufactured degeneracy of
+   Section\ \ref{sec-K} is removed, and $\kappa_{\text{SW}}$ no longer absorbs
+   DW-origin exits. The remaining single-tank limitation is the portfolio
+   \emph{average-age} reset on replacement, deferred to the scale extension ---
+   not this wall-routing channel.
+
+A robustness re-slice under a majority-rule wall assignment
+($w=\text{DW}$ iff more than half of tanks are DW) or an all-DW rule, reporting
+how $\widehat{\theta}$ and the empirical $P(\cdot\mid\text{cl})$ move, would
+characterize the sensitivity of the structural estimates to this rule.
+
+# What is not identified
+
+For completeness, three objects are not identified by this design and should not
+be interpreted structurally:
+
+1. **Common across-action level shifts.** A constant added to all three action
+   values at a state cancels from the choice probabilities. Only differences
+   (and the stay-vs-exit shift carried by $\alpha_g$) are identified.
+
+2. **The discount factor $\beta$.** Not identified from choice probabilities
+   alone; fixed at 0.95.
+
+3. **The portfolio average-age reset on replacement.** Under the corrected
+   beginning-of-year stamping the double-walled exit/replace split *is* now
+   identified (Section\ \ref{sec-K}: DW cells retain their exits), so this is no
+   longer the binding non-identification. What remains outside this
+   specification is the multi-tank replacement dynamic itself: $F_{\text{R}}$
+   resets a replacing facility to age bin 1, but a one-tank swap at a multi-tank
+   facility does not reset the portfolio average age (the replace off-support of
+   @tbl-audit-d1). Separating a genuine like-for-like replacement from
+   within-facility tank churn requires the portfolio state and is deferred to the
+   scale-incorporation extension; see Sections\ \ref{sec-K} and
+   \ref{sec-worsttank}.
+
+# State-coding audit: pipeline invariants underlying identification {#sec-audit}
+
+Every identification claim above rests on a data-generating invariant: that the
+state conditioning a choice is the state the firm actually faced when it chose.
+This section displays the invariants directly, so that a coding error in the
+02b$\rightarrow$04b$\rightarrow$structural pipeline appears as a *visibly broken
+invariant* rather than a plausible-looking estimate. The diagnostics are
+read-only (`T012`, `T013` in `Code/Analysis/`); they are reproduced here because
+they materially qualify the identification of $\kappa_w$ and $K_w$.
+
+The unifying finding: the 32-cell state treats a facility as a single tank (one
+age, one wall, full reset on replace), but a facility is a *portfolio*, and the
+single-tank coding leaks precisely where portfolio dynamics live --- which is
+exactly the wall-specific and replacement margins. The diagnostics originally
+surfaced a *state-stamping* defect: the decision row's state was read from the
+*end-of-year* (post-action) portfolio, when the correct conditioning state is the
+*beginning-of-year* (decision-time) portfolio. That defect has since been
+corrected (beginning-of-year stamping, Ticket 013), and the tables and figures
+below are computed on the corrected panel. They serve two purposes now. First,
+they confirm the fix: the wall-cell leakage that contaminated $\kappa_w$ and
+$K_w$ is eliminated (closure mis-celling falls from 16.2\% to 0\%; the genuine
+all-DW share of the DW replace cell rises from 16.6\% to 100\%). Second --- and
+this is what we carry forward to discuss --- they isolate the *residual* mismatch
+that beginning-of-year stamping does **not** remove, because it is not a coding
+choice but a *modelling assumption*: representing a multi-tank facility by a
+single age, a single wall, and a full age reset on replacement. Two known
+limitations remain visible after the fix, and both are intrinsic to that
+single-tank abstraction rather than to the pipeline:
+
+- **Backward age under Maintain (a real limitation).** Because the state is the
+  portfolio *average* age, a partial closure that retires an old tank *lowers*
+  the facility's average age --- a move the monotone $F_{\text{M}}$ kernel
+  (age stays or advances by one) cannot represent. This accounts for essentially
+  all of the residual maintain off-support and is removed only by a portfolio
+  (histogram-of-tanks) state, not by re-timing the stamp.
+- **Replacement off-support (an open data-support question).** $F_{\text{R}}$
+  resets a replacing facility to age bin 1, but a one-tank swap at a multi-tank
+  facility does not reset the portfolio average. Beginning-of-year stamping
+  *un-masks* the true magnitude of this mismatch (the end-of-year coding had
+  understated it). Whether the data can identify a richer scale model of the
+  partial-closure and replacement margins --- two-part costs, a size gradient in
+  exit value --- is an open identification question, examined in the
+  scale-incorporation scoping (Ticket 014), not a defect to be patched here.
+
+## Transition realization versus the model's $F$ {#sec-audit-trans}
+
+The model's entire dynamic structure is the transition matrices $F_{\text{M}}$
+(maintain: age advances within wall and regime) and $F_{\text{R}}$ (replace:
+reset to age bin 1). Any state-coding error appears as empirical transition mass
+where the model assigns zero probability (``off-support mass'').
+
+```{r audit-d1}
+#| label: tbl-audit-d1
+#| tbl-cap: "Transition realization versus the model's F matrices: off-support mass and model-forbidden transitions."
+.f <- here::here("Output","Tables","T013_D1_TransitionRealization_Summary.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  knitr::kable(dt, format = "latex", booktabs = TRUE,
+    col.names = c("Diagnostic", "Value")) |>
+    kableExtra::kable_styling(font_size = 9, latex_options = "hold_position")
+} else { cat("*[run T013 to generate T013\\_D1\\_TransitionRealization\\_Summary.csv]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}\footnotesize
+\textit{Notes:} Empirical $(s_t,a_t,s_{t+1})$ transitions from the
+beginning-of-year-stamped estimation panel compared to the model's $F$.
+``Off-support mass'' is the share of transitions landing where $F=0$. After the
+stamping fix, the maintain off-support mass is 0.69\%, of which the wall
+component (DW$\rightarrow$SW plus SW$\rightarrow$DW) is only 0.09\% --- the
+remainder are backward age moves: a partial closure retiring an old tank lowers
+the portfolio \emph{average} age, which the monotone $F_{\text{M}}$ kernel cannot
+represent. Replace off-support is 98\%: $F_{\text{R}}$ sends every replace to age
+bin 1, but a one-tank swap at a multi-tank facility does not reset the facility's
+average age (beginning-of-year stamping \emph{un-masks} the true magnitude, which
+the earlier end-of-year coding had understated at 30\%). Regime never changes and
+exit is never followed by re-entry, confirming those two invariants hold. Both
+residuals are structural limitations of the single-tank state abstraction, not
+coding bugs, and are the subject of the portfolio (scale-incorporation) extension.
+\end{flushleft}
+
+```{r audit-d1-fig}
+#| label: fig-audit-d1
+#| fig-cap: "Model-forbidden Maintain transitions remaining after beginning-of-year stamping, by frequency. These are now dominated by backward age moves --- partial closures pruning old tanks from a portfolio average --- the residual single-tank-abstraction limitation the portfolio model resolves."
+.f <- here::here("Output","Figures","T013_D1_TopOffSupportFlows.png")
+if (file.exists(.f)) knitr::include_graphics(.f) else
+  cat("*[run T013 to generate T013\\_D1\\_TopOffSupportFlows.png]*")
+```
+
+\vspace{0.1cm}
+\begin{flushleft}\footnotesize
+\textit{Notes:} The twelve most frequent model-forbidden Maintain transitions
+\emph{after} beginning-of-year stamping. States are labelled age/wall/regime.
+They are now overwhelmingly backward age transitions within the same wall (e.g.\
+$\text{A}3\rightarrow\text{A}1$): $A_{\text{bin}}$ is a portfolio \emph{average}
+that falls when an old tank is pruned by a partial closure, which the monotone
+maintain kernel cannot represent. Wall-flip transitions (DW$\rightarrow$SW),
+which the end-of-year coding produced in bulk, are now a negligible residual ---
+the leakage the stamping fix removed.
+\end{flushleft}
+
+## Closure cell-assignment leakage {#sec-audit-leak}
+
+A closure's wall cell should be the firm's decision-time (beginning-of-year)
+wall. @tbl-audit-routing tracks, for closures grouped by their beginning-of-year
+wall composition, which cell the end-of-year coding actually assigns them to.
+
+```{r audit-routing}
+#| label: tbl-audit-routing
+#| tbl-cap: "Closure routing: decision-time (beginning-of-year) wall composition versus the assigned (end-of-year) wall cell."
+.f <- here::here("Output","Tables","T012_C4b_ClosureRouting.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  knitr::kable(dt, format = "latex", booktabs = TRUE,
+    col.names = c("BOY wall composition", "Action", "Assigned SW cell", "Assigned DW cell")) |>
+    kableExtra::kable_styling(font_size = 9, latex_options = "hold_position")
+} else { cat("*[run T012 to generate T012\\_C4b\\_ClosureRouting.csv]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}\footnotesize
+\textit{Notes:} Closures grouped by beginning-of-year wall composition (rows) and
+tabulated by the assigned wall cell (columns), on the corrected panel. Each
+closure is now filed under its decision-time wall: all-DW closures route to the
+DW column, all-SW and mixed closures to the SW column, so the off-diagonal is
+zero. This is the fix. Under the prior end-of-year coding the routing was
+inverted --- every all-DW \emph{exit} was filed in an SW cell (a DW facility has
+zero tanks at year-end) and SW-origin \emph{replaces} (single- to double-wall
+retrofits) were filed in DW cells --- so 16.2\% of all closures landed in the
+wrong decision-time wall: the SW exit margin (identifying $\kappa_{\text{SW}}$)
+was 11.0\% contaminated by DW-origin exits, and only 16.6\% of the DW replace
+cell (identifying $K_{\text{DW}}$) was genuine all-DW behavior, the remaining
+83.4\% being mis-celled SW$\rightarrow$DW retrofits. Beginning-of-year stamping
+(Ticket 013) eliminates this leakage; what remains (the backward-age and
+replacement off-support of @tbl-audit-d1) is the single-tank \emph{modelling}
+limitation, not a cell-assignment error.
+\end{flushleft}
+
+## Facility size: stickiness and within-cell variation {#sec-audit-size}
+
+Whether facility size belongs in the state space turns on two facts: is size
+sticky enough to be a fixed type (so no transition kernel is needed), and does it
+shift choice probabilities *within* an existing cell (so it carries information
+the 32-cell state omits).
+
+```{r audit-size-fig}
+#| label: fig-audit-size
+#| fig-cap: "Facility size transition matrix (end-of-year tank stock, active-to-active facility-years). Near-diagonal mass indicates size is a sticky, near-permanent attribute."
+.f <- here::here("Output","Figures","T012_C1_SizeTransition_Heatmap.png")
+if (file.exists(.f)) knitr::include_graphics(.f) else
+  cat("*[run T012 to generate T012\\_C1\\_SizeTransition\\_Heatmap.png]*")
+```
+
+\vspace{0.1cm}
+\begin{flushleft}\footnotesize
+\textit{Notes:} Year-over-year transition of the facility size bin (tank count),
+among facility-years active in both years. Diagonal probabilities are
+0.984--0.995 and only 1.17\% of active pairs change bin, so facility size is
+well approximated as a fixed (time-invariant) facility type --- it can enter the
+state space without a size-transition kernel. The complementary check (within-cell
+variation in choice probabilities across size bins, `T012_C2_WithinCell_Spread.csv`)
+finds an observation-weighted mean spread in $P(\text{close})$ of 0.019 and a
+maximum of 0.082, concentrated in the risk-based cells, so size carries
+information the 32-cell state omits. Together these motivate adding size as a
+fixed-type state dimension (Tickets 014--015).
+\end{flushleft}
+
+The one-year transition above *understates* what a fixed type requires: the size
+bin must be constant over a facility's entire operating spell, and a 99\% one-year
+stay rate compounds over a 16-year mean spell. @fig-fixedtype-spell and
+@tbl-fixedtype make that the test.
+
+```{r fig-fixedtype-spell}
+#| label: fig-fixedtype-spell
+#| fig-cap: "Fraction of facilities still in their original size bin, by years since first observed: tank count versus total capacity. Capacity stays higher --- consolidation drops a tank but preserves capacity --- so capacity is the better fixed-type size state."
+.f <- here::here("Output","Figures","04ag_FixedType_Survival.png")
+if (file.exists(.f)) knitr::include_graphics(.f) else
+  cat("*[run 04ag\\_Size\\_Stickiness\\_Diagnostic.R]*")
+```
+
+```{r tbl-fixedtype}
+#| label: tbl-fixedtype
+#| tbl-cap: "Fixed-type test: one-year stay rate versus spell-level constancy, for tank count and total capacity."
+.t <- data.table::fread(here::here("Output","Tables","04ag_FixedType_Summary.csv"))
+.t <- .t[, .(measure,
+             one_year_stay        = sprintf("%.1f%%", 100 * one_year_stay),
+             implied_if_iid       = sprintf("%.1f%%", 100 * implied_if_iid),
+             actual_never_changed = sprintf("%.1f%%", 100 * actual_never_changed))]
+knitr::kable(.t, booktabs = TRUE, escape = TRUE,
+  col.names = c("Size measure", "One-year stay", "Implied over spell", "Actual never changed"))
+```
+
+\vspace{0.1cm}
+\begin{flushleft}\footnotesize
+\textit{Notes:} A fixed type must be constant over the facility's whole operating
+spell (mean 16.4 years), so the one-year stay rate ($\sim$\,99.5\% for both count
+and capacity) is not the relevant statistic --- it compounds. The spell-level test: 91.8\% of
+facilities never change their tank-count bin and 93.5\% never change their
+capacity quartile over their full spell (close to, and slightly above, the
+i.i.d.-compounded benchmark --- i.e.\ mild extra persistence). Of the 0.55\% of
+operating-year transitions that do change the count bin, 70\% are reductions
+(shrinking/consolidation) and 100\% coincide with a coded install or closure, so
+size never drifts without an action: a fixed-type state with action-driven resize
+transitions loses no within-spell variation. Stickiness weakens with size
+(single-tank $\sim$\,98\%, four-plus-tank $\sim$\,87\% by count but $\sim$\,89--94\%
+by capacity), so the approximation is tightest where most facility-years sit and
+loosest at large facilities --- where capacity holds up markedly better than count.
+With the within-cell $P(\text{close})$ spread above, this supports \textbf{total
+capacity} as the fixed-type size state. Source:
+\texttt{04ag\_Size\_Stickiness\_Diagnostic.R}.
+\end{flushleft}
+
+Stickiness says size does not *drift*; the complementary question is whether one
+representative tank is a faithful *summary* of the portfolio at a point in time ---
+i.e.\ whether facilities are internally homogeneous on the risk dimensions.
+@fig-homog-size shows they largely are: across all facility-years, 81.5\% have all
+active tanks in a single wall type and a single five-year age bin (the exact support
+of the representative-tank state), and wall homogeneity exceeds 88\% at every size.
+The residual heterogeneity is an *age-spread* phenomenon concentrated at large
+facilities --- the both-homogeneous share falls from 93\% (single-tank) to 62\%
+(four-plus) --- so the single-representative-tank abstraction is exact for the bulk
+of facility-years and degrades only in the large-facility tail, exactly where the
+portfolio/histogram extension (or an oldest-two-ages summary state) earns its keep.
+
+```{r fig-homog-size}
+#| label: fig-homog-size
+#| fig-cap: "Within-facility homogeneity by facility size: share of facility-years whose active tanks share one wall type, one five-year age bin, or both. Single-tank facilities are homogeneous by construction; heterogeneity is an age-spread phenomenon that emerges only at four-plus-tank facilities."
+.f <- here::here("Output","Figures","04ah_Homogeneity_bySize.png")
+if (file.exists(.f)) knitr::include_graphics(.f) else
+  cat("*[run 04ah\\_Within\\_Facility\\_Homogeneity.R]*")
+```
+
+\vspace{0.1cm}
+\begin{flushleft}\footnotesize
+\textit{Notes:} Facility-year weighted, estimation sample. ``Age one bin'' is the
+share whose oldest and youngest active tank fall in the same five-year state bin;
+``Both'' adds the single-wall requirement and is the share the 32-cell
+representative-tank state represents exactly. The median age range is zero at every
+size --- most multi-tank facilities install their tanks together --- so heterogeneity
+lives in the tail, not the typical facility. Single-tank facilities (23.2\% of
+facility-years) are homogeneous by construction; the $\sim$\,7\% of single-tank
+facility-years flagged not wall-homogeneous carry an unknown wall code, not genuine
+mixing. Source: \texttt{04ah\_Within\_Facility\_Homogeneity.R}.
+\end{flushleft}
+
+Where a facility *is* internally heterogeneous (the large-facility tail), the
+representative-tank abstraction is rescued by a further regularity: the tank that
+gets acted on is *predictable*. @fig-which-tank shows that when a multi-tank facility
+closes exactly one tank, that tank is the single-walled one in 79\% of mixed-wall
+facilities (versus a 52\% base rate), the smallest-capacity tank 70\% of the time
+(versus 32\% under a random draw), and the oldest 74\% of the time (versus 32\%) ---
+the shed tank is the small, single-walled, older one, not a random draw. This is the
+capacity-preserving consolidation margin (Section\ \ref{sec-audit-trans}) seen from
+the tank side, and it means the heterogeneous tail can be carried by a marginal-tank
+representation keyed on wall and size with a step-down transition, rather than the
+full portfolio histogram.
+
+```{r fig-which-tank}
+#| label: fig-which-tank
+#| fig-cap: "When a multi-tank facility closes exactly one tank, the kind of tank it sheds, observed versus a random-tank benchmark. The shed tank is disproportionately single-walled, smallest-capacity, and (more weakly) oldest."
+.f <- here::here("Output","Figures","04ai_WhichTank_Shed.png")
+if (file.exists(.f)) knitr::include_graphics(.f) else
+  cat("*[run 04ai\\_Which\\_Tank\\_Diagnostic.R]*")
+```
+
+\vspace{0.1cm}
+\begin{flushleft}\footnotesize
+\textit{Notes:} Tank-level panel (\texttt{panel\_dt}); single-closure events in
+multi-tank facility-years ($n=19{,}744$). ``If random'' is the share expected if the
+closed tank were drawn uniformly --- the base single-wall share in mixed facilities
+for the wall row, and $\mathbb{E}[1/n]$ for the oldest and smallest rows. The age
+signal is weaker than wall and size because most facilities install their tanks
+together, so the oldest tank is frequently tied. Source:
+\texttt{04ai\_Which\_Tank\_Diagnostic.R}.
+\end{flushleft}

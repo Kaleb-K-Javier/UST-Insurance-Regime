@@ -1,0 +1,8 @@
+metric,value
+total_closures,40172
+mis_celled,0
+mis_celled_pct,0
+DWorigin_to_SWcell,0
+SWorigin_to_DWcell,0
+SW_exit_margin_DWcontam_pct,0
+DWcell_replace_genuine_pct,100

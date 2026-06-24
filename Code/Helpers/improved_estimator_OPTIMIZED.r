@@ -29,8 +29,6 @@ suppressPackageStartupMessages({
 # USER ACTION REQUIRED: Uncomment and set correct path to your .cpp file
 # If Rcpp functions are not loaded, estimation will use R fallback (~10x slower)
 #
-Rcpp::sourceCpp(here('Code\\Helpers\\cpp_engine.cpp'))
-#
 # After sourcing, verify functions are available:
 if (!exists("e_step_cpp", mode = "function")) {
   warning(paste0(
@@ -3647,7 +3645,8 @@ create_estimation_config_replacement_8p_fe <- function(
 #   uM(s,g) = vM(s) + alpha_g;  uE = vE(s);  uR = vR(s)
 # Iterates over <= 576 aggregated (sidx, graw) rows.
 # ------------------------------------------------------------------------------
-npl_likelihood_replacement_8p_fe <- function(thetaraw, Pfixed, cache, config) {
+npl_likelihood_replacement_8p_fe <- function(thetaraw, Pfixed, cache, config,
+                                             alpha_in_R = FALSE) {
   if (is.null(names(thetaraw))) names(thetaraw) <- config$param_names
 
   thetastruct <- thetaraw[config$struct_param_names]
@@ -3660,16 +3659,17 @@ npl_likelihood_replacement_8p_fe <- function(thetaraw, Pfixed, cache, config) {
   # Prefer compiled C++ path
   if (exists("nll_replacement8pfe_counts_cpp", mode = "function")) {
     return(nll_replacement8pfe_counts_cpp(
-      sidx     = counts$sidx,
-      graw     = counts$graw,
-      nM       = counts$nM,
-      nE       = counts$nE,
-      nR       = counts$nR,
-      vM       = v$vM,
-      vE       = v$vE,
-      vR       = v$vR,
-      alphacpp = alphacpp,
-      epsprob  = config$epsprob
+      sidx       = counts$sidx,
+      graw       = counts$graw,
+      nM         = counts$nM,
+      nE         = counts$nE,
+      nR         = counts$nR,
+      vM         = v$vM,
+      vE         = v$vE,
+      vR         = v$vR,
+      alphacpp   = alphacpp,
+      epsprob    = config$epsprob,
+      alpha_in_R = alpha_in_R
     ))
   }
 
@@ -3684,7 +3684,7 @@ npl_likelihood_replacement_8p_fe <- function(thetaraw, Pfixed, cache, config) {
 
     uM  <- v$vM[s] + alphacpp[g + 1L]   # R is 1-indexed; graw+1 gives correct slot
     uE  <- v$vE[s]
-    uR  <- v$vR[s]
+    uR  <- if (alpha_in_R) v$vR[s] + alphacpp[g + 1L] else v$vR[s]
     lse <- .logsumexp3(uM, uE, uR)
     lpM <- uM - lse; lpE <- uE - lse; lpR <- uR - lse
     lpM <- max(lpM, logeps); lpE <- max(lpE, logeps); lpR <- max(lpR, logeps)
@@ -3698,7 +3698,8 @@ npl_likelihood_replacement_8p_fe <- function(thetaraw, Pfixed, cache, config) {
 #   Pnew(s,.) = sum_g w(g|s) * softmax(vM(s)+alpha_g, vE(s), vR(s))
 # Then apply damping: P <- (1-lam)*Pold + lam*Pnew
 # ------------------------------------------------------------------------------
-.update_ccps_geoweighted_8p_fe <- function(thetaraw, Pold, cache, config) {
+.update_ccps_geoweighted_8p_fe <- function(thetaraw, Pold, cache, config,
+                                           alpha_in_R = FALSE) {
   thetastruct <- thetaraw[config$struct_param_names]
   v           <- .compute_v_indices_8p(thetastruct, Pold, cache, config)
   alphacpp    <- .alphacpp_from_theta(thetaraw)
@@ -3707,12 +3708,13 @@ npl_likelihood_replacement_8p_fe <- function(thetaraw, Pfixed, cache, config) {
   # Prefer compiled C++ path
   if (exists("update_ccps_geoweighted_cpp", mode = "function")) {
     Pnew <- update_ccps_geoweighted_cpp(
-      vM       = v$vM,
-      vE       = v$vE,
-      vR       = v$vR,
-      alphacpp = alphacpp,
-      wsg      = wsg,
-      epsprob  = config$epsprob
+      vM         = v$vM,
+      vE         = v$vE,
+      vR         = v$vR,
+      alphacpp   = alphacpp,
+      wsg        = wsg,
+      epsprob    = config$epsprob,
+      alpha_in_R = alpha_in_R
     )
   } else {
     # R fallback
@@ -3728,7 +3730,7 @@ npl_likelihood_replacement_8p_fe <- function(thetaraw, Pfixed, cache, config) {
         if (w <= 0.0) next
         uM  <- v$vM[s] + alphacpp[g + 1L]
         uE  <- v$vE[s]
-        uR  <- v$vR[s]
+        uR  <- if (alpha_in_R) v$vR[s] + alphacpp[g + 1L] else v$vR[s]
         lse <- .logsumexp3(uM, uE, uR)
         p   <- exp(c(uM - lse, uE - lse, uR - lse))
         p   <- pmax(p, eps)
@@ -3896,3 +3898,1036 @@ npl_estimator_replacement_8p_fe <- function(obs_panel,
     log_likelihood = tail(ll_path, 1L)   # alias for back-compat
   )
 }
+
+# ==============================================================================
+# PROFILE-LIKELIHOOD 8p + STATE FE ON {MAINTAIN, REPLACE}
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1-D Newton solver for alpha_g FOC (scalar output)
+# F_g(a) = sum_s [n_stay(s,g)] - sum_s n_total(s,g)*P_stay(s,g;a) = 0
+# No sigma division (sigma=1 throughout; consistent with existing FE kernels).
+# ------------------------------------------------------------------------------
+.solve_alpha_g_foc <- function(g_label, vM, vE, vR,
+                               sidx_g, nM_g, nE_g, nR_g,
+                               tol = 1e-10, max_iter = 30L, bound = 20) {
+  n_total_total <- sum(nM_g + nE_g + nR_g)
+  if (n_total_total == 0) {
+    # Zero observations in this group — group is filtered out of the sample.
+    # α is irrelevant; return 0. (Do NOT stop — drop-{SD,MO} runs expect this.)
+    return(0.0)
+  }
+  n_stay_total  <- sum(nM_g + nR_g)
+  n_exit_total  <- sum(nE_g)
+
+  if (n_stay_total == 0L) {
+    warning(sprintf("solve_alpha_g_foc: group %s has zero stay-actions; alpha pinned at -%g",
+                    g_label, bound))
+    return(-bound)
+  }
+  if (n_exit_total == 0L) {
+    warning(sprintf("solve_alpha_g_foc: group %s has zero exits; alpha pinned at +%g",
+                    g_label, bound))
+    return(bound)
+  }
+
+  a     <- 0.0
+  resid <- NA_real_
+  n_total_per_row <- nM_g + nE_g + nR_g
+  vM_sub <- vM[sidx_g]; vE_sub <- vE[sidx_g]; vR_sub <- vR[sidx_g]
+
+  for (iter in seq_len(max_iter)) {
+    uM    <- vM_sub + a
+    uE    <- vE_sub
+    uR    <- vR_sub + a
+    u_max <- pmax(uM, pmax(uE, uR))
+    eM    <- exp(uM - u_max); eE <- exp(uE - u_max); eR <- exp(uR - u_max)
+    denom  <- eM + eE + eR
+    P_E    <- eE / denom
+    P_stay <- (eM + eR) / denom
+    resid  <- sum(nM_g + nR_g) - sum(n_total_per_row * P_stay)
+    if (abs(resid) < tol) break
+    deriv <- -sum(n_total_per_row * P_stay * P_E)
+    a     <- a - resid / deriv
+    a     <- max(-bound, min(bound, a))
+  }
+
+  if (!is.na(resid) && abs(resid) >= tol)
+    warning(sprintf(
+      "solve_alpha_g_foc: group %s Newton hit max_iter without convergence; resid=%.3e",
+      g_label, resid))
+
+  a
+}
+
+# ------------------------------------------------------------------------------
+# Vectorized alpha solver — returns named length-17 vector alpha_AR..alpha_VA
+# ------------------------------------------------------------------------------
+.solve_alpha_vec_profile <- function(thetastruct, v_indices, cache, config) {
+  counts    <- cache$countsdt8pfe
+  alpha_out <- numeric(17L)
+  names(alpha_out) <- paste0("alpha", CONTROLSTATES)
+
+  for (j in seq_len(17L)) {
+    g_label     <- CONTROLSTATES[j]
+    g_idx_0based <- j   # TX is g=0; CONTROLSTATES is 1-indexed so j maps to graw=j
+    rows_g      <- counts[graw == g_idx_0based]
+    alpha_out[j] <- .solve_alpha_g_foc(
+      g_label  = g_label,
+      vM       = v_indices$vM,
+      vE       = v_indices$vE,
+      vR       = v_indices$vR,
+      sidx_g   = rows_g$sidx,
+      nM_g     = rows_g$nM,
+      nE_g     = rows_g$nE,
+      nR_g     = rows_g$nR,
+      tol      = config$alpha_newton_tol      %||% 1e-10,
+      max_iter = config$alpha_newton_max_iter %||% 30L,
+      bound    = config$alpha_bound           %||% 20
+    )
+  }
+
+  stopifnot(length(alpha_out) == 17L)
+  stopifnot(all(names(alpha_out) == paste0("alpha", CONTROLSTATES)))
+  alpha_out
+}
+
+# ------------------------------------------------------------------------------
+# Profile NLL function (calls new C++ kernel if available, R fallback otherwise)
+# No sigma division per project convention (sigma=1 throughout).
+# ------------------------------------------------------------------------------
+npl_likelihood_replacement_8p_fe_profile <- function(thetastruct, Pfixed,
+                                                     cache, config) {
+  if (is.null(names(thetastruct))) names(thetastruct) <- config$struct_param_names
+  v      <- .compute_v_indices_8p(thetastruct, Pfixed, cache, config)
+  counts <- cache$countsdt8pfe
+  stopifnot(!is.null(counts))
+
+  if (exists("nll_replacement8pfe_profile_counts_cpp", mode = "function")) {
+    return(nll_replacement8pfe_profile_counts_cpp(
+      sidx            = counts$sidx,
+      graw            = counts$graw,
+      nM              = counts$nM,
+      nE              = counts$nE,
+      nR              = counts$nR,
+      vM              = v$vM,
+      vE              = v$vE,
+      vR              = v$vR,
+      epsprob         = config$epsprob,
+      max_newton_iter = config$alpha_newton_max_iter %||% 30L,
+      newton_tol      = config$alpha_newton_tol      %||% 1e-10,
+      alpha_bound     = config$alpha_bound            %||% 20.0
+    ))
+  }
+
+  # R fallback
+  alpha_vec <- .solve_alpha_vec_profile(thetastruct, v, cache, config)
+  log_eps   <- log(config$epsprob)
+  ll        <- 0.0
+
+  for (i in seq_len(nrow(counts))) {
+    s  <- counts$sidx[i]; g <- counts$graw[i]
+    nm <- counts$nM[i];   ne <- counts$nE[i]; nr <- counts$nR[i]
+    if (nm + ne + nr == 0L) next
+    a   <- if (g == 0L) 0.0 else alpha_vec[g]   # TX baseline; graw=j maps to alpha_vec[j]
+    uM  <- v$vM[s] + a
+    uE  <- v$vE[s]
+    uR  <- v$vR[s] + a
+    lse <- .logsumexp3(uM, uE, uR)
+    lpM <- max(uM - lse, log_eps)
+    lpE <- max(uE - lse, log_eps)
+    lpR <- max(uR - lse, log_eps)
+    ll  <- ll + nm * lpM + ne * lpE + nr * lpR
+  }
+  -ll
+}
+
+# ------------------------------------------------------------------------------
+# Profile geo-weighted CCP update (C++ if available, R fallback otherwise)
+# Then applies CCP damping matching existing convention (line 3744).
+# ------------------------------------------------------------------------------
+.update_ccps_geoweighted_8p_fe_profile <- function(thetastruct, Pold,
+                                                   cache, config) {
+  if (is.null(names(thetastruct))) names(thetastruct) <- config$struct_param_names
+  v   <- .compute_v_indices_8p(thetastruct, Pold, cache, config)
+  wsg <- cache$wsg8pfe
+
+  if (exists("update_ccps_geoweighted_profile_cpp", mode = "function")) {
+    Pnew <- update_ccps_geoweighted_profile_cpp(
+      sidx            = cache$countsdt8pfe$sidx,
+      graw            = cache$countsdt8pfe$graw,
+      nM              = cache$countsdt8pfe$nM,
+      nE              = cache$countsdt8pfe$nE,
+      nR              = cache$countsdt8pfe$nR,
+      vM              = v$vM,
+      vE              = v$vE,
+      vR              = v$vR,
+      wsg             = wsg,
+      epsprob         = config$epsprob,
+      max_newton_iter = config$alpha_newton_max_iter %||% 30L,
+      newton_tol      = config$alpha_newton_tol      %||% 1e-10,
+      alpha_bound     = config$alpha_bound            %||% 20.0
+    )
+  } else {
+    # R fallback: solve alpha then form per-(s,g) softmax and marginalize
+    alpha_vec <- c(0.0, .solve_alpha_vec_profile(thetastruct, v, cache, config))
+    S   <- 32L; G <- 18L; eps <- config$epsprob
+    Pnew <- matrix(0.0, nrow = S, ncol = 3)
+    colnames(Pnew) <- c("maintain", "exit", "replace")
+    for (s in seq_len(S)) {
+      pmix <- c(0.0, 0.0, 0.0)
+      for (g in 0L:(G - 1L)) {
+        w <- wsg[s, g + 1L]
+        if (w <= 0.0) next
+        a   <- alpha_vec[g + 1L]
+        uM  <- v$vM[s] + a
+        uE  <- v$vE[s]
+        uR  <- v$vR[s] + a
+        lse <- .logsumexp3(uM, uE, uR)
+        p   <- exp(c(uM - lse, uE - lse, uR - lse))
+        p   <- pmax(p, eps); p <- p / sum(p)
+        pmix <- pmix + w * p
+      }
+      pmix      <- pmax(pmix, eps)
+      Pnew[s, ] <- pmix / sum(pmix)
+    }
+  }
+
+  # CCP damping (mirror existing convention, line 3744)
+  lam <- config$ccp_damping_lambda %||% 1.0
+  if (is.finite(lam) && lam < 1.0) {
+    Pnew <- (1.0 - lam) * Pold + lam * Pnew
+    Pnew <- Pnew / rowSums(Pnew)
+  }
+
+  stopifnot(all(dim(Pnew) == c(32L, 3L)))
+  stopifnot(all(abs(rowSums(Pnew) - 1) < 1e-8))
+  Pnew
+}
+
+# ------------------------------------------------------------------------------
+# Config creator for profile estimator
+# ------------------------------------------------------------------------------
+create_estimation_config_replacement_8p_fe_profile <- function(
+    beta                  = 0.95,
+    sigma2                = 1.0,
+    max_npl_iter          = 200L,
+    feweightsource        = c("controls", "all"),
+    ccp_damping_lambda    = 0.6,
+    epsprob               = 1e-12,
+    alpha_bound           = 20,
+    alpha_newton_tol      = 1e-10,
+    alpha_newton_max_iter = 30L,
+    tol_theta             = 1e-5,
+    tol_P                 = 1e-5) {
+
+  feweightsource <- match.arg(feweightsource)
+
+  cfg_8p <- create_estimation_config_replacement_8p(beta    = beta,
+                                                    sigma2  = sigma2,
+                                                    npl_iter = max_npl_iter)
+  cfg <- cfg_8p
+  cfg$feweightsource        <- feweightsource
+  cfg$ccp_damping_lambda    <- ccp_damping_lambda
+  cfg$epsprob               <- epsprob
+  cfg$alpha_bound           <- alpha_bound
+  cfg$alpha_newton_tol      <- alpha_newton_tol
+  cfg$alpha_newton_max_iter <- alpha_newton_max_iter
+  cfg$tol_theta             <- tol_theta
+  cfg$tol_P                 <- tol_P
+  cfg$max_npl_iter          <- max_npl_iter
+  cfg$struct_param_names    <- c("kappa_SW", "kappa_DW", "K_log_SW", "K_log_DW",
+                                  "gamma_price_FF", "gamma_price_RB",
+                                  "gamma_risk_FF",  "gamma_risk_RB")
+  cfg$param_names           <- cfg$struct_param_names   # NO alpha here
+  cfg$n_params              <- 8L
+  cfg
+}
+
+# ------------------------------------------------------------------------------
+# Main NPL estimator driver — profile 8p + stayFE
+# ------------------------------------------------------------------------------
+npl_estimator_replacement_8p_fe_profile <- function(obs_panel, primitives,
+                                                    config, thetastruct_init,
+                                                    verbose = TRUE) {
+  stopifnot(!is.null(names(thetastruct_init)))
+  stopifnot(all(config$struct_param_names %in% names(thetastruct_init)))
+
+  cat("=== CACHE BUILD ===\n")
+  cache <- primitives
+  cw    <- .build_counts_weights_8p_fe(obs_panel, primitives,
+                                       config$feweightsource)
+  cache$countsdt8pfe <- cw$countsdt
+  cache$wsg8pfe      <- cw$wsg
+
+  config_4p <- create_estimation_config_replacement(
+                 beta     = config$beta,
+                 sigma2   = config$sigma2,
+                 npl_iter = config$max_npl_iter)
+  std_cache <- create_estimation_cache_replacement_8p(primitives, obs_panel,
+                                                      config_4p, config)
+  for (nm in names(std_cache)) {
+    if (is.null(cache[[nm]])) cache[[nm]] <- std_cache[[nm]]
+  }
+  if (is.null(cache$F_maintain)) cache$F_maintain <- std_cache$F_maintain
+  if (is.null(cache$F_replace))  cache$F_replace  <- std_cache$F_replace
+
+  cat("=== EQUILIBRIUM INIT ===\n")
+  P <- NULL
+  if (exists("solve_equilibrium_policy_replacement_8p", mode = "function")) {
+    eq0 <- solve_equilibrium_policy_replacement_8p(
+             thetastruct_init[config$struct_param_names], cache, config,
+             max_iter = 500, tol = 1e-7)
+    if (!is.null(eq0) && isTRUE(eq0$converged)) P <- eq0$P
+  }
+  if (is.null(P)) {
+    P <- matrix(1/3, nrow = 32L, ncol = 3L)
+    colnames(P) <- c("maintain", "exit", "replace")
+    cat("  Equilibrium init failed or unavailable; using uniform P\n")
+  }
+
+  lower_b <- c(config$kappa_SW_bounds[1],       config$kappa_DW_bounds[1],
+               config$K_log_SW_bounds[1],        config$K_log_DW_bounds[1],
+               config$gamma_price_FF_bounds[1],  config$gamma_price_RB_bounds[1],
+               config$gamma_risk_FF_bounds[1],   config$gamma_risk_RB_bounds[1])
+  upper_b <- c(config$kappa_SW_bounds[2],       config$kappa_DW_bounds[2],
+               config$K_log_SW_bounds[2],        config$K_log_DW_bounds[2],
+               config$gamma_price_FF_bounds[2],  config$gamma_price_RB_bounds[2],
+               config$gamma_risk_FF_bounds[2],   config$gamma_risk_RB_bounds[2])
+  names(lower_b) <- names(upper_b) <- config$struct_param_names
+
+  cat("=== NPL OUTER LOOP ===\n")
+  theta_curr  <- thetastruct_init[config$struct_param_names]
+  ll_path     <- numeric(config$max_npl_iter)
+  theta_path  <- matrix(NA_real_, nrow = config$max_npl_iter, ncol = 8L,
+                        dimnames = list(NULL, config$struct_param_names))
+  converged   <- FALSE
+  t0          <- Sys.time()
+
+  for (it in seq_len(config$max_npl_iter)) {
+    opt <- optim(
+      par    = theta_curr,
+      fn     = npl_likelihood_replacement_8p_fe_profile,
+      method = "L-BFGS-B",
+      lower  = lower_b,
+      upper  = upper_b,
+      control = list(maxit = config$inner_maxit %||% 200L,
+                     factr = 1e7),
+      Pfixed = P,
+      cache  = cache,
+      config = config
+    )
+    theta_new <- opt$par
+    if (opt$convergence != 0L)
+      warning(sprintf("optim convergence code %d at NPL iter %d",
+                      opt$convergence, it))
+
+    P_new <- .update_ccps_geoweighted_8p_fe_profile(theta_new, P, cache, config)
+
+    ll_path[it]      <- -opt$value
+    theta_path[it, ] <- theta_new
+
+    if (verbose)
+      cat(sprintf("[%s] NPL iter %d: LL=%.3f dTh=%.2e dP=%.2e\n",
+                  format(Sys.time(), "%H:%M:%S"), it, -opt$value,
+                  max(abs(theta_new - theta_curr)), max(abs(P_new - P))))
+
+    d_theta <- max(abs(theta_new - theta_curr))
+    d_P     <- max(abs(P_new - P))
+    theta_curr <- theta_new
+    P          <- P_new
+
+    if (d_theta < config$tol_theta && d_P < config$tol_P) {
+      converged  <- TRUE
+      ll_path    <- ll_path[seq_len(it)]
+      theta_path <- theta_path[seq_len(it), , drop = FALSE]
+      break
+    }
+  }
+
+  elapsed <- as.numeric(Sys.time() - t0, units = "secs")
+  cat(sprintf("Elapsed: %.1f s | Converged: %s at iter %d | LL: %.3f\n",
+              elapsed, converged, length(ll_path), tail(ll_path, 1L)))
+
+  cat("=== RECOVER ALPHA HAT ===\n")
+  v_final   <- .compute_v_indices_8p(theta_curr, P, cache, config)
+  alpha_hat <- .solve_alpha_vec_profile(theta_curr, v_final, cache, config)
+  theta_raw <- c(theta_curr, alpha_hat)
+
+  cat("=== HESSIAN FOR SE ===\n")
+  if (!requireNamespace("numDeriv", quietly = TRUE))
+    stop("Package numDeriv is required. Install with: install.packages('numDeriv')")
+
+  H <- numDeriv::hessian(
+    func = function(tr) {
+      names(tr) <- c(config$struct_param_names, paste0("alpha", CONTROLSTATES))
+      npl_likelihood_replacement_8p_fe(tr, Pfixed = P, cache = cache,
+                                       config = config, alpha_in_R = TRUE)
+    },
+    x = unname(theta_raw),
+    method = "Richardson",
+    method.args = list(eps = 1e-4, d = 1e-4, r = 4L)
+  )
+
+  Sigma_full <- tryCatch(
+    solve(H),
+    error = function(e) {
+      warning("Hessian inversion failed: ", conditionMessage(e),
+              "; reporting SE = NA")
+      matrix(NA_real_, nrow = 25L, ncol = 25L)
+    }
+  )
+  se_theta <- sqrt(pmax(diag(Sigma_full)[1:8],   0))
+  se_alpha <- sqrt(pmax(diag(Sigma_full)[9:25],  0))
+  names(se_theta) <- config$struct_param_names
+  names(se_alpha) <- paste0("alpha", CONTROLSTATES)
+
+  list(
+    theta_hat      = theta_curr,
+    alpha_hat      = alpha_hat,
+    theta_raw      = theta_raw,
+    se_theta       = se_theta,
+    se_alpha       = se_alpha,
+    P_hat          = P,
+    V_hat          = v_final$V,
+    log_likelihood = tail(ll_path, 1L),
+    converged      = converged,
+    n_iter         = length(ll_path),
+    ll_path        = ll_path,
+    theta_path     = theta_path,
+    cache          = cache,
+    config         = config,
+    sample_label   = "observed",
+    elapsed_sec    = elapsed
+  )
+}
+
+
+# ==============================================================================
+# APPEND (2026-05-22): 6-parameter universal-γ replacement model (T005)
+# ------------------------------------------------------------------------------
+# Drops regime splits on γ_price / γ_risk (common preferences across FF / RB).
+# Retains wall splits on κ and K. Implements no-FE and profile-FE variants.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Step 1 — Flow utility: 6-parameter universal-γ
+# ------------------------------------------------------------------------------
+flow_utilities_replacement_6p <- function(theta, cache) {
+  required <- c("kappa_SW", "kappa_DW", "K_log_SW", "K_log_DW",
+                "gamma_price", "gamma_risk")
+  stopifnot(all(required %in% names(theta)))
+
+  K_vec     <- ifelse(cache$wall_idx == 1L,
+                      exp(theta[["K_log_SW"]]), exp(theta[["K_log_DW"]]))
+  kappa_vec <- ifelse(cache$wall_idx == 1L,
+                      theta[["kappa_SW"]],      theta[["kappa_DW"]])
+
+  # CRITICAL: γ_price and γ_risk are SCALARS — same for every state.
+  # No regime indexing. This is the universal-γ identification claim.
+  gp <- theta[["gamma_price"]]   # scalar
+  gr <- theta[["gamma_risk"]]    # scalar
+
+  u_M <- 1 + gp * cache$P_vec - gr * cache$hazard_loss
+  U   <- cbind(maintain = u_M, exit = kappa_vec, replace = -K_vec)
+  stopifnot(all(dim(U) == c(32L, 3L)))
+  stopifnot(all(colnames(U) == c("maintain", "exit", "replace")))
+  U
+}
+
+
+# ------------------------------------------------------------------------------
+# Step 2 — v-indices wrapper: 6p
+# ------------------------------------------------------------------------------
+.compute_v_indices_6p <- function(thetastruct, P, cache, config) {
+  U    <- flow_utilities_replacement_6p(thetastruct, cache)
+  V    <- invert_value_function_replacement(P, U, cache, config)
+  Fs   <- .get_F_mats(cache)
+  beta <- config$beta
+  vM   <- as.numeric(U[, "maintain"] + beta * (Fs$FM %*% V))
+  vE   <- as.numeric(U[, "exit"])
+  vR   <- as.numeric(U[, "replace"]  + beta * (Fs$FR %*% V))
+  list(U = U, V = V, vM = vM, vE = vE, vR = vR)
+}
+
+
+# ------------------------------------------------------------------------------
+# Step 3 — Config creators
+# ------------------------------------------------------------------------------
+create_estimation_config_replacement_6p <- function(beta         = 0.95,
+                                                    sigma2       = 1.0,
+                                                    max_npl_iter = 200L,
+                                                    ...) {
+  cfg_8p <- create_estimation_config_replacement_8p(beta     = beta,
+                                                    sigma2   = sigma2,
+                                                    npl_iter = max_npl_iter)
+  cfg <- cfg_8p
+
+  # Override: universal γ uses the FF bounds (universal estimate inside FF range)
+  cfg$gamma_price_bounds <- cfg$gamma_price_FF_bounds
+  cfg$gamma_risk_bounds  <- cfg$gamma_risk_FF_bounds
+
+  cfg$struct_param_names <- c("kappa_SW", "kappa_DW", "K_log_SW", "K_log_DW",
+                               "gamma_price", "gamma_risk")
+  cfg$param_names        <- cfg$struct_param_names
+  cfg$n_params           <- 6L
+  cfg$max_npl_iter       <- max_npl_iter
+  cfg$tol_theta          <- 1e-5
+  cfg$tol_P              <- 1e-5
+  cfg
+}
+
+create_estimation_config_replacement_6p_fe_profile <- function(
+    beta                  = 0.95,
+    sigma2                = 1.0,
+    max_npl_iter          = 200L,
+    feweightsource        = c("controls", "all"),
+    ccp_damping_lambda    = 0.6,
+    alpha_bound           = 20,
+    alpha_newton_tol      = 1e-10,
+    alpha_newton_max_iter = 30L) {
+
+  feweightsource <- match.arg(feweightsource)
+  cfg <- create_estimation_config_replacement_6p(beta         = beta,
+                                                  sigma2       = sigma2,
+                                                  max_npl_iter = max_npl_iter)
+  cfg$feweightsource        <- feweightsource
+  cfg$ccp_damping_lambda    <- ccp_damping_lambda
+  cfg$epsprob               <- cfg$eps_prob   # alias used by FE NLL + CCP paths
+  cfg$alpha_bound           <- alpha_bound
+  cfg$alpha_newton_tol      <- alpha_newton_tol
+  cfg$alpha_newton_max_iter <- alpha_newton_max_iter
+  cfg
+}
+
+
+# ------------------------------------------------------------------------------
+# Step 4 helpers — non-FE CCP update, NLL, equilibrium init
+# ------------------------------------------------------------------------------
+update_ccps_replacement_6p <- function(theta, V, cache, config) {
+  sigma <- config$sigma2
+  beta  <- cache$beta
+
+  U   <- flow_utilities_replacement_6p(theta, cache)
+  v_M <- U[, "maintain"] + beta * as.numeric(cache$F_maintain %*% V)
+  v_E <- U[, "exit"]
+  v_R <- U[, "replace"]  + beta * as.numeric(cache$F_replace  %*% V)
+
+  v_mat <- cbind(maintain = v_M, exit = v_E, replace = v_R)
+  v_max <- pmax(v_M, v_E, v_R)
+  z     <- exp((v_mat - v_max) / sigma)
+  P     <- z / rowSums(z)
+  P[P < config$eps_prob] <- config$eps_prob
+  P <- P / rowSums(P)
+  colnames(P) <- c("maintain", "exit", "replace")
+  P
+}
+
+npl_likelihood_replacement_6p <- function(theta, P_fixed, cache, config) {
+  if (is.null(names(theta))) names(theta) <- config$param_names
+  sigma <- config$sigma2
+  beta  <- cache$beta
+
+  U <- flow_utilities_replacement_6p(theta, cache)
+  V <- invert_value_function_replacement(P_fixed, U, cache, config)
+  if (anyNA(V)) return(1e10)
+
+  v_M <- U[, "maintain"] + beta * as.numeric(cache$F_maintain %*% V)
+  v_E <- U[, "exit"]
+  v_R <- U[, "replace"]  + beta * as.numeric(cache$F_replace  %*% V)
+
+  v_mat  <- cbind(v_M, v_E, v_R)
+  v_max  <- pmax(v_M, v_E, v_R)
+  v_diff <- (v_mat - v_max) / sigma
+  cl     <- config$v_clip
+  v_diff[v_diff >  cl] <-  cl
+  v_diff[v_diff < -cl] <- -cl
+  log_Z  <- log(rowSums(exp(v_diff)))
+
+  log_P_state <- v_diff - log_Z
+  idx <- cbind(cache$s_obs, cache$a_obs)
+  ll  <- sum(log_P_state[idx])
+  if (!is.finite(ll)) return(1e10)
+  -ll
+}
+
+solve_equilibrium_policy_replacement_6p <- function(theta, cache, config,
+                                                    max_iter = 1000L,
+                                                    tol = 1e-8) {
+  P <- matrix(1/3, cache$n_states, 3L,
+              dimnames = list(NULL, c("maintain", "exit", "replace")))
+  converged <- FALSE
+  for (i in seq_len(max_iter)) {
+    U     <- flow_utilities_replacement_6p(theta, cache)
+    V     <- invert_value_function_replacement(P, U, cache, config)
+    P_new <- update_ccps_replacement_6p(theta, V, cache, config)
+    if (max(abs(P_new - P)) < tol) { converged <- TRUE; P <- P_new; break }
+    P <- P_new
+  }
+  U <- flow_utilities_replacement_6p(theta, cache)
+  V <- invert_value_function_replacement(P, U, cache, config)
+  list(P = P, V = V, converged = converged, n_iter = i)
+}
+
+
+# ------------------------------------------------------------------------------
+# Step 4 — No-FE 6p NPL estimator
+# ------------------------------------------------------------------------------
+npl_estimator_replacement_6p <- function(obs_panel,
+                                          primitives,
+                                          config,
+                                          theta_init    = NULL,
+                                          verbose       = TRUE,
+                                          sample_label  = "observed") {
+  stopifnot(!is.null(config$param_names), length(config$param_names) == 6L)
+
+  if (verbose) {
+    cat(sprintf("\n=== NPL ESTIMATOR — REPLACEMENT MODEL (6-Param universal-γ) ===\n"))
+    cat(sprintf("    sample = %s | n_obs = %s | n_facilities = %s\n",
+                sample_label,
+                format(nrow(obs_panel), big.mark = ","),
+                format(data.table::uniqueN(obs_panel$panel_id), big.mark = ",")))
+  }
+
+  # Need a 4-param config to share numerical constants with cache builder
+  config_4p <- create_estimation_config_replacement(
+    beta = config$beta, sigma2 = config$sigma2, npl_iter = config$max_npl_iter)
+
+  cat("=== CACHE BUILD ===\n")
+  cache <- create_estimation_cache_replacement_8p(primitives, obs_panel,
+                                                   config_4p, config)
+
+  if (is.null(theta_init)) {
+    theta_init <- c(kappa_SW    =  20,      kappa_DW    =  20,
+                    K_log_SW    =  log(20), K_log_DW    =  log(20),
+                    gamma_price = -1.0,     gamma_risk  =   1.0)
+  }
+  if (is.null(names(theta_init))) names(theta_init) <- config$param_names
+  theta_curr <- theta_init[config$param_names]
+
+  cat("=== EQUILIBRIUM INIT ===\n")
+  eq0 <- solve_equilibrium_policy_replacement_6p(
+           theta_curr, cache, config, max_iter = 500L, tol = 1e-7)
+  if (isTRUE(eq0$converged)) {
+    P <- eq0$P
+  } else {
+    P <- matrix(1/3, nrow = 32L, ncol = 3L)
+    colnames(P) <- c("maintain", "exit", "replace")
+    cat("  Equilibrium init did not converge; using uniform P\n")
+  }
+
+  pn      <- config$param_names
+  lower_b <- c(config$kappa_SW_bounds[1],    config$kappa_DW_bounds[1],
+               config$K_log_SW_bounds[1],    config$K_log_DW_bounds[1],
+               config$gamma_price_bounds[1], config$gamma_risk_bounds[1])
+  upper_b <- c(config$kappa_SW_bounds[2],    config$kappa_DW_bounds[2],
+               config$K_log_SW_bounds[2],    config$K_log_DW_bounds[2],
+               config$gamma_price_bounds[2], config$gamma_risk_bounds[2])
+  names(lower_b) <- names(upper_b) <- pn
+
+  theta_path <- matrix(NA_real_, config$max_npl_iter, 6L,
+                       dimnames = list(NULL, pn))
+  ll_path   <- numeric(config$max_npl_iter)
+  converged <- FALSE
+  t0        <- Sys.time()
+
+  cat("=== NPL OUTER LOOP ===\n")
+  for (npl_iter in seq_len(config$max_npl_iter)) {
+    theta_old          <- theta_curr
+    theta_path[npl_iter, ] <- theta_curr
+
+    opt <- optim(
+      par     = theta_curr,
+      fn      = npl_likelihood_replacement_6p,
+      P_fixed = P, cache = cache, config = config,
+      method  = "L-BFGS-B",
+      lower   = lower_b, upper = upper_b,
+      control = list(maxit = 300L, factr = 1e8)
+    )
+    if (opt$convergence != 0L)
+      warning(sprintf("optim convergence code %d at NPL iter %d",
+                      opt$convergence, npl_iter))
+
+    theta_curr <- opt$par
+    names(theta_curr)     <- pn
+    ll_path[npl_iter]     <- -opt$value
+
+    U     <- flow_utilities_replacement_6p(theta_curr, cache)
+    V     <- invert_value_function_replacement(P, U, cache, config)
+    P_new <- update_ccps_replacement_6p(theta_curr, V, cache, config)
+
+    d_theta <- max(abs(theta_curr - theta_old))
+    d_P     <- max(abs(P_new - P))
+
+    if (verbose)
+      cat(sprintf("[%s] iter %3d: kSW=%5.2f kDW=%5.2f KSW=%5.2f KDW=%5.2f gP=%6.3f gR=%6.3f | dTh=%.1e dP=%.1e LL=%.1f\n",
+          format(Sys.time(), "%H:%M:%S"), npl_iter,
+          theta_curr[["kappa_SW"]], theta_curr[["kappa_DW"]],
+          exp(theta_curr[["K_log_SW"]]), exp(theta_curr[["K_log_DW"]]),
+          theta_curr[["gamma_price"]], theta_curr[["gamma_risk"]],
+          d_theta, d_P, ll_path[npl_iter]))
+
+    P <- P_new
+    if (d_theta < config$tol_theta && d_P < config$tol_P) {
+      converged  <- TRUE
+      ll_path    <- ll_path[seq_len(npl_iter)]
+      theta_path <- theta_path[seq_len(npl_iter), , drop = FALSE]
+      break
+    }
+  }
+  if (!converged)
+    warning(sprintf("6p NPL did not converge in %d iterations", config$max_npl_iter))
+
+  elapsed <- as.numeric(Sys.time() - t0, units = "secs")
+  cat(sprintf("Elapsed: %.1f s | Converged: %s at iter %d | LL: %.3f\n",
+              elapsed, converged, length(ll_path), tail(ll_path, 1L)))
+
+  U_final <- flow_utilities_replacement_6p(theta_curr, cache)
+  V_final <- invert_value_function_replacement(P, U_final, cache, config)
+
+  cat("=== HESSIAN FOR SE ===\n")
+  if (!requireNamespace("numDeriv", quietly = TRUE))
+    stop("Package numDeriv is required.")
+
+  H <- numDeriv::hessian(
+    func = function(th) {
+      names(th) <- pn
+      npl_likelihood_replacement_6p(th, P_fixed = P, cache = cache, config = config)
+    },
+    x = unname(theta_curr),
+    method = "Richardson",
+    method.args = list(eps = 1e-4, d = 1e-4, r = 4L)
+  )
+
+  Sigma_full <- tryCatch(
+    solve(H),
+    error = function(e) {
+      warning("Hessian inversion failed: ", conditionMessage(e),
+              "; reporting SE = NA")
+      matrix(NA_real_, nrow = 6L, ncol = 6L)
+    }
+  )
+  se_theta <- sqrt(pmax(diag(Sigma_full), 0))
+  names(se_theta) <- pn
+
+  # theta_hat and theta_raw are identical for the no-FE variant
+  # (both in optim space: K on log scale, for warm-start compatibility)
+  list(
+    theta_hat      = theta_curr,
+    theta_raw      = theta_curr,
+    se_theta       = se_theta,
+    P_hat          = P,
+    V_hat          = V_final,
+    log_likelihood = tail(ll_path, 1L),
+    converged      = converged,
+    n_iter         = length(ll_path),
+    ll_path        = ll_path,
+    theta_path     = theta_path,
+    cache          = cache,
+    config         = config,
+    sample_label   = sample_label,
+    elapsed_sec    = elapsed
+  )
+}
+
+
+# ------------------------------------------------------------------------------
+# Step 5 helper — geo-weighted CCP update for 6p + profile FE
+# (identical to .update_ccps_geoweighted_8p_fe_profile except calls
+#  .compute_v_indices_6p)
+# ------------------------------------------------------------------------------
+.update_ccps_geoweighted_6p_fe_profile <- function(thetastruct, Pold,
+                                                    cache, config) {
+  if (is.null(names(thetastruct))) names(thetastruct) <- config$struct_param_names
+  v   <- .compute_v_indices_6p(thetastruct, Pold, cache, config)
+  wsg <- cache$wsg8pfe
+
+  if (exists("update_ccps_geoweighted_profile_cpp", mode = "function")) {
+    Pnew <- update_ccps_geoweighted_profile_cpp(
+      sidx            = cache$countsdt8pfe$sidx,
+      graw            = cache$countsdt8pfe$graw,
+      nM              = cache$countsdt8pfe$nM,
+      nE              = cache$countsdt8pfe$nE,
+      nR              = cache$countsdt8pfe$nR,
+      vM              = v$vM,
+      vE              = v$vE,
+      vR              = v$vR,
+      wsg             = wsg,
+      epsprob         = config$epsprob %||% config$eps_prob,
+      max_newton_iter = config$alpha_newton_max_iter %||% 30L,
+      newton_tol      = config$alpha_newton_tol      %||% 1e-10,
+      alpha_bound     = config$alpha_bound            %||% 20.0
+    )
+  } else {
+    # R fallback
+    alpha_vec <- c(0.0, .solve_alpha_vec_profile(thetastruct, v, cache, config))
+    S   <- 32L; G <- 18L; eps <- config$epsprob %||% config$eps_prob
+    Pnew <- matrix(0.0, nrow = S, ncol = 3L)
+    colnames(Pnew) <- c("maintain", "exit", "replace")
+    for (s in seq_len(S)) {
+      pmix <- c(0.0, 0.0, 0.0)
+      for (g in 0L:(G - 1L)) {
+        w <- wsg[s, g + 1L]
+        if (w <= 0.0) next
+        a   <- alpha_vec[g + 1L]
+        uM  <- v$vM[s] + a
+        uE  <- v$vE[s]
+        uR  <- v$vR[s] + a
+        lse <- .logsumexp3(uM, uE, uR)
+        p   <- exp(c(uM - lse, uE - lse, uR - lse))
+        p   <- pmax(p, eps); p <- p / sum(p)
+        pmix <- pmix + w * p
+      }
+      pmix      <- pmax(pmix, eps)
+      Pnew[s, ] <- pmix / sum(pmix)
+    }
+  }
+
+  lam <- config$ccp_damping_lambda %||% 1.0
+  if (is.finite(lam) && lam < 1.0) {
+    Pnew <- (1.0 - lam) * Pold + lam * Pnew
+    Pnew <- Pnew / rowSums(Pnew)
+  }
+  stopifnot(all(dim(Pnew) == c(32L, 3L)))
+  stopifnot(all(abs(rowSums(Pnew) - 1) < 1e-8))
+  Pnew
+}
+
+
+# ------------------------------------------------------------------------------
+# Step 5 helper — Profile NLL for 6p: identical to 8p version except calls
+# .compute_v_indices_6p (the ONE structural substitution)
+# ------------------------------------------------------------------------------
+npl_likelihood_replacement_6p_fe_profile <- function(thetastruct, Pfixed,
+                                                      cache, config) {
+  if (is.null(names(thetastruct))) names(thetastruct) <- config$struct_param_names
+  v      <- .compute_v_indices_6p(thetastruct, Pfixed, cache, config)
+  counts <- cache$countsdt8pfe
+  stopifnot(!is.null(counts))
+
+  if (exists("nll_replacement8pfe_profile_counts_cpp", mode = "function")) {
+    return(nll_replacement8pfe_profile_counts_cpp(
+      sidx            = counts$sidx,
+      graw            = counts$graw,
+      nM              = counts$nM,
+      nE              = counts$nE,
+      nR              = counts$nR,
+      vM              = v$vM,
+      vE              = v$vE,
+      vR              = v$vR,
+      epsprob         = config$epsprob %||% config$eps_prob,
+      max_newton_iter = config$alpha_newton_max_iter %||% 30L,
+      newton_tol      = config$alpha_newton_tol      %||% 1e-10,
+      alpha_bound     = config$alpha_bound            %||% 20.0
+    ))
+  }
+
+  # R fallback
+  alpha_vec <- .solve_alpha_vec_profile(thetastruct, v, cache, config)
+  log_eps   <- log(config$epsprob %||% config$eps_prob)
+  ll        <- 0.0
+  for (i in seq_len(nrow(counts))) {
+    s  <- counts$sidx[i]; g <- counts$graw[i]
+    nm <- counts$nM[i];   ne <- counts$nE[i]; nr <- counts$nR[i]
+    if (nm + ne + nr == 0L) next
+    a   <- if (g == 0L) 0.0 else alpha_vec[g]
+    uM  <- v$vM[s] + a;  uE  <- v$vE[s];  uR  <- v$vR[s] + a
+    lse <- .logsumexp3(uM, uE, uR)
+    ll  <- ll + nm * max(uM - lse, log_eps) +
+                ne * max(uE - lse, log_eps) +
+                nr * max(uR - lse, log_eps)
+  }
+  -ll
+}
+
+
+# ------------------------------------------------------------------------------
+# Step 5 — Profile-FE 6p NPL estimator
+# ------------------------------------------------------------------------------
+npl_estimator_replacement_6p_fe_profile <- function(obs_panel,
+                                                     primitives,
+                                                     config,
+                                                     thetastruct_init,
+                                                     verbose      = TRUE,
+                                                     sample_label = "observed") {
+  stopifnot(!is.null(names(thetastruct_init)))
+  stopifnot(all(config$struct_param_names %in% names(thetastruct_init)))
+
+  cat("=== CACHE BUILD ===\n")
+  cache <- primitives
+  cw    <- .build_counts_weights_8p_fe(obs_panel, primitives,
+                                       config$feweightsource)
+  cache$countsdt8pfe <- cw$countsdt
+  cache$wsg8pfe      <- cw$wsg
+
+  config_4p <- create_estimation_config_replacement(
+    beta = config$beta, sigma2 = config$sigma2, npl_iter = config$max_npl_iter)
+  std_cache <- create_estimation_cache_replacement_8p(primitives, obs_panel,
+                                                      config_4p, config)
+  for (nm in names(std_cache)) {
+    if (is.null(cache[[nm]])) cache[[nm]] <- std_cache[[nm]]
+  }
+  if (is.null(cache$F_maintain)) cache$F_maintain <- std_cache$F_maintain
+  if (is.null(cache$F_replace))  cache$F_replace  <- std_cache$F_replace
+
+  cat("=== EQUILIBRIUM INIT ===\n")
+  P <- NULL
+  eq0 <- solve_equilibrium_policy_replacement_6p(
+           thetastruct_init[config$struct_param_names], cache, config,
+           max_iter = 500L, tol = 1e-7)
+  if (isTRUE(eq0$converged)) {
+    P <- eq0$P
+  } else {
+    P <- matrix(1/3, nrow = 32L, ncol = 3L)
+    colnames(P) <- c("maintain", "exit", "replace")
+    cat("  Equilibrium init did not converge; using uniform P\n")
+  }
+
+  pn      <- config$struct_param_names
+  lower_b <- c(config$kappa_SW_bounds[1],    config$kappa_DW_bounds[1],
+               config$K_log_SW_bounds[1],    config$K_log_DW_bounds[1],
+               config$gamma_price_bounds[1], config$gamma_risk_bounds[1])
+  upper_b <- c(config$kappa_SW_bounds[2],    config$kappa_DW_bounds[2],
+               config$K_log_SW_bounds[2],    config$K_log_DW_bounds[2],
+               config$gamma_price_bounds[2], config$gamma_risk_bounds[2])
+  names(lower_b) <- names(upper_b) <- pn
+
+  cat("=== NPL OUTER LOOP ===\n")
+  theta_curr  <- thetastruct_init[pn]
+  ll_path     <- numeric(config$max_npl_iter)
+  theta_path  <- matrix(NA_real_, nrow = config$max_npl_iter, ncol = 6L,
+                        dimnames = list(NULL, pn))
+  converged   <- FALSE
+  t0          <- Sys.time()
+
+  for (it in seq_len(config$max_npl_iter)) {
+    opt <- optim(
+      par     = theta_curr,
+      fn      = npl_likelihood_replacement_6p_fe_profile,
+      method  = "L-BFGS-B",
+      lower   = lower_b,
+      upper   = upper_b,
+      control = list(maxit = config$inner_maxit %||% 200L, factr = 1e7),
+      Pfixed  = P,
+      cache   = cache,
+      config  = config
+    )
+    theta_new <- opt$par
+    if (opt$convergence != 0L)
+      warning(sprintf("optim convergence code %d at NPL iter %d",
+                      opt$convergence, it))
+
+    P_new <- .update_ccps_geoweighted_6p_fe_profile(theta_new, P, cache, config)
+
+    ll_path[it]      <- -opt$value
+    theta_path[it, ] <- theta_new
+
+    if (verbose)
+      cat(sprintf("[%s] NPL iter %d: LL=%.3f dTh=%.2e dP=%.2e\n",
+                  format(Sys.time(), "%H:%M:%S"), it, -opt$value,
+                  max(abs(theta_new - theta_curr)), max(abs(P_new - P))))
+
+    d_theta <- max(abs(theta_new - theta_curr))
+    d_P     <- max(abs(P_new - P))
+    theta_curr <- theta_new
+    P          <- P_new
+
+    if (d_theta < config$tol_theta && d_P < config$tol_P) {
+      converged  <- TRUE
+      ll_path    <- ll_path[seq_len(it)]
+      theta_path <- theta_path[seq_len(it), , drop = FALSE]
+      break
+    }
+  }
+
+  elapsed <- as.numeric(Sys.time() - t0, units = "secs")
+  cat(sprintf("Elapsed: %.1f s | Converged: %s at iter %d | LL: %.3f\n",
+              elapsed, converged, length(ll_path), tail(ll_path, 1L)))
+
+  cat("=== RECOVER ALPHA HAT ===\n")
+  v_final   <- .compute_v_indices_6p(theta_curr, P, cache, config)
+  alpha_hat <- .solve_alpha_vec_profile(theta_curr, v_final, cache, config)
+  theta_raw <- c(theta_curr, alpha_hat)
+
+  cat("=== HESSIAN FOR SE ===\n")
+  if (!requireNamespace("numDeriv", quietly = TRUE))
+    stop("Package numDeriv is required.")
+
+  H <- numDeriv::hessian(
+    func = function(tr) {
+      names(tr) <- c(pn, paste0("alpha", CONTROLSTATES))
+      thetastruct_h <- tr[pn]
+      v_h           <- .compute_v_indices_6p(thetastruct_h, P, cache, config)
+      alphacpp_h    <- .alphacpp_from_theta(tr)
+      counts        <- cache$countsdt8pfe
+      if (exists("nll_replacement8pfe_counts_cpp", mode = "function")) {
+        return(nll_replacement8pfe_counts_cpp(
+          sidx       = counts$sidx,
+          graw       = counts$graw,
+          nM         = counts$nM,
+          nE         = counts$nE,
+          nR         = counts$nR,
+          vM         = v_h$vM,
+          vE         = v_h$vE,
+          vR         = v_h$vR,
+          alphacpp   = alphacpp_h,
+          epsprob    = config$epsprob %||% config$eps_prob,
+          alpha_in_R = TRUE
+        ))
+      }
+      # R fallback for Hessian
+      eps <- config$epsprob %||% config$eps_prob
+      ll  <- 0.0
+      for (i in seq_len(nrow(counts))) {
+        if (counts$nM[i] + counts$nE[i] + counts$nR[i] == 0L) next
+        s   <- counts$sidx[i]
+        g   <- counts$graw[i]
+        a   <- alphacpp_h[g + 1L]
+        uM  <- v_h$vM[s] + a
+        uE  <- v_h$vE[s]
+        uR  <- v_h$vR[s] + a
+        lse <- .logsumexp3(uM, uE, uR)
+        ll  <- ll + counts$nM[i] * max(uM - lse, log(eps)) +
+                    counts$nE[i] * max(uE - lse, log(eps)) +
+                    counts$nR[i] * max(uR - lse, log(eps))
+      }
+      -ll
+    },
+    x = unname(theta_raw),
+    method = "Richardson",
+    method.args = list(eps = 1e-4, d = 1e-4, r = 4L)
+  )
+
+  Sigma_full <- tryCatch(
+    solve(H),
+    error = function(e) {
+      warning("Hessian inversion failed: ", conditionMessage(e),
+              "; reporting SE = NA")
+      matrix(NA_real_, nrow = 23L, ncol = 23L)
+    }
+  )
+  se_theta <- sqrt(pmax(diag(Sigma_full)[1:6],   0))
+  se_alpha <- sqrt(pmax(diag(Sigma_full)[7:23],  0))
+  names(se_theta) <- pn
+  names(se_alpha) <- paste0("alpha", CONTROLSTATES)
+
+  list(
+    theta_hat      = theta_curr,
+    alpha_hat      = alpha_hat,
+    theta_raw      = theta_raw,
+    se_theta       = se_theta,
+    se_alpha       = se_alpha,
+    P_hat          = P,
+    V_hat          = v_final$V,
+    log_likelihood = tail(ll_path, 1L),
+    converged      = converged,
+    n_iter         = length(ll_path),
+    ll_path        = ll_path,
+    theta_path     = theta_path,
+    cache          = cache,
+    config         = config,
+    sample_label   = sample_label,
+    elapsed_sec    = elapsed
+  )
+}
+# END APPEND T005 (2026-05-22)

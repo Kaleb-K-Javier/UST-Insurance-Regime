@@ -1,0 +1,522 @@
+\documentclass[aspectratio=169,]{beamer}
+
+% -------------------------------------------------------------------------
+% 1. REQUIRED PACKAGES (The "Batteries" Quarto usually includes)
+% -------------------------------------------------------------------------
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{array}      % <--- ADD THIS LINE HERE
+\usepackage[most]{tcolorbox} % REQUIRED for Quarto Callouts
+\usepackage{fontawesome5}    % REQUIRED for Callout Icons
+\usepackage{framed}          % REQUIRED for standard blocks
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+
+% Fix for Pandoc's "tightlist"
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+% -------------------------------------------------------------------------
+% 2. CUSTOM DESIGN PACKAGES
+% -------------------------------------------------------------------------
+\usepackage{tikz}
+\usepackage{calc}
+\usepackage{xcolor}
+\usepackage{xparse} 
+\usepackage{etoolbox} 
+\usepackage[default]{sourcesanspro} 
+\usetikzlibrary{calc, positioning, shapes.geometric}
+
+% -------------------------------------------------------------------------
+% DEFINE QUARTO CALLOUT COLORS (REQUIRED)
+% -------------------------------------------------------------------------
+% We map these to your "Elegant Dark Mode" aesthetic.
+% Note: Quarto expects these EXACT names.
+
+% 1. Note (Blue)
+\definecolor{quarto-callout-note-color}{HTML}{3498DB}        % Icon/Title Color
+\definecolor{quarto-callout-note-color-frame}{HTML}{2980B9}  % Border Color
+
+% 2. Tip (Green)
+\definecolor{quarto-callout-tip-color}{HTML}{27AE60}
+\definecolor{quarto-callout-tip-color-frame}{HTML}{2ECC71}
+
+% 3. Important (Red/Crimson)
+\definecolor{quarto-callout-important-color}{HTML}{C0392B}
+\definecolor{quarto-callout-important-color-frame}{HTML}{E74C3C}
+
+% 4. Warning (Orange)
+\definecolor{quarto-callout-warning-color}{HTML}{F39C12}
+\definecolor{quarto-callout-warning-color-frame}{HTML}{E67E22}
+
+% 5. Caution (Yellow/Gold)
+\definecolor{quarto-callout-caution-color}{HTML}{F1C40F}
+\definecolor{quarto-callout-caution-color-frame}{HTML}{D4AC0D}
+
+% Add this right before \begin{document}
+\newcommand{\Est}[1]{\textcolor{quarto-callout-important-color}{\mathbf{#1}}}
+
+\providecommand{\estc}[1]{\textcolor[HTML]{1B7837}{#1}}
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\AtBeginDocument{%
+\ifdefined\contentsname
+  \renewcommand*\contentsname{Table of contents}
+\else
+  \newcommand\contentsname{Table of contents}
+\fi
+\ifdefined\listfigurename
+  \renewcommand*\listfigurename{List of Figures}
+\else
+  \newcommand\listfigurename{List of Figures}
+\fi
+\ifdefined\listtablename
+  \renewcommand*\listtablename{List of Tables}
+\else
+  \newcommand\listtablename{List of Tables}
+\fi
+\ifdefined\figurename
+  \renewcommand*\figurename{Figure}
+\else
+  \newcommand\figurename{Figure}
+\fi
+\ifdefined\tablename
+  \renewcommand*\tablename{Table}
+\else
+  \newcommand\tablename{Table}
+\fi
+}
+\@ifpackageloaded{float}{}{\usepackage{float}}
+\floatstyle{ruled}
+\@ifundefined{c@chapter}{\newfloat{codelisting}{h}{lop}}{\newfloat{codelisting}{h}{lop}[chapter]}
+\floatname{codelisting}{Listing}
+\newcommand*\listoflistings{\listof{codelisting}{List of Listings}}
+\makeatother
+\makeatletter
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\@ifpackageloaded{subcaption}{}{\usepackage{subcaption}}
+\makeatother
+
+% -------------------------------------------------------------------------
+% NEW: COLOR THEME COMMANDS (Robust Single-Slide Overrides)
+% -------------------------------------------------------------------------
+
+% 1. Light Mode Command
+\newcommand{\LightMode}{
+  % 1. Draw White Background (TikZ Overlay)
+  \begin{tikzpicture}[remember picture, overlay]
+    \fill[white] (current page.south west) rectangle (current page.north east);
+  \end{tikzpicture}
+  % 2. Force Text Colors to Black
+  \setbeamercolor{normal text}{fg=black}
+  \setbeamercolor{frametitle}{fg=black}
+  \setbeamercolor{itemize item}{fg=black}
+  \setbeamercolor{structure}{fg=black}
+  \usebeamercolor[fg]{normal text}
+}
+
+% 2. Black Mode Command
+\newcommand{\BlackMode}{
+  \begin{tikzpicture}[remember picture, overlay]
+    \fill[black] (current page.south west) rectangle (current page.north east);
+  \end{tikzpicture}
+  \setbeamercolor{normal text}{fg=white}
+  \setbeamercolor{frametitle}{fg=white}
+  \setbeamercolor{itemize item}{fg=white}
+  \setbeamercolor{structure}{fg=white}
+  \usebeamercolor[fg]{normal text}
+}
+
+% 3. Brand Mode Command
+\newcommand{\BrandMode}{
+  \begin{tikzpicture}[remember picture, overlay]
+    \definecolor{tempBrand}{HTML}{7D181E}
+    \fill[tempBrand] (current page.south west) rectangle (current page.north east);
+  \end{tikzpicture}
+  \setbeamercolor{normal text}{fg=white}
+  \setbeamercolor{frametitle}{fg=white}
+  \setbeamercolor{itemize item}{fg=white}
+  \setbeamercolor{structure}{fg=white}
+  \usebeamercolor[fg]{normal text}
+}
+
+% -------------------------------------------------------------------------
+% 4. UC BERKELEY THEME (Modern Matte) - FIXED SCOPE
+% -------------------------------------------------------------------------
+
+% 1. DEFINE COLORS GLOBALLY (Required for assumptionbox and modes)
+\definecolor{BerkeleyBlue}{HTML}{003262}
+\definecolor{CaliforniaGold}{HTML}{FDB515}
+\definecolor{BerkeleyMatte}{HTML}{0D2D52} 
+\definecolor{SoftWhite}{HTML}{F8F9FA}
+
+% 4. UC Berkeley Theme (Modern Matte)
+\newcommand{\BerkeleyMode}{
+  % 2. Draw Background AND Title
+  \begin{tikzpicture}[remember picture, overlay]
+    % Background Fill (Covers old title)
+    \fill[BerkeleyMatte] (current page.south west) rectangle (current page.north east);
+    % Gold Accent Strip
+    \fill[CaliforniaGold] (current page.south west) rectangle ($(current page.north west)+(0.15cm,0)$);
+    % REDRAW TITLE ON TOP
+    \node[anchor=west, white, font=\Large\bfseries] at ($(current page.north west)+(1cm,-1cm)$) {\insertframetitle};
+  \end{tikzpicture}
+  
+  % 3. Set Text Colors
+  \setbeamercolor{normal text}{fg=SoftWhite}
+  \setbeamercolor{frametitle}{fg=BerkeleyMatte} % Hide original title
+  \setbeamercolor{itemize item}{fg=CaliforniaGold} 
+  \setbeamercolor{structure}{fg=CaliforniaGold}
+  
+  \usebeamercolor[fg]{normal text}
+}
+
+% 5. UC Berkeley Theme (Academic Light)
+\newcommand{\BerkeleyLightMode}{
+  % (Color definitions removed here as they are now global)
+  
+  % 2. Draw Background AND Title
+  \begin{tikzpicture}[remember picture, overlay]
+    % Background Fill
+    \fill[white] (current page.south west) rectangle (current page.north east);
+    % Blue Header Bar
+    \fill[BerkeleyBlue] (current page.north west) rectangle ($(current page.north east)+(0,-1.4cm)$);
+    % Gold Line
+    \fill[CaliforniaGold] ($(current page.north west)+(0,-1.4cm)$) rectangle ($(current page.north east)+(0,-1.45cm)$);
+    % REDRAW TITLE ON TOP
+    \node[anchor=west, white, font=\Large\bfseries] at ($(current page.north west)+(1cm,-0.7cm)$) {\insertframetitle};
+  \end{tikzpicture}
+  
+  % 3. Set Text Colors
+  \setbeamercolor{normal text}{fg=black}
+  \setbeamercolor{frametitle}{fg=white} 
+  \setbeamercolor{itemize item}{fg=BerkeleyBlue}
+  \setbeamercolor{structure}{fg=BerkeleyBlue}
+  
+  \usebeamercolor[fg]{normal text}
+}
+
+% -------------------------------------------------------------------------
+% NEW: ACADEMIC POWER LAYOUTS
+% -------------------------------------------------------------------------
+
+% 1. Statement Layout (Big Impact Transitions)
+% Usage: ::: {.layout-statement} Content :::
+\newenvironment{layout-statement}{
+  \vspace*{\fill}
+  \centering
+  \Huge \bfseries
+  \setbeamercolor{normal text}{fg=CaliforniaGold} % Use Gold for impact
+  \usebeamercolor[fg]{normal text}
+}{
+  \vspace*{\fill}
+}
+
+% 2. Dense Data Layout (Regression Tables)
+% Usage: ::: {.layout-dense} Table :::
+\newenvironment{layout-dense}{
+  \vspace*{\fill}
+  \tiny                  % Force tiny font
+  \setlength\tabcolsep{2pt} % Tighten table columns
+  \centering
+}{
+  \vspace*{\fill}
+}
+
+% 3. Split Slide Macro (Vertical Centering)
+% Usage: \SplitSlide{Left Content}{Right Content}
+\newcommand{\SplitSlide}[2]{
+  \begin{columns}[c] % 'c' option forces vertical centering
+    \begin{column}{0.48\textwidth}
+      #1
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      #2
+    \end{column}
+  \end{columns}
+}
+
+% -------------------------------------------------------------------------
+% 3. DYNAMIC BACKGROUND & CONTRAST LOGIC
+% -------------------------------------------------------------------------
+  \definecolor{mainbg}{HTML}{0D2D52}
+
+\setbeamercolor{background canvas}{bg=mainbg}
+
+% Logic to calculate luminance and set text color automatically
+\makeatletter
+\newcommand{\AutoSetContrast}{
+  \extractcolorspec{mainbg}{\mainbgspec}
+  \expandafter\convertcolorspec\mainbgspec{rgb}\mainbgrgb
+  \def\calculatebrightness##1,##2,##3;{
+    \pgfmathparse{0.2126*##1 + 0.7152*##2 + 0.0722*##3}
+  }
+  \expandafter\calculatebrightness\mainbgrgb;
+  \pgfmathparse{\pgfmathresult > 0.5 ? 1 : 0}
+  \ifnum\pgfmathresult=1
+    \definecolor{maintext}{HTML}{222222}
+    \definecolor{dimtext}{HTML}{555555}
+  \else
+    \definecolor{maintext}{HTML}{FFFFFF}
+    \definecolor{dimtext}{HTML}{CCCCCC}
+  \fi
+}
+\makeatother
+
+\AutoSetContrast
+
+\setbeamercolor{normal text}{fg=maintext}
+\setbeamercolor{frametitle}{fg=maintext}
+\setbeamercolor{title}{fg=maintext}
+\setbeamercolor{structure}{fg=maintext} 
+
+% -------------------------------------------------------------------------
+% 4. FOOTER CUSTOMIZATION
+% -------------------------------------------------------------------------
+\setbeamercolor{footline}{fg=dimtext}
+\setbeamerfont{footline}{size=\tiny}
+
+\newtoggle{hidesection}
+\togglefalse{hidesection}
+
+\setbeamertemplate{footline}{
+  \begin{beamercolorbox}[wd=\paperwidth, ht=2.5ex, dp=1.125ex, leftskip=.3cm, rightskip=.3cm]{footline}
+    \iftoggle{hidesection}{}{
+      \insertsectionhead
+    }
+    \hfill
+    \insertframenumber
+  \end{beamercolorbox}
+}
+\setbeamertemplate{navigation symbols}{}
+
+% -------------------------------------------------------------------------
+% 5. CUSTOM COMMANDS & ENVIRONMENTS (FIXED FOR STABILITY)
+% -------------------------------------------------------------------------
+\NewDocumentCommand{\navbutton}{ O{} O{fill=gray} m }{
+  \hyperlink{#1}{
+    \tikz[baseline=(node.base)]{
+      \node(node)[
+        anchor=base,
+        rounded corners=3pt,
+        inner sep=5pt,
+        text=white,
+        font=\small\bfseries,
+        #2
+      ]{#3};
+    }
+  }
+}
+
+\newenvironment{layout-math}{
+  \vspace*{\fill}
+  \centering
+  \begin{minipage}{\linewidth}
+  \centering
+}{
+  \end{minipage}
+  \vspace*{\fill}
+}
+
+% SAFE Layout for Tables (Removed risky \makebox)
+\newenvironment{layout-table}{
+  \vspace*{\fill}
+  \begin{center}
+}{
+  \end{center}
+  \vspace*{\fill}
+}
+
+% SAFE Layout for Full Figures (Uses LRBOX to capture content first)
+\newsavebox{\fullfigbox}
+\newenvironment{layout-full-figure}{
+  \begin{lrbox}{\fullfigbox}
+    \begin{minipage}{\paperwidth}
+      \centering
+}{
+    \end{minipage}
+  \end{lrbox}
+  \begin{tikzpicture}[remember picture, overlay]
+    \node[anchor=center, inner sep=0pt] at (current page.center) {
+      \usebox{\fullfigbox}
+    };
+  \end{tikzpicture}
+}
+
+\newcommand{\hidefootersection}{\global\toggletrue{hidesection}}
+\newcommand{\showfootersection}{\global\togglefalse{hidesection}}
+
+
+% -------------------------------------------------------------------------
+% CUSTOM BERKELEY CALLOUT BOX
+% -------------------------------------------------------------------------
+\newtcolorbox{assumptionbox}[1]{
+  enhanced,
+  colback=SoftWhite,       % White-ish background
+  colframe=CaliforniaGold, % Gold Border
+  coltitle=SoftWhite,      % White Title Text
+  colbacktitle=BerkeleyMatte, % Berkeley Blue Title Background
+  title={#1},
+  fonttitle=\bfseries\small,
+  arc=2pt,                 % Slight rounded corners
+  boxrule=1pt,             % Thin elegant border
+  left=5pt, right=5pt, top=5pt, bottom=5pt, % Padding
+  titlerule=0pt,
+  width=\linewidth
+}
+
+% -------------------------------------------------------------------------
+% 6. DOCUMENT BODY
+% -------------------------------------------------------------------------
+\title{Internalizing Environmental Risk: Insurance Design and Firm
+Behavior in Hazardous Industries}
+\author{Kaleb K. Javier}
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame}{}
+\phantomsection\label{section}
+\LightMode
+\centering
+
+\includegraphics[width=1\textwidth,height=\textheight]{../../Data/tank_jpg.jpg}
+\end{frame}
+
+\begin{frame}{}
+\phantomsection\label{section-1}
+\LightMode
+\centering
+
+\includegraphics[width=1\textwidth,height=\textheight]{../../Data/LUST.jpg}
+\end{frame}
+
+\begin{frame}
+\begin{block}{Why Insurance Design Is a First-Order Policy Question}
+\phantomsection\label{why-insurance-design-is-a-first-order-policy-question}
+\BerkeleyLightMode
+
+\begin{itemize}
+\tightlist
+\item
+  The firm pays for what it causes, regardless of fault --- across oil
+  \& gas (OPA 1990), surface mining (SMCRA 1977), and hazardous
+  substances (CERCLA 1980, RCRA 1976)
+\item
+  Works when firms can be held fully accountable --- breaks down when
+  they cannot (Shavell 1986, 2007)
+\item
+  Shavell (2004): two instruments to restore accountability:
+
+  \begin{itemize}
+  \tightlist
+  \item
+    Minimum Asset / bonding requirements
+  \item
+    \textbf{Compulsory liability insurance} --- where the premium does
+    the deterrence work, \emph{if} the insurer can price on
+    risk-relevant attributes
+  \end{itemize}
+\end{itemize}
+
+\vfill
+
+\centering\textbf{This paper examines the design and efficacy of compulsory liability insurance as a financial responsibility instrument in environmental hazard settings.}
+\end{block}
+\end{frame}
+
+\begin{frame}
+\begin{block}{Does insurance design change firm behavior?}
+\phantomsection\label{does-insurance-design-change-firm-behavior}
+\BerkeleyLightMode
+
+\textbf{Setting}
+
+\begin{itemize}
+\tightlist
+\item
+  USTs --- retail petroleum storage, \(\sim\),140,000 facilities, the
+  most common source of groundwater contamination in the US (EPA 2024)
+\item
+  Compulsory insurance the law since 1988 (RCRA Subtitle I, \$1M floor)
+\item
+  \textbf{Clean shock:} Texas exits its flat-fee fund December 22, 1998
+  --- 26,000 facilities enter risk-rated private insurance overnight
+\item
+  9.8M tank-years of EPA panel data spanning both regimes
+\end{itemize}
+
+\vspace{0.2cm}
+
+\textbf{Three questions}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Q1 --- Observability:} Is release risk predictable from
+  observable tank characteristics?
+\item
+  \textbf{Q2 --- Behavior:} Does risk-based pricing change closure,
+  replacement, and release outcomes?
+\item
+  \textbf{Q3 --- Welfare:} How much of the first-best welfare gain does
+  risk-rated pricing capture?
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}
+\begin{block}{What is an underground storage tank?}
+\phantomsection\label{what-is-an-underground-storage-tank}
+\BerkeleyLightMode
+
+{[}ADD FIGURE HERE{]}
+\end{block}
+\end{frame}
+
+\begin{frame}
+\begin{block}{Related literature}
+\phantomsection\label{related-literature}
+\BerkeleyLightMode
+
+\small
+
+\textbf{Liability regimes, financial responsibility, and UST policy}
+
+Shavell (1986, 2004, 2007); Yin, Kunreuther \& White (2011); Yin, Pfaff
+\& Kunreuther (2011, 2007); Boomhower (2019); Ho, Hsu, Cha \& Rivera
+(2018)
+
+\emph{First firm-level panel analysis of insurance design --- risk-rated
+vs.~flat-fee --- as a financial responsibility instrument; clean policy
+shock; structural welfare decomposition}
+
+\medskip
+
+\textbf{Environmental economics and environmental risk}
+
+Fowlie, Reguant \& Ryan (2016); Muehlenbachs (2015); Blundell,
+Gowrisankaran \& Langer (2020); Kellogg \& Reguant (2021)
+
+\emph{Dynamic structural model of firm behavior under environmental
+regulation; welfare decomposition bounding gap to first-best}
+
+\medskip
+
+\textbf{IO of selection markets: risk-based and cost-based pricing}
+
+Einav, Finkelstein \& Mahoney (2021); Einav, Finkelstein \& Cullen
+(2010); Bundorf, Levin \& Mahoney (2012); Handel, Hendel \& Whinston
+(2015); Mahoney \& Weyl (2017)
+
+\emph{{[}PLACEHOLDER{]}}
+\end{block}
+\end{frame}
+
+\end{document}

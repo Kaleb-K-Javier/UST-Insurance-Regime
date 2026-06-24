@@ -1,0 +1,1595 @@
+---
+title: "Identifying Variation, Facility Size, and Capacity in the UST Replacement Model"
+subtitle: "Diagnostic report on what the structural model uses and what it currently ignores"
+author: "Kaleb Javier"
+date: "`r Sys.Date()`"
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    linestretch: 1.15
+    toc: true
+    number-sections: true
+    keep-tex: true
+    fig-cap-location: top
+    fig-pos: "H"
+    include-in-header:
+      text: |
+        \usepackage{amsmath}
+        \usepackage{amssymb}
+        \usepackage{booktabs}
+        \usepackage{float}
+        \usepackage{longtable}
+        \usepackage{graphicx}
+        \usepackage{caption}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.pos = "H",
+  fig.width  = 6.5,
+  fig.height = 4.0,
+  dpi = 150
+)
+library(data.table)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(here)
+
+theme_set(theme_minimal(base_size = 10) +
+          theme(legend.position = "top",
+                plot.title = element_text(face = "bold"),
+                plot.subtitle = element_text(color = "grey30"),
+                strip.text = element_text(face = "bold")))
+```
+
+```{r load-data, include=FALSE}
+# Primitives + cache from the canonical 6p+stayFE fit
+fit <- readRDS(here("Output", "Estimation_Results",
+                    "Model_Replacement_6paramFE_profile_observed_dropSDMO.rds"))
+ca  <- fit$cache
+lut <- ca$state_lut
+
+# Cell-level (state, P, h) primitives (32 cells)
+cell_dt <- data.table(
+  s_idx  = 1:32,
+  A_bin  = lut$A_bin,
+  wall   = ifelse(lut$w_state == 1L, "SW", "DW"),
+  regime = ifelse(lut$rho_state == 1L, "FF", "RB"),
+  P      = ca$P_vec * 10000,             # $/yr per tank
+  h      = ca$h_vec,                     # annual leak probability
+  L      = ca$L_vec * 10000,             # $ per leak
+  haz_loss = ca$hazard_loss * 10000      # $/yr expected loss
+)
+
+# Facility-year panel with tank counts, capacity, and install history
+fp <- fread(here("Data", "Analysis", "facility_panel.csv"),
+            select = c("panel_id","panel_year","state","texas_treated",
+                       "n_tanks_active","n_tanks_eoy","total_capacity",
+                       "n_closures","n_closures_permanent","n_closures_replacement",
+                       "n_sw_closures","n_dw_closures",
+                       "n_installs","n_sw_installs","n_dw_installs",
+                       "facility_complete_closure","single_to_double_year",
+                       "any_closure","first_install_yr","last_install_yr"))
+
+# DCM observed panel (the canonical estimation sample)
+obs <- fread(here("Data", "Analysis", "dcm_obs_panel_observed.csv"))
+
+# Merge facility-year features (n_tanks, total_capacity) onto DCM obs
+obs <- merge(obs,
+             fp[, .(panel_id, panel_year, n_tanks_active, total_capacity)],
+             by = c("panel_id","panel_year"), all.x = TRUE)
+
+# Action labels
+obs[, action := fcase(
+  y_it == 0L,                                                    "M",
+  y_it == 1L & !is.na(I_replace) & I_replace == 1L,              "R",
+  y_it == 1L & (is.na(I_replace) | I_replace == 0L),             "E"
+)]
+
+# Size bins
+obs[, size_bin := fcase(
+  n_tanks_active == 1L,  "1",
+  n_tanks_active == 2L,  "2",
+  n_tanks_active == 3L,  "3",
+  n_tanks_active >= 4L,  "4+",
+  default = NA_character_
+)]
+obs[, size_bin := factor(size_bin, levels = c("1","2","3","4+"))]
+
+# Capacity bins (existing categorical from data, plus our cuts)
+obs[, cap_bin := fcase(
+  total_capacity < 10000,                            "<10K",
+  total_capacity >= 10000  & total_capacity < 30000, "10-30K",
+  total_capacity >= 30000  & total_capacity < 60000, "30-60K",
+  total_capacity >= 60000,                           "60K+",
+  default = NA_character_
+)]
+obs[, cap_bin := factor(cap_bin, levels = c("<10K","10-30K","30-60K","60K+"))]
+
+# Per-tank capacity
+obs[, cap_per_tank := total_capacity / pmax(n_tanks_active, 1L)]
+```
+
+# Setup
+
+This report documents four things:
+
+1. **Where the dynamic replacement model gets its identifying variation** — visualizing the cross-cell joint distribution of premium $P$ and hazard $h$, the time-series shifts in $P$, and the empirical action heterogeneity.
+2. **The size dimension (`n_tanks_active`)** — empirical evidence that facility size, currently averaged away by the model, is a meaningful driver of action probabilities.
+3. **The capacity dimension (`total_capacity`)** — analogous evidence for total tank capacity in gallons, distinct from tank count.
+4. **Facility-portfolio behavior around closure events** (@sec-closure-taxonomy) — what does a tank closure actually mean for the facility? Classifying every closure event by the facility's subsequent install behavior, and mapping those facility-level realities to current and proposed model actions.
+
+Sample throughout: the canonical observed DCM panel (TX 2006+, controls 1999+; $N = 2{,}282{,}735$ facility-year observations across 139,493 unique facilities). The fit referenced for model-implied quantities is the 6-parameter universal-$\gamma$ stayFE-profile specification with SD and MO dropped (`Model_Replacement_6paramFE_profile_observed_dropSDMO.rds` from Ticket 005).
+
+The takeaway upfront: **the joint $(P, h)$ variation cleanly identifies the universal-$\gamma$ structural parameters**, but **facility size and capacity capture systematic behavioral heterogeneity that the current 32-state model averages away**, and **the model's action definitions (Exit vs Replace vs Maintain) conflate genuinely different facility-portfolio behaviors**. Section 4 quantifies the action-definition issue: how much of the current "Exit" data is actually a partial-shrinkage event where the facility kept operating, and how much is a true facility-level walk-away.
+
+
+# Identifying variation in the structural model
+
+## Premium $\times$ hazard cell-level scatter {#sec-Ph-scatter}
+
+The structural identification of $(\gamma_{\text{price}}, \gamma_{\text{risk}})$ requires
+that $P$ and $h$ vary *independently* across some subset of the data. @fig-Ph-scatter
+plots the 32 state cells of the model in $(P, h)$ space, colored by regime.
+**Under FF**, $P$ is set administratively and is uncorrelated with $h$ within
+the regime — that is the source of clean $\gamma_{\text{price}}$ identification.
+**Under RB**, $P$ is risk-priced (covaries with $h$); the RB cells provide
+fit but cannot separately identify $\gamma_{\text{price}}$ from $\gamma_{\text{risk}}$.
+
+```{r fig-Ph-scatter}
+#| label: fig-Ph-scatter
+#| fig-cap: "Cell-level joint distribution of annual premium and hazard probability across the 32 state cells of the structural model. Each point is one (age $\\times$ wall $\\times$ regime) cell. FF cells span a range of hazards at roughly constant premium; RB cells show premium covarying with hazard."
+ggplot(cell_dt, aes(x = h, y = P, color = regime, shape = wall)) +
+  geom_point(size = 3, alpha = 0.85) +
+  scale_color_manual(values = c(FF = "#E76F51", RB = "#2A9D8F")) +
+  labs(x = "Annual leak probability  h(s)",
+       y = "Annual premium  P(s)  ($/tank-year)",
+       color = "Regime", shape = "Wall",
+       title = "Where the model's price-vs-risk identification comes from",
+       subtitle = "FF cells (red) give γ_price identification; RB cells (teal) give fit only") +
+  scale_y_continuous(labels = scales::dollar)
+```
+
+## Cross-state, cross-year premium variation within FF
+
+Within the FF regime, premium variation across states and over time provides
+additional identifying power for $\gamma_{\text{price}}$. @fig-P-time shows
+year-by-year mean premium by regime in the DCM sample. The pre-2006 TX
+(extended sample, included for context) had a different premium structure
+than post-2006; control-state FF premiums also drift over the sample window.
+
+```{r fig-P-time}
+#| label: fig-P-time
+#| fig-cap: "Mean annual premium per tank by regime and year. TX shows the FF-to-RB transition at the 2006 reform; control states have continuous FF premium drift."
+prem_yr <- obs[!is.na(premium), .(
+  mean_premium = mean(premium) * 10000,
+  N            = .N
+), by = .(panel_year, regime = ifelse(rho_state == 1L, "FF", "RB"))]
+
+ggplot(prem_yr, aes(x = panel_year, y = mean_premium, color = regime,
+                    group = regime)) +
+  geom_line(linewidth = 1.0) +
+  geom_point(aes(size = N), alpha = 0.7) +
+  scale_color_manual(values = c(FF = "#E76F51", RB = "#2A9D8F")) +
+  scale_size_continuous(guide = "none") +
+  scale_y_continuous(labels = scales::dollar) +
+  labs(x = "Year", y = "Mean premium ($/tank-year)",
+       color = "Regime",
+       title = "Premium variation over time, by regime",
+       subtitle = "Cross-year drift within FF provides γ_price identification")
+```
+
+## Empirical action shares across the 32 state cells {#sec-emp-ccp}
+
+@tbl-emp-ccp summarizes the empirical action shares across the 32 cells.
+This is the variation the structural likelihood is trying to fit; the
+fit figures in `Dynamic_Model_Fit_Report.qmd` show the model-implied
+overlay.
+
+```{r tbl-emp-ccp}
+#| label: tbl-emp-ccp
+#| tbl-cap: "Empirical action shares by (wall $\\times$ regime $\\times$ age bin) cell, with cell sample size $n$ and dollar premium / hazard-loss values."
+cell_emp <- obs[!is.na(s_idx), .(
+  n = .N,
+  pct_M = round(100 * mean(action == "M"), 2),
+  pct_E = round(100 * mean(action == "E"), 2),
+  pct_R = round(100 * mean(action == "R"), 3)
+), by = s_idx][order(s_idx)]
+
+cell_emp <- merge(cell_dt, cell_emp, by = "s_idx")
+cell_emp <- cell_emp[, .(s_idx, wall, regime, A_bin,
+                        n = format(n, big.mark=","),
+                        P_USDyr   = round(P),
+                        Haz_USDyr = round(haz_loss),
+                        pct_M, pct_E, pct_R)]
+setnames(cell_emp,
+         c("s_idx","wall","regime","A_bin","n","P_USDyr","Haz_USDyr","pct_M","pct_E","pct_R"),
+         c("Cell","Wall","Reg","Age","N obs","Premium USD per yr","Haz loss USD per yr","Maintain pct","Exit pct","Replace pct"))
+
+kable(cell_emp, format = "latex", booktabs = TRUE, longtable = TRUE,
+      align = c("r","l","l","r","r","r","r","r","r","r")) |>
+  kable_styling(latex_options = c("repeat_header"), font_size = 7)
+```
+
+
+# The size dimension: number of tanks per facility
+
+## Distribution
+
+The DCM sample has substantial spread in facility size. Only **23%** of
+facility-years are single-tank; the median facility-year has **3 tanks**;
+24% have **4 or more**.
+
+```{r fig-size-dist}
+#| label: fig-size-dist
+#| fig-cap: "Distribution of active tank count per facility-year in the DCM observed sample. Bars truncated at 8+; about 1.6\\% of facility-years have $\\geq 8$ tanks."
+size_dist <- obs[!is.na(n_tanks_active), .(N = .N), by = n_tanks_active][order(n_tanks_active)]
+size_dist[, pct := round(100 * N / sum(N), 2)]
+size_dist[, n_tanks_disp := pmin(n_tanks_active, 8L)]
+size_disp_collapsed <- size_dist[, .(N = sum(N), pct = sum(pct)),
+                                  by = n_tanks_disp]
+size_disp_collapsed[, label := ifelse(n_tanks_disp == 8L, "8+", as.character(n_tanks_disp))]
+size_disp_collapsed[, label := factor(label,
+                                       levels = c(as.character(1:7), "8+"))]
+
+ggplot(size_disp_collapsed, aes(x = label, y = N)) +
+  geom_col(fill = "#264653", alpha = 0.85) +
+  geom_text(aes(label = sprintf("%.1f%%", pct)), vjust = -0.4, size = 3) +
+  scale_y_continuous(labels = scales::comma,
+                     expand = expansion(mult = c(0, 0.12))) +
+  labs(x = "Active tanks at facility", y = "Facility-year observations",
+       title = "Tank count distribution in DCM observed sample",
+       subtitle = "Median = 3 tanks; only 23% are single-tank facilities")
+```
+
+## Action shares by (size $\times$ wall)
+
+@tbl-size-action and @fig-size-action together show the striking
+size-action relationship. The pattern is most dramatic at the
+**Replace** margin for double-wall tanks: DW replace rate jumps from
+**0% at single-tank facilities to ~4% at 4+ tank facilities**.
+This is almost certainly the portfolio dynamic — large multi-tank
+facilities cycle individual DW tanks at a high rate that the model
+attributes to "Replace" but is really within-facility capital refresh.
+
+```{r tbl-size-action}
+#| label: tbl-size-action
+#| tbl-cap: "Empirical action shares by (size $\\times$ wall), pooled across regime and age. Single-tank DW facilities show literally zero Replace events; 4+ tank DW facilities replace at roughly 4 percent per year."
+sa <- obs[!is.na(size_bin), .(
+  n     = .N,
+  pct_M = round(100 * mean(action == "M"), 3),
+  pct_E = round(100 * mean(action == "E"), 3),
+  pct_R = round(100 * mean(action == "R"), 3)
+), by = .(size_bin, wall = ifelse(w_state == 1L, "SW", "DW"))]
+setorder(sa, wall, size_bin)
+sa_disp <- sa[, .(Wall = wall, Size = as.character(size_bin),
+                  `N obs` = format(n, big.mark=","),
+                  `Maintain pct` = pct_M,
+                  `Exit pct` = pct_E,
+                  `Replace pct` = pct_R)]
+kable(sa_disp, format = "latex", booktabs = TRUE, align = c("l","l","r","r","r","r")) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 9)
+```
+
+```{r fig-size-action}
+#| label: fig-size-action
+#| fig-cap: "Empirical action shares by facility size and wall. Replace rate (right panel) grows steeply with size, especially for DW; this is the portfolio-refresh signature."
+sa_long <- melt(sa, id.vars = c("size_bin","wall","n"),
+                measure.vars = c("pct_M","pct_E","pct_R"),
+                variable.name = "action", value.name = "pct")
+sa_long[, action := fcase(action == "pct_M", "Maintain",
+                          action == "pct_E", "Exit",
+                          action == "pct_R", "Replace")]
+sa_long[, action := factor(action, levels = c("Maintain","Exit","Replace"))]
+
+ggplot(sa_long, aes(x = size_bin, y = pct, fill = wall)) +
+  geom_col(position = "dodge", alpha = 0.85) +
+  facet_wrap(~ action, scales = "free_y", nrow = 1) +
+  scale_fill_manual(values = c(SW = "#F4A261", DW = "#2A9D8F")) +
+  labs(x = "Tanks at facility", y = "Share (%)", fill = "Wall",
+       title = "Action shares by facility size and wall",
+       subtitle = "Replace rate explodes at 4+ tank DW facilities — portfolio cycling")
+```
+
+## Action shares by (size $\times$ age)
+
+@fig-size-age shows whether the size pattern is stable across age bins
+or interacts with age. The Replace excess in 4+ tank facilities is
+visible across all ages; it is not driven by any single age bin.
+
+```{r fig-size-age, fig.height=3.6}
+#| label: fig-size-age
+#| fig-cap: "Replace rate by age bin, separately for each facility size class. The 4+ tank line sits above the others at every age."
+sa_age <- obs[!is.na(size_bin), .(
+  pct_R = 100 * mean(action == "R"),
+  n     = .N
+), by = .(size_bin, A_bin)][order(size_bin, A_bin)]
+
+ggplot(sa_age, aes(x = A_bin, y = pct_R, color = size_bin, group = size_bin)) +
+  geom_line(linewidth = 1.0) +
+  geom_point(size = 2) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_x_continuous(breaks = 1:8,
+                     labels = c("0-5","5-10","10-15","15-20",
+                                "20-25","25-30","30-35","35+")) +
+  labs(x = "Age bin (5-year)", y = "Replace rate (%)",
+       color = "Size",
+       title = "Replace rate by age, stratified by facility size",
+       subtitle = "Size effect on Replace is roughly proportional across age bins")
+```
+
+
+# The capacity dimension: total gallons at facility
+
+## Distribution
+
+Total facility capacity is correlated with tank count but adds
+orthogonal information. The DCM sample's 25th/50th/75th percentiles of
+total capacity are **6K / 18K / 30K gallons** — a typical small station
+has one or two 12K tanks; a high-volume station has four 20K tanks
+(~80K total).
+
+```{r fig-cap-dist}
+#| label: fig-cap-dist
+#| fig-cap: "Distribution of total facility capacity in gallons. Truncated at 100K for readability; 1.9\\% of facility-years exceed 100K total gallons."
+cap_dat <- obs[!is.na(total_capacity) & total_capacity > 0 & total_capacity <= 100000]
+
+ggplot(cap_dat, aes(x = total_capacity)) +
+  geom_histogram(bins = 50, fill = "#264653", alpha = 0.85) +
+  scale_x_continuous(labels = scales::comma,
+                     breaks = seq(0, 100000, 20000)) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(x = "Total facility capacity (gallons)",
+       y = "Facility-year observations",
+       title = "Capacity distribution",
+       subtitle = "Median 18K gallons; range mostly 6K to 30K")
+```
+
+## Capacity vs tank count
+
+Capacity is partly mechanical (more tanks → more gallons) but also
+captures per-tank size. @fig-cap-vs-size shows the joint distribution:
+within each tank-count bin there is substantial spread in total
+capacity, meaning capacity adds orthogonal information beyond size.
+
+```{r fig-cap-vs-size}
+#| label: fig-cap-vs-size
+#| fig-cap: "Distribution of total capacity within each tank-count bin. Each violin plot shows the spread of total gallons for facilities with that many tanks; horizontal lines mark median, 25th, 75th. Capacity is positively related to tank count but not redundant — there is meaningful within-bin spread."
+cap_size <- obs[!is.na(size_bin) & total_capacity > 0 & total_capacity <= 100000]
+
+ggplot(cap_size, aes(x = size_bin, y = total_capacity, fill = size_bin)) +
+  geom_violin(alpha = 0.7, draw_quantiles = c(0.25, 0.5, 0.75)) +
+  scale_fill_brewer(palette = "Set2", guide = "none") +
+  scale_y_continuous(labels = scales::comma) +
+  labs(x = "Tanks at facility", y = "Total capacity (gallons)",
+       title = "Capacity within each size bin",
+       subtitle = "Capacity adds information beyond tank count")
+```
+
+## Action shares by capacity bin
+
+@tbl-cap-action mirrors the size analysis but slices by total capacity.
+The same Replace-rate growth shows up, with the largest capacity bin
+(60K+ gallons) having a Replace rate of **2.25 percent** — roughly
+33 times higher than the smallest bin (0.07 percent).
+
+```{r tbl-cap-action}
+#| label: tbl-cap-action
+#| tbl-cap: "Empirical action shares by total-capacity bin, pooled across wall, regime, and age. Replace rate grows with capacity (consistent with the size pattern but distinguishable)."
+ca_action <- obs[!is.na(cap_bin), .(
+  n     = .N,
+  pct_M = round(100 * mean(action == "M"), 3),
+  pct_E = round(100 * mean(action == "E"), 3),
+  pct_R = round(100 * mean(action == "R"), 3)
+), by = .(cap_bin)]
+setorder(ca_action, cap_bin)
+
+ca_disp <- ca_action[, .(`Capacity bin` = as.character(cap_bin),
+                          `N obs` = format(n, big.mark=","),
+                          `Maintain pct` = pct_M,
+                          `Exit pct` = pct_E,
+                          `Replace pct` = pct_R)]
+kable(ca_disp, format = "latex", booktabs = TRUE, align = c("l","r","r","r","r")) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 9)
+```
+
+## Disentangling size from capacity
+
+If we believe capacity and tank count are both proxies for "facility
+scale", does either subsume the other? @tbl-size-x-cap cross-tabulates
+the two and shows Replace rate in each (size, capacity) cell. The
+pattern that emerges: **tank count dominates capacity in this sample**.
+Almost every cell at 4+ tanks (Replace rates 0.31--2.89 percent) exceeds
+every cell at 1--3 tanks (Replace rates 0.00--0.16 percent), regardless
+of capacity bin. Within 4+ tank facilities, capacity also matters
+(0.31 percent at <10K vs 2.89 percent at 60K+), so the two dimensions
+are not redundant -- but tank count is the first-order driver of
+Replace behavior.
+
+```{r tbl-size-x-cap}
+#| label: tbl-size-x-cap
+#| tbl-cap: "Replace rate (\\%) by (size $\\times$ capacity) cell. Row $\\times$ column shows both dimensions independently shift the Replace rate."
+xtab <- obs[!is.na(size_bin) & !is.na(cap_bin), .(
+  pct_R = round(100 * mean(action == "R"), 3),
+  n     = .N
+), by = .(size_bin, cap_bin)]
+xtab_wide <- dcast(xtab, size_bin ~ cap_bin, value.var = "pct_R")
+xtab_wide_n <- dcast(xtab, size_bin ~ cap_bin, value.var = "n")
+setnames(xtab_wide, "size_bin", "Tanks")
+kable(xtab_wide, format = "latex", booktabs = TRUE,
+      align = c("l", rep("r", ncol(xtab_wide) - 1L))) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 9) |>
+  add_header_above(c(" " = 1, "Total capacity (gallons)" = 4))
+```
+
+
+# What does a tank closure actually mean at the facility level? {#sec-closure-taxonomy}
+
+In the structural model, a "Replace" event means the agent paid $K$ to
+install a new (DW) tank; an "Exit" event means the agent took the outside
+option and walked away. At the facility level, what actually happens when
+a tank closes? This section classifies every closure event in the DCM
+sample by the facility's subsequent install behavior and shows how that
+classification maps onto the current and proposed model actions.
+
+## Setup: closure-event taxonomy {#sec-closure-setup}
+
+For each facility-year with at least one tank closure, we look ahead at
+the same facility's panel history and classify the event by what follows.
+The taxonomy:
+
+- **Same-year swap** — the facility installs at least one new tank in
+  the same year as the closure ($n_{\text{install}}[t] > 0$ and
+  $n_{\text{close}}[t] > 0$). The cleanest possible "retrofit cycle":
+  one tank out, one in, same year.
+- **Delayed retrofit (1-5 yrs)** — no install in the closure year, but
+  at least one install at the same facility within 5 years.
+- **Long-gap retrofit ($>$ 5 yrs)** — install eventually, but more
+  than 5 years after the closure.
+- **Partial shrinkage** — facility closed some tanks, kept others, but
+  *never installs again* in the panel. Facility still operating with
+  fewer tanks.
+- **True exit** — all tanks closed this year ($n_{\text{eoy}}[t] = 0$)
+  AND no future install at this facility anywhere in the panel.
+
+This is the user's plain-English mapping:
+- Replace = closure followed by future install at the same facility (any
+  gap length)
+- Exit = all-tanks-gone with no future install ever (truly leaving)
+- Maintain = facility kept operating, including partial-closure cases
+  where some tanks remain (the facility didn't make a structural-model
+  decision; just adjusted its tank portfolio)
+
+*Note on counts vs. T005.* The earlier "T005 has 6,210 Replace events"
+diagnostic used 04b's `I_replace` flag, which is built on 02b's
+tank-level `is_replacement = (fac_max_install_date > tank_closed_date)`
+condition. That condition requires the next install to occur strictly
+*after* the tank's closure date. The "Same-year swap" category in the
+taxonomy here lumps in all closures and installs occurring in the same
+calendar year regardless of chronological order, so the taxonomy's
+retrofit total (8,341 closures = same-year + 1-5y + >5y) is about
+2,100 higher than T005's Replace count. The gap is closures where the
+facility installed *earlier* in the same year (then closed a different
+tank later) -- which T005 treats as Maintain at the facility-year level
+but the taxonomy treats as a swap. Both approximations are reasonable
+at year-level granularity; the user's plain-English definition is
+closer to T005's chronological rule.
+
+```{r closure-taxonomy-build, include=FALSE}
+# Restrict to the DCM observed sample window and only active-facility-years
+fp_d <- fp[((texas_treated == 1L & panel_year >= 2006L) |
+            (texas_treated == 0L & panel_year >= 1999L)) &
+           n_tanks_active > 0L]
+setorder(fp_d, panel_id, panel_year)
+
+# Compute year of next install at the same facility (NA if no future install)
+fp_d[, install_year_of := ifelse(n_installs > 0, panel_year, NA_integer_)]
+fp_d[, years_to_next_install := {
+  iy <- install_year_of[!is.na(install_year_of)]
+  vapply(panel_year, function(y) {
+    fut <- iy[iy > y]
+    if (length(fut) == 0L) NA_integer_ else as.integer(min(fut) - y)
+  }, integer(1L))
+}, by = panel_id]
+
+# Build closure-event subset and classify
+cl <- fp_d[any_closure == 1L]
+cl[, taxonomy := factor(fcase(
+  n_installs > 0L,                                              "Same-year swap",
+  !is.na(years_to_next_install) & years_to_next_install <= 5L,  "Retrofit 1-5 yrs",
+  !is.na(years_to_next_install) & years_to_next_install > 5L,   "Retrofit >5 yrs",
+  is.na(years_to_next_install) & facility_complete_closure == 0L, "Partial shrinkage",
+  is.na(years_to_next_install) & facility_complete_closure == 1L, "True exit",
+  default = NA_character_
+), levels = c("Same-year swap","Retrofit 1-5 yrs","Retrofit >5 yrs",
+              "Partial shrinkage","True exit"))]
+
+# Size bins on closure events
+cl[, size_bin := factor(fcase(
+  n_tanks_active == 1L,  "1",
+  n_tanks_active == 2L,  "2",
+  n_tanks_active == 3L,  "3",
+  n_tanks_active >= 4L,  "4+",
+  default = NA_character_
+), levels = c("1","2","3","4+"))]
+```
+
+## Distribution of closure-event types {#sec-closure-distribution}
+
+@tbl-closure-tax and @fig-closure-tax show the overall composition of
+closure events under this taxonomy and how it varies by facility size.
+**True exits dominate** at 72 percent of all closure events, followed by
+retrofit cycles at 16 percent (same-year swap 13 percent plus delayed
+retrofit 3 percent) and partial shrinkage at 12 percent.
+
+The size-stratified composition (@fig-closure-tax) tells a sharper story:
+
+- **Single-tank facilities (1 tank):** 97 percent of closures are true
+  exits. Almost no retrofit activity. By construction these can't
+  partially shrink.
+- **Small multi-tank facilities (2--3 tanks):** still dominated by true
+  exits (80--84 percent), with partial shrinkage at 9--12 percent and
+  retrofit cycles at only 5--8 percent.
+- **Large multi-tank facilities (4+ tanks):** the pattern flips --
+  true exits drop to 41 percent, retrofit cycles rise to 36 percent
+  (mostly same-year swaps at 32 percent), and partial shrinkage takes
+  23 percent.
+
+The 4+ tank facilities are the *only* group where retrofit cycles are
+a majority-ish share of closure events. For the other ~75 percent of
+the sample, closure events overwhelmingly mean "facility leaves the
+industry."
+
+```{r tbl-closure-tax}
+#| label: tbl-closure-tax
+#| tbl-cap: "Distribution of facility-year closure events by what follows at the same facility. Each row is a category of facility-level outcome conditional on at least one tank closing that year."
+tax_dist <- cl[!is.na(taxonomy), .(N = .N), by = taxonomy][order(taxonomy)]
+tax_dist[, pct := round(100 * N / sum(N), 1)]
+tax_dist[, N := format(N, big.mark = ",")]
+kable(tax_dist, format = "latex", booktabs = TRUE,
+      col.names = c("Outcome", "N closure events", "Pct of closures"),
+      align = c("l","r","r")) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 10)
+```
+
+```{r fig-closure-tax}
+#| label: fig-closure-tax
+#| fig-cap: "Composition of closure events by facility size. Single-tank facilities are roughly half retrofits and half true exits. Larger facilities are dominated by same-year swaps and retrofit cycles — the portfolio refresh signature."
+#| fig-width: 7
+#| fig-height: 3.5
+tax_by_size <- cl[!is.na(taxonomy) & !is.na(size_bin),
+                  .(N = .N), by = .(size_bin, taxonomy)]
+tax_by_size[, pct := N / sum(N) * 100, by = size_bin]
+
+ggplot(tax_by_size, aes(x = size_bin, y = pct, fill = taxonomy)) +
+  geom_col(position = "stack", alpha = 0.9) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = "Tanks at facility (size bin)", y = "% of closure events",
+       fill = "Closure outcome",
+       title = "What follows a tank closure, by facility size",
+       subtitle = "Retrofit cycles dominate at multi-tank facilities")
+```
+
+## Closure-to-install gap distribution {#sec-closure-gap}
+
+For closure events that ARE eventually replaced, @fig-gap shows the
+distribution of years until the next install at the same facility.
+**Most retrofits happen within the same year as the closure**, with
+secondary peaks at 1-2 years and a long tail.
+
+```{r fig-gap}
+#| label: fig-gap
+#| fig-cap: "Distribution of years from closure to next install at the same facility, among closure events that are eventually replaced. Same-year swaps (gap = 0) dominate; the tail extends to multi-year delays."
+#| fig-width: 7
+#| fig-height: 3.2
+gap_dat <- cl[!is.na(years_to_next_install) | n_installs > 0]
+gap_dat[, gap := fifelse(n_installs > 0L, 0L, years_to_next_install)]
+gap_dat[, gap_cap := pmin(gap, 10L)]
+
+ggplot(gap_dat[!is.na(gap_cap)], aes(x = gap_cap)) +
+  geom_histogram(bins = 11, fill = "#264653", alpha = 0.85,
+                 binwidth = 1, center = 0) +
+  scale_x_continuous(breaks = 0:10, labels = c(0:9, "10+")) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(x = "Years from closure to next install at same facility",
+       y = "Closure events",
+       title = "How quickly do retrofitting facilities re-install?",
+       subtitle = "0 = same-year swap; >5 = long-gap retrofit; right tail truncated at 10+")
+```
+
+## Composition shifts around closure events {#sec-closure-composition}
+
+For each closure event, did the facility's wall composition shift?
+@tbl-composition-shift cross-tabulates what was closed against what
+was installed (in the same year or within 5 years). This reveals the
+*directional* tank dynamics: SW → DW (retrofit upgrade), DW → DW
+(capital refresh), SW → none (downsize), etc.
+
+```{r tbl-composition-shift}
+#| label: tbl-composition-shift
+#| tbl-cap: "Composition of closure-and-install events. Rows: type of tank(s) closed. Columns 'SW', 'DW', 'Both' = wall type of same-year install at the facility. Column 'Within 5y' = no same-year install but install within 5 years. Column 'Never' = no install at this facility for the rest of the panel. Cells are counts of closure events."
+# For each closure event, look at the wall composition of closures and of nearby installs
+# Categorize closures: SW-only, DW-only, mixed
+cl[, closed_kind := fcase(
+  n_sw_closures > 0L & n_dw_closures == 0L, "SW closed",
+  n_sw_closures == 0L & n_dw_closures > 0L, "DW closed",
+  n_sw_closures > 0L & n_dw_closures > 0L,  "Both closed",
+  default = NA_character_
+)]
+
+# For each closure event, find install-side wall (same year, then within 5 years)
+# Same year:
+cl[, install_kind_sameyear := fcase(
+  n_sw_installs > 0L & n_dw_installs == 0L, "SW",
+  n_sw_installs == 0L & n_dw_installs > 0L, "DW",
+  n_sw_installs > 0L & n_dw_installs > 0L,  "Both",
+  n_installs == 0L,                          "(none same year)",
+  default = NA_character_
+)]
+
+# For within-5-year window (look-ahead) — only when no same-year install
+cl[, install_kind := install_kind_sameyear]
+cl[install_kind == "(none same year)", install_kind := fifelse(
+  !is.na(years_to_next_install) & years_to_next_install <= 5L,
+  "Within 5y",
+  "Never"
+)]
+cl[, install_kind := factor(install_kind,
+   levels = c("SW","DW","Both","Within 5y","Never"))]
+cl[, closed_kind := factor(closed_kind, levels = c("SW closed","DW closed","Both closed"))]
+
+comp_tab <- cl[!is.na(closed_kind) & !is.na(install_kind),
+               .(N = .N), by = .(closed_kind, install_kind)]
+comp_wide <- dcast(comp_tab, closed_kind ~ install_kind,
+                   value.var = "N", fill = 0L)
+setnames(comp_wide, "closed_kind", "Closed")
+
+kable(comp_wide, format = "latex", booktabs = TRUE,
+      align = c("l", rep("r", ncol(comp_wide) - 1L))) |>
+  kable_styling(font_size = 9)
+```
+
+The diagonal entries (SW closed → SW installed; DW closed → DW
+installed) show direct tank-for-tank substitution. **Off-diagonal cells
+where the wall type changes — SW closed → DW installed — are the
+structural retrofits the model conceptually targets**, but they're a
+small share of the table.
+
+## Mapping facility-level reality to model actions {#sec-closure-mapping}
+
+The whole point of the taxonomy: how do these facility-level events map
+to model actions, both under the current T005 definition and under the
+proposed clean definition?
+
+```{r tbl-mapping}
+#| label: tbl-mapping
+#| tbl-cap: "Mapping of facility-level closure outcomes to model actions. T005 column shows the current (04b) classification; Clean column shows the proposed (T006) classification per the user's plain-English definitions. Mismatches are highlighted."
+mapping_dt <- data.table(
+  Outcome = levels(cl$taxonomy),
+  N       = vapply(levels(cl$taxonomy),
+                   function(k) nrow(cl[taxonomy == k]),
+                   integer(1L)),
+  T005    = c("Replace", "Replace", "Replace", "Exit (MISMATCH)", "Exit"),
+  T006    = c("Replace", "Replace", "Replace", "Maintain", "Exit")
+)
+mapping_dt[, pct := round(100 * N / sum(N), 1)]
+mapping_dt[, N := format(N, big.mark = ",")]
+mapping_dt <- mapping_dt[, .(Outcome, `N events` = N, `Pct of closures` = pct,
+                              `T005 action` = T005, `T006 action` = T006)]
+
+kable(mapping_dt, format = "latex", booktabs = TRUE,
+      align = c("l","r","r","l","l")) |>
+  kable_styling(font_size = 10) |>
+  row_spec(4, background = "#FFF3CD")
+```
+
+**The single substantive mismatch is the Partial shrinkage row**: a
+facility closed some tanks but kept operating and never installs
+again. T005 calls this Exit; T006 calls it Maintain. The numbers in
+@tbl-mapping quantify how much of the current "Exit" data is actually
+this case.
+
+Two implications fall out of this:
+
+1. **T005's Exit margin is contaminated** by partial-shrinkage events.
+   The estimated $\hat\kappa$ partly reflects "value of partial
+   downsizing," not "value of full facility exit."
+2. **T005's Replace data is mostly clean.** The taxonomy bins
+   "Same-year swap," "Retrofit 1-5 yrs," and "Retrofit >5 yrs" all
+   correctly map to Replace under both T005 and T006. The Replace
+   total is the same in both classifications; the issue with the
+   *interpretation* of Replace (per Section 4.4 of this report) is
+   the structural one — replacement_closure_year captures any
+   tank-replacement, including capital refresh at multi-tank DW
+   facilities, which is conceptually distinct from SW→DW retrofit.
+
+## Per-tank vs facility closure rates {#sec-closure-pertank}
+
+For completeness, @tbl-tank-vs-fac shows the rate of "any tank closure"
+vs "facility complete closure" by size bin. The ratio quantifies how
+much closure activity is partial vs total.
+
+```{r tbl-tank-vs-fac}
+#| label: tbl-tank-vs-fac
+#| tbl-cap: "Per-tank closure rate (any tank in the facility closed that year) vs full-facility-closure rate, by facility size. Larger facilities have much higher per-tank rates relative to full-facility-closure rates — reflecting that individual-tank events at multi-tank facilities are common."
+rate_tab <- fp_d[!is.na(n_tanks_active) & n_tanks_active > 0, .(
+  N_obs                  = .N,
+  any_closure_rate       = round(100 * mean(any_closure == 1L), 3),
+  full_closure_rate      = round(100 * mean(facility_complete_closure == 1L), 3),
+  ratio_any_to_full      = round(mean(any_closure == 1L) /
+                                  pmax(mean(facility_complete_closure == 1L), 1e-9), 1)
+), by = .(size = fcase(n_tanks_active == 1L,  "1",
+                        n_tanks_active == 2L,  "2",
+                        n_tanks_active == 3L,  "3",
+                        n_tanks_active >= 4L,  "4+"))]
+setorder(rate_tab, size)
+rate_tab[, N_obs := format(N_obs, big.mark = ",")]
+
+kable(rate_tab, format = "latex", booktabs = TRUE,
+      col.names = c("Size", "N obs", "Any closure pct", "Full closure pct", "Any to Full ratio"),
+      align = c("l","r","r","r","r")) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 10)
+```
+
+The "Any / Full" ratio rises sharply with size — at single-tank
+facilities the two rates are identical by definition; at 4+ tank
+facilities, "any tank closure" happens many times more often than
+"facility fully closes." This is the portfolio-management signature:
+big facilities cycle individual tanks routinely without ever fully
+exiting.
+
+## How facility wall-state is assigned, and why DW-to-SW transitions exist {#sec-wall-state-rule}
+
+The DCM panel build (`04b_Replacement_Panel_Prep.R`, lines 117--119)
+classifies a facility-year's `w_state` by the *worst tank's wall type*:
+
+```
+w_state = DW   if  wall_type == "Double-Walled"   (all tanks DW)
+w_state = SW   otherwise                            (any SW tank, or unknown)
+```
+
+So a facility with 1 SW and 3 DW tanks has `wall_type = "Mixed"` at
+the facility level and is coded `w_state = SW` in the DCM panel. The
+intent (per the in-code comment) is: any SW tank in the facility's
+portfolio means the facility still carries SW risk, so the SW
+classification dominates. This is the **worst-tank rule**.
+
+Consequences:
+
+1. **Mixed facilities are pooled into the SW cells.** A facility
+   that's retrofitted 3 of 4 tanks still shows up in SW state cells in
+   the model. The hazard and premium cell averages in the SW pool are
+   contaminated by these partially-retrofitted facilities.
+
+2. **The 1 percent DW-to-SW transition rate observed earlier
+   (Section 1) is a mechanical consequence of this rule, not a data
+   error.** A facility coded "all DW" in year $t$ that adds an SW
+   tank in year $t+1$ shifts to `wall_type = "Mixed"` and therefore
+   to `w_state = SW`. The model's transition matrix forbids this
+   move (DW state never transitions to SW under any action), so these
+   data points contradict the model's deterministic wall evolution.
+
+3. **Two alternative rules** are worth considering as robustness checks:
+
+    - **Majority rule:** `w_state = DW` iff `pct_dw > 0.5`. Captures
+      "what's the typical tank at this facility?"
+    - **All-DW rule:** `w_state = DW` iff `all_dw == 1` (every tank
+      DW). Strictest interpretation -- only facilities that have
+      completed full retrofit count as DW. Symmetric to the current
+      worst-tank rule.
+
+The current worst-tank rule probably makes the SW pool noisier than
+necessary -- it lumps "all SW" facilities together with "mostly DW
+with one straggler SW" facilities, even though these groups may have
+very different responses to retrofit incentives. A robustness check
+re-estimating the 6p+stayFE model under the majority rule (and
+reporting how $\hat\theta$ moves) would help characterize the
+sensitivity.
+
+
+## Partial closure as a candidate fourth action {#sec-partial-closure-action}
+
+Partial closure — a facility closes *some* tanks but keeps operating and never
+installs again — currently maps to **Maintain** under the T007 clean definitions
+(§4.5). This section characterizes partial-closure behavior across
+facility-portfolio dimensions and assesses whether it is large enough and
+structured enough to warrant adding as a fourth model action.
+
+```{r partial-closure-data, include=FALSE}
+# ------------------------------------------------------------------
+# Additional facility_panel columns for §4.8 analyses
+# ------------------------------------------------------------------
+fp_wall <- fread(here("Data","Analysis","facility_panel.csv"),
+                 select = c("panel_id","panel_year",
+                            "all_sw","all_dw","mixed_wall","avg_tank_age_dec"),
+                 na.strings = c("","NA","N/A"))
+
+# Merge wall composition into fp_d (already has years_to_next_install from
+# the closure-taxonomy-build chunk)
+if (!("all_sw" %in% names(fp_d)))
+  fp_d <- merge(fp_d, fp_wall, by = c("panel_id","panel_year"), all.x = TRUE)
+
+# Partial-closure indicator on the full fp_d
+fp_d[, is_partial := any_closure == 1L & is.na(years_to_next_install) &
+                     facility_complete_closure == 0L]
+
+# Partial-closure subset for detailed analyses
+pc <- fp_d[is_partial == TRUE]
+
+# Wall composition label
+fp_d[, wall_comp := fcase(
+  !is.na(all_dw)  & all_dw  == 1L, "All-DW",
+  !is.na(mixed_wall) & mixed_wall == 1L, "Mixed",
+  !is.na(all_sw)  & all_sw  == 1L, "All-SW",
+  default = "Unknown"
+)]
+
+# Average tank age bin
+fp_d[, age_bin_fac := factor(fcase(
+  is.na(avg_tank_age_dec),          "Unknown",
+  avg_tank_age_dec < 5,             "<5 yrs",
+  avg_tank_age_dec < 10,            "5-10 yrs",
+  avg_tank_age_dec < 20,            "10-20 yrs",
+  avg_tank_age_dec >= 20,           "20+ yrs",
+  default = "Unknown"
+), levels = c("<5 yrs","5-10 yrs","10-20 yrs","20+ yrs","Unknown"))]
+
+# Capacity bins
+fp_d[, cap_bin4 := fcase(
+  is.na(total_capacity) | total_capacity == 0, NA_character_,
+  total_capacity < 10000,                       "<10K gal",
+  total_capacity < 30000,                       "10-30K gal",
+  total_capacity < 60000,                       "30-60K gal",
+  total_capacity >= 60000,                      "60K+ gal",
+  default = NA_character_
+)]
+
+# panel_dt for tank-level analyses (§4.8.2 and §4.8.3)
+panel_dt_path <- here("Data","Analysis","panel_dt.csv")
+pdt48 <- fread(panel_dt_path,
+               select = c("tank_panel_id","panel_id","panel_year",
+                          "mm_wall","install_yr_int","closure_event",
+                          "tank_installed_date","tank_closed_date"),
+               na.strings = c("","NA","N/A"))
+pdt48[, panel_year         := as.integer(panel_year)]
+pdt48[, tank_installed_date := as.IDate(tank_installed_date)]
+pdt48[, tank_closed_date    := as.IDate(tank_closed_date)]
+pdt48[, tank_age_at_closure := fifelse(
+  closure_event == 1L & !is.na(tank_closed_date) & !is.na(install_yr_int),
+  as.integer(year(tank_closed_date)) - install_yr_int,
+  NA_integer_
+)]
+
+# Partial-closure event keys (panel_id × panel_year)
+pc_keys <- fp_d[is_partial == TRUE, .(panel_id, panel_year, event = "Partial shrinkage")]
+exit_keys <- cl[taxonomy == "True exit",    .(panel_id, panel_year, event = "True exit")]
+retro_keys <- cl[taxonomy %in% c("Same-year swap","Retrofit 1-5 yrs","Retrofit >5 yrs"),
+                  .(panel_id, panel_year, event = "Retrofit")]
+
+# Tanks that closed at each event type
+closed_tanks <- rbindlist(list(
+  merge(pdt48[closure_event == 1L], pc_keys,   by = c("panel_id","panel_year")),
+  merge(pdt48[closure_event == 1L], exit_keys,  by = c("panel_id","panel_year")),
+  merge(pdt48[closure_event == 1L], retro_keys, by = c("panel_id","panel_year"))
+))
+closed_tanks[, wall_clean := fcase(
+  grepl("Single", mm_wall, ignore.case = TRUE), "SW",
+  grepl("Double", mm_wall, ignore.case = TRUE), "DW",
+  default = "Unknown"
+)]
+
+# Phase 0 results
+phase0 <- fread(here("Reports","Audits","Phase0_Churn_Filtered_Regime_Test.csv"),
+                na.strings = c("","NA","N/A"))
+```
+
+### The bidirectional regime effect by facility size {#sec-partial-regime}
+
+The within-TX natural experiment (pre-1999 flat-fee vs 2006+ risk-based pricing)
+reveals a **bidirectional** partial-closure response that depends sharply on
+facility size (@tbl-phase0). Single-tank facilities show zero partial-closure
+events by construction (a single-tank closure is always a full exit).
+At **2--3 tank facilities**, the partial-closure rate is *lower* under RB
+pricing than under FF (−4.9pp to −6.9pp). At **4+ tank facilities**, the
+rate is *higher* under RB (+6.2pp). This sign reversal is the key finding.
+
+The sign reversal survived a churn-tank filter: the 4+ tank effect is
++6.2pp whether or not first-year-churn tanks are excluded (Phase 0
+diagnostic result). Churn tanks are already filtered from the matched
+analysis panel by the `tstop > tstart` exposure criterion, so this
+bidirectional pattern is not a panel-build artifact.
+
+```{r tbl-phase0}
+#| label: tbl-phase0
+#| tbl-cap: "Within-TX partial-closure rate by facility size and pricing regime (pre-1999 flat-fee vs 2006+ risk-based). Phase 0 diagnostic: T007. The bidirectional effect by size is the key finding — smaller facilities shrink less under RB, larger facilities shrink more."
+phase0_disp <- phase0[, .(
+  `Size bin`           = size_bin,
+  Regime               = regime,
+  `Closure events`     = format(n_closure_events, big.mark = ","),
+  `N partial (orig)`   = format(n_partial_shrinkage, big.mark = ","),
+  `Pct partial (orig)` = sprintf("%.1f%%", pct_partial_original),
+  `Pct partial (clean)`= sprintf("%.1f%%", pct_partial_clean),
+  `Δ (clean−orig)`     = sprintf("%+.1fpp", delta)
+)]
+kable(phase0_disp, format = "latex", booktabs = TRUE,
+      align = c("l","l","r","r","r","r","r")) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 9)
+```
+
+Two structural-model design choices are motivated by this pattern:
+
+1. **Add partial closure as a fourth action** — captures the response
+   *level* (do facilities shrink at all?) but requires estimating a new
+   cost parameter and extending the state space.
+2. **Add facility size as a state dimension** — captures the *sign reversal*
+   directly (size interacts with the regime-pricing effect) and may be
+   sufficient if the level of partial shrinkage is well-approximated by
+   allowing size-specific intercepts on the Maintain/Exit/Replace CCPs.
+
+These two options are not mutually exclusive but have different implementation costs.
+Section @sec-partial-recommendation evaluates them together using the evidence
+from §§4.8.1--4.8.4.
+
+### Partial closure rate by facility-portfolio dimensions {#sec-partial-dims}
+
+@tbl-partial-dims shows the unconditional partial-closure rate (fraction of
+closure events that are partial shrinkage, not full exit or retrofit) stratified
+along four portfolio dimensions: facility size, total capacity, wall composition,
+and average tank age.
+
+```{r tbl-partial-dims}
+#| label: tbl-partial-dims
+#| tbl-cap: "Partial-closure rate by four facility-portfolio dimensions, pooled across regime and year. Partial closure = any\\_closure $=1$, facility\\_complete\\_closure $=0$, no future install. `N closures` = denominator (any-closure events); `Pct partial` = fraction that are partial shrinkage."
+make_strat_tab <- function(dt, by_var, by_label) {
+  tab <- dt[any_closure == 1L & !is.na(get(by_var)), .(
+    N_closures = .N,
+    N_partial  = sum(is_partial == TRUE, na.rm = TRUE)
+  ), by = c(by_var)]
+  tab[, pct_partial := round(100 * N_partial / pmax(N_closures, 1L), 2)]
+  setnames(tab, by_var, by_label)
+  tab[, `Dimension` := by_label]
+  tab[, .(Dimension, Level = get(by_label),
+           `N closures` = format(N_closures, big.mark=","),
+           `N partial`  = format(N_partial,  big.mark=","),
+           `Pct partial` = pct_partial)]
+}
+
+# Size bin
+fp_d[, size_bin_48 := fcase(
+  n_tanks_active == 1L, "1", n_tanks_active == 2L, "2",
+  n_tanks_active == 3L, "3", n_tanks_active >= 4L, "4+",
+  default = NA_character_)]
+t_size <- make_strat_tab(fp_d, "size_bin_48", "Size bin")
+t_cap  <- make_strat_tab(fp_d[!is.na(cap_bin4)], "cap_bin4", "Capacity bin")
+t_wall <- make_strat_tab(fp_d[wall_comp != "Unknown"], "wall_comp", "Wall composition")
+t_age  <- make_strat_tab(fp_d[age_bin_fac != "Unknown"], "age_bin_fac", "Avg tank age")
+
+dims_tab <- rbindlist(list(t_size, t_cap, t_wall, t_age))
+kable(dims_tab, format = "latex", booktabs = TRUE,
+      align = c("l","l","r","r","r")) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 9) |>
+  collapse_rows(columns = 1, latex_hline = "major")
+```
+
+### Wall type of closed tank at partial-closure events {#sec-partial-wall}
+
+For each partial-closure event, @tbl-partial-wall shows the wall type of the
+tank(s) that actually closed (identified by joining closure-year rows in
+`panel_dt`). The hypothesis: facilities preferentially close their oldest SW
+tanks (highest risk, least valuable), making partial closure a risk-management
+action.
+
+```{r tbl-partial-wall}
+#| label: tbl-partial-wall
+#| tbl-cap: "Wall type of closed tanks at partial-closure, true-exit, and retrofit events. Rows: event type. Columns: fraction of closed-tank observations that are SW, DW, or Unknown wall. SW dominance at partial-closure events would support the risk-management interpretation."
+wall_summary <- closed_tanks[wall_clean != "Unknown", .(
+  N_tanks = .N,
+  pct_SW  = round(100 * mean(wall_clean == "SW"), 1),
+  pct_DW  = round(100 * mean(wall_clean == "DW"), 1)
+), by = event][order(event)]
+
+wall_summary_disp <- wall_summary[, .(
+  `Event type` = event,
+  `N closed tanks` = format(N_tanks, big.mark=","),
+  `% SW` = pct_SW,
+  `% DW` = pct_DW
+)]
+kable(wall_summary_disp, format = "latex", booktabs = TRUE,
+      align = c("l","r","r","r")) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 10)
+```
+
+### Age of closed tank at partial-closure events {#sec-partial-age}
+
+@fig-partial-age shows the distribution of tank age at closure for tanks
+involved in partial-closure events vs full exits and retrofits. The hypothesis:
+partial-closure tanks are older than average (firms pruning end-of-life tanks).
+
+```{r fig-partial-age}
+#| label: fig-partial-age
+#| fig-cap: "Distribution of tank age at closure (years since installation) by event type. Partial-shrinkage tanks, true-exit tanks, and retrofit tanks. Partial-closure tanks systematically older than retrofit tanks would support the risk-management interpretation."
+#| fig-height: 3.6
+age_dat <- closed_tanks[!is.na(tank_age_at_closure) &
+                          tank_age_at_closure >= 0 &
+                          tank_age_at_closure <= 60]
+age_dat[, age_cap := pmin(tank_age_at_closure, 50L)]
+
+ggplot(age_dat, aes(x = age_cap, fill = event, color = event)) +
+  geom_density(alpha = 0.35, linewidth = 0.8) +
+  scale_fill_brewer(palette  = "Set2") +
+  scale_color_brewer(palette = "Set2") +
+  scale_x_continuous(breaks = seq(0, 50, 10), labels = c(seq(0,40,10),"50+")) +
+  labs(x = "Tank age at closure (years)", y = "Density",
+       fill = "Event type", color = "Event type",
+       title = "Age of closed tank by event type",
+       subtitle = "Partial-shrinkage tanks compared to true-exit and retrofit tanks") +
+  theme(legend.position = "top")
+```
+
+### Policy response check: within-TX 1999 cutoff {#sec-partial-policy}
+
+@tbl-partial-policy repeats the within-TX partial-closure test using the
+post-T007 cleaned action definitions and confirms the bidirectional finding from
+Phase 0. Since churn tanks are already excluded from the matched analysis panel
+(by the `tstop > tstart` filter in 02b), the cleaned and original rates are
+identical in this sample; the column is shown for transparency.
+
+```{r tbl-partial-policy}
+#| label: tbl-partial-policy
+#| tbl-cap: "Within-TX partial-closure rate by facility size and pricing regime, using T007 cleaned definitions. Phase 0 diagnostic: churn filter has zero effect on this sample (churn tanks already excluded by exposure filter). The 4+ tank bidirectional effect (+6.2pp) is the headline result."
+kable(phase0[, .(
+  `Size` = size_bin,
+  Regime = regime,
+  `Pct (original)` = sprintf("%.1f%%", pct_partial_original),
+  `Pct (clean)`    = sprintf("%.1f%%", pct_partial_clean),
+  `Δ` = sprintf("%+.1fpp", delta)
+)], format = "latex", booktabs = TRUE,
+   align = c("l","l","r","r","r")) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 9)
+```
+
+### Recommendation: 4th action or size as state dimension? {#sec-partial-recommendation}
+
+The four analyses above converge on a specific characterization of partial
+closure: it is concentrated at large multi-tank facilities (4+ tanks), is
+associated with SW tanks (the higher-risk wall type), and involves
+disproportionately old tanks. The within-TX regime test shows a
+**+6.2pp increase in partial-closure frequency at 4+ tank facilities under RB
+pricing**, which is a meaningful behavioral response to the pricing regime.
+
+Two model extensions are motivated by this evidence, and they answer
+different questions:
+
+**Option A — Add partial closure as a 4th model action.**
+This directly represents the partial-shrinkage choice in the value function.
+It requires (i) defining the fourth action at the facility-year level in 04b,
+(ii) adding a new partial-closure cost parameter to the utility specification,
+(iii) extending the estimator and state-transition matrix to handle four actions,
+and (iv) re-running the full estimation suite. The benefit: the welfare CF
+(Phase 4) would capture the social cost of suppressed or induced partial
+closure under alternative pricing regimes. The cost: substantial
+implementation work, plus the fourth action is only empirically relevant at
+4+ tank facilities (≈25% of the sample), so it may not move the aggregate
+welfare number enough to justify the effort.
+
+**Option B — Add facility size as a state dimension.**
+Rather than adding an action, extend the state space from 32 to 128 cells
+(4 size bins × existing 32). This captures the bidirectional size–regime
+interaction directly in the CCPs without a new action parameter. The
+implementation is lighter — the existing 6p+stayFE+profile machinery supports
+arbitrary additive group intercepts, and size FE are already the specification
+tested in the T004 profile-likelihood architecture. The cost: the partial-closure
+behavior would still be folded into the Maintain action, and the welfare CF
+cannot distinguish "facilities shrinking their portfolio" from "facilities simply
+not exiting or replacing."
+
+**Recommendation: implement Option B (size as state dimension) first.**
+The evidence for a size-differentiated structural response is strong (6.2pp
+regime effect at 4+ tank facilities, sign reversal relative to 2--3 tank
+facilities, consistent wall-type and age patterns). Option B can be implemented
+as a modest extension to the existing 6p+stayFE+profile spec and will
+immediately improve the model's empirical fit. If, after adding size FE, the
+partial-closure-specific CF contribution to welfare remains large (a separate
+computation), Option A can be added in a subsequent ticket with the
+size-differentiated baseline already in place. Option A without Option B
+would add a new action but still average over size heterogeneity — and the Phase
+0 evidence suggests the behavioral margin is precisely where size matters most.
+
+
+# Implications
+
+## For the dynamic structural model
+
+### Action definitions (highest priority)
+
+@sec-closure-mapping shows the most consequential model-data mismatch: the
+"Partial shrinkage" row — facility closed some tanks, kept operating, and
+never installs again — is currently classified as **Exit** under T005 but is
+behaviorally **Maintain** under the user's clean facility-level definition.
+Fixing this requires only a small change to 04b's action assignment, then
+re-running the T005 estimation suite on the corrected panel. The expected
+result: $\hat\kappa$ moves (partial-shrinkage signal is removed from the
+Exit margin), $\hat K$ may shift modestly, and the structural welfare
+counterfactuals become defensible. **This fix should land before any CF
+estimation.**
+
+### Size and capacity (second priority)
+
+The 6-parameter universal-$\gamma$ specification (T005) treats every
+facility as if it were a single representative tank with the cell-average
+$(P, h)$ values. The size and capacity diagnostics above show that:
+
+- **Single-tank facilities (23\\% of sample) and 4+ tank facilities
+  (25\\%) have qualitatively different action profiles**, especially at
+  the DW Replace margin where 4+ tank facilities replace at ~4\\% vs
+  ~0\\% for single-tank.
+- The "Replace" action in the model conflates two distinct firm
+  behaviors: structural retrofit (SW $\\to$ DW upgrade) and tank-level
+  portfolio refresh at multi-tank facilities.
+- Capacity adds incremental information beyond tank count.
+
+The cleanest minimal extension is to add **facility size as a profile-FE
+grouping dimension** (analogous to state FE), interacted with state or
+additive. This requires no new estimator architecture — the
+existing T004 profile-likelihood machinery generalizes to any number of
+additive group intercepts.
+
+Recommended ticket: **add size FE (4 bins: 1, 2, 3, 4+) to the
+6p+stayFE+profile specification**, either additive (3 new profiled-out
+intercepts) or interacted with state FE (17 $\\times$ 4 = 68 intercepts).
+Compare to the T005 fit on LL improvement. If $\\Delta\\log L$ is large,
+this is a real source of misspecification; if small, the model is robust
+to size and the diagnostic can be left as a footnote.
+
+## For the reduced-form analyses
+
+The event-study and DiD specifications elsewhere in the project
+currently aggregate at the facility-year level without explicit size
+controls. The size patterns above suggest:
+
+- **Stratify event-study estimates by facility size** (e.g., $\\leq 2$
+  tanks vs $\\geq 3$ tanks). The headline ATT may differ across size
+  classes; reform effects could plausibly be larger at large facilities
+  (which have more decisions to make per year).
+- **Add size as a control variable** in OLS / Cox specifications. At a
+  minimum include `n_tanks_active` (or its log) as a covariate.
+- **Capacity may add additional explanatory power** — worth testing
+  whether `log(total_capacity)` improves fit beyond size.
+- **Report compositional shifts** — if the treated and control samples
+  differ systematically in size composition, the matching / weighting
+  procedures should be re-examined.
+
+## For paper exposition
+
+Make the per-tank-vs-per-facility distinction explicit:
+
+- All structural cost estimates ($\\kappa$, $K$) are **per-tank**
+- All flow utility components (revenue, premium, hazard loss) are
+  **per-tank**
+- Per-facility welfare effects scale with average tanks-per-facility
+  ($\\approx 2.7$ in this sample)
+- The agent in the model is best understood as "a representative tank
+  at a facility making one closure-or-replace decision per year,"
+  acknowledging that 25\\% of observed closure events involve only
+  some tanks at multi-tank facilities (which the model treats as
+  composite full-facility events)
+
+# T011 Diagnostics: action coding, empirical CCPs, and size variation {#sec-t011}
+
+## Action coding audit {#sec-t011-action}
+
+### Action distribution: 02b flags vs 04b y\_it {#sec-t011-a1}
+
+```{r}
+#| label: tbl-t011-a1
+#| tbl-cap: "Action coding: 02b flags mapped to 04b DCM actions"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Tables","T011_A1_ActionDistribution.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  knitr::kable(dt, format="latex", booktabs=TRUE,
+    col.names=c("Category","N","Pct")) |>
+    kableExtra::kable_styling(font_size=9, latex_options="hold_position")
+} else { cat("*[T011 not yet run — Output/Tables/T011\\_A1\\_ActionDistribution.csv missing]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Six categories computed on the merged estimation sample; the common denominator is all sample rows, so the categories overlap by design (a partial closure is also a Maintain). Partial closures (any\_closure $=1$, facility\_complete\_closure $=0$) are classified Maintain in the DCM. CompleteExit\_withFutureInstall is the double-triggered case in which a full closure coincides with a future install, which the model codes as Replace (retrofit wins).
+\end{flushleft}
+
+### Closure type overlap: full-exit x replacement flag {#sec-t011-a2}
+
+```{r}
+#| label: tbl-t011-a2
+#| tbl-cap: "Closure-type overlap: complete closure $\\times$ replacement flag"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Tables","T011_A2_ClosureTypeOverlap.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  knitr::kable(dt, format="latex", booktabs=TRUE,
+    col.names=c("Complete closure","Replacement flag","N","Pct of closures")) |>
+    kableExtra::kable_styling(font_size=9, latex_options="hold_position")
+} else { cat("*[T011 not yet run — T011\\_A2 missing]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Cross-tabulation among closure rows (y\_it $=1$). Pct of closures uses total estimation-sample closures as the denominator. Rows with facility\_complete\_closure $=1$ and replacement\_closure\_year $=1$ are the double-triggered events mapped to Replace.
+\end{flushleft}
+
+### Replacement margin validity: timing, tank count, and capacity change {#sec-t011-a5}
+
+```{r}
+#| label: tbl-t011-a5
+#| tbl-cap: "Replacement-margin validity: timing, tank count, and capacity change"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Tables","T011_A5_ReplacementMarginValidity.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  knitr::kable(dt, format="latex", booktabs=TRUE, longtable=TRUE,
+    col.names=c("Section","Category","N","Pct of Replace events","Note")) |>
+    kableExtra::kable_styling(font_size=9, latex_options=c("hold_position","repeat_header"))
+} else { cat("*[T011 not yet run — T011\\_A5 missing]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Replace events are facility-years with replacement\_closure\_year $=1$ in the full facility panel. Before/after stock is anchored by calendar year (t$-1$ and the next-install year) via a gap-safe join. The tank-count and capacity sub-blocks exclude events with a missing before/after neighbor row. SW-replacement timing uses the broader set of facility-years with an SW closure and a future install; the same-year SW$\rightarrow$DW count (single\_to\_double\_year $=1$) is reported in the note column for cross-check.
+\end{flushleft}
+
+### Replace definition: broad vs SW-to-DW vs DCM coding {#sec-t011-a4}
+
+```{r}
+#| label: tbl-t011-a4
+#| tbl-cap: "Replace-definition concordance: broad, SW-to-DW, and DCM coding"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Tables","T011_A4_ReplaceDefinition_Concordance.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  knitr::kable(dt, format="latex", booktabs=TRUE,
+    col.names=c("Category","N","Pct of DCM Replace","Pct of all closures","Note")) |>
+    kableExtra::kable_styling(font_size=9, latex_options="hold_position")
+} else { cat("*[T011 not yet run — T011\\_A4 missing]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Three replace definitions exist in the pipeline: broad (replacement\_closure\_year, any future install; equals 04b is\_retrofit), SW$\rightarrow$DW (single\_to\_double\_year, an SW tank closed and a DW tank installed the same year), and DCM (equals broad). Rows 4--6 are validity checks that should all equal zero: SW$\rightarrow$DW is a subset of broad, and 04b is\_retrofit reproduces 02b replacement\_closure\_year exactly.
+\end{flushleft}
+
+### Partial closure breakdown by facility size {#sec-t011-a3}
+
+```{r}
+#| label: tbl-t011-a3
+#| tbl-cap: "Partial closures by facility size"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Tables","T011_A3_PartialClosure_by_Size.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  knitr::kable(dt, format="latex", booktabs=TRUE,
+    col.names=c("Size bin","N partial","N obs (size)","N closures (size)",
+                "Pct obs partial","Pct closures partial")) |>
+    kableExtra::kable_styling(font_size=9, latex_options="hold_position")
+} else { cat("*[T011 not yet run — T011\\_A3 missing]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Partial-closure events (any\_closure $=1$, facility\_complete\_closure $=0$) in the estimation sample, binned by beginning-of-year facility size (prior-year end-of-year tank stock; see Section 1.5). Rows with size bin ``unknown'' are excluded. Partial closures are always Maintain in the DCM.
+\end{flushleft}
+
+### Distribution of size change at Replace events {#sec-t011-a6}
+
+```{r}
+#| label: tbl-t011-a6
+#| tbl-cap: "Distribution of facility size change at replace events"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Tables","T011_A6_CapacityChange_Distribution.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  knitr::kable(dt, format="latex", booktabs=TRUE, longtable=TRUE,
+    col.names=c("Metric","Bin","N events","Pct of events")) |>
+    kableExtra::kable_styling(font_size=8, latex_options=c("hold_position","repeat_header"))
+} else { cat("*[T011 not yet run — T011\\_A6 missing]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Distribution of facility size change at Replace events (replace-event population with non-missing before/after stock). Tank count is in integer bins clipped to $[-5,+5]$; capacity is in gallon bins with an explicit no-change bin, extending to $\pm 10{,}000$ gallons (about the p10--p90 range). Pct of events sums to 100 within each metric block. Capacity is reported in gallons rather than percent because tank sizes are standardized in the thousands of gallons, which makes percent change heavy-tailed.
+\end{flushleft}
+
+### Capacity-change distribution figure {#sec-t011-a6-fig}
+
+```{r}
+#| label: fig-t011-a6
+#| fig-cap: "Distribution of facility size change at replace events"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Figures","T011_A6_CapacityChange_Distribution.png")
+if (file.exists(.f)) {
+  knitr::include_graphics(.f)
+} else { cat("*[T011\\_A6\\_CapacityChange\\_Distribution.png not yet generated]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Two-panel histogram of facility size change at Replace events: tank count (top, clipped to $[-5,+5]$) and total capacity in gallons (bottom, clipped to $\pm 20{,}000$; events beyond the clip are noted in the panel subtitle). Vertical line marks no change. The capacity distribution is roughly symmetric around zero, consistent with consolidation rather than systematic shrinkage.
+\end{flushleft}
+
+### Tank-count vs capacity change (joint) {#sec-t011-a7}
+
+```{r}
+#| label: tbl-t011-a7
+#| tbl-cap: "Tank-count change versus capacity change at replace events"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Tables","T011_A7_TankVsCapacity_Joint.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  knitr::kable(dt, format="latex", booktabs=TRUE,
+    col.names=c("Tank chg bin","N","Pct","Mean cap pct","Median cap pct",
+                "P25 cap pct","P75 cap pct","Pct cap-preserving")) |>
+    kableExtra::kable_styling(font_size=8, latex_options=c("hold_position","scale_down"))
+} else { cat("*[T011 not yet run — T011\\_A7 missing]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Joint distribution of tank-count and capacity change at Replace events. For each tank-count-change bin: median and interquartile range of capacity percent change, and the share that is capacity-preserving (delta\_cap\_pct $\geq -10$). A negative tank-count bin with median capacity near zero is consolidation (fewer, larger tanks); a negative bin with strongly negative capacity is true shrinkage. The mean column is dominated by small-denominator outliers and is reported only for completeness; the figure plots the median.
+\end{flushleft}
+
+### Tank-count vs capacity change bin scatter {#sec-t011-a7-fig}
+
+```{r}
+#| label: fig-t011-a7
+#| fig-cap: "Tank-count change versus capacity change at replace events (bin scatter)"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Figures","T011_A7_TankVsCapacity_BinScatter.png")
+if (file.exists(.f)) {
+  knitr::include_graphics(.f)
+} else { cat("*[T011\\_A7\\_TankVsCapacity\\_BinScatter.png not yet generated]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Bin scatter of capacity percent change against tank-count change at Replace events: median (point) and p25--p75 (band) within each tank-count-change bin; point area is the number of events. The y-axis is clipped to $[-100,+200]$ so the bands and reference lines are visible. Solid line at zero (capacity flat); dashed line at $-10$ (shrink threshold); dotted vertical line at zero tank change. Near zero capacity at negative tank change is consolidation; well below zero is true facility shrinkage.
+\end{flushleft}
+
+## Empirical CCPs by state cell {#sec-t011-ccp}
+
+### Raw empirical CCP table — all 32 cells {#sec-t011-b1}
+
+```{r}
+#| label: tbl-t011-b1
+#| tbl-cap: "Empirical choice probabilities by state cell"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Tables","T011_B1_EmpiricalCCPs_by_Cell.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  dt[, `:=`(P_M=round(P_M,4), P_E=round(P_E,5), P_R=round(P_R,5),
+             P_E_cond=round(P_E_cond,3), P_R_cond=round(P_R_cond,3),
+             cell_pct=round(cell_pct,2))]
+  knitr::kable(dt[, .(s_idx,age,wall,regime,n_obs,P_M,P_E,P_R,P_E_cond,P_R_cond,cell_pct)],
+    format="latex", booktabs=TRUE,
+    col.names=c("s","Age","Wall","Regime","N obs","P(M)","P(E)","P(R)",
+                "P(E|cl)","P(R|cl)","Cell pct")) |>
+    kableExtra::kable_styling(font_size=8, latex_options=c("hold_position","scale_down"))
+} else { cat("*[T011 not yet run — T011\\_B1 missing]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Raw empirical choice probabilities by state cell (age $\times$ wall $\times$ regime; 32 cells). Wall: SW = single-walled, DW = double-walled. Regime: FF = flat-fee, RB = risk-based. P(M)$+$P(E)$+$P(R)$=1$ by construction; P(E$\mid$cl) and P(R$\mid$cl) are conditional on a closure and sum to 1. In this table P(R$\mid$cl)$=1$ for all DW cells, but that was a routing artifact of end-of-year state stamping (DW exits, which leave zero tanks at year-end, were defaulted to SW cells); it has since been resolved by beginning-of-year stamping (Ticket 013), under which DW cells retain their exits and P(R$\mid$cl)$\approx 0.17$. These T011 diagnostics predate that fix and are retained as the pre-correction snapshot. Cell pct is the cell's share of the estimation sample; sparse cells should be read with caution.
+\end{flushleft}
+
+### Empirical CCPs — single-walled panel {#sec-t011-b1-sw}
+
+```{r}
+#| label: fig-t011-b1-sw
+#| fig-cap: "Empirical choice probabilities, single-walled facilities"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Figures","T011_B1_EmpiricalCCPs_SW.png")
+if (file.exists(.f)) {
+  knitr::include_graphics(.f)
+} else { cat("*[T011\\_B1\\_EmpiricalCCPs\\_SW.png not yet generated]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Single-walled facilities. Raw data shares by age bin, faceted by action (Maintain, Exit, Replace); no smoothing. Dot area is the cell's share of the estimation sample. FF = flat-fee, RB = risk-based.
+\end{flushleft}
+
+### Empirical CCPs — double-walled panel {#sec-t011-b2-dw}
+
+```{r}
+#| label: fig-t011-b2-dw
+#| fig-cap: "Empirical choice probabilities, double-walled facilities"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Figures","T011_B2_EmpiricalCCPs_DW.png")
+if (file.exists(.f)) {
+  knitr::include_graphics(.f)
+} else { cat("*[T011\\_B2\\_EmpiricalCCPs\\_DW.png not yet generated]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Double-walled facilities. Raw data shares by age bin, faceted by action; no smoothing. Dot area is the cell's share of the estimation sample. Double-walled closures are coded Replace by construction, so the Exit panel is empty. FF = flat-fee, RB = risk-based.
+\end{flushleft}
+
+### P(Replace | Closure) by age, wall, and regime {#sec-t011-b3}
+
+```{r}
+#| label: fig-t011-b3
+#| fig-cap: "Replace share among closures, by age, wall, and regime"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Figures","T011_B3_ReplaceShareAmongClosures.png")
+if (file.exists(.f)) {
+  knitr::include_graphics(.f)
+} else { cat("*[T011\\_B3\\_ReplaceShareAmongClosures.png not yet generated]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Conditional replace share among closures, faceted by pricing regime (FF, RB) and colored by wall type. Double-walled closures are coded Replace by construction (P $=1.0$ in every cell), so the single-walled series carries all the identifying variation. Point area is the number of closures in the cell.
+\end{flushleft}
+
+## CCP variation by facility size {#sec-t011-size}
+
+### CCPs by (size bin x state cell) {#sec-t011-c1}
+
+```{r}
+#| label: tbl-t011-c1
+#| tbl-cap: "Empirical choice probabilities by facility size and state cell"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Tables","T011_C1_CCPs_by_SizeBin_Cell.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  dt[, `:=`(P_M=round(P_M,4), P_E=round(P_E,5), P_R=round(P_R,5),
+             P_E_cond=round(P_E_cond,3), P_R_cond=round(P_R_cond,3))]
+  knitr::kable(dt[n_obs>=20, .(size_bin,age,wall,regime,n_obs,P_M,P_E,P_R,P_E_cond,P_R_cond)],
+    format="latex", booktabs=TRUE, longtable=TRUE,
+    col.names=c("Size","Age","Wall","Regime","N obs","P(M)","P(E)","P(R)",
+                "P(E|cl)","P(R|cl)")) |>
+    kableExtra::kable_styling(font_size=8, latex_options=c("hold_position","repeat_header"))
+} else { cat("*[T011 not yet run — T011\\_C1 missing]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Empirical CCPs by (size bin $\times$ state cell); cells with fewer than 20 observations excluded. Facility size is the beginning-of-year tank count (Section 1.5). P(E$\mid$cl) and P(R$\mid$cl) are conditional on a closure. If the conditional shares are roughly constant across size bins within the same (age, wall, regime) cell, facility size does not belong in the DCM state space.
+\end{flushleft}
+
+### Exit rate by size x age (SW) {#sec-t011-c1-fig}
+
+```{r}
+#| label: fig-t011-c1
+#| fig-cap: "Exit rate by facility size and age (single-walled)"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Figures","T011_C1_ExitRate_by_Size_SW.png")
+if (file.exists(.f)) {
+  knitr::include_graphics(.f)
+} else { cat("*[T011\\_C1\\_ExitRate\\_by\\_Size\\_SW.png not yet generated]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Exit rate by facility size, age, and regime, single-walled facilities only; cells with fewer than 20 observations dropped. Four lines correspond to the four beginning-of-year size bins. Coincident lines imply facility size does not belong in the DCM state space.
+\end{flushleft}
+
+### Replace rate by size x age (SW) {#sec-t011-c2-fig}
+
+```{r}
+#| label: fig-t011-c2
+#| fig-cap: "Replace rate by facility size and age (single-walled)"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Figures","T011_C2_ReplaceRate_by_Size_SW.png")
+if (file.exists(.f)) {
+  knitr::include_graphics(.f)
+} else { cat("*[T011\\_C2\\_ReplaceRate\\_by\\_Size\\_SW.png not yet generated]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Replace rate by facility size, age, and regime, single-walled facilities only; cells with fewer than 20 observations dropped. Four lines correspond to the four beginning-of-year size bins. Coincident lines imply facility size does not belong in the DCM state space.
+\end{flushleft}
+
+### Partial closure composition by size and regime {#sec-t011-c2}
+
+```{r}
+#| label: tbl-t011-c2
+#| tbl-cap: "Closure composition by facility size and pricing regime"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Tables","T011_C2_PartialClosure_by_Size_Regime.csv")
+if (file.exists(.f)) {
+  dt <- data.table::fread(.f)
+  dt[, `:=`(pct_partial=round(pct_partial,1),
+             pct_full_exit=round(pct_full_exit,1),
+             pct_full_replace=round(pct_full_replace,1))]
+  knitr::kable(dt,
+    format="latex", booktabs=TRUE,
+    col.names=c("Size","Regime","N events","N partial","N full exit","N full replace",
+                "Pct partial","Pct exit","Pct replace")) |>
+    kableExtra::kable_styling(font_size=9, latex_options=c("hold_position","scale_down"))
+} else { cat("*[T011 not yet run — T011\\_C2 missing]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Closure composition among facility-years with at least one closure, by beginning-of-year size bin and pricing regime, from the full facility panel (not restricted to the DCM estimation sample). Pct partial = portfolio shrinkage (some tanks closed, facility survives); pct full exit = complete walk-away with no future install; pct full replace = complete closure with a future install. The three shares sum to 100 within each row.
+\end{flushleft}
+
+### Closure composition stacked bar {#sec-t011-c3-fig}
+
+```{r}
+#| label: fig-t011-c3
+#| fig-cap: "Closure composition by facility size and regime"
+#| echo: false
+#| warning: false
+#| message: false
+.f <- here::here("Output","Figures","T011_C3_ClosureComposition_by_Size.png")
+if (file.exists(.f)) {
+  knitr::include_graphics(.f)
+} else { cat("*[T011\\_C3\\_ClosureComposition\\_by\\_Size.png not yet generated]*") }
+```
+
+\vspace{0.1cm}
+\begin{flushleft}
+\footnotesize
+\textit{Notes:} Closure composition (partial, full exit, full replace) by beginning-of-year facility size and regime, among facility-years with at least one closure. Bars are shown only for size $\times$ regime cells with at least 30 closure events. Partial closures rise steeply with facility size.
+\end{flushleft}

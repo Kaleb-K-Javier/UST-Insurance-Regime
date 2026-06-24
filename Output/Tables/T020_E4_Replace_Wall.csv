@@ -1,0 +1,5 @@
+has_SW,outcome,n,row_share
+0,samewall,859,0.995365
+0,upgrade,4,0.004635
+1,samewall,2882,0.496725
+1,upgrade,2920,0.503275

@@ -79,19 +79,24 @@ state_idx <- function(A, w, rho) (rho - 1L) * 16L + (w - 1L) * 8L + A
 # ==============================================================================
 # 1. Load facility panel and assign state index
 # ==============================================================================
-cat("[1/8] Loading facility panel from Z...\n")
+cat("[1/8] Loading facility panel (prefer local T007-cleaned copy, fall back to Z)...\n")
 
-fac_panel_path <- z_path("Data", "Analysis", "facility_panel.csv")
+# T007 Phase 2: use data_in() so the Phase 1-regenerated local facility_panel.csv
+# is picked up when present; falls back to Z if no local copy exists.
+fac_panel_path <- data_in("Data", "Analysis", "facility_panel.csv")
 if (!file.exists(fac_panel_path))
   stop("facility_panel.csv not found: ", fac_panel_path)
+cat(sprintf("  Source: %s\n", fac_panel_path))
 
-# Pull only what we need (3.2 GB file)
+# Pull only what we need (3.2 GB file).
+# n_installs added for T007 Phase 2 last_install_yr_facility computation.
 KEEP_COLS <- c("panel_id", "panel_year", "state", "texas_treated",
                "avg_tank_age_dec", "wall_type", "post_1999",
                "any_closure", "facility_exit", "facility_complete_closure",
-               "replacement_closure_year",
+               "replacement_closure_year", "n_installs",
                "fr_premium_per_tank_yr",
-               "active_tanks", "has_single_walled_dec", "has_double_walled_dec")
+               "active_tanks", "has_single_walled_dec", "has_double_walled_dec",
+               "n_tanks_eoy")   # T013: prior-year EOY stock -> BOY size_bin (1.5)
 
 fac_panel <- fread(fac_panel_path, select = KEEP_COLS)
 
@@ -101,13 +106,45 @@ cat(sprintf("  rows = %s | facilities = %s | year range %d-%d\n",
             min(fac_panel$panel_year, na.rm = TRUE),
             max(fac_panel$panel_year, na.rm = TRUE)))
 
-# Build A_bin and wall flags on the FULL panel (pre- and post-1999) so the
-# hazard re-aggregation in step 2 can merge against the same panel_id-year
-# rows that 01n saw. The pre-1999 filter is applied AFTER the hazard merge.
-# 01n's CV data is pre-reform only (the elnet was trained on pre-1999 to
-# avoid leakage from the regime change), so we need pre-1999 fac_panel rows
-# to recover (A_bin, w_state) for those facility-years.
-fac_panel[, A_bin := as.integer(cut(avg_tank_age_dec, AGE_BREAKS,
+# ------------------------------------------------------------------------------
+# TICKET 013 — BOY (beginning-of-year = decision-time) state stamping.
+#
+# avg_tank_age_dec and wall_type are December/EOY snapshots. Reading them on the
+# decision row stamps the POST-action portfolio: 16.2% of closures land in the
+# wrong wall cell, every DW full-exit reclassifies SW (0 tanks at EOY), and age
+# runs BACKWARD under Maintain (T013 D1/D2). Fix: stamp A_bin/w_state from the
+# prior-year December snapshot = the state a forward-looking decision is made IN.
+#
+# Snapshots are built on the FULL panel BEFORE the pre-1999 filter so year t can
+# see year t-1. The hazard re-aggregation in step 2 recomputes its own A_bin/
+# w_state internally (from avg_tank_age_dec / has_single_walled), so it does not
+# consume fac_panel$A_bin — building these on the full panel is for gap-safety,
+# not the hazard merge.
+#
+# 1.1 Gap-safe prior-year (BOY) snapshots via a +1L key join (NOT a row-shift;
+#     the panel has gaps at zero-tank years).
+setorder(fac_panel, panel_id, panel_year)
+boy <- fac_panel[, .(panel_id,
+                     panel_year    = panel_year + 1L,
+                     avg_age_boy   = avg_tank_age_dec,
+                     wall_type_boy = wall_type,
+                     boy_stock     = n_tanks_eoy)]
+fac_panel <- merge(fac_panel, boy, by = c("panel_id", "panel_year"),
+                   all.x = TRUE)
+
+# 1.2 Fallback for rows with no prior-year row (left-censored first appearance
+#     or post-gap reappearance): use the SAME-YEAR value and count them.
+n_boy_fallback <- fac_panel[is.na(avg_age_boy), .N]
+fac_panel[is.na(avg_age_boy),   avg_age_boy   := avg_tank_age_dec]
+fac_panel[is.na(wall_type_boy), wall_type_boy := wall_type]
+fac_panel[is.na(boy_stock),     boy_stock     := n_tanks_eoy]
+cat(sprintf("  [T013] BOY snapshot: %s of %s fac-panel rows used same-year fallback (%.2f%%)\n",
+            format(n_boy_fallback, big.mark = ","),
+            format(nrow(fac_panel), big.mark = ","),
+            100 * n_boy_fallback / nrow(fac_panel)))
+
+# 1.3 Stamp A_bin and w_state from the BOY snapshots (decision-time state).
+fac_panel[, A_bin := as.integer(cut(avg_age_boy, AGE_BREAKS,
                                     labels = 1:N_AGE, right = FALSE,
                                     include.lowest = TRUE))]
 fac_panel[is.na(A_bin), A_bin := N_AGE]   # missing age -> oldest bin (conservative)
@@ -115,16 +152,27 @@ fac_panel[is.na(A_bin), A_bin := N_AGE]   # missing age -> oldest bin (conservat
 # w_state: 1 = SW (or Mixed/Unknown), 2 = DW. Per spec: collapse Mixed to SW
 # because a single SW tank dominates the risk profile for a facility.
 fac_panel[, w_state := fcase(
-  wall_type == "Double-Walled", 2L,
+  wall_type_boy == "Double-Walled", 2L,
   default = 1L)]
 
 # rho_state: 1 = FF, 2 = RB. Controls always FF; TX FF before 1999, RB after.
+# UNCHANGED — year-based (T013 confirmed 0 regime leakage).
 fac_panel[, rho_state := fcase(
   texas_treated == 1L & panel_year >= PRE_REFORM_YEAR, 2L,
   default = 1L)]
 
 fac_panel[, s_idx := state_idx(A_bin, w_state, rho_state)]
 stopifnot(all(fac_panel$s_idx %in% 1:N_STATES))
+
+# 1.5 BOY portfolio-size bin (decision-time stock) for downstream use. Not used
+#     in estimation here — Ticket 015 consumes it. Character label, explicit bins
+#     so 0/NA aren't mislabeled.
+fac_panel[, size_bin := fcase(
+  boy_stock == 1L, "1",
+  boy_stock == 2L, "2",
+  boy_stock == 3L, "3",
+  boy_stock >= 4L, "4+",
+  default = NA_character_)]
 
 
 # ==============================================================================
@@ -294,13 +342,36 @@ print(fac_panel[, .(
 # ==============================================================================
 cat("[5/8] Building observation-level estimation panel...\n")
 
-fac_panel[, y_it := as.integer(any_closure == 1L)]
+# T007 Phase 2: clean action definitions per researcher's plain-English mapping.
+#   Replace = closure where facility installs again later anywhere
+#   Exit    = all tanks closed AND no future installs at this facility ever
+#   Maintain = anything else (including partial closures)
 
-# I_replace: NA on Maintain rows, 1 on replacement closure, 0 on permanent exit
+setorder(fac_panel, panel_id, panel_year)
+
+# Last year this facility installed anything (churn-excluded n_installs after Phase 1)
+fac_panel[, last_install_yr_facility := {
+  yrs <- panel_year[n_installs > 0L]
+  if (length(yrs) == 0L) NA_integer_ else max(yrs)
+}, by = panel_id]
+
+# True exit: complete closure AND no future install (panel_year >= last install year)
+fac_panel[, is_true_exit := as.integer(
+  facility_complete_closure == 1L &
+  (is.na(last_install_yr_facility) | panel_year >= last_install_yr_facility)
+)]
+
+# Retrofit/Replace: replacement_closure_year already correctly built in post-fix 02b
+fac_panel[, is_retrofit := as.integer(replacement_closure_year == 1L)]
+
+# Action mapping: only true exits and retrofits are "closure" actions
+fac_panel[, y_it := as.integer(is_true_exit == 1L | is_retrofit == 1L)]
+
+# I_replace: NA for Maintain, 1 for Retrofit, 0 for Exit
 fac_panel[, I_replace := fcase(
-  y_it == 0L,                                    NA_integer_,
-  y_it == 1L & replacement_closure_year == 1L,   1L,
-  y_it == 1L & replacement_closure_year == 0L,   0L,
+  y_it == 0L,                                   NA_integer_,
+  is_retrofit == 1L,                            1L,
+  is_true_exit == 1L & is_retrofit == 0L,       0L,
   default = NA_integer_)]
 
 # Next-year wall state (for reset_state_index of replacers)
@@ -313,6 +384,12 @@ fac_panel[, reset_state_index := fcase(
   I_replace == 1L & is.na(w_state_next),
     state_idx(1L, w_state, rho_state),       # fallback: same wall type
   default = NA_integer_)]
+
+# T013: reset_state_index logic UNCHANGED (F_replace single-tank reset is out of
+# scope -> Ticket 014). w_state_next = shift(w_state) now references the BOY
+# w_state, so the reset target is next period's decision-time wall — BOY-consistent
+# (an SW->DW retrofitter lands in a DW state next period).
+cat("  [T013] reset_state_index unchanged; now BOY-consistent via shift(w_state).\n")
 
 
 # ==============================================================================
@@ -488,11 +565,54 @@ write_sample <- function(dat, primitives_path, panel_path, label) {
                      s_idx, A_bin, w_state, rho_state,
                      premium = premium_per_tank_scaled,
                      y_it, I_replace, reset_state_index,
-                     P_close_init)]
+                     P_close_init, size_bin, boy_stock)]   # T013 1.5: BOY size
   fwrite(obs_out, panel_path)
   cat(sprintf("  saved obs panel -> %s\n", panel_path))
 }
 
+
+# T007 Phase 2: Back up T005-era observed outputs before overwriting
+cat("[T007] Backing up T005-era observed panel and primitives to _pre_T007/...\n")
+pre_t007_pnl  <- file.path(OUT_PNL,  "_pre_T007")
+pre_t007_prim <- file.path(OUT_PRIM, "_pre_T007")
+dir.create(pre_t007_pnl,  recursive = TRUE, showWarnings = FALSE)
+dir.create(pre_t007_prim, recursive = TRUE, showWarnings = FALSE)
+
+for (.src in c(file.path(OUT_PNL,  "dcm_obs_panel_observed.csv"),
+               file.path(OUT_PRIM, "DCM_Primitives_Replacement_observed.rds"))) {
+  if (file.exists(.src)) {
+    .dst <- file.path(if (grepl("\\.rds$", .src)) pre_t007_prim else pre_t007_pnl,
+                      basename(.src))
+    file.copy(.src, .dst, overwrite = TRUE)
+    cat(sprintf("  Backed up: %s\n", .dst))
+  }
+}
+
+# T007 Phase 2: action-distribution diff log vs T005-era panel
+cat("[T007] Computing y_it diff vs T005-era dcm_obs_panel_observed.csv...\n")
+old_obs_path <- file.path(pre_t007_pnl, "dcm_obs_panel_observed.csv")
+if (file.exists(old_obs_path)) {
+  old_obs <- fread(old_obs_path, select = c("panel_id", "panel_year", "y_it", "I_replace"))
+  # Use same sample filter as sample_observed below
+  new_tmp <- ccp_dat[!(texas_treated == 1L & panel_year < TX_OBSERVED_YEAR),
+                     .(panel_id, panel_year, y_it, I_replace)]
+  merged_diff <- merge(old_obs, new_tmp, by = c("panel_id", "panel_year"),
+                       suffixes = c("_old", "_new"), all = FALSE)
+  n_flip_yit <- merged_diff[y_it_old != y_it_new, .N]
+  cat(sprintf("  Matched rows: %s | y_it flipped: %s (%.2f%%)\n",
+      format(nrow(merged_diff), big.mark = ","),
+      format(n_flip_yit,        big.mark = ","),
+      100 * n_flip_yit / nrow(merged_diff)))
+  cat("  Old action distribution:\n")
+  print(old_obs[, .(N = .N, pct = round(100 * .N / nrow(old_obs), 2)),
+                by = y_it][order(y_it)])
+  cat("  New action distribution:\n")
+  print(new_tmp[, .(N = .N, pct = round(100 * .N / nrow(new_tmp), 2)),
+                by = y_it][order(y_it)])
+  rm(old_obs, new_tmp, merged_diff)
+} else {
+  cat("  No T005-era file found at backup path; skipping diff.\n")
+}
 
 # Sample A — observed only: exclude TX pre-2006 (insufficient premium data)
 sample_observed <- ccp_dat[!(texas_treated == 1L & panel_year < TX_OBSERVED_YEAR)]

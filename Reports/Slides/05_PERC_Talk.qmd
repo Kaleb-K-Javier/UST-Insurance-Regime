@@ -1,0 +1,1066 @@
+---
+title: "Internalizing Environmental Risk: Insurance Design and Firm Behavior in Hazardous Industries"
+subtitle: ""
+author: "Kaleb K. Javier"
+format:
+  beamer:
+    template: "my-template.tex"
+    keep-tex: true
+    aspectratio: 169
+    pdf-engine: xelatex
+    header-includes:
+      - |
+        \providecommand{\estc}[1]{\textcolor[HTML]{1B7837}{#1}}
+theme-bg-color: "0D2D52"
+---
+
+
+
+
+
+
+
+##
+
+\LightMode
+
+```{=latex}
+\begin{columns}[c]
+\begin{column}{0.5\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.8\textheight,keepaspectratio]{../../Data/tank_jpg.jpg}
+\end{column}
+\begin{column}{0.5\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.8\textheight,keepaspectratio]{../../Data/LUST.jpg}
+\end{column}
+\end{columns}
+```
+
+---
+
+
+## Compulsory insurance works only if it prices risk
+
+\BerkeleyLightMode
+
+- U.S. environmental law makes polluters pay for the harm they cause: strict liability (OPA 1990, SMCRA 1977, CERCLA 1980, RCRA 1976).
+- It also requires proof they can pay: bonding, minimum assets, or compulsory insurance.
+- When that proof is insurance, how the insurance is priced decides whether the firm has any reason to cut risk.
+
+\vfill
+\centering\textbf{This paper examines the design and efficacy of compulsory liability insurance as a financial responsibility instrument, using underground storage tanks (USTs) as a case study for environmentally hazardous settings.}
+---
+
+
+## (UST) leaks (LUSTs) are common, costly, and borne by others
+
+\BerkeleyLightMode
+
+- About 1 in 4 facilities leaks over a 30-year life, as high as oil and gas wells.
+- USTs are the top source of US groundwater contamination; petroleum and benzene reach drinking-water wells (EPA 2024).
+- Cleanups are costly: median about \$136k, mean about \$403k per site (my claims data).
+- Contamination reaches drinking water and lowers infant birthweight (Marcus 2021).
+- The public funds most states use to cover cleanups are winding down: more than a dozen of the 37 fund states are set to close theirs this decade (ASTSWMO State Fund Survey 2025).
+
+\vfill
+\centering\textit{Leak risk is not random: it rises with tank age and construction, both of which an insurer can observe and price.}
+
+---
+
+
+
+
+## A clean natural experiment: Texas, 1998
+
+\BerkeleyLightMode
+
+- Every US gas station stores fuel underground: about 140,000 facilities, 550,000 tanks (EPA 2024).
+- Since 1988, every owner must carry at least \$1M in coverage (RCRA Subtitle I).
+- Most states use a \textbf{state-run, uniform premium}: everyone pays the same regardless of risk, so owners have no reason to retire old tanks.
+- \textbf{Texas, December 22, 1998:} the fund closed overnight. About 26,000 facilities moved to \textbf{risk-rated private insurance}, driven by the fund's insolvency, not by any change in Texas tanks.
+
+---
+
+
+## This work answers 3 questions
+
+\BerkeleyLightMode
+
+\textbf{Q1. Observability.} Is release risk predictable from observable tank characteristics? If not, the premium schedule is noise, not signal.
+
+\vspace{0.2cm}
+
+\textbf{Q2. Behavior.} Does risk-based pricing change closure, replacement, and release outcomes?
+
+\vspace{0.2cm}
+
+\textbf{Q3. Welfare.} How much of the first-best welfare gain does risk-rated pricing capture?
+
+\vfill
+\centering\textit{Three answers, one argument: risk is priceable (Q1), so pricing it moves behavior (Q2), and that behavior change recovers part, not all, of the lost welfare (Q3).}
+
+---
+
+
+## What am are doing this summer at PERC
+
+\BerkeleyLightMode
+
+\textbf{1. Who responds, and what it does to local markets (reduced form).}
+
+- Heterogeneity by geography (urban vs rural) and firm type (branded vs independent): which firms exit, which replace
+- Whether the reform raised or lowered local market concentration
+
+\vspace{0.25cm}
+
+\textbf{2. Cross-subsidies under the uniform premium (reduced form).}
+
+- Use the claims data to estimate each facility's actuarially fair premium, then compare it to what it pays
+- Measure how much low-risk facilities subsidize high-risk ones under a uniform premium
+
+\vspace{0.25cm}
+
+\textbf{3. The structural model.}
+
+- Estimate the portfolio model, then run the four counterfactuals and deliver the welfare comparison
+
+---
+
+
+## More Details
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{slide-roadmap}{}
+```
+
+\vspace{0.2cm}
+
+\begin{center}
+\large
+\renewcommand{\arraystretch}{1.7}
+\begin{tabular}{ll}
+\textbf{Section} & \textbf{Jump to} \\
+\hline
+Data                  & \navbutton[slide-data][fill=BerkeleyBlue, font=\small, inner sep=4pt]{Data $\rightarrow$} \\[4pt]
+Empirical Approach    & \navbutton[slide-rf][fill=BerkeleyBlue, font=\small, inner sep=4pt]{Empirical Approach $\rightarrow$} \\[4pt]
+Results               & \navbutton[slide-results][fill=BerkeleyBlue, font=\small, inner sep=4pt]{Results $\rightarrow$} \\[4pt]
+Structural Model      & \navbutton[slide-structural][fill=BerkeleyBlue, font=\small, inner sep=4pt]{Structural Model $\rightarrow$} \\
+\hline
+\end{tabular}
+\end{center}
+
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
+##
+
+\BerkeleyMode
+
+```{=latex}
+\hypertarget{slide-data}{}
+```
+
+::: {.layout-statement}
+\begin{center}
+\Huge \textbf{Data}
+\end{center}
+:::
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Data: three collection efforts, 18 usable states
+
+\BerkeleyLightMode
+
+\begin{itemize}
+  \item \textbf{State + EPA administrative records} --- UST inventory and confirmed releases from all 50 states and EPA LUST Finder; tank-level attributes (install date, wall type, piping, leak detection) and cleanup dispositions
+  \hfill \navbutton[baseline-table][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Summary statistics $\rightarrow$}
+
+  \vspace{0.25cm}
+
+  \item \textbf{Cleanup cost data} --- Trust-fund claims from 6 control states; first multistate per-site cleanup cost study; median \$136k, mean \$403k; right tail dominates expected loss
+  \hfill \navbutton[cost-dist-pooled][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Claims distribution $\rightarrow$}
+
+  \vspace{0.25cm}
+
+  \item \textbf{TX insurance rate filings} --- Mid-Continent Casualty SERFF filings, 2006--2024; reconstructs the risk-based premium schedule $P(s)$ at the tank level from base rates, ILFs, and attribute credits/debits
+  \hfill \navbutton[premium-divergence][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Premium figure $\rightarrow$}
+\end{itemize}
+
+\vspace{0.2cm}
+\textbf{Why 18 states?} 20 of 38 flat-fee states dropped: missing closure dates, install dates, or wall construction variables. The 17 controls plus Texas have complete records across all three dimensions.
+
+---
+
+
+\LightMode
+
+```{=latex}
+\hypertarget{baseline-table}{}
+\vspace{0.1cm}
+\input{../../Output/Tables/T_Baseline_Characteristics_Slide.tex}
+```
+
+\vspace{0.1cm}
+\centering\scriptsize\textit{18 study states; alive-at-reform = facilities with $\geq 1$ tank active on Dec 22, 1998. Wall, vintage, and age computed over tanks active at reform; profile averages over all study facility-years. Capacity is the median (robust to large-facility outliers).}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[baseline-tanks][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Tank-size distribution $\rightarrow$}%
+  \hspace{3pt}%
+  \navbutton[baseline-cap][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Capacity distribution $\rightarrow$}%
+};
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-data][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Data}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Releases are costly to cleanup budgets and human health
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{cost-dist-pooled}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[height=0.72\textheight,keepaspectratio]{../../Output/Figures/Figure_cost_distribution_pooled.png}
+\end{center}
+
+\vfill
+\centering\small\textit{$\sim$\,550,000 confirmed releases since 1988. Median cleanup \$136k; mean \$403k. Right tail dominates expected loss.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[cost-dist-states][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Claims by state $\rightarrow$}%
+};
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-data][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Data}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Cleanup cost distribution by state (6 trust-fund states) {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{cost-dist-states}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.72\textheight,keepaspectratio]{../../Output/Figures/Figure_cost_distribution_by_state.png}
+\end{center}
+
+\vfill
+\centering\small\textit{Per-site cleanup cost by state, deflated to 2023 dollars. State-level variation in the cost distribution; pooled distribution in prior slide masks meaningful right-tail heterogeneity.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[cost-dist-pooled][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ Pooled distribution}%
+};
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-data][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Data}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Premium divergence: Texas vs. control states (1992--2020)
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{premium-divergence}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/04e_Premium_by_Year_Treatment.png}
+\end{center}
+
+\vspace{0.1cm}
+\centering\small\textit{Flat and parallel before 1998; sharp Texas divergence after the reform. Sets up the DiD without showing it.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-data][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Data}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Risk is predictable: the age-hazard gradient (setup)
+
+\BerkeleyLightMode
+
+**Estimand.** Annual first-release hazard in the never-yet-leaked risk set:
+
+$$
+h(t \mid x) \;=\; P\bigl(\,\text{first confirmed release in year } t \mid \text{no prior release}, \; x\,\bigr)
+$$
+
+In plain words: given what an underwriter can observe at the start of a policy year, what's the probability of a claim?
+
+**Model.** Penalized logistic regression on the pre-treatment panel:
+
+- $x$: 3-year age bins fully interacted with wall construction; state FE; fuel and portfolio controls
+- Lasso variable selection; inverse-frequency weights for the 0.70\% base rate
+- Out-of-sample CV (10 folds); post-hoc recalibration to the empirical event rate
+
+**Sample.** 3.93M pre-treatment facility-years; $27{,}455$ confirmed first-release events.
+
+$\hat h(x)$ feeds the next figure and the structural-model hazard $h(a_t, W_i)$.
+
+---
+
+
+## Single-walled tanks drive the age-hazard gradient
+
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_CV_CellRisk.png}
+\end{center}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[cell-gof][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Goodness of fit $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## The insurance market: how Texas premiums are built
+
+\BerkeleyLightMode
+
+**Texas** --- rebuilt from major Texas UST insurer's rate filings (SERFF, 2006--2024):
+
+$$P_{ijt} \;=\; \text{Base}_t \;\times\; \text{ILF}_{it} \;\times\; \Bigl(1 \;+\; \sum_{k} \lambda_{k,t}\, X_{ijt,k}\Bigr)$$
+
+- $\text{Base}_t$: per-tank base rate, four filing periods
+- $\text{ILF}_{it}$: increased-limit factor; fix coverage at federal-minimum \$1M/\$1M
+- $X_{ijt}$: tank age, wall, piping, leak-detection technology
+- $\lambda_{k,t}$: additive credits/debits from the filed schedule
+
+**Control states** --- state financial-responsibility fund records: a per-tank annual assessment, largely flat across years and tank characteristics.
+
+---
+
+
+## Premiums track the risk we can predict
+
+\BerkeleyLightMode
+
+\vspace{0.1cm}
+\begin{center}
+\includegraphics[height=0.80\textheight,keepaspectratio]{../../Output/Figures/Figure_Premium_vs_Hazard_Raw.png}
+\end{center}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[premium-vs-el][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Predicted per-tank EL $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+
+
+##
+
+\BerkeleyMode
+
+```{=latex}
+\hypertarget{slide-rf}{}
+```
+
+::: {.layout-statement}
+\begin{center}
+\Huge \textbf{Empirical Approach}
+\end{center}
+:::
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Research design: DiD with facility FE and cell-by-year FE
+
+\BerkeleyLightMode
+
+**Static DiD.**
+
+$$Y_{it} \;=\; \beta\,(\text{Texas}_{f(i)} \times \text{Post}_t) \;+\; \alpha_i \;+\; \delta_{ct} \;+\; \varepsilon_{it}$$
+
+**Event study** (replaces single Post indicator with per-year coefficients relative to 1998):
+
+$$Y_{it} \;=\; \sum_{\tau \neq -1} \beta_\tau \cdot \bigl(\text{Texas}_{f(i)} \times \mathbf{1}[t - 1998 = \tau]\bigr) \;+\; \alpha_i \;+\; \delta_{ct} \;+\; \varepsilon_{it}$$
+
+- $\alpha_i$: facility FE. $\delta_{ct}$: cell$\times$year FE with $c = \{\text{wall}\times\text{fuel}\times\text{capacity}\times\text{install cohort}\}$
+- *Identifying variation:* within a single tank-vintage cell, in the same calendar year, $\hat\beta$ is the change in the Texas-vs-control closure-rate gap before vs.\ after Dec 22, 1998
+- *Inference:* one treated unit $\rightarrow$ Conley-Taber (2011) placebo inference; wild-cluster bootstrap at state level (18 clusters) as cross-check
+
+\vspace{0.2cm}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+
+
+
+##
+
+\BerkeleyMode
+
+```{=latex}
+\hypertarget{slide-results}{}
+```
+
+::: {.layout-statement}
+\begin{center}
+\Huge \textbf{Results}
+\end{center}
+:::
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Event study: closure response in Texas
+
+\BerkeleyLightMode
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Fig_ES_Full.pdf}
+\end{center}
+
+\vspace{0.1cm}
+\centering\small\textit{Pre-trends flat; sharp break at Dec 22, 1998; sustained post-treatment effect.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## ATT on Tank Closure: $+1.58$ pp on a $2.0\%$ Baseline
+
+\BerkeleyLightMode
+
+```{=latex}
+\vspace{0.15cm}
+\begin{center}
+\begingroup
+\scriptsize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{0.95}
+\input{../../Output/Tables/T_DiD_Stepped_Full.tex}
+\endgroup
+\end{center}
+```
+
+\vfill
+
+\centering
+\textit{Cols add facility FE, then cell$\times$year FE. Col (3) is the headline.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Heterogeneity: Pre-89 Vintage Drives the Effect
+
+\BerkeleyLightMode
+
+```{=latex}
+\vspace{-0.1cm}
+\begin{center}
+\begingroup
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.7}
+\input{../../Output/Tables/T_HTE_DiD_Vintage.tex}
+\endgroup
+\end{center}
+```
+
+\centering\scriptsize
+\textit{Pre-89 ATT $= \hat\beta_0 + \hat\beta_1 \approx +3.1$ pp; post-88 ATT $= \hat\beta_0 \approx +0.6$ pp. A coincident Texas-wide shock predicts uniform response across vintage; only the insurance premium gradient predicts the 5$\times$ differential.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[vintage-forest][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{ATT by install year $\rightarrow$}%
+};
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## LUST discovery falls under risk-based pricing
+
+\BerkeleyLightMode
+
+```{=latex}
+\vspace{0.2cm}
+\begin{center}
+\begingroup
+\footnotesize
+\renewcommand{\arraystretch}{1.05}
+\input{../../Output/Tables/T_LUST_Incumbent_Slide.tex}
+\endgroup
+\end{center}
+```
+
+\vspace{0.1cm}
+\centering\small\textit{Leak discovery falls $1.27$ pp on a $1.73\%$ base; both routine-monitoring and closure-inspection findings decline.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Closure composition shifts toward replacement
+
+\BerkeleyLightMode
+
+```{=latex}
+\vspace{0.05cm}
+\begin{center}
+\begingroup
+\let\small\scriptsize
+\scriptsize
+\renewcommand{\arraystretch}{0.85}
+\input{../../Output/Tables/T2b_Enriched_Slide.tex}
+\endgroup
+\end{center}
+```
+
+\vspace{0.05cm}
+\centering\scriptsize\textit{Among closing facilities, RBP raises the replacement (upgrade) share and lowers permanent closures --- the margin the structural model recovers.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+
+
+
+
+## What the reduced form cannot tell us
+
+\BerkeleyLightMode
+
+\textbf{The DiD identifies an average treatment effect. Three questions it cannot answer:}
+
+\vspace{0.2cm}
+
+\begin{enumerate}
+
+\item \textbf{How large are the welfare effects in dollar terms?} The DiD gives a closure-rate gap, not a present-value welfare number on which to compare policies.
+
+\item \textbf{What would alternative policies (subsidy, Pigouvian surcharge, age mandate) actually do?} These were not implemented in Texas. Their welfare consequences are counterfactual.
+
+\item \textbf{How far are we from first-best, and why?} Risk-based pricing is a partial fix: premiums price what the insurer can claim, but health damages are structurally unpriced. Quantifying the residual wedge needs the structural primitives.
+
+\end{enumerate}
+
+\vfill
+
+\textbf{Recovering the structural parameters is the only way to answer these. The structural model is not an add-on, it is required.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-structural][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Structural model $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+##
+
+\BerkeleyMode
+
+```{=latex}
+\hypertarget{slide-structural}{}
+```
+
+::: {.layout-statement}
+\begin{center}
+\Huge \textbf{Structural Model \& Counterfactuals}
+\end{center}
+:::
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## What a facility looks like in the model
+
+\BerkeleyLightMode
+
+- A facility is a set of underground tanks. Two things about each tank drive its cost and its risk: how old it is, and whether it is single- or double-walled.
+- The model describes a facility by the mix of tanks it holds: how many fall into each age-and-wall group, how much fuel it can store, and which pricing regime it faces.
+- Each year the owner decides what to do with that set: keep it as is, close some tanks, add new ones, or shut down for good.
+
+\vfill
+\centering\small\textit{Tanks are retired and replaced one at a time, so the real choice is how many to close or add, not a single keep-or-quit decision.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## State: the portfolio. Action: how many tanks to close or add
+
+\BerkeleyLightMode
+
+$$s = (\,n,\; G,\; \rho\,)$$
+
+- $n$: counts of tanks across 16 categories: wall type (single or double) $\times$ eight 5-year age bins
+- $G$: facility capacity bin; $\rho$: pricing regime, fixed for the facility's life
+- A large but tractable state space, about \textbf{298{,}000} states in all
+
+\vspace{0.15cm}
+
+\textbf{Action} $(k,m)$: close $k$ tanks, install $m$. \quad $(0,0)$ maintain $\;\cdot\;$ $(k,0)$ downsize $\;\cdot\;$ $(k,m\ge 1)$ replace $\;\cdot\;$ $X$ exit.
+
+- \textbf{Which} tanks leave is a rule, not a choice: oldest single-walled first. New tanks are double-walled (law).
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[model-coding][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{How a facility-year is coded $\rightarrow$}%
+};
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Each option's payoff: measured prices in, estimated weights out
+
+\BerkeleyLightMode
+
+```{=latex}
+\begin{align*}
+u_{(k,m)}(s) &= \varphi_G + \alpha_g - \estc{\gamma_p}\, P(n',\rho) - \estc{\gamma_r}\, OOP(n') - \estc{c^{\text{rem}}}\,k - \estc{c^{\text{inst}}}\,m &&\text{\small(operate)}\\[3pt]
+u_X(s) &= \estc{\kappa_1}\, N(n) &&\text{\small(exit)}
+\end{align*}
+```
+
+\vspace{0.1cm}
+
+- \textbf{Measured first, not estimated:} the premium bill $P$ (Texas filings or state fee), the leak hazard $H$, out-of-pocket $OOP = H \cdot D$, and the aging and capacity transitions
+- \textbf{Estimated} (in \estc{green}): $\estc{\varphi_G}$ operating payoff by size, $\estc{\gamma_p}$ premium weight, $\estc{\gamma_r}$ out-of-pocket weight, $\estc{c^{\text{rem}}}$ and $\estc{c^{\text{inst}}}$ close / install costs, $\estc{\kappa_1}$ exit value per tank
+- $\estc{\gamma_p} = \estc{\gamma_r}$ is a testable restriction: does a premium dollar feel like an expected out-of-pocket dollar?
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## The dynamic choice: today's payoff vs. operating next year
+
+\BerkeleyLightMode
+
+$$v_a(s) = u_a(s) + \beta\,\mathbb{E}\!\left[V(s') \mid s, a\right], \qquad V(s) = \log\!\Bigl(\, e^{v_{\text{maintain}}(s)} + e^{IV(s)} + e^{v_{\text{exit}}(s)} \,\Bigr)$$
+
+\vspace{0.1cm}
+
+- Each year the owner compares \textbf{maintain}, any \textbf{tank-work} option $(k,m)$, and \textbf{exit}, trading today's payoff against the value of operating next year
+- Nested logit: the tank-work options share a draw $\lambda$ for the common decision to touch the tanks at all
+- $\beta = 0.95$; estimated by nested pseudo-likelihood (Aguirregabiria \& Mira 2007). Eight economic parameters plus state fixed effects
+
+\vfill
+\centering\small\textit{Risk-based pricing makes the premium climb with age, so the value of holding old tanks falls and owners close or replace sooner.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Why risk pricing is only a partial fix
+
+\BerkeleyLightMode
+
+- A leak costs society $L + E$: cleanup $L$ plus external health and water damage $E$ beyond cleanup
+- The owner pays only the deductible $D$ directly. The rest of cleanup, $L - D$, falls on the insurer or fund. The external damage $E$ is borne by no one in the market.
+
+\vspace{0.15cm}
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{lll}
+\hline
+\textbf{Regime} & \textbf{Owner internalizes} & \textbf{Wedge left open} \\
+\hline
+Uniform premium & roughly only the deductible $D$           & $(L - D) + E$ \\
+Risk-based & $D$ plus part of $L - D$                  & $E$ plus the missing part of $L - D$ \\
+First-best & the full $H\,(L + E)$ at the margin        & none \\
+\hline
+\end{tabular}
+\end{center}
+
+\vfill
+\centering\small\textit{Social welfare $=$ producer surplus $-$ external damage $-$ government outlay. $E$ calibrated at \$50k per leak, with a band.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Four counterfactuals (estimation in progress, no results yet)
+
+\BerkeleyLightMode
+
+Once the portfolio model is estimated, we run four policy experiments:
+
+\vspace{0.2cm}
+
+\begin{enumerate}
+\item \textbf{Uniform-premium Texas.} Texas keeps its state-run uniform premium. The welfare cost of the reform itself.
+\item \textbf{First-best Pigouvian contract.} Exposure set to the full social cost $H(L+E)$. The welfare ceiling.
+\item \textbf{Single-walled replacement subsidy.} Pay down the cost of replacing the riskiest tanks.
+\item \textbf{Age mandate.} Force removal at age $A$.
+\end{enumerate}
+
+\vfill
+\centering\small\textit{Each is judged by the margins it moves: closure, replacement, leaks, and welfare. No results yet; this is the plan for the summer.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south east, inner sep=0pt] at ([xshift=-10pt, yshift=10pt]current page.south east) {%
+  \navbutton[slide-roadmap][fill=BerkeleyBlue!60, font=\tiny, inner sep=2pt]{$\leftarrow$ Roadmap}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+
+
+## Appendix: Cell-Level Goodness of Fit {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{cell-gof}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_CV_CellRisk_GoF.png}
+\end{center}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[slide-data][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: ATT by installation vintage {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{vintage-forest}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Fig_Vintage_Forest.pdf}
+\end{center}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[slide-results][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Premium vs. Per-Tank Expected Loss {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{premium-vs-el}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Figure_Premium_vs_EL_Raw.png}
+\end{center}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[slide-data][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+
+
+## Appendix: Facility size at reform --- Texas vs.\ controls {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{baseline-tanks}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Fig_Baseline_TanksAtReform.png}
+\end{center}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[baseline-table][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+  \hspace{3pt}%
+  \navbutton[baseline-cap][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{Capacity $\rightarrow$}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: Facility capacity at reform --- Texas vs.\ controls {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{baseline-cap}{}
+```
+
+\vspace{0.2cm}
+\begin{center}
+\includegraphics[width=0.92\textwidth,height=0.78\textheight,keepaspectratio]{../../Output/Figures/Fig_Baseline_CapacityAtReform.png}
+\end{center}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[baseline-table][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+## Appendix: How the model codes each facility-year {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+```{=latex}
+\hypertarget{model-coding}{}
+```
+
+Let $k_{it}$ = tanks closed and $m_{it}$ = tanks installed in year $t$. Each facility-year gets exactly one action, by precedence:
+
+```{=latex}
+\begin{align*}
+\textbf{Exit } X         &: \quad \text{every tank closed} \\
+\textbf{Replace } (k,m\ge 1) &: \quad k_{it}\ge 1,\;\; m_{it}\ge 1,\;\; \text{still operating} \\
+\textbf{Downsize } (k,0) &: \quad k_{it}\ge 1,\;\; m_{it}=0,\;\; \text{still operating} \\
+\textbf{Maintain } (0,0) &: \quad k_{it}=0
+\end{align*}
+```
+
+\vspace{0.1cm}
+
+- **State** coded from the beginning-of-year portfolio: counts $n$ over 16 (wall $\times$ age) cells, capacity bin $G$, regime $\rho$
+- **Which tanks leave** is the rule $r(n,k)$ --- oldest single-walled first --- *not* a choice; only the counts $k,\,m$ are chosen
+- The new tank enters double-walled at age bin 1 (regulation)
+
+\vfill
+\centering\small\textit{Downsizing --- coded ``maintain'' or ``exit'' in the single-tank model --- is now its own action.}
+
+```{=latex}
+\begin{tikzpicture}[remember picture, overlay]
+\node[anchor=south west, inner sep=0pt] at ([xshift=10pt, yshift=10pt]current page.south west) {%
+  \navbutton[slide-structural][fill=BerkeleyBlue, font=\tiny, inner sep=2pt]{$\leftarrow$ back}%
+};
+\end{tikzpicture}
+```
+
+---
+
+
+
+
+## Texas was first. The state-run uniform-premium model is winding down nationwide {visibility="uncounted"}
+
+\BerkeleyLightMode
+
+- Six states have already replaced their state-run uniform premium with private, risk-rated coverage: Arizona, Connecticut, Florida, New York, Texas, Wisconsin.
+- More than a dozen others carry a statutory fund sunset (claims-bar) date. The dates cluster through this decade:
+
+\vspace{0.15cm}
+\begin{center}
+\small
+Minnesota 2022 \quad Colorado 2023 \quad Kansas / Nebraska 2024 \\[3pt]
+Illinois / New Hampshire / Missouri 2025 \quad California / South Carolina 2026 \\[3pt]
+Utah 2028 \quad Vermont 2029 \quad Washington 2030 \quad Oklahoma 2032
+\end{center}
+\vspace{0.1cm}
+
+- The gasoline fees that bankroll these programs are in structural decline as fuel use shifts (ASTSWMO 2023).
+
+\vfill
+\centering\small\textit{This paper measures the welfare consequences of exactly the transition many states are now facing. (California's 2026 date was pushed to 2036 in 2024, so these sunsets get re-litigated.) Source: ASTSWMO State Fund Survey.}

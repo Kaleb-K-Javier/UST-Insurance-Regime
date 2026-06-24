@@ -38,29 +38,157 @@ library(here)
 # Introduction {#sec-intro}
 
 This report summarizes the in-sample fit of the dynamic structural replacement
-model under three nested specifications, each estimated by Aguirregabiria-Mira
-NPL on the observed UST panel ($N = 2{,}282{,}735$ tank-year observations):
+model under four specifications, each estimated by Aguirregabiria-Mira NPL on
+the observed UST panel ($N = 2{,}282{,}735$ tank-year observations):
 
 1. **4-parameter** — a single $(\kappa, K, \gamma_{\text{price}}, \gamma_{\text{risk}})$
    block, pooled across wall and regime.
 2. **8-parameter** — the same primitives split by wall type (SW/DW) and
    insurance regime (FF/RB): 4 cost parameters and 4 price/risk slopes.
-3. **8-parameter + state fixed effects** — the 8p structural specification
-   augmented with 17 state-level intercepts $\alpha_g$ that enter the
-   measurement equation (not the agent's equilibrium) for the 17 control
-   states; Texas is the baseline ($\alpha_{\text{TX}} \equiv 0$).
+3. **8-parameter + FE (M-only, joint)** — the 8p structural specification
+   augmented with 17 state-level intercepts $\alpha_g$ entering the
+   *Maintain* flow utility only. Estimated jointly (25 parameters in `optim`).
+4. **8-parameter + stayFE (profile)** — the same 8 structural parameters with
+   17 state-level intercepts entering both the *Maintain* and *Replace* flow
+   utilities (the "stay-in-business" actions), with the $\alpha_g$
+   *profiled out* via a 1-D Newton FOC inside each likelihood evaluation
+   (so `optim` searches only the 8 structural dimensions). The exit
+   utility is unchanged across all four specifications and serves as the
+   outside option.
+
+All four specifications use the *Semantic 2* convention for the
+$\alpha_g$: the FE enter the measurement equation (the likelihood) only,
+not the agent's value function in counterfactual re-solves. Texas is the
+baseline ($\alpha_{\text{TX}} \equiv 0$).
 
 The report is organized for direct visual and statistical comparison:
-@sec-params reports the three parameter tables and the FE alphas;
-@sec-comparison reports the three-way information-criteria and likelihood-ratio
-table; @sec-fit reports model-implied vs. empirical action shares at the
+@sec-models gives the flow-utility specifications;
+@sec-params reports the four parameter tables and the FE alphas;
+@sec-comparison reports the four-way information-criteria and
+likelihood-ratio table plus an aggregate fit-metric comparison;
+@sec-fit reports model-implied vs. empirical action shares at the
 $(\text{wall} \times \text{regime} \times \text{age bin})$ cell level for each
 specification, with figures produced by a single shared plotting routine to
 guarantee structural parity. Per-cell numerical fit tables are in @sec-appendix.
 
-All artifacts are produced by `Code/Dynamic_Model/04k_Fit_Report_Artifacts.R`
-from saved fit objects under `Output/Estimation_Results/`. No estimation is
-re-run in the production of this report.
+Artifacts are produced by `Code/Dynamic_Model/04k_Fit_Report_Artifacts.R`
+(specs 1–3) and `Code/Dynamic_Model/04l_8paramFE_Profile_Estimation.R`
+(spec 4) from saved fit objects under `Output/Estimation_Results/`. No
+estimation is re-run in the production of this report.
+
+
+# Model Specifications {#sec-models}
+
+All four specifications share the same dynamic discrete-choice (DCC)
+structure with three actions $a_t \in \{M, E, R\}$ (Maintain, Exit, Replace),
+discount factor $\beta = 0.95$, T1EV(0) shocks with scale $\sigma_2 = 1$,
+and a state space of $S = 32$ cells indexed by tank age bin
+$A_{\text{bin}} \in \{1, \ldots, 8\}$ (5-year bins), wall type
+$w \in \{\text{SW}, \text{DW}\}$, and insurance regime
+$\rho \in \{\text{FF}, \text{RB}\}$. The exit action is absorbing
+(`F_exit` does not enter the Bellman operator), so $u_E$ is the firm's
+terminal outside-option payoff. All cost parameters $\kappa$ and $K$ are
+reported in dollar units (one model unit $= \$10{,}000 / \text{yr} /
+\text{facility}$).
+
+## 4-parameter flow utilities {#sec-models-4p}
+
+A single $(\kappa, K, \gamma_p, \gamma_r)$ vector applies to every state
+cell. The flow utilities at state $s$ are:
+
+$$
+\begin{aligned}
+u_M(s; \theta_{4p}) &\;=\; 1 \,+\, \gamma_{\text{price}} \cdot P(s) \,-\, \gamma_{\text{risk}} \cdot h(s) \\
+u_E(s; \theta_{4p}) &\;=\; \kappa \\
+u_R(s; \theta_{4p}) &\;=\; -K \;=\; -\exp(K_{\log})
+\end{aligned}
+$$
+
+where $P(s)$ is the per-period insurance premium in cell $s$, $h(s)$ is
+the cell's hazard-loss product (probability of release $\times$ expected
+cleanup cost), and the leading $1$ in $u_M$ is the normalized annual net
+revenue $R = \$10{,}000/\text{yr}$ collected each period the facility
+operates. Parameter vector:
+$\theta_{4p} = (\kappa_{\text{exit}}, K_{\log}, \gamma_{\text{price}}, \gamma_{\text{risk}})$,
+4 entries.
+
+## 8-parameter flow utilities {#sec-models-8p}
+
+Cost parameters split by wall, price/risk semi-elasticities split by
+regime:
+
+$$
+\begin{aligned}
+u_M(s; \theta_{8p}) &\;=\; 1 \,+\, \gamma_{\text{price}, \rho(s)} \cdot P(s) \,-\, \gamma_{\text{risk}, \rho(s)} \cdot h(s) \\
+u_E(s; \theta_{8p}) &\;=\; \kappa_{w(s)} \\
+u_R(s; \theta_{8p}) &\;=\; -K_{w(s)} \;=\; -\exp(K_{\log, w(s)})
+\end{aligned}
+$$
+
+with $w(s) \in \{\text{SW}, \text{DW}\}$ and
+$\rho(s) \in \{\text{FF}, \text{RB}\}$ read off the state cell. Parameter
+vector:
+$\theta_{8p} = (\kappa_{\text{SW}}, \kappa_{\text{DW}}, K_{\log, \text{SW}},
+K_{\log, \text{DW}}, \gamma_{\text{price}, \text{FF}}, \gamma_{\text{price}, \text{RB}},
+\gamma_{\text{risk}, \text{FF}}, \gamma_{\text{risk}, \text{RB}})$, 8 entries.
+
+Sign conventions: $\gamma_{\text{price}} < 0$ in the parameter (premium
+*reduces* maintain utility); $\gamma_{\text{risk}} > 0$ in the parameter
+but enters with a minus sign in the equation, so higher hazard also
+*reduces* maintain utility.
+
+## 8-parameter + FE (M-only, joint) {#sec-models-8pfe}
+
+Adds an additive group intercept $\alpha_g$ to the Maintain flow only,
+indexed by the firm's state of operation $g \in \{0 = \text{TX}, 1 = \text{AR}, \ldots, 17 = \text{VA}\}$:
+
+$$
+\begin{aligned}
+u_M(s, g; \theta_{8p}, \alpha_g) &\;=\; v_M(s; \theta_{8p}) \,+\, \alpha_g \\
+u_E(s; \theta_{8p}) &\;=\; v_E(s; \theta_{8p}) \\
+u_R(s; \theta_{8p}) &\;=\; v_R(s; \theta_{8p})
+\end{aligned}
+$$
+
+where $v_j(s; \theta)$ are the NPL choice-specific values from the
+existing 8p model (i.e., the same flow utilities as @sec-models-8p
+plus continuation values where applicable). Texas is the baseline
+($\alpha_0 \equiv 0$). The 17 control-state alphas are estimated
+*jointly* with $\theta_{8p}$ in a 25-parameter `optim` call. Parameter
+vector: $\theta_{8p}$ plus
+$(\alpha_{\text{AR}}, \alpha_{\text{CO}}, \ldots, \alpha_{\text{VA}})$,
+$8 + 17 = 25$ entries.
+
+## 8-parameter + stayFE (profile) {#sec-models-8pfeStay}
+
+The state intercept $\alpha_g$ shifts both *Maintain* and *Replace*
+utilities — the two "stay-in-business" actions — leaving the exit
+(outside-option) utility untouched:
+
+$$
+\begin{aligned}
+u_M(s, g; \theta_{8p}, \alpha_g) &\;=\; v_M(s; \theta_{8p}) \,+\, \alpha_g \\
+u_E(s; \theta_{8p}) &\;=\; v_E(s; \theta_{8p}) \\
+u_R(s, g; \theta_{8p}, \alpha_g) &\;=\; v_R(s; \theta_{8p}) \,+\, \alpha_g
+\end{aligned}
+$$
+
+Crucially, $\alpha_g$ is *profiled out* of the likelihood: for each
+$\theta_{8p}$ candidate the optimizer evaluates, the 17 control-state
+$\alpha_g$ values are solved analytically from a 1-D Newton FOC enforcing
+
+$$
+\sum_s \left[\, n_M(s, g) + n_R(s, g) \,-\, n_{\text{total}}(s, g) \cdot \hat P_{\text{stay}}(s, g; \theta_{8p}, \alpha_g) \,\right] \;=\; 0
+$$
+
+(i.e., the model-implied total "stay" count in group $g$ equals the
+empirical count). `optim` therefore searches only the 8 structural
+dimensions. Texas is the baseline ($\alpha_0 \equiv 0$). At
+convergence, the $\alpha_g(\hat\theta)$ values are recovered post-hoc.
+See `Reports/Teaching_Notes_Dynamic_Models.md` §1 for the full
+derivation, literature, and standard-error treatment. Parameter vector:
+8 structural plus 17 profiled-out alphas; effective $k = 25$ for
+information-criteria purposes.
 
 
 # Parameter Estimates {#sec-params}
@@ -93,11 +221,12 @@ cat(readLines(here("Output", "Tables", "04h_Theta_Table_8param_AM_SE.tex")),
 cat("\n}\n\\end{center}\n")
 ```
 
-## 8-parameter + state fixed effects {#sec-params-8pfe}
+## 8-parameter + FE (M-only, joint) {#sec-params-8pfe}
 
 @tbl-theta-8pfe reports the 8-structural-parameter block from the joint
-$(\theta, \alpha)$ estimation. The 17 state fixed effects are reported
-separately in @tbl-fe-alphas.
+25-dim $(\theta, \alpha)$ estimation with $\alpha_g$ entering $u_M$
+only. The 17 state fixed effects are reported separately in
+@tbl-fe-alphas.
 
 ```{r tbl-theta-8pfe, results="asis"}
 #| label: tbl-theta-8pfe
@@ -133,26 +262,118 @@ which span roughly $[-1.4,\, +0.8]$. Both are statistically distinguishable
 from zero and reflect near-zero observed *Exit* and *Replace* activity in those
 state-year cells relative to the TX baseline; they are not numerical artifacts.
 
+## 8-parameter + stayFE (profile) {#sec-params-8pfeStay}
 
-# Model Comparison {#sec-comparison}
+@tbl-theta-8pfeProfile reports the 8 structural parameters from the
+profile-likelihood fit. The 17 state intercepts $\alpha_g$ are recovered
+post-hoc at $\hat\theta$ and reported in @tbl-fe-alphas-profile.
 
-@tbl-comparison reports log-likelihood, information criteria, and nested
-likelihood-ratio tests across the three specifications. All three are fit
-on the same observed sample, so the comparison is direct.
+```{r tbl-theta-8pfeProfile, results="asis"}
+#| label: tbl-theta-8pfeProfile
+#| tbl-cap: "8-parameter + stayFE (profile) estimates: structural parameters only. The 17 state FE coefficients $\\alpha_g$ (profiled out at $\\hat\\theta$) are reported separately in @tbl-fe-alphas-profile."
+cat("\\begin{center}\n\\resizebox{\\textwidth}{!}{\n")
+cat(readLines(here("Output", "Tables", "04l_Theta_Table_8paramFE_profile_AM_SE.tex")),
+    sep = "\n")
+cat("\n}\n\\end{center}\n")
+```
 
-```{r tbl-comparison, results="asis"}
-#| label: tbl-comparison
-#| tbl-cap: "Three-way nested model comparison. AIC $= -2\\log L + 2k$; BIC $= -2\\log L + k\\log N$. Likelihood-ratio tests: 8p vs 4p ($\\Delta k = 4$), 8p+FE vs 8p ($\\Delta k = 17$). Both LR statistics are far in the tail of their reference $\\chi^2$ distributions, with $p$-values numerically zero."
+### State fixed-effect coefficients (profile spec) {#sec-params-fe-alphas-profile}
+
+```{r tbl-fe-alphas-profile, results="asis"}
+#| label: tbl-fe-alphas-profile
+#| tbl-cap: "State fixed-effect coefficients $\\hat\\alpha_g(\\hat\\theta)$ from the stayFE-profile specification, recovered post-convergence from the profile FOC. Texas is the baseline ($\\alpha_{\\text{TX}} \\equiv 0$); standard errors in parentheses are from the joint 25-dim Hessian sub-block. Several SE values report as 0.000 due to finite-difference precision in `numDeriv::hessian`; these are not exact zeros but values below the 3-decimal display threshold."
 cat("\\begin{center}\n")
-cat(readLines(here("Output", "Tables", "04k_Model_Comparison_3way.tex")),
+cat(readLines(here("Output", "Tables", "04l_FE_Alphas_profile_Compact.tex")),
     sep = "\n")
 cat("\n\\end{center}\n")
 ```
 
-Both nested restrictions are rejected at any conventional level. AIC and
-BIC agree on the ranking 4p $\succ$ 8p $\succ$ 8p+FE (lower is better),
-with the BIC penalty large enough to make 8p+FE still preferred despite
-the 17 additional parameters.
+*Note on the MO boundary.* The Missouri alpha hits the
+$\pm 20$ Newton bound ($\hat\alpha_{\text{MO}} = 20.0$, SE $9.46$) because the
+group's empirical Exit-share is essentially zero in the observed window;
+the profile FOC has no interior solution and the solver correctly pins
+the value at the bound with an inflated SE that honestly reports the
+local non-identification. This is an improvement over the M-only joint
+spec where the same data pathology surfaced as a spuriously-tight
+$\hat\alpha_{\text{MO}} = 8.18$ (SE $0.77$).
+
+
+# Model Comparison {#sec-comparison}
+
+@tbl-comparison reports log-likelihood, information criteria, and nested
+likelihood-ratio tests across the four specifications. All four are fit
+on the same observed sample, so the comparison is direct.
+
+```{r tbl-comparison, results="asis"}
+#| label: tbl-comparison
+#| tbl-cap: "Four-way model comparison. AIC $= -2\\log L + 2k$; BIC $= -2\\log L + k\\log N$. Likelihood-ratio tests reported: 8p vs 4p ($\\Delta k = 4$); 8p+FE M-only vs 8p ($\\Delta k = 17$); 8p+stayFE profile vs 8p ($\\Delta k = 17$). All three LR statistics are far in the tail of their reference $\\chi^2$ distributions, with $p$-values numerically zero. The two FE specifications are non-nested to each other (same effective $k = 25$, different $\\alpha$-placement), so they are not LR-comparable; AIC/BIC favor the M-only joint placement by $\\approx 1{,}500$ units."
+cat("\\begin{center}\n")
+cat(readLines(here("Output", "Tables", "04l_Model_Comparison_4way.tex")),
+    sep = "\n")
+cat("\n\\end{center}\n")
+```
+
+All three nested restrictions are rejected at any conventional level.
+AIC and BIC agree on the ranking
+4p $\succ$ 8p $\succ$ 8p+stayFE (profile) $\succ$ 8p+FE (M-only, joint) —
+the joint-M-only fit is best in absolute likelihood terms.
+However, the two FE specifications are *non-nested* to each other:
+they differ in where $\alpha_g$ enters the flow utility, not in
+parameter count. The profile-stayFE specification has the cleaner
+economic interpretation ($\alpha_g$ shifts state-specific stay-vs-exit
+propensity) at a cost of $\approx 750$ log-likelihood units relative
+to the M-only joint fit.
+
+## Aggregate fit-metric comparison {#sec-comparison-fit-metrics}
+
+@tbl-fit-metrics-summary collapses the per-(wall, regime, action)
+weighted-RMSE numbers from each model into a per-action summary
+weighted by total cell sample size. Lower is better in every column.
+
+```{r tbl-fit-metrics-summary}
+#| label: tbl-fit-metrics-summary
+#| tbl-cap: "Aggregate goodness-of-fit comparison across the four specifications. Each cell reports the cell-sample-size-weighted RMSE of the model-vs-empirical residual, computed as $\\sqrt{\\sum_c n_c \\cdot \\text{res}_c^2 / \\sum_c n_c}$ across the four $(\\text{wall} \\times \\text{regime})$ subgroups for the given action. Overall column collapses across all 12 wall-regime-action groups. Lower is better."
+.summarize_fit <- function(path, label) {
+  dt <- fread(path)
+  agg <- dt[, .(
+    weighted_RMSE = sqrt(sum(weighted_RMSE^2 * total_n) / sum(total_n))
+  ), by = action]
+  overall <- dt[, .(
+    action = "Overall",
+    weighted_RMSE = sqrt(sum(weighted_RMSE^2 * total_n) / sum(total_n))
+  )]
+  out <- rbind(agg, overall)
+  out[, Model := label]
+  setcolorder(out, c("Model", "action", "weighted_RMSE"))
+  out
+}
+fit_metrics <- rbindlist(list(
+  .summarize_fit(here("Output", "Tables", "04g_Fit_Quality_byWallRegimeAction.csv"),
+                 "4-parameter"),
+  .summarize_fit(here("Output", "Tables", "04h_8param_FitQuality_byWallRegimeAction.csv"),
+                 "8-parameter"),
+  .summarize_fit(here("Output", "Tables", "04k_FitQuality_8paramFE_byWallRegimeAction.csv"),
+                 "8p+FE (M-only, joint)"),
+  .summarize_fit(here("Output", "Tables", "04l_FitQuality_8paramFE_profile_byWallRegimeAction.csv"),
+                 "8p+stayFE (profile)")
+))
+fit_metrics_wide <- dcast(fit_metrics, Model ~ action, value.var = "weighted_RMSE")
+fit_metrics_wide <- fit_metrics_wide[, .(Model, Maintain, Exit, Replace, Overall)]
+fit_metrics_wide[, Model := factor(Model, levels = c(
+  "4-parameter","8-parameter","8p+FE (M-only, joint)","8p+stayFE (profile)"))]
+setorder(fit_metrics_wide, Model)
+
+kable(fit_metrics_wide, format = "latex", booktabs = TRUE, digits = 5,
+      align = c("l","r","r","r","r")) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 9)
+```
+
+Takeaway: the 8p specifications all reduce overall weighted RMSE by
+roughly half relative to 4p; among the 8p variants, the M-only-joint
+spec achieves the lowest overall RMSE, with the stayFE-profile spec a
+close second. The 4p model's poor fit is concentrated in *Exit* and
+*Maintain* (where the wall/regime split matters most), while *Replace*
+fit is already comparable across the 8p variants.
 
 
 # Goodness of Fit: Model-Implied vs. Empirical Cell Shares {#sec-fit}
@@ -225,7 +446,7 @@ kable(fq8, format = "latex", booktabs = TRUE, digits = 5,
   kable_styling(latex_options = c("scale_down"), font_size = 9)
 ```
 
-## 8-parameter + FE fit {#sec-fit-8pfe}
+## 8-parameter + FE (M-only, joint) fit {#sec-fit-8pfe}
 
 ```{r fig-fit-8pfe-sw}
 #| label: fig-fit-8pfe-sw
@@ -245,10 +466,37 @@ knitr::include_graphics(here("Output", "Figures", "04k_Fit_8paramFE_DW.png"))
 
 ```{r tbl-fitq-8pfe}
 #| label: tbl-fitq-8pfe
-#| tbl-cap: "8-parameter + FE weighted-RMSE summary by wall, regime, and action. Same construction as @tbl-fitq-4p."
+#| tbl-cap: "8-parameter + FE (M-only, joint) weighted-RMSE summary by wall, regime, and action. Same construction as @tbl-fitq-4p."
 fqfe <- fread(here("Output", "Tables", "04k_FitQuality_8paramFE_byWallRegimeAction.csv"))
 kable(fqfe, format = "latex", booktabs = TRUE, digits = 5,
       align = c("l","l","l", rep("r", ncol(fqfe) - 3L))) |>
+  kable_styling(latex_options = c("scale_down"), font_size = 9)
+```
+
+## 8-parameter + stayFE (profile) fit {#sec-fit-8pfeProfile}
+
+```{r fig-fit-8pfeProfile-sw}
+#| label: fig-fit-8pfeProfile-sw
+#| fig-cap: "8-parameter + stayFE (profile) fit, Single-Walled tanks. Same construction as @fig-fit-4p-sw. Model-implied probabilities marginalize the per-$g$ choice probability over the empirical state composition $w_g(s)$, with $\\alpha_g$ entering both Maintain and Replace utilities (profiled out via 1-D FOC)."
+#| fig-width: 7
+#| fig-height: 2.8
+knitr::include_graphics(here("Output", "Figures", "04l_Fit_8paramFE_profile_SW.png"))
+```
+
+```{r fig-fit-8pfeProfile-dw}
+#| label: fig-fit-8pfeProfile-dw
+#| fig-cap: "8-parameter + stayFE (profile) fit, Double-Walled tanks. Same construction as @fig-fit-8pfeProfile-sw."
+#| fig-width: 7
+#| fig-height: 2.8
+knitr::include_graphics(here("Output", "Figures", "04l_Fit_8paramFE_profile_DW.png"))
+```
+
+```{r tbl-fitq-8pfeProfile}
+#| label: tbl-fitq-8pfeProfile
+#| tbl-cap: "8-parameter + stayFE (profile) weighted-RMSE summary by wall, regime, and action. Same construction as @tbl-fitq-4p."
+fqfeProfile <- fread(here("Output", "Tables", "04l_FitQuality_8paramFE_profile_byWallRegimeAction.csv"))
+kable(fqfeProfile, format = "latex", booktabs = TRUE, digits = 5,
+      align = c("l","l","l", rep("r", ncol(fqfeProfile) - 3L))) |>
   kable_styling(latex_options = c("scale_down"), font_size = 9)
 ```
 
@@ -283,7 +531,7 @@ actions $a \in \{M, E, R\}$, `mod_a` $= \hat P_a(s)$ (model-implied),
   kable(dt, format = "latex", booktabs = TRUE, longtable = TRUE,
         digits = 4,
         align = c("l","l","l","r", rep("r", 9))) |>
-    kable_styling(latex_options = c("repeat_header"), font_size = 8)
+    kable_styling(font_size = 8)
 }
 ```
 
@@ -303,10 +551,18 @@ actions $a \in \{M, E, R\}$, `mod_a` $= \hat P_a(s)$ (model-implied),
 .render_appendix(.prep_appendix(here("Output", "Tables", "04h_8param_PerCell_Fit_Wide.csv")))
 ```
 
-## 8-parameter + FE {#sec-appendix-8pfe}
+## 8-parameter + FE (M-only, joint) {#sec-appendix-8pfe}
 
 ```{r tbl-appendix-8pfe}
 #| label: tbl-appendix-8pfe
-#| tbl-cap: "8-parameter + FE per-cell fit. Same construction as @tbl-appendix-4p."
+#| tbl-cap: "8-parameter + FE (M-only, joint) per-cell fit. Same construction as @tbl-appendix-4p."
 .render_appendix(.prep_appendix(here("Output", "Tables", "04k_PerCell_Fit_8paramFE_Wide.csv")))
+```
+
+## 8-parameter + stayFE (profile) {#sec-appendix-8pfeProfile}
+
+```{r tbl-appendix-8pfeProfile}
+#| label: tbl-appendix-8pfeProfile
+#| tbl-cap: "8-parameter + stayFE (profile) per-cell fit. Same construction as @tbl-appendix-4p."
+.render_appendix(.prep_appendix(here("Output", "Tables", "04l_PerCell_Fit_8paramFE_profile_Wide.csv")))
 ```

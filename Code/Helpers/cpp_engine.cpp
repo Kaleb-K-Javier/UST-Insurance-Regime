@@ -355,7 +355,8 @@ double nll_replacement8pfe_counts_cpp(const Rcpp::IntegerVector& sidx,
                                       const Rcpp::NumericVector& vE,
                                       const Rcpp::NumericVector& vR,
                                       const Rcpp::NumericVector& alphacpp,
-                                      const double epsprob = 1e-12) {
+                                      const double epsprob = 1e-12,
+                                      const bool alpha_in_R = false) {
   // Inputs:
   // - sidx: 1-based state indices (1..32)
   // - graw: 0..17 geo index (0=TX, 1..17=CONTROLSTATES in canonical order)
@@ -373,9 +374,9 @@ double nll_replacement8pfe_counts_cpp(const Rcpp::IntegerVector& sidx,
     const int nm = nM[i], ne = nE[i], nr = nR[i];
     if (nm + ne + nr == 0) continue;
 
-    const double uM = vM[s] + alphacpp[g];  // maintain shift only
+    const double uM = vM[s] + alphacpp[g];
     const double uE = vE[s];
-    const double uR = vR[s];
+    const double uR = alpha_in_R ? vR[s] + alphacpp[g] : vR[s];
 
     const double lse = logsumexp3cpp(uM, uE, uR);
     double lpM = uM - lse;
@@ -399,7 +400,8 @@ Rcpp::NumericMatrix update_ccps_geoweighted_cpp(const Rcpp::NumericVector& vM,
                                                 const Rcpp::NumericVector& vR,
                                                 const Rcpp::NumericVector& alphacpp,
                                                 const Rcpp::NumericMatrix& wsg,
-                                                const double epsprob = 1e-12) {
+                                                const double epsprob = 1e-12,
+                                                const bool alpha_in_R = false) {
   // Returns Pnew (32x3): Pnew(s,.) = sum_g w(g|s) * softmax(vM(s)+alpha_g, vE(s), vR(s))
   // Maintain-only FE.
   // wsg: R matrix [32 x 18], rows sum to 1. Column j corresponds to graw = j-1 (R is 1-indexed).
@@ -419,7 +421,7 @@ Rcpp::NumericMatrix update_ccps_geoweighted_cpp(const Rcpp::NumericVector& vM,
 
       const double uM = vM[s] + alphacpp[g];
       const double uE = vE[s];
-      const double uR = vR[s];
+      const double uR = alpha_in_R ? vR[s] + alphacpp[g] : vR[s];
 
       const double lse = logsumexp3cpp(uM, uE, uR);
       double pM = std::exp(uM - lse);
@@ -446,6 +448,207 @@ Rcpp::NumericMatrix update_ccps_geoweighted_cpp(const Rcpp::NumericVector& vM,
     Pnew(s, 0) = pm / den;
     Pnew(s, 1) = pe / den;
     Pnew(s, 2) = pr / den;
+  }
+
+  Rcpp::colnames(Pnew) = Rcpp::CharacterVector::create("maintain", "exit", "replace");
+  return Pnew;
+}
+
+// ------------------------------------------------------------
+// Profile-likelihood NLL for 8p + state FE on {M, R}
+// Internally solves alpha_g per group via 1-D Newton (no sigma division).
+// Returns negative log-likelihood (scalar).
+// ------------------------------------------------------------
+// [[Rcpp::export]]
+double nll_replacement8pfe_profile_counts_cpp(
+    Rcpp::IntegerVector sidx,
+    Rcpp::IntegerVector graw,
+    Rcpp::IntegerVector nM,
+    Rcpp::IntegerVector nE,
+    Rcpp::IntegerVector nR,
+    Rcpp::NumericVector vM,
+    Rcpp::NumericVector vE,
+    Rcpp::NumericVector vR,
+    double epsprob,
+    int    max_newton_iter = 30,
+    double newton_tol      = 1e-10,
+    double alpha_bound     = 20.0)
+{
+  const int G = 18;          // 0 = TX baseline (alpha = 0)
+  const int R = sidx.size(); // number of count rows (<= 576)
+  Rcpp::NumericVector alpha_vec(G, 0.0);
+
+  // ----- Newton-solve alpha for each control-state group g = 1..17 -----
+  for (int g = 1; g < G; ++g) {
+    // Pre-check: zero observations in this group → skip Newton, α=0
+    double n_total_g = 0.0;
+    for (int i = 0; i < R; ++i) {
+      if (graw[i] != g) continue;
+      n_total_g += nM[i] + nE[i] + nR[i];
+    }
+    if (n_total_g <= 0.0) {
+      alpha_vec[g] = 0.0;
+      continue;  // skip Newton entirely; α irrelevant for LL
+    }
+    double a = 0.0;
+    double resid = 0.0, deriv = 0.0;
+    for (int iter = 0; iter < max_newton_iter; ++iter) {
+      resid = 0.0; deriv = 0.0;
+      double n_stay_total = 0.0, n_exit_total = 0.0;
+      for (int i = 0; i < R; ++i) {
+        if (graw[i] != g) continue;
+        int s = sidx[i] - 1;  // 0-based
+        double uM_ = vM[s] + a;
+        double uE_ = vE[s];
+        double uR_ = vR[s] + a;
+        double umax = std::max({uM_, uE_, uR_});
+        double eM = std::exp(uM_ - umax);
+        double eE = std::exp(uE_ - umax);
+        double eR = std::exp(uR_ - umax);
+        double denom  = eM + eE + eR;
+        double P_E    = eE / denom;
+        double P_stay = (eM + eR) / denom;
+        double n_total_i = nM[i] + nE[i] + nR[i];
+        double n_stay_i  = nM[i] + nR[i];
+        resid += n_stay_i - n_total_i * P_stay;
+        deriv -= n_total_i * P_stay * P_E;
+        n_stay_total += n_stay_i;
+        n_exit_total += nE[i];
+      }
+      if (n_stay_total <= 0.0) { a = -alpha_bound; break; }
+      if (n_exit_total <= 0.0) { a =  alpha_bound; break; }
+      if (std::abs(resid) < newton_tol) break;
+      if (deriv == 0.0) break;
+      a -= resid / deriv;
+      if (a < -alpha_bound) a = -alpha_bound;
+      if (a >  alpha_bound) a =  alpha_bound;
+    }
+    alpha_vec[g] = a;
+  }
+
+  // ----- LL evaluation using solved alpha_vec -----
+  double ll = 0.0;
+  double log_eps = std::log(epsprob);
+  for (int i = 0; i < R; ++i) {
+    if (nM[i] + nE[i] + nR[i] == 0) continue;
+    int s = sidx[i] - 1;
+    int g = graw[i];
+    double a  = alpha_vec[g];
+    double uM_ = vM[s] + a;
+    double uE_ = vE[s];
+    double uR_ = vR[s] + a;
+    double lse = logsumexp3cpp(uM_, uE_, uR_);
+    double lpM = std::max(uM_ - lse, log_eps);
+    double lpE = std::max(uE_ - lse, log_eps);
+    double lpR = std::max(uR_ - lse, log_eps);
+    ll += nM[i]*lpM + nE[i]*lpE + nR[i]*lpR;
+  }
+  return -ll;
+}
+
+// ------------------------------------------------------------
+// Profile CCP update (geo-weighted) for 8p + state FE on {M, R}
+// Internally solves alpha_g, forms per-(s,g) softmax, marginalizes by wsg.
+// Returns (32 x 3) Pnew matrix. No sigma division.
+// ------------------------------------------------------------
+// [[Rcpp::export]]
+Rcpp::NumericMatrix update_ccps_geoweighted_profile_cpp(
+    Rcpp::IntegerVector sidx,
+    Rcpp::IntegerVector graw,
+    Rcpp::IntegerVector nM,
+    Rcpp::IntegerVector nE,
+    Rcpp::IntegerVector nR,
+    Rcpp::NumericVector vM,
+    Rcpp::NumericVector vE,
+    Rcpp::NumericVector vR,
+    Rcpp::NumericMatrix wsg,
+    double epsprob,
+    int    max_newton_iter = 30,
+    double newton_tol      = 1e-10,
+    double alpha_bound     = 20.0)
+{
+  // Step 1: solve alpha_vec (same Newton loop as nll profile function above)
+  const int G = 18;
+  const int R = sidx.size();
+  Rcpp::NumericVector alpha_vec(G, 0.0);
+
+  for (int g = 1; g < G; ++g) {
+    // Pre-check: zero observations in this group → skip Newton, α=0
+    double n_total_g = 0.0;
+    for (int i = 0; i < R; ++i) {
+      if (graw[i] != g) continue;
+      n_total_g += nM[i] + nE[i] + nR[i];
+    }
+    if (n_total_g <= 0.0) {
+      alpha_vec[g] = 0.0;
+      continue;  // skip Newton entirely; α irrelevant for LL
+    }
+    double a = 0.0;
+    double resid = 0.0, deriv = 0.0;
+    for (int iter = 0; iter < max_newton_iter; ++iter) {
+      resid = 0.0; deriv = 0.0;
+      double n_stay_total = 0.0, n_exit_total = 0.0;
+      for (int i = 0; i < R; ++i) {
+        if (graw[i] != g) continue;
+        int s = sidx[i] - 1;
+        double uM_ = vM[s] + a;
+        double uE_ = vE[s];
+        double uR_ = vR[s] + a;
+        double umax = std::max({uM_, uE_, uR_});
+        double eM = std::exp(uM_ - umax);
+        double eE = std::exp(uE_ - umax);
+        double eR = std::exp(uR_ - umax);
+        double denom  = eM + eE + eR;
+        double P_E    = eE / denom;
+        double P_stay = (eM + eR) / denom;
+        double n_total_i = nM[i] + nE[i] + nR[i];
+        double n_stay_i  = nM[i] + nR[i];
+        resid += n_stay_i - n_total_i * P_stay;
+        deriv -= n_total_i * P_stay * P_E;
+        n_stay_total += n_stay_i;
+        n_exit_total += nE[i];
+      }
+      if (n_stay_total <= 0.0) { a = -alpha_bound; break; }
+      if (n_exit_total <= 0.0) { a =  alpha_bound; break; }
+      if (std::abs(resid) < newton_tol) break;
+      if (deriv == 0.0) break;
+      a -= resid / deriv;
+      if (a < -alpha_bound) a = -alpha_bound;
+      if (a >  alpha_bound) a =  alpha_bound;
+    }
+    alpha_vec[g] = a;
+  }
+
+  // Step 2: form per-(s,g) softmax + marginalize over g using wsg
+  const int S = 32;
+  Rcpp::NumericMatrix Pnew(S, 3);
+
+  for (int s = 0; s < S; ++s) {
+    double pmix_M = 0.0, pmix_E = 0.0, pmix_R = 0.0;
+    for (int g = 0; g < G; ++g) {
+      double w = wsg(s, g);  // wsg 0-based in C++
+      if (w <= 0.0) continue;
+      double a   = alpha_vec[g];
+      double uM_ = vM[s] + a;
+      double uE_ = vE[s];
+      double uR_ = vR[s] + a;
+      double umax = std::max({uM_, uE_, uR_});
+      double eM = std::exp(uM_ - umax);
+      double eE = std::exp(uE_ - umax);
+      double eR = std::exp(uR_ - umax);
+      double denom = eM + eE + eR;
+      double pM = std::max(eM / denom, epsprob);
+      double pE = std::max(eE / denom, epsprob);
+      double pR = std::max(eR / denom, epsprob);
+      double psum = pM + pE + pR;
+      pmix_M += w * (pM / psum);
+      pmix_E += w * (pE / psum);
+      pmix_R += w * (pR / psum);
+    }
+    double psum = std::max(pmix_M + pmix_E + pmix_R, 3.0 * epsprob);
+    Pnew(s, 0) = pmix_M / psum;
+    Pnew(s, 1) = pmix_E / psum;
+    Pnew(s, 2) = pmix_R / psum;
   }
 
   Rcpp::colnames(Pnew) = Rcpp::CharacterVector::create("maintain", "exit", "replace");

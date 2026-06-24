@@ -1,4 +1,673 @@
-# HANDOFF -- 2026-06-02 (T017 reviewed CLOSED-PASS + committed; T014 portfolio model + MO/SD raw-data audit remain)
+# HANDOFF -- 2026-06-22 (T024b v4 estimator: RUNS end-to-end on subsets; dgeMatrix + alpha-profiling-blowup fixed; full converged run + CF/figures next)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T024b v4 estimator implemented + debugged (2026-06-22, Opus hands-on)
+═══════════════════════════════════════════════════
+PM08_Estimator_v4.R written and runs END-TO-END on subsets (gates B/C/D pass).
+Full converged run NOT yet done. Detail in ticket 024b ATTEMPT LOG. Key state:
+  - NPL machinery CORRECT: GATE B basis==direct 1.2e-9; GATE C grad==fin-diff 3.7e-10.
+  - Two bugs FOUND + FIXED in PM08 this session:
+    (1) dgeMatrix: comp_apply (sparse x dense) returns S4 -> broke pm_op_build at iter 2.
+        FIX as.matrix() coercion (value-preserving).
+    (2) alpha-profiling blowup: clamped Newton overshoot stuck at +-50 (10/14 alphas
+        pinned, LL=-1.4e9 on full 17env). FIX = uniroot bracketing (score monotone).
+        VALIDATED on 4-FF-env subset: alphas interior [-0.06,0.06], LL sane.
+  - alpha_g now PROFILED OUT (concentrated 1-D FOC per FF env; envelope-thm gradient);
+    outer optim = 9 structural params. fnscale=sum(n_obs) added (mean-LL).
+  - TEST KNOBS: PM08_TEST_NENV=N (N FF+1 RB subset), PM08_MAXITER=N (cap iters).
+  - TIMING: ~23min/pass basis (17 env), ~25min/healthy pass, converged run ~2-2.5hr.
+    gamma_r=0.044 interior on full data (2-env pin was an artifact).
+OPEN (priority order): (0) TICKET 024p SPEEDUPS first (batched matvec ~4x + PSOCK env-
+  parallel ~5-6x -> basis ~23min->~1.5min, full converged run ~2hr->~15-25min) BEFORE the
+  long runs; machine = Ryzen 9 6900HS 8 phys cores / 27.7GB -> ~8 PSOCK workers x ~1.5GB.
+  (a) then the FE-ON vs FE-OFF full converged comparison (PM08_NO_ALPHA toggle is IN +
+  validated; subset hinted the FE choice moves gamma_r + optim speed, but needs FULL data:
+  it is about cross-state variation. no-FE optim is fast/clean code-0; FE optim slow/code-1
+  from per-eval uniroot profiling). (b) inner-optim cold-start code-1 (parscale; non-block).
+  (c) MODULARIZE PM08 -> pm_estimator_v4_lib.R. (d) CF + figures (plan drafted; theta-fixed
+  equilibrium reusing kernel+P1; 4 researcher decisions pending). NOTE: no full converged
+  fit has been produced yet — only subset + 1-iter timing runs.
+Resume: "Load CLAUDE.md + HANDOFF.md + tickets 024b + 024p. v4 estimator RUNS (uniroot
+  alpha fix validated; dgeMatrix fixed). Machine Ryzen 9 6900HS 8c/27.7GB. Today: implement
+  024p (batched matvec then PSOCK parallel), then FE-on vs FE-off full comparison (now fast),
+  then modularize + CF/figures."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-21 (PERC Research Plan draft built + renders clean; paper workstream, not the estimator)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: PERC Research Plan draft (2026-06-21)
+═══════════════════════════════════════════════════
+WORKSTREAM: the PERC workshop "Research Plan" document, NOT the structural
+estimator. File: Reports/Paper/PERC_Reserach_Plan.qmd. Renders to PDF clean
+(43 pp, exit 0).
+
+RENDER COMMAND (R must be found by quarto; bib underscore bug fixed):
+  cd Reports/Paper
+  QUARTO_R="C:/Program Files/R/R-4.5.2/bin/R.exe" quarto render PERC_Reserach_Plan.qmd --to pdf
+  Toolchain: Quarto 1.4.553 + TinyTeX (xelatex). Close the PDF viewer first (file lock).
+
+DONE this session:
+  - Sections now present: Purpose + Background (pre-existing); MILESTONES (new:
+    tangible, Track D data-infra D1-D5 + M1-M4, no "Done"/ticket jargon);
+    METHODS = "Reduced-Form Evidence" (Sec 4: hazard model, premium build, DiD
+    design + results) and "Dynamic Structural Model" (Sec 5: portfolio v4 -
+    state/actions/flow utility/Bellman/identification/counterfactuals); DATA.
+  - All tables+figures moved to a back-matter "# Tables and Figures {-}" section.
+    Each float = a self-contained \captionof block on its OWN vertically-centered
+    page (\clearpage + \null\vfill ... \vfill\clearpage). NO [H]/[p] (the [p] was
+    leaking as literal text). Captions ABOVE the item; QJE/AER notes BELOW (\small,
+    italic "Notes:" label, roman body, econ-tradition = how built from data, then
+    read a specific line/point). Referenced via raw \autoref{tbl-*}/\autoref{fig-*}
+    (NOT Quarto @-refs, except @sec-structural-model which stays Quarto).
+  - Model-assumption exhibits shown as PICTURES: fig-which-tank (AE_X6 forest),
+    fig-km-kernel (AE_X7 kernel heat), fig-ae-x3-premium-by-age, fig-oop-by-age
+    (AE09). Tables: AE_X10 regime margins + DiD results + baseline + variable defs.
+  - Structural ESTIMATE NUMBERS deliberately removed from the plan (portfolio fit
+    not run yet) -> presented as milestones, not results.
+  - Bib: natbib+xelatex breaks on underscores -> qmd now points to
+    UST-lit-fixed.bib (hyphen copy of UST_lit_fixed.bib). See memory
+    render-natbib-underscore-bib-bug.
+
+FILES CREATED/EDITED (paper workstream; local):
+  - Reports/Paper/PERC_Reserach_Plan.qmd        (the draft)
+  - Reports/Paper/PERC_Research_Plan_OUTLINE.md (working scaffold)
+  - Reports/Paper/PERC_motivation_notes.md      (UST leak-rate vs O&G wells; state-fund sunsets; cited)
+  - Code/Analysis/02e_Variable_Definitions_Table.R -> Output/Tables/T_Variable_Definitions.tex (codebook; 3 cols, no Source)
+  - Code/Analysis/Descrptive Facts/01n_CVValidation.R: appended S12 (lifetime cumulative first-release ~1 in 4)
+  - Reports/Paper/UST-lit-fixed.bib (hyphen bib copy)
+
+REMAINING:
+  1. [regulatory citation] DONE (2026-06-21): filled in reference qmd as a
+     footnote -> EPAct 2005 secondary-containment (42 U.S.C. 6991b(i)) + state
+     ban dates verified from Box "Double Wall Date Email Verification.csv"
+     (study states 1989-2013, most 2007-2009).
+  2. TRIM A COPY: submission copy = PERC_Research_Plan_PERC.qmd. Methods rewritten
+     (sandwich style, per-PERC-question paragraphs, all eqns + 4 CF eqns +
+     closure-composition reg). Tables/figures kept at end unchanged. Build +
+     render handed to a Sonnet subagent chip (drafted in Opus session 2026-06-21).
+  3. Bib drift: other qmds still cite UST_lit_fixed.bib (same latent underscore
+     bug); consider renaming the canonical bib to hyphens + updating all qmds.
+  4. Data section prose still has the author's original typos (left intact) and the
+     19-vs-18 state count wording to reconcile (user: 17+TX, don't sweat +-1).
+  5. DISCOUNTING (2026-06-21): the structural model uses ANNUAL discounting,
+     beta=0.95 (~5%/yr). PERC plan prose states beta~=0.95 (NO footnote, per
+     researcher). Scale_Incorporation_Model_Sketch.qmd updated 0.9957 -> 0.95.
+     STILL TO DO: the estimation config / T023 first-stage build carried a
+     MONTHLY beta=0.9957 -- reconcile the estimator config to annual 0.95 before
+     the next portfolio fit (tolerance/constant change -> approval gate).
+
+RESUME: "Load CLAUDE.md. PERC Research Plan (Reports/Paper/PERC_Reserach_Plan.qmd)
+  is drafted and renders clean at ~43pp. Today: trim a copy to the PERC page
+  budgets and fill the [regulatory citation]."
+═══════════════════════════════════════════════════
+
+# HANDOFF -- 2026-06-19 (T024d preconditioner: P1 aging-backbone PASS, 15x iter cut; 024b estimator UNBLOCKED)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T024d P1 preconditioner reviewed PASS (2026-06-19, Opus reviewer)
+═══════════════════════════════════════════════════
+THE SOLVE IS SOLVED. Portfolio value-solve speed chain is complete:
+  024s: direct sparse LU DEAD (OOM at 298k fill-in).
+  024c: C++ matvec CORRECT but only 1.3x over R — it's at the memory-bandwidth
+        floor (the sparse A_age product was already compiled in R's Matrix). So
+        the lever is ITERATION COUNT, not matvec cost.
+  024d: aging-backbone preconditioner P1 PASS. Web-verified design (M-matrix +
+        Meijerink-van der Vorst + Topological Value Iteration). Aging is monotone
+        => A_age is EXACTLY triangular under age-potential order (below-diag mass
+        0.000e+00). Maintain carries ~98% of work-mass, so (I - beta M_maintain)
+        is a near-exact, cheap (triangular-substitution) preconditioner.
+        RESULT: 152 -> 10 cold iters (15.2x), 8 warm (18.1x). resid 8.3e-11,
+        agree-with-oracle 3.0e-08, G4 exact in 1 iter. Projection 2.81 hr/NPL-iter
+        (vs 49.2 unpreconditioned). PM07_Preconditioner_Bakeoff.R, exit 0.
+
+FROZEN (inputs to 024b, unchanged from 024a/023):
+  pm_bellman_kernel.R (oracle Mv), Code/Helpers/pm_matvec.cpp (024c C++ matvec),
+  PM_StateSpace.rds, PM_Lookups.rds, pm_agg_counts.csv. PM_Precond_Bakeoff.rds saved.
+
+NEXT = 024b (the ESTIMATOR). Architect must write the spec (gate #1; pull
+  NPL_REFERENCE.md). Production solve = right-preconditioned BiCGSTAB + P1
+  aging-backbone preconditioner + warm-start. CARRY-FORWARD (in ticket 024d
+  attempt log): (1) GRADIENT must be ADJOINT (one M^T solve/eval for all ~9
+  params; reuse P1; M^T triangular under reverse order) — else the 2.8 hr/iter
+  projection (which counts 1 solve/eval) balloons; (2) group-by-m matvec batching
+  (~3.4x, oracle-guarded) optional accelerator -> ~0.9 hr/iter; (3) build 4 T_G
+  once per (NPL-iter,env), `ord`/`A_perm` once for the whole run; (4) lambda=1
+  flat MNL FIRST then free lambda (022 staging); (5) flow utilities = v4 model
+  (17 environments: 3 RB era-cards + 14 FF (tau,D)).
+
+Resume: "Load CLAUDE.md + HANDOFF.md. Portfolio solve fully settled: P1 aging-
+  backbone preconditioner PASS (15x iter cut, 2.8 hr/NPL-iter). 024b estimator
+  unblocked. Today: write the 024b spec (pull NPL_REFERENCE; adjoint gradient,
+  P1 precond, warm-start, lambda staging)."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-13 (T023 first-stage build: all 4 scripts PASS; ready for T024 engine)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T023 B0–B3 all PASS (2026-06-13, coder attempt 1)
+═══════════════════════════════════════════════════
+Scripts: PM00_Preflight.R, PM01_Estimation_Panel.R, PM02_Lookups.R, PM03_State_Space.R
+All exit 0; logs present; all asserts green.
+
+KEY NUMBERS:
+  B0: PREFLIGHT PASS | g++: C:\rtools45\...\g++.exe | compile 30.4s | smoke [1.675, 2.175]
+      NOTE: must invoke via "C:/Program Files/R/R-4.5.2/bin/x64/Rscript.exe" — the
+      miniconda R (default on PATH) has a DLL-loading bug with Rcpp; standalone R works.
+      C:\Users\kaleb\.Renviron written with rtools45 PATH entries for standalone R.
+  B1: 2,351,957 rows | 256,302 excluded (212K state, 4K expansion, 45K bigN, 45K offmenu, 387 k0shed)
+      regime/rho_state agreement 1.0000 | G breaks: 1|9000|20000|30000|2B gallons
+  B2: pbar [0.025–0.046] model units | h_aw [0.0045–0.0127] | BETA=0.9957
+      MN, SD: D=0 (zero-deductible state funds; L_OOP=0; D>=0 assertion substituted for D>0)
+      Gmat: 4 thin (G, netbin) rows fell back to pooled work row (G=1 netbins -3,-2,0; G=2 netbin 0)
+  B3: C=74,612 compositions (assert PASS) | A_age 1,947,791 nonzeros | row-sum error 5.55e-16
+      observed support 0.9807 (expected ~0.981) | 10,323 distinct visited (comp_id,G) pairs
+      agg_counts 65,781 rows | sum(n_obs)=2,083,764 == included rows (PASS) | runtime 2.6 min
+
+OUTPUTS (frozen; inputs to T024):
+  Data/Analysis/pm_panel.csv            (2,351,957 x 31)
+  Data/Analysis/pm_G_breaks.rds
+  Data/Analysis/pm_agg_counts.csv       (65,781 x 5)
+  Output/Estimation_Results/PM_Lookups.rds
+  Output/Estimation_Results/PM_StateSpace.rds
+
+DEVIATION FROM SPEC (flag for reviewer):
+  L2 D assertion: spec says "assert D>0 all included states"; MN and SD have zero-deductible
+  state funds (D_usd=0 in data). Changed to D>=0 with diagnostic print. min(D,L)==D still holds.
+  All other assertions match spec exactly.
+
+Resume: "Load CLAUDE.md. T023 PASS. Today: T024 portfolio engine (Bellman / CCP / NPL)."
+==========================
+
+# HANDOFF -- 2026-06-11 (T021 assumption-evidence suite: reviewed PASS; 3 design decisions landed; QMD build next)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T021 reviewed PASS attempt 1 (2026-06-11, Opus architect+reviewer)
+═══════════════════════════════════════════════════
+T021 = clean rebuild of ALL assumption-motivation evidence (supersedes 019/020
+  exhibits for publication; 04ap addendum absorbed and closed). Scripts
+  Code/Analysis/AE01-AE05; outputs Output/Tables/AE_X*.{csv,tex} (27) +
+  Output/Figures/AE_X*.{png,pdf} (8 pairs). Publication rules ENFORCED IN CODE:
+  assert_ascii_clean() (no specials/math in .tex), th_ae (no titles on figures).
+  Artifacts fixed at source: X8 closure-only population; X9 tank-level acts +
+  hardcoded state ban dates; X10 no RBxwall interaction (Replace on has_SW);
+  X11 FF_feepos + zero-fee list + Q-trim.
+RUNNERS FIXED this session: model pinned claude-sonnet-4-6 + --strict-mcp-config
+  in run_coder_pro_api.ps1 AND run_reviewer_pro_api.ps1; reviewer runner spec-
+  glob bug fixed (would have crashed on slug-named tickets); TeamCreate/Delete
+  dead deny rules removed from .claude/settings.json.
+DESIGN DECISIONS LANDED (ticket 021 Attempt Log, pre-committed reads):
+  DD1 capacity bin G: STEP-DOWN KERNEL AT DOWNSIZE ONLY (G-move 0.42 at D);
+      frozen at Maintain/Replace (stay 0.995/yr; X8 capacity conserved at swaps).
+  DD2 downsize = CHOSEN-COUNT intensity action (k alternatives, cost k*c^D, one
+      parameter) — removals mostly < top-priority block at sizes 3/4+.
+  DD3 NO wall sub-choice on replace (true violation 1.3 pct); install-SW is
+      pre-ban only (31 pct -> 2.7 pct post-ban); post-ban inst-SW 6 pct =
+      data-quality note. Model stays stationary (install = DW; one qmd sentence).
+NEW FINDING needing researcher decision BEFORE estimator spec:
+  X11 per-tank rate-card fit poor (r .09/.35/.60 by era; simplified $386 vs
+  actual $291/tank) — total-level fit was count-driven. RECOMMENDATION: define
+  p_c empirically = cell-mean ACTUAL rated per-tank premium by (wall x bin x era)
+  from the 04a engine output (keeps 16-cell state; P_total tracks reality).
+═══════════════════════════════════════════════════
+CHECKPOINT: portfolio estimator — solve method decided; C++ matvec is next
+  (2026-06-18, session end, Opus architect/reviewer)
+═══════════════════════════════════════════════════
+WHERE WE ARE: building the count-state portfolio DCM estimator. First stage
+  (T023) done+frozen. Bellman kernel (T024a) built + PROVEN CORRECT. Solver
+  bake-off (T024s) done: BiCGSTAB chosen, direct LU dead. Next coder task =
+  T024c (C++ matvec). Then 024b (estimator). Then CF1-4.
+
+FROZEN OBJECTS (inputs to everything downstream):
+  Data/Analysis/pm_panel.csv, pm_agg_counts.csv
+  Output/Estimation_Results/PM_StateSpace.rds (74,612 comps, rmap/imap/A_age),
+    PM_Lookups.rds (pbar 16x3, tau/D per state, h_aw, Gmat, BETA=0.9957)
+  Code/Helpers/pm_bellman_kernel.R = the CORRECT, validated value-solve kernel
+    (Mv + Anderson solve_V) — the ORACLE; do NOT modify.
+
+SOLVE METHOD (T024s measured, locked): BiCGSTAB on the structured matvec.
+  Direct sparse LU is DEAD (M=131M nnz forms fine but Matrix::lu OOMs >8GB at
+  298k — measured). BiCGSTAB correct (resid 8.5e-11) at ~152 iters but 136s
+  with the R matvec -> needs C++.
+
+NEXT TICKET = T024c (.claude/TICKETS/024c_cpp_matvec.md): port ONLY the matvec
+  to C++ (Code/Helpers/pm_matvec.cpp, ISOLATED — not cpp_engine.cpp), validate
+  C++ Mv == R Mv to 1e-12, re-benchmark BiCGSTAB. Has a HARDENED C++ BUILD
+  PROTOCOL (E1-E5) because we keep hitting Rcpp/Rtools walls:
+    E1 standalone R-4.5.2 x64 Rscript ONLY (miniconda R has an Rcpp DLL conflict)
+    E2 assert make+g++ (Rtools45 via .Renviron) before compile; NO R-fallback
+    E3 new C++ in its OWN file (cpp_engine.cpp + improved_estimator_OPTIMIZED.r
+       UNTOUCHED — the latter has the line-32 eager-sourceCpp halt bug)
+    E4 Rcpp + RcppArmadillo (arma::sp_mat); pass A_age in once
+    E5 a build-preflight gate must print PASS before real work
+  Launch: .\.claude\run_coder_pro_api.ps1 -TicketID 024c
+
+024b (ESTIMATOR, after 024c) DESIGN NOTES (carry forward):
+  - flow utilities = v4 model (phi_G + alpha_g - gamma_p*P(n',rho) - gamma_r*
+    H(n')*D - k*c_rem - m*c_inst; exit kappa_1*N; kappa_0:=0; positive-gamma sign
+    convention). 17 environments (3 RB era-cards + 14 FF (tau,D) contracts).
+  - nested logit run at lambda=1 FIRST (must reproduce flat MNL), then free lambda.
+  - RUNTIME LEVERS (inner eval count dominates): (a) PRECONDITION BiCGSTAB
+    (ILU(0) of (I-betaM), memory-bounded unlike full LU, amortize once per
+    NPL-iter since M fixed in inner optim; block-Jacobi fallback) to cut 152->
+    ~30 iters; (b) ANALYTIC NPL-score gradient, NOT 18x numerical for ~9 params.
+  - welfare-wedge derivation (OOP split) still owed for CF2 (can write anytime).
+
+PROCESS LESSONS: (1) coder must use ONE monitor max on long runs (024a died of
+  context exhaustion from 5). (2) the runner prompt is fixed; put coder guidance
+  IN the spec (START HERE banner). (3) measure, don't guess (LU OOM, solver
+  speed both only knowable by running).
+
+Resume: "Load CLAUDE.md + HANDOFF.md. Portfolio estimator: solve = BiCGSTAB,
+  C++ matvec is next. Launch T024c (.\.claude\run_coder_pro_api.ps1 -TicketID
+  024c); answer R/C++-only questions; reviewer-check C++ Mv == R Mv to 1e-12 +
+  the re-benchmark; then write 024b."
+═══════════════════════════════════════════════════
+
+
+2026-06-18: T024a BELLMAN KERNEL — REVIEWED PASS-PORT. Kernel pm_bellman_kernel.R
+  is PROVABLY CORRECT (G3 structured-vs-explicit matvec at 1e-16 machine
+  precision; G4 analytic V=3/(1-beta) exact; all 5 gates pass; D1/D2 compliant;
+  peak mem 94 MB — M never formed, the structured-matvec design works). BUT the
+  R + Anderson-fixed-point SOLVE is too slow: cold 640s/764 iters, warm 303s/529
+  iters per env-solve (threshold was 30s/5s). Root cause: beta=0.9957 makes the
+  fixed-point contraction crawl; Anderson only ~9x over plain. GATE RULING:
+  before the estimator (024b), do a 024a attempt-2 solver swap: (a) KRYLOV
+  (BiCGSTAB/GMRES) replacing Anderson — (I-beta M) is a diag-dominant M-matrix,
+  cond ~233, expect ~20-50 iters not 530+; (b) C++ structured matvec (0.42s ->
+  ~15ms), keep the correct R kernel as the G3 oracle; (c) warm-start V across
+  optim evals. Target: cold<10s/warm<2s per env. Fallback: direct factorize-once
+  (memory OK ~1-2GB but 298k fill-in is the risk). 17 environments confirmed
+  (only MN+SD collapse; contracts too heterogeneous). PROCESS: coder died of
+  context exhaustion from 5 concurrent Monitors on one run — use ONE monitor for
+  long scripts. NEXT: 024a attempt-2 (Krylov+C++ re-benchmark), then 024b estimator.
+2026-06-13: T023 FIRST STAGE CLOSED-PASS (attempt 2). Frozen objects for the
+  engine: Data/Analysis/pm_panel.csv (2,351,957 fac-yrs, (k,m)/X coding, G bin),
+  pm_agg_counts.csv (likelihood input, 2,083,737 included), Output/
+  Estimation_Results/PM_Lookups.rds (pbar 16x3 empirical prices, tau/D per
+  state, h_aw, adv age kernel, Gmat G-kernel by netbin, BETA=0.9957),
+  PM_StateSpace.rds (74,612 compositions, rmap/imap/post maps, A_age aging
+  sparse C x C). CAPACITY: winsorized per-tank at 60k (NOT dropped) — TN 999999
+  = "25k-Plus, exact unknown" sentinel, recoverable; G_breaks now physical
+  (max 360k). Readme.md "Tank-Capacity Data Quality" table logs the audit.
+  B0 preflight PASS (Rtools45; MUST run standalone R-4.5.2 x64 Rscript, not
+  miniconda R). NEXT = ticket 024 (engine).
+2026-06-12 EVE: T022 qmd rewrite REVIEWED PASS (attempt 1, Sonnet seat) + two
+  architect patches post-ruling: beta -> 0.9957 everywhere (researcher ruling;
+  CLAUDE.md beta=0.95 STALE, fix at rebuild) and KS/MD -> ASTSWMO-confirmed
+  exclusion language. Re-rendered clean. IMPLEMENTATION RULINGS (Phase A):
+  beta 0.9957; lambda staged (flat first; nested phase needs EXTRA validation
+  rigor — nested code simulated once, never production-run); N_bar=6 caps
+  pending final nod; units = $10k internal scale; phi_G = 4 free levels;
+  expansion years excluded (revisitable as (0,m) action); ERA EXTENSION
+  approved-in-principle: treat the 3 Mid-Continent cards as era-regimes with
+  permanent-card beliefs (V per era like the per-state FF contracts) — adds
+  premium variation; RCPP ENVIRONMENT PRE-FLIGHT added as hard gate in 023
+  (Rtools PATH for Rscript, cpp_engine compiles, line-32 eager-sourceCpp
+  regression check). NEXT: architect writes ticket 023 (first stage + state
+  enumeration + pre-flight), then 024a/b engine split per the phased plan.
+2026-06-12 PM UPDATE (AE07/AE08 + model v3): AE07 premium-by-age figure (TX SW
+  totals rise $500->$1,065 across bins; count channel carries much of it).
+  AE08 corrective pass: (1) HAZARD FIX — H now = facility-level ML hazard at
+  composition coords (avg-age bin x majority wall; T014 standing decision; the
+  AE05 union formula violated it); X3 scatter + X11 regenerated: RB resid/sd
+  0.267 (was 0.236), regime gap $708.8 — identification conclusion SURVIVES.
+  (2) per-tank age-band kernel (stay 0.73-0.83, bin8 absorbing). (3) MISS-COST:
+  among rule misses, mean premium error $71/yr (p90 $142), hazard error 0.135pp;
+  unconditional (x16% miss rate) ~ $11/yr ~ 1-2% of bills — L2 defended
+  quantitatively. (4) (k,m) MENU: replace is NOT 1-for-1 (13.7% k=1; modal
+  remove-3-install-2) -> ACTION SPACE REDESIGN: unified intensity menu
+  a=(k removed by rule, m DW installed), downsize=(k,0), replace=(k,m>=1),
+  costs k*c_rem + m*c_inst (2 params for whole intensive margin). Model v3
+  stated in chat; qmd template rewrite still pending (researcher register:
+  behavioral meaning per assumption, centered equations, tanks-first language).
+2026-06-12 UPDATE (AE06 + qmd v2): researcher review of the qmd drove TWO new
+  exhibits (Code/Analysis/AE06_G_Transition_and_Empirical_Premiums.R, run clean):
+  X4C Rust-style G x G' capacity-bin transition BY ACTION -> REVISES DD1: kernel
+  at Downsize AND Replace (stay 0.56/0.46), frozen at Maintain only (0.998).
+  X3E EMPIRICAL per-tank premium by cell from single-cell TX fy (245,578) ->
+  settles p_c construction (use empirical cell means) AND new finding: realized
+  bills FLAT vs filed card (SW $278-310 all bins vs card $319-443; wall gap
+  $15-30 vs $71) — offsetting discounts compress the effective schedule;
+  gamma_p leans on regime gap + era re-filings. AE section of the qmd REBUILT:
+  journal figure setup (short caption + Notes block, 8 figures), a third
+  "What it says" interpretation paragraph after every exhibit (12), the two new
+  tables wired in (X4 Rust framing; X3 retitled "What facilities actually pay").
+  Rendered clean (947KB). Remaining confusions addressed in-text: replace-vs-
+  downsize rule asymmetry (identity rule holds for both; COUNT is chosen for
+  downsize), homogeneity meaning, capacity-as-mileage framing.
+Polish-direct (2026-06-11, researcher-directed): NEW SECTION "# The assumption
+  evidence suite" appended to Reports/Paper/Scale_Incorporation_Model_Sketch.qmd
+  — all 12 AE exhibits wired in (.tex via latex \input, figures as PDF images),
+  each with the researcher-required TWO paragraphs (plain "what/why" + code-
+  faithful "how it is computed"); X11 carries the empirical-p_c design note as
+  DECISION PENDING. Rendered clean end-to-end (xelatex x3, 934KB PDF, no errors).
+NEXT: (1) researcher rules on empirical-p_c; (2) Opus polish-direct QMD build —
+  new section in Reports/Paper/Scale_Incorporation_Model_Sketch.qmd: defense-
+  style writeup (plain language register per researcher), model math (count
+  state, indices, 4 actions w/ intensity-k downsize, nesting fork Tree A vs B,
+  plain removal rule), one AE exhibit per assumption, untestable-assumptions
+  section; (3) commit T019/020/021 artifacts (scripts+tables+tickets+runners;
+  not data/intermediates).
+Resume: "Load CLAUDE.md + HANDOFF.md. T021 PASS; DD1-DD3 locked; X11 empirical-
+  p_c recommendation pending researcher. Today: rule on p_c, then build the
+  model+evidence section into Scale_Incorporation_Model_Sketch.qmd from the
+  AE_X* exhibits."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-09 EVENING (T020 count-state validation: reviewed PASS; addendum drafted)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T020 reviewed PASS attempt 1; addendum awaiting approval (2026-06-09, Opus)
+═══════════════════════════════════════════════════
+DESIGN EVOLUTION this session (big): coarse wall-mix state REPLACED by researcher's
+  COUNT-STATE design — n over 16 cells (04b A_bin x wall), utility through indices
+  P_total(n) (Mid-Continent rate card / fee x N), H(n), N, Q; 4 actions (downsize
+  now explicit — forced by count state, supported by M1/M2); replace wall outcome
+  = composition consequence, NOT a choice; marginal rule = the license for coarse
+  transitions, never tracked in the state. FF fee verified PER-TANK (not facility);
+  6 states automatic_zero + KS/MD NA->0 => P_FF degenerate at 0 for ~8/18 states.
+  Rate card: 3 distinct tables (2006/2014/2019; 2021==2019), era map pinned.
+T020 RAN + REVIEWED PASS (4 scripts 04al-04ao; Code/Dynamic_Model/). Key numbers:
+  E1: >=2sheds & >=2installs = 3,890 (>>200) -> F^R stays candidate. Downsize
+      7,034 / Replace 6,000 / Exit 39,702 events; Expansion 0.93% fenced.
+  E2: within-RB resid/sd(P)=0.236 >> 0.05 -> gamma_p identified within RB (kinks
+      + eras), not just FF<->RB. R3 regime gap $709.5 (SE 126). R2_FF=0.126 (NOT
+      ~1: cross-state fee variation incl. zero-fee states; no state FE).
+      Rate-card fit r2 .43/.55/.64 + LEVEL offset (simpl $1042 vs actual $781):
+      suspect n_tanks_rated denominator + neutral-status pricing (TOU -0.50).
+  E3: exact-match 0.840 pooled, kernel diag 0.905, wall-viol 2.8%, ageband 13.6%
+      -> deterministic + documented noise. Binding cells k=1 multi-tank (.72-.88);
+      k=2+ replace fidelity partly trivial (shed-everything).
+  E4: SW-skip 0.497 FIRED THE RULE but conflates 3 causes; has_SW=0 rows 99.5%
+      samewall confirms mechanical direction; single_to_double_year =
+      (n_sw_replacement>0 & n_dw_installs>0) @ 02b:1109 — flag != tank-level act.
+  E5: 368 compositions cover 95% of fy; 86.6% single-cell; p99 N=8.
+DEVIATIONS BLESSED: R1 unclustered (TX single cluster); kernel pairing; frame
+  inconsistency E1(dcm spine) vs E2-E4(boyfy >=1999) — benign, documented.
+SPEC GAP (mine): zero-fee amendment not in deliverable enumeration -> not coded;
+  .tex footnote "mechanically near 1" wrong vs R2_FF=0.126. Both in addendum.
+ADDENDUM DRAFTED in ticket 020 (04ap, attempt-2 scope, AWAITING APPROVAL):
+  A1 E4x skip decomposition (shed_SW&inst_DW / shed_SW&inst_SW / shed_DW_only x
+     yearbins; settles wall-sub-choice vs era-qualified DW-install assumption);
+  A2 E2x per-tank rate-card fit + R2_FF_feepos row + zero-fee list + tex fix;
+  A3 Q-outlier sensitivity (Q=2.0e9 row -> raw-data audit list).
+REMAINING: approve+run addendum; then design verdict memo (count-state confirmed
+  vs amendments); then the assumption-slide build (019+020 evidence); commit all
+  T019/T020 artifacts (scripts+tables+tickets; not intermediates/.csv data).
+Resume: "Load CLAUDE.md + HANDOFF.md. T020 PASS; addendum 04ap drafted in ticket
+  020 awaiting approval. Today: run addendum, write the count-state design
+  verdict, start assumption slides."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-09 (T019 assumption-motivation diagnostics: implemented + reviewed PASS)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T019 reviewed PASS attempt 1 (2026-06-09, Opus architect+reviewer)
+═══════════════════════════════════════════════════
+SPEC AMENDED pre-launch (architect): M2 Eq.2 gained panel_year FE (RB = TX x
+  post-1999, so without year FE e_k absorbs secular trends; RB still identified
+  cross-state within year). Three places: spec, pseudocode, acceptance criteria.
+R1 Q&A (all within-spec): 04z label mapping = rename-after-fcase; size_bin
+  re-derived (shipped column ignored); M4 active = row-presence in panel_dt (no
+  tstart/tstop gate — strata-count band is the tripwire); dcap_pct NA'd rows stay
+  in population for Eq.5/6; output dirs standard.
+RAN CLEAN, REVIEWED PASS: Code/Analysis/04aj_Assumption_Motivation.R (M1-M3) +
+  04ak_WhichTank_clogit.R (M4). 4 figs + 5 CSV/.tex pairs in Output/. Verified
+  independently: fcase byte-identical to 04z; all SEs state-clustered (G=18);
+  M4 n_strata = 19,744 (exactly 04ai). Blessed deviations: M2 regex term
+  extraction; M4 clogit method="approximate" (identical to exact with 1 event/
+  stratum, enables clustered SE).
+HEADLINE RESULTS (for the later slide build):
+  M1 size gradients monotone, all p<.001: Exit OR falls 0.71->0.45 with size;
+    Replace-upgrade rises 2.30->6.00; Downsize rises 6.28->18.36 (4+ vs 1).
+    Size shifts behavior at fixed (age,wall,regime) => size belongs in the state.
+  M2 e_Downsize = -0.486 (p=.009); RB raises SW-facility upgrade odds e+f=+0.81.
+  M3 distribution (dcount<=0): consolidation medians +6.9/0/-9.7% dcap vs
+    pure-shrink -14/-39/-58% => capacity conserved under swaps.
+  M4 clogit: SW OR 2.85 (p<.001) robust; age OR 1.044/yr (tie-robust, much
+    smaller than 04ai's raw 74%); capacity OR ~1.000 n.s. => marginal-tank rule
+    keyed on WALL; 04ai capacity "smallest-shed" finding does NOT survive the
+    within-facility design.
+CAVEATS LOGGED in ticket 019 Attempt Log (spec-design, not code): C1 M3 Eq.4
+  contaminated by entry/growth years (65% of events net>0; +191.6 coef is growth,
+  not replace — use the distribution table instead; optional re-run on
+  any_closure==1 only); C2 Eq.6 mechanically degenerate (SW->DW=0 in pure-shrink
+  by construction — never slide it); C3 M2 Replace-upgrade RB main/interaction
+  quasi-separated (near-empty RBxDWxUpgrade cell; use e+f); C4 M1 per-margin n
+  differs (FE cells with zero events dropped — cite per-margin n).
+REMAINING: researcher decides whether to commission the C1 follow-up (Eq.4-5 on
+  any_closure==1) before slide build; then build assumption slides citing
+  M1-M4 + 04ag/04ah; commit T019 artifacts.
+Resume: "Load CLAUDE.md + HANDOFF.md. T019 reviewed PASS with M3/M2 caveats in
+  the ticket Attempt Log. Today: decide the M3 swap-only follow-up, then the
+  assumption slides."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-04 (Meredith-meeting follow-ups: deductible/contract verify, identification-figure exploration, 3-layer model-change map, size fixed-type diagnostic)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: portfolio/size model scoping + size fixed-type diagnostic (2026-06-04, Opus architect)
+═══════════════════════════════════════════════════
+SLIDE FIXES (Polish-direct, user waived architect): xelatex compile error fixed
+  (unterminated ```{=latex} on portfolio-summary slide leaked next `##` header ->
+  "Illegal parameter number"; closed fence + escaped two `%`). ActionMap slide split
+  into taxonomy + FF/RB tables (04z emits ..._Taxonomy.tex + ..._RegimeRates_split.tex).
+  04ad model-fit y-labels 4dp->2dp. Appendix orphan audit: NO broken buttons; 20
+  arrow-only anchors (toy x9 + portfolio chain x6 intentional; cf-overlay/fr-compliance/
+  market-hhi x5 standalone candidates -- left to user).
+
+C1 VERIFIED (the deductible question): risk term today = gamma_r * h(s) * L_cleanup
+  (L = expected CLEANUP ~$300k, 04b:291), NOT deductible. So C1 is a GENUINE respec,
+  not a relabel. Deductible data: Data/Raw/state_fr_premium.csv has deductible_usd
+  (controls, varies); merged in 02b S13.3 but DROPPED at 04b. TX deductible ASSUMED
+  $5k flat (PARIS data dict has Coverage per-occ/aggregate but NO deductible field --
+  verified in the .docx; 04a:48 defaults $5k). => OOP term h*D has ~no within-RB
+  variation (TX flat); deductible's real variation is cross-state among FF controls.
+  Welfare ripple: switching L_cleanup->D re-derives the wedge (firm bears D, premium
+  pool bears L-D, E external) -- moves the headline externality number; do that
+  derivation before any ticket.
+C3 spec (confirmed by user): NOT separate gamma by regime -- base gamma_r on (h*D)
+  for all + a single increment gamma_r_RB*(h*D)*1{RB} to TEST if RB firms are MORE
+  OOP-sensitive (info/salience channel). Machinery half-exists (gamma_risk_FF/RB at
+  improved_estimator_OPTIMIZED.r:3179).
+
+IDENTIFICATION (now crisp, for the reduced-form audience): gamma_price <- premium
+  variation orthogonal to risk = the FF<->RB gap at matched age; gamma_risk <- risk
+  variation orthogonal to premium = the flat-fee age gradient. RB premium is priced
+  off hazard (collinear), so the FF world is load-bearing for gamma_risk. KEY DATA
+  FACT: the SW closure crossover -- RB discounts young (fewer exits) and penalizes old
+  (more exits); the crossover IS gamma_price in age-space. Figures (annotation-free,
+  exploring, NO final pick): 04ae (schematic simple+pivot; crossover; two-worlds) +
+  04af (price-channel-by-risk-band; risk-channel-by-regime; AVP_Price/AVP_Risk =
+  added-variable plots; 2D regressors expected-loss-x-premium). AVP dots = the 28
+  state cells (sized by N), not a binscatter -- there is no finer premium/hazard
+  variation than the cell. Old 04q PremiumHazard scatter -> retire.
+
+3-LAYER MODEL-CHANGE MAP (the clarifying frame; user prefers Layer 3):
+  L1 contract/risk (u^M only): 1a OOP term h*D; 1b regime increment gamma_r_RB;
+     1c two-part contract C(rho)=(P,D), CF transports both. Self-contained.
+  L2 state/transition (still 1 agent): 2a marginal-tank state (oldest, fixes age-
+     backward); 2b consolidation F_R (oldest scrapped -> step to 2nd-oldest age,
+     capacity kept = on-support, vs today's reset-to-age-0 98% off-support);
+     2c track oldest-2 ages + capacity (lightweight). Self-contained.
+  L3 agent/scale (THE fork; user's preference): 3a u^M = phi*Q + gamma_p*P_total -
+     gamma_r*H*D (size-scaled revenue + TOTAL premium; kappa_0:=0 to id phi = T014);
+     3b unit: (i) facility=1 marginal tank [cheapest, exit correlation FREE], (ii)
+     tank-level [needs facility-exit kept OR Barahona facility shock eps_f -- heavy,
+     last resort], (iii) full portfolio histogram.
+  Exit-correlation insight: you only need Barahona's shock if you DISAGGREGATE exit
+  to tanks; keep exit facility-level and correlation is structural/free.
+  NO-HISTOGRAM condition: size-as-portfolio reduces to (rep age, wall, capacity-bin,
+  regime) ~128 cells IFF within-facility homogeneity + size stickiness + predictable/
+  all-or-nothing actions. Histogram only needed for WITHIN-facility heterogeneity
+  (mixed-age portfolios + selective actions). Size matters (doesn't cancel) via
+  hazard concavity in n: H = P(any tank leaks) != k*h.
+
+ACTION STRUCTURE (T011 tables, verified): Maintain 98.05% | Full exit 1.68% |
+  Downsizing(hidden-as-maintain) 0.36% | Replace 0.27%. All-or-nothing holds at
+  SMALL facilities, breaks at large: partial share of closures 3.6%(1tank) ->
+  70.3%(4+). "Replace" = capacity-preserving CONSOLIDATION (modal 0/-1 tanks, median
+  cap 0/+11%), NOT reset. Capacity is the conserved quantity.
+
+SIZE FIXED-TYPE DIAGNOSTIC -- DONE (Code/Analysis/04ag_Size_Stickiness_Diagnostic.R,
+  read-only). Did it the way the model needs (spell-level, not the 1-yr diagonal):
+    one-year stay 99.5%, BUT mean spell 16.4 yrs so it compounds ->
+    91.8% (count) / 93.5% (CAPACITY) of facilities NEVER change bin over the spell.
+    => CAPACITY is the stickier (better) fixed-type size state (consolidation drops a
+       tank but holds capacity). 70% of bin changes are shrink; 100% coincide with a
+       coded install/closure (no silent drift). Weakens at 4+ (count ~87%) but
+       capacity holds (~89-94%). Outputs: 04ag_FixedType_Survival.png,
+       04ag_FixedType_Summary.{csv,tex}, 04ag_SizeTransition_{Count,Capacity}.csv,
+       04ag_SizeChange_ActionCoincidence.csv, 04ag_Stickiness_byInitSize_Regime.csv.
+  DOCUMENTED in BOTH (per user): Reports/Paper/Identification_6pFE_Appendix.qmd
+    sec-audit-size (added fig-fixedtype-spell + tbl-fixedtype + Notes) AND the deck
+    slide "Facility size is a near-fixed attribute" (swapped to the survival figure +
+    spell-level caption). Table chunk test-rendered OK.
+
+HOMOGENEITY DIAGNOSTIC -- ALSO DONE (04ah_Within_Facility_Homogeneity.R, read-only):
+  the OTHER no-histogram condition (is one representative tank a faithful summary?).
+  81.5% of facility-years have all tanks in ONE wall type + ONE 5-yr age bin (exact
+  support of the representative-tank state); median age-spread is ZERO at EVERY size
+  (tanks installed together); heterogeneity is a large-facility TAIL: both-homog
+  93%(1tank) -> 62%(4+); wall homog 88-94% everywhere (age-spread drives the decline).
+  => no-histogram size-scaled model is EXACT for ~82% of facility-years; histogram (or
+  oldest-two-ages state) only needed for the 4+ heterogeneous-age tail. Outputs:
+  04ah_Homogeneity_bySize.png/.csv, 04ah_Homogeneity_Summary.tex. DOCUMENTED in the
+  identification appendix (sec-audit-size: fig-homog-size) + a new deck slide
+  ("Within-facility homogeneity"). Deck fences balanced 86/86.
+
+WHICH-TANK DIAGNOSTIC -- DONE (04ai_Which_Tank_Diagnostic.R, tank-level panel_dt 3.9GB;
+  filter-first to avoid a 12.7M-row group-by OOM crash). When a multi-tank facility
+  closes ONE tank (n=19,744 single-closure events), the shed tank is PREDICTABLE: SW
+  79% (vs 52% base) in mixed facilities | smallest-capacity 70% (vs 32% random) |
+  oldest 74% (vs 32%, but age is tie-muddied -- facilities install together). => the
+  heterogeneous-facility tail is carried by a marginal-tank state keyed on WALL+SIZE +
+  capacity-preserving step-down transition; NO full histogram needed. Outputs:
+  04ai_WhichTank_Shed.png, 04ai_WhichTank_Summary.{csv,tex}, 04ai_WhichTank_bySize.csv,
+  04ai_mc.csv (saved so figures rebuild w/o re-reading panel_dt). DOCUMENTED in
+  identification appendix (fig-which-tank) + new deck slide ("Which tank do they shed").
+
+REMAINING / NEXT:
+  - all-or-nothing closure rate by size (last small diagnostic; T011-A3 already has
+    partial-share 3.6%->70.3% by size, so mostly assembled).
+  - C1 OOP welfare re-derivation -- IGNORED for now per researcher.
+  - identification figures still EXPLORING (no final pick).
+  - user to re-render the deck + identification appendix.
+  - C1 welfare re-derivation (plain text) before any ticket -- moves the headline.
+  - Identification figures: still EXPLORING, no final pick (user will choose).
+  - Slide edits A1/A2/A3 DONE: killed "structural model buys" block; estimated params
+    (kappa/K/gamma_price/gamma_risk) now GREEN via \estc macro on Flow-utilities slide
+    (alpha_g left uncolored); "same tank in two worlds" opener -> "A thought experiment."
+  - User to re-render the deck + identification appendix on their end.
+
+RESUME: "Load CLAUDE.md + HANDOFF.md. Portfolio/size model scoping. Size is a near-
+  fixed type (CAPACITY stickier: 93.5% spell-level); diagnostic in 04ag, documented
+  in identification appendix + deck. Today: run the which-tank + homogeneity-dispersion
+  diagnostics to settle no-histogram-vs-histogram for the size-scaled portfolio model;
+  and/or the A1/A2/A3 slide edits; and/or the C1 welfare re-derivation."
+
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-03 (JMT slide refactor + canonical appendix "model-challenges" cluster; split-slide Q + render issues pending)
+
+Polish-direct (2026-06-03, Opus; user waived architect for slides): fixed the
+xelatex compile error (unterminated ```{=latex} block on the portfolio-summary
+slide leaked the next slide's `##` header into LaTeX -> "Illegal parameter
+number"; closed the fence + escaped two `%`); split the ActionMap slide into
+taxonomy + FF/RB-rate slides (extended Code/Dynamic_Model/04z_Model_vs_Reality.R
+to emit 04z_ActionMap_Taxonomy.tex + 04z_ActionMap_RegimeRates_split.tex, re-ran);
+fixed model-fit y-labels 4dp->2dp (Code/Dynamic_Model/04ad_ModelFit_byAction.R
+accuracy 0.0001->0.01, re-ran 3 PNGs). Appendix orphan audit: NO broken buttons;
+20 anchors reachable only by arrowing (toy-* cluster x9 + deep portfolio chain x6
+= intentional linear walkthroughs; cf-overlay-sw/dw + cf-removal-age + fr-compliance
++ market-hhi x5 = standalone, candidates for an entry button -- left to user).
+Files: 04_...TALK_EDIT.qmd, 04z_Model_vs_Reality.R, 04ad_ModelFit_byAction.R.
+
+
+═══════════════════════════════════════════════════
+CHECKPOINT: Talk-slide refactor + appendix model-challenge cluster (2026-06-03, Opus)
+═══════════════════════════════════════════════════
+FILE: Reports/Slides/04_Risk_Based_Pricing_and_USTs_TALK_EDIT.qmd
+  (quarto beamer / xelatex; my-template.tex; user renders their end. NOT the
+   ..._REFACTORED.qmd. Slides currently render.)
+
+DONE this session (all presentation-polish; user waived architect for slides):
+- Reduced form: split "two complementary outcomes" -> LUST + composition slides;
+  shrank ATT / Pre-89 / closure tables to fit (font + arraystretch idiom).
+- Structural section rewritten/tightened: flow utilities; Bellman ("Keep, scrap,
+  or replace"); toy slide "The same tank in two worlds"; "What identifies each
+  parameter"; PARAM TABLE updated to CANONICAL gammafree fit + SEs (regression
+  style); "What the estimates say"; CF slides -> colored-\alert{} equation form
+  (all 4 CFs one slide + separate "Welfare accounting" slide); welfare bar chart
+  -> clean jargon-free 04v.
+- CANONICAL 6p gammafree fit (Model_Replacement_6paramFE_profile_clean_observed_gammafree.rds):
+  kSW $252,349(1,213) kDW $243,800(1,239) KSW $51,383(176) KDW $51,162(372)
+  gp -2.163(0.205,t-10.6) gr +0.114(0.005,t21.6) LL -227,239.78 N 2,282,735.
+- Welfare CF (04r/T018, E=$50k delta): CF1 flatfee +9,092 / CF2 subsidy -12,761 /
+  CF3 pigou -6,327 / CF4 mandate -9,389. CF2/CF4 carry F_replace replace-margin caveat.
+- Baseline char table: Code/Analysis/T_Baseline_Characteristics_Slide.R -> real
+  values (.tex/.csv) + 2 at-reform TX-vs-control histograms (tanks, capacity) as buttons.
+- APPENDIX "MODEL CHALLENGES" CLUSTER (~19 uncounted slides, entry button
+  "Model vs. data: the limitation ->" on the Welfare-accounting slide ->
+  hypertarget portfolio-summary): Summary(captures/strains) -> rare-action freq ->
+  how-model-codes (math indicators c_it,n_it) -> "What facilities do & how model
+  bins it" (5-row taxonomy table + FF/RB) -> why-one-tank -> how-to-fix ->
+  size-stickiness -> CCP-by-size -> SW/DW CCP-by-regime -> where-closures-go
+  (by size, by regime) -> shed-tanks 2-panel hist -> tank/capacity binscatter ->
+  state-violations -> reduced-form-check; model-fit slides (Exit/Maintain/Replace).
+  Also: a "How the model codes each action ->" button on the main DCM slide
+  (l.559) -> hypertarget model-coding.
+
+SCRIPTS created (Code/Dynamic_Model/ unless noted; all read CANONICAL panels):
+  04q identification figs + replace-portfolio | 04u CCP-by-cut (REBUILT from
+  dcm_obs after T011_C1 DW-degeneracy bug) | 04v clean welfare bar | 04w size
+  event-decomps | 04x binscatter (SUPERSEDED by 04ac) | 04y regime event-decomp +
+  04y_Replace_ModelFit (model-fit SUPERSEDED by 04ad) | 04z confusion matrix +
+  04z_ActionMap_RegimeRates.tex (5-row taxonomy) | 04ab state violations |
+  04ac replace size-change hist+binscatter+stickiness (replaces T011_A6/A7/04s/04x) |
+  04ad ModelFit per action (% to 4dp) | Code/Analysis/T_Baseline_Characteristics_Slide.R
+
+KEY FINDINGS (load-bearing for the talk):
+- TRUE action -> model bin (deterministic): no-closure->Maintain; full-exit->Exit;
+  upgrade(close+install)->Replace; DOWNSIZING(close some, keep operating; 8,134yr=
+  0.36%)->Maintain (HIDDEN = the action misclassification).
+- STATE misclassification (confirmed canonical): downsizing-as-Maintain years flip
+  wall SW->DW (1,825; 67% downsizing, 65% closed an SW tank) + jump age backward
+  (13,686). Maintain forbids both.
+- Replace taxonomy: of 6,210 replaces only 46% are SW->DW upgrades (what model
+  ASSUMES); 54% same-wall. SW->DW upgrade rises 2.4x under RB.
+- CORRECTED earlier overstatements: (a) "shrink ~8x replace, dominant hidden" was
+  WRONG -- most permanent_closure is full-exit (captured as Exit); only
+  partial-downsizing (0.36%) is hidden. (b) "DW exit ~0" was a T011_C1 stale-coding
+  artifact; canonical DW exit rises with age normally.
+- Framing: model captures dominant margins (maintain/exit/premium; gamma id'd off
+  exit); strains on no-partial-closure-action, mis-specified replace transition
+  (98% off-support), omitted size state (94.9% size-sticky).
+- PANDOC GOTCHA (recurring): never put `$...$` with closing `$` immediately before a
+  digit -> pandoc escapes both, strands the math cmd -> "Missing $" compile error.
+  Use `$\sim$\,2\%` not `$\sim$2\%`.
+
+REMAINING / OPEN (next session):
+  1. USER DECISION pending: split the "What facilities do & how the model bins it"
+     5-row table slide into TWO (taxonomy; then mapping+FF/RB)? or keep combined.
+  2. SLIDE RENDERING ISSUES -- user will report specifics. Watch: model-fit 4-dp
+     y-labels (wide), dense text slides, ~19-slide appendix length.
+  3. T018 (CF2-4 welfare) Sonnet review NOT run (gate #2) -- decide.
+  4. Welfare headline framing unresolved (all policy CFs reduce welfare; CF2/CF4
+     replace-margin caveated). 
+  5. "% internalized" number dropped from estimates slide -- need L denominator from user.
+  6. Cleanup candidate: 04x + 04y_Replace_ModelFit now unused -> Archive/.
+
+RESUME: "Load CLAUDE.md + .claude/HANDOFF.md. JMT talk (Reports/Slides/04_...TALK_EDIT.qmd)
+  refactored incl. canonical appendix model-challenges cluster. Today: (a) answer the
+  split-slide question, (b) fix the slide rendering issues the user reports."
 
 ═══════════════════════════════════════════════════
 CHECKPOINT: T017 reviewed CLOSED-PASS + committed (2026-06-02, Opus acting reviewer)

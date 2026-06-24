@@ -1,0 +1,39 @@
+\begin{threeparttable}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.02}
+\begin{tabular}{@{}p{2.9cm}p{7.4cm}p{3.7cm}@{}}
+\toprule
+\textbf{Variable} & \textbf{What it measures} & \textbf{Uses in analysis} \\
+\midrule
+\addlinespace\multicolumn{3}{@{}l}{\textit{Outcomes}}\\[1pt]
+Tank closure & Equals one in the year a tank is closed. & Outcome (DiD) \\
+Facility exit & Equals one in a facility's last operating year. & Outcome (DiD); exit action (structural) \\
+Replacement vs.\ permanent closure & A closure is a replacement if the facility installs a tank afterward; otherwise permanent. & Outcome (DiD); replace action (structural) \\
+Leak discovery & Equals one in a year the facility has a confirmed release. & Outcome (DiD) \\
+First release & Equals one in the first year a never-yet-leaked facility has a confirmed release. & Outcome (leak hazard) \\
+\addlinespace\multicolumn{3}{@{}l}{\textit{Treatment and regime}}\\[1pt]
+Texas & Equals one for Texas, zero for the 17 control states. & Treatment (DiD) \\
+Post & Equals one from 1999 on (Texas fund closed Dec.\ 1998). & Treatment (DiD) \\
+Texas $\times$ Post & Interaction; its coefficient is the average treatment effect. & Treatment (DiD) \\
+Regime & Flat-fee (control states; Texas pre-1999) vs.\ risk-based (Texas post-1999). & State (structural model) \\
+\addlinespace\multicolumn{3}{@{}l}{\textit{Tank and facility characteristics}}\\[1pt]
+Tank age & Mean age of a facility's active tanks; grouped into three-year bins. & Control (DiD); state (structural) \\
+Wall type & Single- vs.\ double-walled construction (facility flag: any single-walled). & Control (DiD); state (structural) \\
+Capacity & Total facility tank capacity in gallons; binned for the structural state. & Control (DiD); state (structural) \\
+Fuel & Gasoline, diesel, or other stored product. & Control (DiD) \\
+Portfolio composition & Tank counts in each wall $\times$ age cell, the facility's full fleet. & State (structural model) \\
+Install vintage & Year the facility's first tank was installed, banded. & Heterogeneity (DiD) \\
+Federal compliance mandates & Whether a tank met the EPA spill, overfill, and release-detection deadlines. & Control (DiD) \\
+\addlinespace\multicolumn{3}{@{}l}{\textit{Priced and calibrated inputs}}\\[1pt]
+Premium $P$ & Annual insurance bill for the facility. & Maintain payoff (structural) \\
+Hazard $\hat{h}$ & Predicted annual probability of a first release, by age and wall. & Maintain payoff (structural) \\
+Deductible $D$ & Out-of-pocket cost per claim ($\approx$\$5{,}000 in Texas; varies across funds). & Maintain payoff (structural) \\
+Cleanup liability $L$ & Remediation cost per release. & Welfare accounting \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}[flushleft]
+\small
+\item \textit{Notes:} Unit of analysis is the facility-year, 1990--2021, across 18 study states (Texas and 17 flat-fee control states). Sources: tank attributes, closures, and confirmed releases from the EPA LUST Finder (state UST administrative registries harmonized by the EPA); Texas premiums from TDI rate manuals and TCEQ contracts; control-state fees and deductibles from the ASTSWMO fund survey; cleanup cost from state trust-fund claims. Premium, hazard, deductible, and cleanup liability enter the dynamic model as calibrated first-stage inputs, not estimated parameters.
+\end{tablenotes}
+\end{threeparttable}

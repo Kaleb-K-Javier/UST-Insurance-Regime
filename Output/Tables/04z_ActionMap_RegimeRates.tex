@@ -1,0 +1,19 @@
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{llrrr}
+\toprule
+\textbf{What the facility did} & \textbf{Model bin} & \textbf{\% sample} & \textbf{FF rate} & \textbf{RB rate} \\
+\midrule
+No tank closed & Maintain & 97.690\% & 97.699\% & 97.619\% \\
+Full exit (all tanks closed) & Exit & 1.682\% & 1.667\% & 1.793\% \\
+Downsizing (closed some, kept op.) $^{\dagger}$ & Maintain & 0.356\% & 0.383\% & 0.158\% \\
+Replace: same wall (DW$\to$DW, SW$\to$SW) & Replace & 0.146\% & 0.143\% & 0.174\% \\
+Replace: SW$\to$DW upgrade $^{\ddagger}$ & Replace & 0.126\% & 0.108\% & 0.256\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.1cm}
+{\centering\scriptsize $^{\dagger}$ Downsizing is coded Maintain (no partial-closure action). 
+$^{\ddagger}$ The model's Replace assumes every replace is an SW$\to$DW reset --- but only $\sim$46\% are. 
+FF/RB rate $=$ share of that regime's facility-years.\par}

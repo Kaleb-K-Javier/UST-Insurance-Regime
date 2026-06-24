@@ -43,8 +43,6 @@
       "TaskOutput",
       "TaskStop",
       "TaskUpdate",
-      "TeamCreate",
-      "TeamDelete",
       "ToolSearch"
     ]
   }

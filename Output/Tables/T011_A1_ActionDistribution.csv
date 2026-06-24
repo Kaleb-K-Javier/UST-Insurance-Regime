@@ -1,0 +1,7 @@
+category,N,pct
+Maintain,2238133,98.046115733977
+Exit,38392,1.68184217616149
+Replace,6210,0.272042089861504
+PartialClosure_inMaintain,8134,0.356326949908772
+CompleteExit_noFutureInstall,38392,1.68184217616149
+CompleteExit_withFutureInstall,1310,0.0573873007598342

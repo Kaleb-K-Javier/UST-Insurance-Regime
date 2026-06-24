@@ -1,0 +1,6 @@
+true_event,Maintain,Exit,Replace
+No tank closed,2229999,0,0
+Replace: SW->DW upgrade,0,0,2870
+Replace: same wall,0,0,3340
+Full exit (all tanks closed),0,38392,0
+Downsizing (kept operating),8134,0,0

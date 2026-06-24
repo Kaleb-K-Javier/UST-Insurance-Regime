@@ -1,0 +1,7 @@
+install_class,ban_timing,n,share
+shed SW inst DW,post ban,2402,0.413995
+shed SW inst DW,pre ban,1365,0.235264
+shed SW inst SW,post ban,156,0.026887
+shed SW inst SW,pre ban,1804,0.310927
+shed DW only,post ban,37,0.006377
+shed DW only,pre ban,38,0.006549

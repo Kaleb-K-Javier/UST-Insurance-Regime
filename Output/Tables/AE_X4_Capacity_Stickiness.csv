@@ -1,0 +1,13 @@
+panel,metric,group,n,value
+A,one_year_stay,count,,0.994611282027378
+A,mean_spell_yrs,count,,16.4485225202258
+A,implied_never_change,count,,0.91495890363718
+A,actual_never_change,count,,0.919186617579797
+A,one_year_stay,capacity,,0.994917668857502
+A,mean_spell_yrs,capacity,,16.4485225202258
+A,implied_never_change,capacity,,0.919605969977231
+A,actual_never_change,capacity,,0.934962397558653
+B,g_move_at_downsize,1,69,0.4348
+B,g_move_at_downsize,2,1063,0.3086
+B,g_move_at_downsize,3,1423,0.5179
+B,g_move_at_downsize,4+,4099,0.423

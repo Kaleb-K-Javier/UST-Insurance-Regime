@@ -1,0 +1,13 @@
+metric,value
+n_compositions,12781
+top10_cov,0.331001
+top100_cov,0.886028
+top500_cov,0.959799
+n_for_95pct,368
+n_for_99pct,2864
+share_single_cell,0.866451
+share_N_gt4,0.092895
+share_N_gt6,0.019292
+p50_N,3
+p90_N,4
+p99_N,8
