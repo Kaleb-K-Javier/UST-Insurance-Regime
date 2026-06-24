@@ -45,12 +45,15 @@ bash probe_system.sh        # paste the output back; it sets the choices below
 
 ## Step 2 — run (ucbare2 Windows server, via uv)
 Confirmed env: `uv` 0.10.12, `uv run python` → 3.13, `uv run --with duckdb` → duckdb 1.5.3.
-Downloads MUST live on **C:** (server policy; D: not allowed). That is fine: stream-and-
-reduce never stages the full dataset — peak disk = one month (~10 GB) + small reduced
-outputs. PowerShell:
+STORAGE (updated 2026-06, admin Gary): large data now lives on **D:** (C: is small/shared).
+`dewey-downloads` was physically moved to D: (`D:\shares\Users\kalebkja\...`) with a
+**junction left behind**, so the old `C:\Users\kalebkja\dewey-downloads` path still works
+unchanged and downloads under it now land on D: automatically — keep using it below.
+Stream-and-reduce never stages the full dataset (peak disk = one chunk + small outputs).
+PowerShell:
 ```powershell
 $env:DEWEY_API_KEY  = "dwy_...."                         # don't commit it
-$env:DEWEY_Z_ROOT   = "C:\Users\kalebkja\dewey-downloads"   # on C: (D: not allowed)
+$env:DEWEY_Z_ROOT   = "C:\Users\kalebkja\dewey-downloads"   # C: junction -> physically on D:
 $env:UST_MASTER_CSV = "C:\Users\kalebkja\ust_ins_move_to_github\Data\Processed\Master_Harmonized_UST_Tanks.csv"
 $env:DEWEY_RUN      = "uvx"
 # DRY RUN — build grid + print the month plan, no download:

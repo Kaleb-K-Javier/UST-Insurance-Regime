@@ -1,6 +1,14 @@
 # HANDOFF — GIS + Dewey workstream
-# Updated: 2026-06-05
+# Updated: 2026-06-24
 # (design reference: Code/GIS/SCOPE_GIS_Dewey_Linkage.md)
+#
+# INFRA NOTE (2026-06, admin Gary, ucbare2): C: was nearly full (shared ~50 users).
+#   `dewey-downloads` (~65 GB) was moved to D: (`D:\shares\Users\kalebkja\...`) with a
+#   JUNCTION left behind — the old C:\Users\kalebkja\dewey-downloads path still works
+#   unchanged, and new downloads under it now physically land on D:. POLICY FLIPPED:
+#   keep large data on D: going forward (the old "C: only / D: not allowed" rule is dead).
+#   Scripts keep the C: junction path (works); do NOT hardcode a guessed D: path —
+#   confirm the exact D: target with admin (Gary until 2026-07-01, then Eric).
 
 ═══════════════════════════════════════════════════
 RESUME HERE (next session)
@@ -19,10 +27,11 @@ Code/GIS/dewey/  (python, runs via uv/uvx — no installs):
      to POIs NEAR a UST facility (GEOGRAPHY, not NAICS) -> write small -> delete raw.
      Peak disk = one chunk. Grid = 0.0025deg cells (+8 nbrs ~0.5km) from master lat/long.
   run_dewey_pull.ps1 / .sh, README_DEWEY_PULL.md, probe_system.ps1, requirements.txt
-  Env (server): DEWEY_Z_ROOT=C:\Users\kalebkja\dewey-downloads ; DEWEY_RUN=uvx ;
+  Env (server): DEWEY_Z_ROOT=C:\Users\kalebkja\dewey-downloads (C: junction -> physically D:) ; DEWEY_RUN=uvx ;
      UST_MASTER_CSV=C:\Users\kalebkja\ust_ins_move_to_github\Data\Processed\Master_Harmonized_UST_Tanks.csv
      DEWEY_API_KEY = per-session (NOT persisted; set each shell, or set User env once).
-  Confirmed: uv 0.10.12, uv run python 3.13, duckdb 1.5.3, dewey reachable. D: NOT allowed.
+  Confirmed: uv 0.10.12, uv run python 3.13, duckdb 1.5.3, dewey reachable.
+  STORAGE: large data lives on D: now (junction keeps C: paths working — see INFRA NOTE up top).
 
 Dataset registry (DATASETS in dewey_pull_reduce.py):
   safegraph_places       READY  project_id prj_ycsuakbe__fldr_b7faazxwmt47zdme8

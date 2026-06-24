@@ -8,10 +8,11 @@
 # --- 1. credentials (needed only for the REAL pull in step 4, not the dry run) ---
 if (-not $env:DEWEY_API_KEY) { Write-Warning "DEWEY_API_KEY not set - dry run is fine; set it before step 4 (real pull)." }
 
-# --- 2. paths: MUST be on C: (server policy; D: not allowed). Safe because
-#         stream-and-reduce never stages the full dataset: peak disk = one month
-#         (~10 GB scratch) + small reduced outputs, well within C: free space. ---
-$env:DEWEY_Z_ROOT   = "C:\Users\kalebkja\dewey-downloads"
+# --- 2. paths: large data now lives on D: (admin move, 2026-06; C: is small/shared).
+#         dewey-downloads was moved to D:\shares\Users\kalebkja\... with a JUNCTION left
+#         behind, so this C: path still works unchanged and now physically lands on D:.
+#         Keep using the C: junction path here — do not hardcode a guessed D: path. ---
+$env:DEWEY_Z_ROOT   = "C:\Users\kalebkja\dewey-downloads"   # C: junction -> physically D:
 $env:UST_MASTER_CSV = "C:\Users\kalebkja\ust_ins_move_to_github\Data\Processed\Master_Harmonized_UST_Tanks.csv"
 $env:DEWEY_RUN      = "uvx"          # deweypy CLI via uvx (no install)
 $script = "Code\GIS\dewey\dewey_pull_reduce.py"
