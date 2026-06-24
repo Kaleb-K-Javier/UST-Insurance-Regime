@@ -56,3 +56,11 @@ Code/GIS/dewey_api.txt
 
 # Run logs (local-only workflow artifacts)
 logs/
+
+# Dewey downloads & reduced extracts (large; live on server D:, NEVER commit)
+dewey-downloads/
+global-places-poi-geometry/
+_reduced_near_ust/
+_raw/
+_scratch/
+*.parquet
