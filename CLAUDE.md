@@ -80,6 +80,22 @@ UNIT CONVENTION  (do not forget — load-bearing for slides)
     inside the figure/table code, not at Bellman time.
 
 ═══════════════════════════════════════════════════
+SERVER / STORAGE PATHS  (ucbare2; verified 2026-06-24)
+═══════════════════════════════════════════════════
+Scripts authored on local laptop, RUN on server ucbare2 (Windows). Both clones
+track origin/main. Server data physically lives on D: now (C: was full/shared);
+the whole C:\Users\kalebkja profile is junctioned to D:\shares\Users\kalebkja\,
+so C: paths work transparently. Verified targets:
+  repo     C:\Users\kalebkja\ust_ins_move_to_github -> D:\shares\Users\kalebkja\ust_ins_move_to_github
+  dewey    C:\Users\kalebkja\dewey-downloads        -> D:\shares\Users\kalebkja\dewey-downloads
+  reduced  ...\dewey-downloads\_reduced_near_ust\<dataset>_near_ust\part_*.parquet
+Keep large data on D: (old "C: only / D: not allowed" rule is dead). DEWEY_Z_ROOT
+keeps the C: junction path (routes to D:). Local laptop inspects server outputs via
+Z:\C_Drive_Portal\. Dewey downloads + *.parquet are gitignored — never commit them.
+Admin: Gary -> Eric (2026-07-01).
+Detail: memory server_dewey_data_moved_to_d + git_sync_local_server_topology.
+
+═══════════════════════════════════════════════════
 UST MODEL
 ═══════════════════════════════════════════════════
 DCM: maintain(1) / exit(2) / retrofit-replace(3)
@@ -136,6 +152,13 @@ replacement: npl_iter=200 | sigma2=1.0 | ccp_damping_lambda=0.6
 ═══════════════════════════════════════════════════
 R CODING STYLE
 ═══════════════════════════════════════════════════
+LANGUAGE SCOPE (2026-06-24): the R-only style below governs the STRUCTURAL
+ESTIMATOR (Bellman/NPL/CF + anything feeding Output/Estimation_Results). GIS /
+POI / data-engineering work may use the best tool (Python + geopandas/duckdb-
+spatial likely). For ANY non-R script: (1) inline R->language mapping comments so
+the logic reads in R terms, and (2) a companion markdown doc (what it does +
+language setup/gotchas). Detail: memory feedback_nonr_language_requires_mapping_and_md.
+
 Naming:   snake_case only. No camelCase. No dots.
 Errors:   Hard propagation only.
   FORBIDDEN: tryCatch(expr, error=function(e) NULL) | try(expr, silent=TRUE)
