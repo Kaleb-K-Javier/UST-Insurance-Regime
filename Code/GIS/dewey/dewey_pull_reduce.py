@@ -97,7 +97,9 @@ STUDY_STATES = ["TX","AL","AR","CO","LA","ME","NJ","NM","OK","PA","TN",
 # ----------------------------------------------------------------------------
 DATASETS = {
     "safegraph_places": dict(
-        project_id="prj_ycsuakbe__fldr_b7faazxwmt47zdme8",
+        # project_id = tail of the Dewey API URL after ".../data/". Updated 2026-06-24
+        # (old prj_ycsuakbe__fldr_b7faazxwmt47zdme8 was stale -> dir stayed empty).
+        project_id="prj_ycsuakbe__fldr_7d3aor6cp4yt83sxq",
         local_dir=None,
         partitioned=False,
         lat="LATITUDE", lon="LONGITUDE", region="REGION",
