@@ -26,11 +26,17 @@
 
 import os
 import sys
+import glob
 import duckdb
 
 # ---- config (env-overridable) -------------------------------------------------
 Z_ROOT   = os.environ.get("DEWEY_Z_ROOT", r"C:\Users\kalebkja\dewey-downloads")
-POI_GLOB = os.path.join(Z_ROOT, "global-places-poi-geometry", "*.parquet")
+# POI source: set $env:POI_GLOB to point at wherever the SafeGraph parquet actually
+# landed (handles nested / TX-county-split layouts). Default = recursive search under
+# global-places-poi-geometry.  Examples:
+#   $env:POI_GLOB = 'C:\Users\kalebkja\dewey-downloads\dewey-downloads\tx-*\*.parquet'
+POI_GLOB = os.environ.get("POI_GLOB") or os.path.join(
+    Z_ROOT, "global-places-poi-geometry", "**", "*.parquet")
 MASTER   = os.environ.get(
     "UST_MASTER_CSV",
     r"C:\Users\kalebkja\ust_ins_move_to_github\Data\Processed\Master_Harmonized_UST_Tanks.csv")
@@ -68,6 +74,13 @@ def pick(have, *aliases, required=True, label=""):
     return None
 
 print("=== detecting schemas ===")
+_hits = glob.glob(POI_GLOB.replace("/", os.sep), recursive=True)
+if not _hits:
+    print(f"!! no parquet found at POI_GLOB={POI_GLOB}")
+    print("   point it at your SafeGraph folder and re-run, e.g.:")
+    print(r"   $env:POI_GLOB='C:\Users\kalebkja\dewey-downloads\dewey-downloads\tx-*\*.parquet'")
+    sys.exit(1)
+print(f"POI files matched: {len(_hits)}  (POI_GLOB={POI_GLOB})")
 poi_cols = cols_of(f"read_parquet('{POI_FS}')")
 mas_cols = cols_of(f"read_csv_auto('{SRC_FS}', all_varchar=true, ignore_errors=true, sample_size=-1)")
 print(f"POI columns ({len(poi_cols)}): {poi_cols}")
