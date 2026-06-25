@@ -28,7 +28,9 @@ if (!file.exists(cpp_path)) stop(sprintf("pm_matvec.cpp not found: %s", cpp_path
 Rcpp::sourceCpp(cpp_path)
 cat("  pm_matvec.cpp sourced [OK]\n")
 USE_BATCHED_MV <- !nzchar(Sys.getenv("PM08_NO_BATCHED"))   # default ON; set PM08_NO_BATCHED=1 to use old op
+use_pooled     <- nzchar(Sys.getenv("PM08_POOLED"))         # PM08_POOLED=1 -> pooled total exposure + RB interaction (T024q)
 cat(sprintf("  USE_BATCHED_MV: %s\n", USE_BATCHED_MV))
+cat(sprintf("  USE_POOLED:     %s\n", use_pooled))
 
 # === SECTION: LOAD INPUTS ===
 cat("\n=== SECTION: LOAD INPUTS ===\n")
@@ -150,8 +152,13 @@ stopifnot(!anyNA(env_tbl$tau[env_tbl$type == "FF"]))
 cat("  env_tbl:\n"); print(env_tbl)
 
 # Parameter names: 9 structural + n_ff alpha_g
-param_struct <- c("phi_1", "phi_2", "phi_3", "phi_4",
-                  "gamma_p", "gamma_r", "c_rem", "c_inst", "kappa_1")
+param_struct <- if (use_pooled) {
+  c("phi_1", "phi_2", "phi_3", "phi_4",
+    "gamma_pool", "gamma_RB", "c_rem", "c_inst", "kappa_1")
+} else {
+  c("phi_1", "phi_2", "phi_3", "phi_4",
+    "gamma_p", "gamma_r", "c_rem", "c_inst", "kappa_1")
+}
 param_alpha  <- paste0("alpha_", ff_envs)
 param_names  <- c(param_struct, param_alpha)
 n_param      <- length(param_names)
@@ -398,7 +405,7 @@ cat("  Ready for Phase B.\n")
 # ============================================================
 cat("\n=== PHASE B: BASIS + VALUE ===\n")
 
-e_test  <- 1L   # first env in alphabetical order (AR, FF)
+e_test  <- if (use_pooled) env_tbl[type == "RB", env_idx[1L]] else 1L   # pooled: RB env so gamma_RB gets real GATE C check
 ev_test <- env_tbl[e_test]
 cat(sprintf("  Test env %d: %s (type=%s)\n", e_test, ev_test$env_key, ev_test$type))
 
@@ -437,18 +444,25 @@ for (G_prime in seq_len(N_G)) {
   rho_list[[paste0("phi_", G_prime)]] <- rho
 }
 
-# gamma_p: rho[c,G] = -sum_j work P_j[c,G] * prem_j[c]
+# gamma_p/gamma_pool intermediate: rho[c,G] = -sum_j work P_j[c,G] * prem_j[c]
 rho_gp <- matrix(0.0, nrow = C, ncol = N_G)
 for (i in seq_len(n_act))
   rho_gp <- rho_gp - P_envs[[e_test]][[act_keys[i]]] * prem_ej[[e_test]][, i]
-rho_list[["gamma_p"]] <- rho_gp
 
-# gamma_r: rho[c,G] = -D_e * sum_j work P_j[c,G] * haz_j[c]
+# gamma_r/gamma_pool intermediate: rho[c,G] = -D_e * sum_j work P_j[c,G] * haz_j[c]
 D_e    <- ev_test$D
 rho_gr <- matrix(0.0, nrow = C, ncol = N_G)
 for (i in seq_len(n_act))
   rho_gr <- rho_gr - D_e * P_envs[[e_test]][[act_keys[i]]] * haz_j[, i]
-rho_list[["gamma_r"]] <- rho_gr
+
+if (use_pooled) {
+  rb <- (ev_test$type == "RB")
+  rho_list[["gamma_pool"]] <- rho_gp + rho_gr
+  rho_list[["gamma_RB"]]   <- rb * (rho_gp + rho_gr)
+} else {
+  rho_list[["gamma_p"]] <- rho_gp
+  rho_list[["gamma_r"]] <- rho_gr
+}
 
 # c_rem: rho[c,G] = -sum_j work P_j[c,G] * k_j
 rho_cr <- matrix(0.0, nrow = C, ncol = N_G)
@@ -507,7 +521,11 @@ for (pn in param_names) {
 theta_test <- setNames(rep(0.0, n_param), param_names)
 theta_test["phi_1"] <- 0.5;  theta_test["phi_2"] <-  0.3
 theta_test["phi_3"] <- 0.1;  theta_test["phi_4"] <- -0.1
-theta_test["gamma_p"] <- -2.0;  theta_test["gamma_r"] <- 0.1
+if (use_pooled) {
+  theta_test["gamma_pool"] <- 0.05;  theta_test["gamma_RB"] <- 0.02
+} else {
+  theta_test["gamma_p"] <- -2.0;  theta_test["gamma_r"] <- 0.1
+}
 theta_test["c_rem"]  <- 0.5;  theta_test["c_inst"]  <- 0.5
 theta_test["kappa_1"] <- -1.0
 
@@ -578,7 +596,8 @@ for (i in seq_len(n_act)) {
 # = du_j/dtheta_p + beta*(F_j W_p)[obs_c[s], obs_G[s]]  for work j
 # = du_X/dtheta_p                                          for exit (no Bellman)
 cat("  Computing coeff_p for each param (n_act FjWp comp_apply calls each)...\n")
-t0_cp <- proc.time()["elapsed"]
+t0_cp   <- proc.time()["elapsed"]
+rb_test <- (ev_test$type == "RB")   # rb flag for gamma_RB du in GATE C
 coeff_p <- vector("list", n_param)
 names(coeff_p) <- param_names
 for (pn in param_names) {
@@ -599,8 +618,10 @@ for (pn in param_names) {
     else if (pn == "phi_2")   du_dp_i[obs_G == 2L] <- 1.0
     else if (pn == "phi_3")   du_dp_i[obs_G == 3L] <- 1.0
     else if (pn == "phi_4")   du_dp_i[obs_G == 4L] <- 1.0
-    else if (pn == "gamma_p") du_dp_i <- -prem_ej[[e_test]][cbind(obs_c, rep(i, n_obs_states))]
-    else if (pn == "gamma_r") du_dp_i <- -haz_j[cbind(obs_c, rep(i, n_obs_states))] * D_e
+    else if (pn == "gamma_p")    du_dp_i <- -prem_ej[[e_test]][cbind(obs_c, rep(i, n_obs_states))]
+    else if (pn == "gamma_r")    du_dp_i <- -haz_j[cbind(obs_c, rep(i, n_obs_states))] * D_e
+    else if (pn == "gamma_pool") du_dp_i <- -(prem_ej[[e_test]][cbind(obs_c, rep(i, n_obs_states))] + haz_j[cbind(obs_c, rep(i, n_obs_states))] * D_e)
+    else if (pn == "gamma_RB")   du_dp_i <- -rb_test * (prem_ej[[e_test]][cbind(obs_c, rep(i, n_obs_states))] + haz_j[cbind(obs_c, rep(i, n_obs_states))] * D_e)
     else if (pn == "c_rem")   du_dp_i <- rep(-k_vec[i], n_obs_states)
     else if (pn == "c_inst")  du_dp_i <- rep(-m_vec[i], n_obs_states)
     # kappa_1, alpha_g: du_j/dp = 0 for work j (kappa_1 is exit-only; alpha in exit=0)
@@ -739,10 +760,16 @@ build_basis_env <- function(e, p_e, V_const_warm = NULL, W_warm = NULL) {
   }
   rho_gp <- matrix(0.0, nrow = C, ncol = N_G)
   for (i in seq_len(n_act)) rho_gp <- rho_gp - p_e[[act_keys[i]]] * prem_ej[[e]][, i]
-  rho[["gamma_p"]] <- rho_gp
   rho_gr <- matrix(0.0, nrow = C, ncol = N_G)
   for (i in seq_len(n_act)) rho_gr <- rho_gr - D_e * p_e[[act_keys[i]]] * haz_j[, i]
-  rho[["gamma_r"]] <- rho_gr
+  if (use_pooled) {
+    rb_e <- (ev$type == "RB")
+    rho[["gamma_pool"]] <- rho_gp + rho_gr
+    rho[["gamma_RB"]]   <- rb_e * (rho_gp + rho_gr)
+  } else {
+    rho[["gamma_p"]] <- rho_gp
+    rho[["gamma_r"]] <- rho_gr
+  }
   rho_cr <- matrix(0.0, nrow = C, ncol = N_G)
   for (i in seq_len(n_act)) if (k_vec[i] > 0L) rho_cr <- rho_cr - k_vec[i] * p_e[[act_keys[i]]]
   rho[["c_rem"]] <- rho_cr
@@ -779,6 +806,7 @@ build_basis_env <- function(e, p_e, V_const_warm = NULL, W_warm = NULL) {
 build_coeffs_env <- function(e, basis_e) {
   ev      <- env_tbl[e]
   D_e     <- ev$D
+  rb_e    <- (ev$type == "RB")
   Vc      <- basis_e$V_const
   W       <- basis_e$W_list
   ae      <- agg_keep[env_key == ev$env_key]
@@ -814,8 +842,10 @@ build_coeffs_env <- function(e, basis_e) {
       else if (pn == "phi_2")    du_dp_i[obs_G_e == 2L] <- 1.0
       else if (pn == "phi_3")    du_dp_i[obs_G_e == 3L] <- 1.0
       else if (pn == "phi_4")    du_dp_i[obs_G_e == 4L] <- 1.0
-      else if (pn == "gamma_p")  du_dp_i <- -prem_ej[[e]][cbind(obs_c_e, rep(i, n_obs_s))]
-      else if (pn == "gamma_r")  du_dp_i <- -haz_j[cbind(obs_c_e, rep(i, n_obs_s))] * D_e
+      else if (pn == "gamma_p")    du_dp_i <- -prem_ej[[e]][cbind(obs_c_e, rep(i, n_obs_s))]
+      else if (pn == "gamma_r")    du_dp_i <- -haz_j[cbind(obs_c_e, rep(i, n_obs_s))] * D_e
+      else if (pn == "gamma_pool") du_dp_i <- -(prem_ej[[e]][cbind(obs_c_e, rep(i, n_obs_s))] + haz_j[cbind(obs_c_e, rep(i, n_obs_s))] * D_e)
+      else if (pn == "gamma_RB")   du_dp_i <- -rb_e * (prem_ej[[e]][cbind(obs_c_e, rep(i, n_obs_s))] + haz_j[cbind(obs_c_e, rep(i, n_obs_s))] * D_e)
       else if (pn == "c_rem")    du_dp_i <- rep(-k_vec[i], n_obs_s)
       else if (pn == "c_inst")   du_dp_i <- rep(-m_vec[i], n_obs_s)
       else if (pn == paste0("alpha_", ev$g) && ev$type == "FF") du_dp_i <- rep(1.0, n_obs_s)
@@ -836,8 +866,9 @@ build_coeffs_env <- function(e, basis_e) {
 
 # --- Helper: CCP update over all C*N_G states for env e ---
 ccp_update_env <- function(e, theta_k, basis_e) {
-  ev  <- env_tbl[e]
-  D_e <- ev$D
+  ev    <- env_tbl[e]
+  D_e   <- ev$D
+  rb_e  <- (ev$type == "RB")
   alpha_e <- if (ev$type == "FF") theta_k[[paste0("alpha_", ev$g)]] else 0.0
   phi_G   <- c(theta_k[["phi_1"]], theta_k[["phi_2"]], theta_k[["phi_3"]], theta_k[["phi_4"]])
 
@@ -853,10 +884,16 @@ ccp_update_env <- function(e, theta_k, basis_e) {
     # as.matrix: comp_apply returns an S4 dgeMatrix (A_age %*% Y is sparse x dense);
     # coerce so P_new stays base matrices (else pm_op_build throws "Not a matrix" next iter).
     FjV_i <- beta * as.matrix(comp_apply(kernel, k_vec[i], m_vec[i], V_mat %*% t(kernel$Gmat[[nb]])))
-    u_mat <- sweep(matrix(phi_G, nrow = C, ncol = N_G, byrow = TRUE), 1L,
-                   theta_k[["gamma_p"]] * prem_ej[[e]][, i] +
-                   theta_k[["gamma_r"]] * haz_j[, i] * D_e +
-                   k_vec[i] * theta_k[["c_rem"]] + m_vec[i] * theta_k[["c_inst"]] - alpha_e, "-")
+    if (use_pooled) {
+      E_i   <- prem_ej[[e]][, i] + haz_j[, i] * D_e
+      u_vec <- (theta_k[["gamma_pool"]] + rb_e * theta_k[["gamma_RB"]]) * E_i +
+                k_vec[i] * theta_k[["c_rem"]] + m_vec[i] * theta_k[["c_inst"]] - alpha_e
+    } else {
+      u_vec <- theta_k[["gamma_p"]] * prem_ej[[e]][, i] +
+               theta_k[["gamma_r"]] * haz_j[, i] * D_e +
+               k_vec[i] * theta_k[["c_rem"]] + m_vec[i] * theta_k[["c_inst"]] - alpha_e
+    }
+    u_mat <- sweep(matrix(phi_G, nrow = C, ncol = N_G, byrow = TRUE), 1L, u_vec, "-")
     v_ij  <- u_mat + FjV_i
     v_ij[!feas_mask[, i], ] <- -Inf
     v_mats[[i]] <- v_ij
@@ -893,8 +930,13 @@ max_npl_iter <- if (nzchar(Sys.getenv("PM08_MAXITER"))) as.integer(Sys.getenv("P
 
 lower_bounds <- setNames(rep(-50.0, n_param), param_names)
 upper_bounds <- setNames(rep( 50.0, n_param), param_names)
-lower_bounds["gamma_p"] <- -20.0; upper_bounds["gamma_p"] <- 20.0
-lower_bounds["gamma_r"] <- -20.0; upper_bounds["gamma_r"] <- 20.0
+if (use_pooled) {
+  lower_bounds["gamma_pool"] <- -20.0; upper_bounds["gamma_pool"] <- 20.0
+  lower_bounds["gamma_RB"]   <- -20.0; upper_bounds["gamma_RB"]   <- 20.0
+} else {
+  lower_bounds["gamma_p"] <- -20.0; upper_bounds["gamma_p"] <- 20.0
+  lower_bounds["gamma_r"] <- -20.0; upper_bounds["gamma_r"] <- 20.0
+}
 .nll_scale <- sum(agg_keep$n_obs)   # optimize MEAN log-lik (O(1) gradients) so L-BFGS-B is well-scaled
 
 theta_k    <- setNames(rep(0.0, n_param), param_names)
@@ -904,7 +946,8 @@ bases_warm <- vector("list", n_env)   # warm-start storage
 
 cat(sprintf("  Tolerances: tol_theta=%.0e, tol_P=%.0e, max_iter=%d\n",
             tol_theta, tol_P, max_npl_iter))
-cat(sprintf("  Bounds: gamma_p/r in [-20,20]; rest in [-50,50]\n"))
+cat(sprintf("  Bounds: %s in [-20,20]; rest in [-50,50]\n",
+            if (use_pooled) "gamma_pool/gamma_RB" else "gamma_p/gamma_r"))
 cat(sprintf("  Starting theta: all zeros\n\n"))
 
 # --- Profile a FF-env fixed effect alpha_g out via its 1-D FOC (concentrated MLE).
@@ -967,7 +1010,7 @@ cat("  Workers initialised (kernel + C++ loaded) [OK]\n")
 
 .static_vars <- c(
   "beta", "C", "N_G", "N_SIDX", "n_act", "n_act_p1", "n_param",
-  "eps_prob", "use_alpha", "USE_BATCHED_MV",
+  "eps_prob", "use_alpha", "use_pooled", "USE_BATCHED_MV",
   "kernel", "ss",
   "k_vec", "m_vec", "act_keys", "all_action_keys", "act_row",
   "env_tbl", "param_struct", "param_alpha", "param_names", "ff_envs",
@@ -1157,3 +1200,41 @@ print(trace_dt)
 stopifnot(nrow(trace_dt) >= 1L)   # at least K=1 completed
 cat(sprintf("  Converged: %s\n", if (converged) "YES" else "NO (hit max_iter)"))
 cat("  GATE D PASS\n")
+
+# ============================================================
+# SECTION: SAVE FIT
+# ============================================================
+cat("\n=== SECTION: SAVE FIT ===\n")
+
+sample_label <- paste0(
+  if (use_pooled) "pooled" else "two_gamma",
+  if (use_alpha)  "_FE_on" else "_FE_off"
+)
+fit_path <- here::here("Output", "Estimation_Results",
+  sprintf("Model_Portfolio_v4_%s_observed_%s.rds",
+          sample_label, format(Sys.Date(), "%Y%m%d")))
+
+fit_obj <- list(
+  theta_hat   = theta_k,
+  converged   = converged,
+  n_iter      = nrow(trace_dt),
+  LL          = if (nrow(trace_dt) > 0L) tail(trace_dt$LL, 1L) else NA_real_,
+  trace_dt    = trace_dt,
+  param_names = param_names,
+  use_pooled  = use_pooled,
+  beta        = beta,
+  env_keys    = env_tbl$env_key,
+  env_types   = env_tbl$type,
+  D_vec       = env_tbl$D,
+  tol_theta   = tol_theta,
+  tol_P       = tol_P
+)
+saveRDS(fit_obj, fit_path)
+
+cat(sprintf("Estimator: PM08_v4_%s | Sample: observed | Converged: %s at iter %d | LL: %.4f\n",
+            sample_label, if (converged) "T" else "F", nrow(trace_dt), fit_obj$LL))
+cat(sprintf("theta_hat: %s\n",
+            paste(sprintf("%s=%.4f", param_names[seq_len(9L)], theta_k[seq_len(9L)]),
+                  collapse = " ")))
+cat(sprintf("Elapsed: %.1fs | Saved: %s\n", elapsed_total, fit_path))
+cat("=== SAVE COMPLETE ===\n")

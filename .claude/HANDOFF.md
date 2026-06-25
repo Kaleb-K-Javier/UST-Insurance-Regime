@@ -1,3 +1,94 @@
+# HANDOFF -- 2026-06-25 (First full portfolio fit DONE; FE-on settled; pooled-exposure+RB respec 024q validated; full pooled fit then CFs 024r next)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: pooled+RB respec (024q) validated; identification settled (2026-06-25, Opus architect)
+═══════════════════════════════════════════════════
+FIRST FULL PORTFOLIO FIT ran on server ucbare2 (FE-on, two-gamma): converged iter 11,
+  LL=-291648.5, gamma_p~=-0.019(~0), gamma_r=4.32, c_rem 3.7, c_inst 2.0, kappa_1 1.08,
+  phi_1..4 ~=-0.56 (flat). Elapsed 0.51 hr. 024p speedups worked (basis ~80-150s/iter).
+IDENTIFICATION SETTLED via FE-on vs FE-off:
+  - FE-off: gammas COLLAPSE (gamma_r 4.32 -> 0.03; gamma_p ~0 both ways). Costs/phi
+    recover same as FE-on. => the RISK signal is WITHIN-STATE; state FEs are NEEDED to
+    isolate it from cross-state confounds (between-state swamps it). Costs/phi don't
+    need FEs (within-state action freqs). phi FLAT is real (not FE-masked).
+  - gamma_p NOT separately identifiable under credible (FE-on) design. TX premium data
+    is 2006+ ONLY; pre-2006 unfillable (TCEQ/PARIS FR records EMPTY pre-2006: 1 fac in
+    2000, 21 in 2001, jumps to 8366 in 2007). Pre-1999 TX was a PETROLEUM-FEE FUND (not
+    per-tank uniform), so NO within-TX FF benchmark exists. RB==TX between-state confound
+    on the regime effect is STRUCTURAL/unfixable. Memory: write this up.
+DECISION (locked): FE-on + ONE pooled gamma on TOTAL EXPOSURE (premium+haz*D) +
+  gamma_RB*1[RB] interaction (discrete regime contrast; FF pins gamma_pool=OOP response,
+  RB increment=gamma_RB=premium/regime mechanism). Data can't split premium vs OOP -> fine.
+024q DONE + VALIDATED (NOT yet a full converged fit): PM08_POOLED=1 toggle in PM08
+  (default OFF = two-gamma path byte-for-byte intact). gamma_pool rho = rho_gp+rho_gr;
+  gamma_RB rho = 1[RB]*(rho_gp+rho_gr); du likewise. GATE C PASS both new params
+  (analytic==FD 5e-11/6.7e-10; e_test overridden to RB_2006 so gamma_RB gets rb=1).
+  Lean rds saved (theta incl profiled alphas; NO P_envs/bases_all). On RB env gamma_pool
+  ==gamma_RB gradient (collinear, expected); separation is multi-env (FF pins pool).
+NEXT (in order):
+  1. RUN FULL CONVERGED POOLED FIT on server (FE-on, all 17 env):
+     $env:PM08_POOLED="1"; $env:PM08_MAXITER="25"; & $rs Code/Dynamic_Model/PM08_Estimator_v4.R
+     then Remove-Item Env:PM08_POOLED,Env:PM08_MAXITER. ~30-40 min. Sanity: gamma_pool>0,
+     gamma_RB sign (the RB increment), costs/phi steady vs two-gamma FE-on.
+  2. 024r = CFs on the pooled fit (gated on #1; architect pulls NPL_REFERENCE first, gate#8):
+     solve_equilibrium(theta,policy) reusing kernel+P1+BiCGSTAB; baseline re-solved from theta.
+     CF1 TX-as-FF: FULL CONTRACT swap (premium->control flat fee AND D->control D; data
+       can't move just one) + knob decomp CF1a(contract only, keep gamma_RB) / CF1b(+1[RB]->0).
+     CF3 subsidy: reduce c_inst (sweep 25/50/75%), report by regime.
+     CF4 mandate: removal at age A (choice-set/feasibility surgery; histogram SUITED - per-cell
+       age exact). Heaviest; may slip a day.
+     SKIP CF2 first-best (no pop-weighting). Welfare on OBSERVED dist (PS=E[V]+premium/govt+
+       first-pass external damages). DELIVERABLE per CF: ONE decomposition bar chart + ONE
+       table (reuse 04r/04v-style code; user has most fig/table code ready).
+  3. SEs: not computed (point estimate). gamma_RB SE NEEDED for paper interpretation
+     (is the RB increment significant?) -> follow-on OPG/NPL-sandwich pass, not blocking CFs.
+Resume: "Load CLAUDE.md + HANDOFF.md. 024q pooled+RB respec validated (GATE C). Today:
+  run full converged pooled fit (PM08_POOLED=1, FE-on, 25 iter) on server, sanity-check
+  theta, then I pull NPL_REFERENCE + write 024r (CF1 full-contract/CF3 subsidy/CF4 mandate,
+  bar-chart+table per CF)."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-24 (T024p speedups DONE + validated + committed; first full converged run = next, to run on server ucbare2)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T024p Lever A + Lever B validated + committed (2026-06-24, Opus architect)
+═══════════════════════════════════════════════════
+024p BOTH speedups implemented, gated, committed (local commit 56afe3b; NOT pushed).
+  Lever A (batched matvec): pm_op_build_b/pm_op_mv_b appended to pm_matvec.cpp;
+    groups 21 actions by install-count m (5 distinct) -> sparse product 21x->5x.
+    GATE: max|old-new| = max|new-R| = 4.4e-16 < 1e-12 (PM08p_validate_A.R PASS).
+    Speed: ~2.1x matvec, ~2.6x basis-in-context (below spec 3.5-4x; Amdahl — the
+    per-action dense GaT mult + remove-gather + accumulate are the non-hoistable
+    floor; sparse product was ~65% of work, not ~85%). USE_BATCHED_MV default on.
+  Lever B (PSOCK env-parallel basis): PM08 Phase D, behind PM08_NWORKERS (=1 keeps
+    serial path byte-for-byte). Each worker sourceCpp's own op (XPtr unserializable).
+    Static mem cap 8 workers / 20GB ceiling. PM08_VALIDATE_B serial-vs-parallel =
+    0.000e+00 BIT-IDENTICAL on AR/CO/RB_2006. Gates A/B/C/D all PASS.
+  Measured (3-env test): serial basis 87.1s (~29s/env, was ~76 pre-A), parallel
+    42.2s (2.06x on the unfavorable 3-env/3-worker case). Full 16-env basis
+    projected ~20min -> ~1.5-2min. Per NPL iter also has serial inner-optim (~99s
+    on 3 env) -> realistic full converged run ~15-35 min (NOT 10-13; optim now a
+    real share). 1-iter theta is meaningless (max_iter=1 from zeros).
+NEXT = first FULL CONVERGED RUN, on server ucbare2 (laptop free). Setup split:
+  CODE via git: commit 56afe3b (PM08 + pm_matvec.cpp + PM08p_validate_A.R) needs
+    PUSH, then server `git pull`. pm_bellman_kernel.R already in git.
+  DATA via scp (gitignored, portal is READ-ONLY from laptop -> must scp, ~16.5MB):
+    Output/Estimation_Results/PM_StateSpace.rds (15MB), PM_Lookups.rds (1.8KB),
+    Data/Analysis/pm_agg_counts.csv (1.5MB).
+  Server de-risk FIRST: run PM08p_validate_A.R on server (compiles cpp at runtime
+    via sourceCpp -> proves standalone R-4.5.2 x64 + Rtools45 + Rcpp/RcppArmadillo
+    + Matrix/data.table/here). GATE A PASS => full run will work.
+  STILL NEEDED from researcher: (1) push OK to origin/main; (2) server scp
+    host/user/auth + dest path; (3) confirm server Rscript = standalone x64 (not
+    miniconda — Rcpp DLL bug); (4) server cores/free RAM (>=8c/>=14GB -> defaults).
+  024p attempt log still owed the final numbers before reviewer-close.
+Resume: "Load CLAUDE.md + HANDOFF.md. 024p validated + committed (56afe3b, unpushed).
+  Today: push code, scp the 3 PM data files to ucbare2, run PM08p_validate_A.R on
+  server (GATE A PASS), then the first full converged PM08 run."
+═══════════════════════════════════════════════════
+
+
 # HANDOFF -- 2026-06-22 (T024b v4 estimator: RUNS end-to-end on subsets; dgeMatrix + alpha-profiling-blowup fixed; full converged run + CF/figures next)
 
 ═══════════════════════════════════════════════════
