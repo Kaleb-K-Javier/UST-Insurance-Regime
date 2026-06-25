@@ -121,3 +121,124 @@ double pm_probe_arma(double a, double b) {
   arma::vec x = {a, b};
   return arma::sum(x);
 }
+
+// =====================================================================
+// BATCHED MATVEC (Ticket 024p Lever A)
+// Groups actions by install count m.  For each m-group computes
+//   Zbase_m = A_age * InstallGather_m(Vmat)   <- ONE sparse product
+// then per action in the group:
+//   Wa = Zbase_m * GaT_a                       <- cheap dense 4x4
+//   result += P_a % RemoveGather_k(Wa)
+// Reduces expensive sparse products from n_actions to n_distinct_m (<=5).
+// Old pm_op_build / pm_op_mv are left intact as the within-file oracle.
+// =====================================================================
+#include <map>
+
+struct ActionB {
+  std::vector<int> g_out;   // [C]: 0-based remove gather, -1 = infeasible
+  arma::mat        GaT;     // N_G x N_G (pre-transposed Gmat)
+  arma::mat        P_a;     // C x N_G  (CCP weight matrix)
+};
+
+struct MGroupB {
+  std::vector<int>     g_in;    // [C]: 0-based install gather, -1 = infeasible
+  std::vector<ActionB> actions; // all actions sharing this m value
+};
+
+struct MvOpB {
+  arma::sp_mat         A_age;
+  int                  C;
+  int                  N_G;
+  std::vector<MGroupB> groups;  // one entry per distinct install count m
+};
+
+// pm_op_build_b: same interface as pm_op_build; groups actions by m before storing.
+// [[Rcpp::export]]
+SEXP pm_op_build_b(
+  const arma::sp_mat&        A_age,
+  const Rcpp::IntegerMatrix& imap0,
+  const Rcpp::IntegerMatrix& rmap0,
+  const Rcpp::IntegerVector& k_vec,
+  const Rcpp::IntegerVector& m_vec,
+  const Rcpp::List&          GaT_list,
+  const Rcpp::List&          P_list,
+  int C, int N_G
+) {
+  int n_actions = k_vec.size();
+  MvOpB* op = new MvOpB();
+  op->A_age = A_age;
+  op->C     = C;
+  op->N_G   = N_G;
+
+  std::map<int, int> m_to_grp;  // install count m (0-based) -> index in op->groups
+
+  for (int a = 0; a < n_actions; a++) {
+    int m = m_vec[a];
+    int k = k_vec[a];
+
+    if (m_to_grp.find(m) == m_to_grp.end()) {
+      int grp_idx = (int)op->groups.size();
+      m_to_grp[m] = grp_idx;
+      MGroupB grp;
+      grp.g_in.resize(C);
+      for (int c = 0; c < C; c++) grp.g_in[c] = imap0(c, m);
+      op->groups.push_back(std::move(grp));
+    }
+    int grp_idx = m_to_grp.at(m);
+
+    ActionB act;
+    act.g_out.resize(C);
+    for (int c = 0; c < C; c++) act.g_out[c] = rmap0(c, k);
+    act.GaT = Rcpp::as<arma::mat>(GaT_list[a]);
+    act.P_a = Rcpp::as<arma::mat>(P_list[a]);
+    op->groups[grp_idx].actions.push_back(std::move(act));
+  }
+
+  return Rcpp::XPtr<MvOpB>(op, true);
+}
+
+// pm_op_mv_b: batched matvec — see algebra above.
+// Same calling convention as pm_op_mv: input/output are flat C*N_G vectors.
+// [[Rcpp::export]]
+Rcpp::NumericVector pm_op_mv_b(SEXP ptr_sexp, Rcpp::NumericVector x) {
+  Rcpp::XPtr<MvOpB> op(ptr_sexp);
+  const int C   = op->C;
+  const int N_G = op->N_G;
+
+  const arma::mat Vmat(x.begin(), C, N_G, false, true);
+
+  Rcpp::NumericVector ret(C * N_G);
+  arma::mat result(ret.begin(), C, N_G, false, true);
+  result.zeros();
+
+  // Workspace: allocated once per pm_op_mv_b call, reused across all groups/actions
+  arma::mat Ym(C, N_G), Zbase(C, N_G), Wa(C, N_G), out_g(C, N_G);
+
+  for (const MGroupB& grp : op->groups) {
+    // Install gather: Ym[c,:] = Vmat[g_in[c],:]; row zeroed when g_in[c] < 0
+    Ym.zeros();
+    for (int c = 0; c < C; c++) {
+      int src = grp.g_in[c];
+      if (src >= 0) Ym.row(c) = Vmat.row(src);
+    }
+
+    // ONE sparse product for all actions in this m-group
+    Zbase = op->A_age * Ym;
+
+    for (const ActionB& act : grp.actions) {
+      // Dense C x N_G matmul with pre-transposed 4x4 Gmat
+      Wa = Zbase * act.GaT;
+
+      // Remove gather: out_g[c,:] = Wa[g_out[c],:]; row zeroed when g_out[c] < 0
+      out_g.zeros();
+      for (int c = 0; c < C; c++) {
+        int src = act.g_out[c];
+        if (src >= 0) out_g.row(c) = Wa.row(src);
+      }
+
+      result += act.P_a % out_g;
+    }
+  }
+
+  return ret;
+}

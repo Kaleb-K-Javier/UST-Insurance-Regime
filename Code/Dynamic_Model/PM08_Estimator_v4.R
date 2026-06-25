@@ -27,6 +27,8 @@ cpp_path <- here::here("Code", "Helpers", "pm_matvec.cpp")
 if (!file.exists(cpp_path)) stop(sprintf("pm_matvec.cpp not found: %s", cpp_path))
 Rcpp::sourceCpp(cpp_path)
 cat("  pm_matvec.cpp sourced [OK]\n")
+USE_BATCHED_MV <- !nzchar(Sys.getenv("PM08_NO_BATCHED"))   # default ON; set PM08_NO_BATCHED=1 to use old op
+cat(sprintf("  USE_BATCHED_MV: %s\n", USE_BATCHED_MV))
 
 # === SECTION: LOAD INPUTS ===
 cat("\n=== SECTION: LOAD INPUTS ===\n")
@@ -324,15 +326,20 @@ rmap0 <- kernel$rmap - 1L; rmap0[is.na(rmap0)] <- -1L; storage.mode(rmap0) <- "i
 GaT_list <- vector("list", n_act)
 for (i in seq_len(n_act)) GaT_list[[i]] <- t(kernel$Gmat[[netbin(k_vec[i], m_vec[i])]])
 
-# build_cpp_op: build C++ op encoding M^e for env e at current P_envs[[e]]
+# build_cpp_op: build C++ op encoding M^e for env e at current P_envs[[e]].
+# Dispatches to batched (pm_op_build_b) or original (pm_op_build) via USE_BATCHED_MV.
 build_cpp_op <- function(p_e) {
   P_list <- vector("list", n_act)
   for (i in seq_len(n_act)) {
     ak <- act_keys[i]
-    # as.matrix guard: P_list must be base matrices for Rcpp::as<arma::mat> in pm_op_build.
+    # as.matrix guard: P_list must be base matrices for Rcpp::as<arma::mat>.
     P_list[[i]] <- as.matrix(if (ak %in% names(p_e)) p_e[[ak]] else matrix(0.0, C, N_G))
   }
-  pm_op_build(kernel$A_age, imap0, rmap0, k_vec, m_vec, GaT_list, P_list, C, N_G)
+  if (USE_BATCHED_MV) {
+    pm_op_build_b(kernel$A_age, imap0, rmap0, k_vec, m_vec, GaT_list, P_list, C, N_G)
+  } else {
+    pm_op_build(kernel$A_age, imap0, rmap0, k_vec, m_vec, GaT_list, P_list, C, N_G)
+  }
 }
 cat("  build_cpp_op() defined [OK]\n")
 
@@ -398,9 +405,10 @@ cat(sprintf("  Test env %d: %s (type=%s)\n", e_test, ev_test$env_key, ev_test$ty
 # B1: build C++ op (M^e) and P1 Minv for env e_test
 cat("\n--- B1: Build cpp_op and Minv_P1 ---\n")
 t0_b1    <- proc.time()["elapsed"]
-cpp_op_e <- build_cpp_op(P_envs[[e_test]])
-A_x_e    <- function(x) x - beta * as.numeric(pm_op_mv(cpp_op_e, x))
-Minv_e   <- build_minv_p1(P_envs[[e_test]])
+cpp_op_e  <- build_cpp_op(P_envs[[e_test]])
+mv_call_e <- if (USE_BATCHED_MV) pm_op_mv_b else pm_op_mv
+A_x_e     <- function(x) x - beta * as.numeric(mv_call_e(cpp_op_e, x))
+Minv_e    <- build_minv_p1(P_envs[[e_test]])
 cat(sprintf("  B1 built: %.2f sec\n", proc.time()["elapsed"] - t0_b1))
 
 # B2: compute R^e_const and rho^e_p (one vector per param), solve basis
@@ -709,9 +717,10 @@ build_basis_env <- function(e, p_e, V_const_warm = NULL, W_warm = NULL) {
   D_e   <- ev$D
   Pa_X  <- p_e[["X"]]
 
-  cpp_op <- build_cpp_op(p_e)
-  A_x    <- function(x) x - beta * as.numeric(pm_op_mv(cpp_op, x))
-  Minv   <- build_minv_p1(p_e)
+  cpp_op  <- build_cpp_op(p_e)
+  mv_call <- if (USE_BATCHED_MV) pm_op_mv_b else pm_op_mv
+  A_x     <- function(x) x - beta * as.numeric(mv_call(cpp_op, x))
+  Minv    <- build_minv_p1(p_e)
 
   # R_const
   R_const <- matrix(0.0, nrow = C, ncol = N_G)
@@ -932,24 +941,118 @@ profile_alpha_e <- function(e, th_struct_named, ce) {
   uniroot(score, lower = -50, upper = 50, f.lower = s_lo, f.upper = s_hi, tol = 1e-8)$root
 }
 
+# === SECTION: PSOCK CLUSTER (Ticket 024p Lever B) ===
+cat("\n=== SECTION: PSOCK CLUSTER ===\n")
+.pm08_nw_env <- as.integer(Sys.getenv("PM08_NWORKERS", unset = "0"))
+n_workers <- if (.pm08_nw_env > 0L) .pm08_nw_env else
+               min(8L, parallel::detectCores(logical = FALSE))
+est_gb <- n_workers * 1.5
+cat(sprintf("  PSOCK: %d workers, est %.1f GB\n", n_workers, est_gb))
+if (est_gb > 20) stop(sprintf("worker RAM estimate %.1f GB exceeds 20 GB ceiling", est_gb))
+
+cl <- parallel::makeCluster(n_workers, type = "PSOCK")
+on.exit(parallel::stopCluster(cl), add = TRUE, after = FALSE)
+
+.wk_kernel_path <- normalizePath(here::here("Code", "Helpers", "pm_bellman_kernel.R"))
+.wk_cpp_path    <- normalizePath(cpp_path)
+parallel::clusterExport(cl, c(".wk_kernel_path", ".wk_cpp_path", "USE_BATCHED_MV"),
+                         envir = .GlobalEnv)
+parallel::clusterEvalQ(cl, {
+  suppressPackageStartupMessages({ library(Matrix); library(data.table); library(Rcpp) })
+  source(.wk_kernel_path)
+  Rcpp::sourceCpp(.wk_cpp_path)
+  invisible(NULL)
+})
+cat("  Workers initialised (kernel + C++ loaded) [OK]\n")
+
+.static_vars <- c(
+  "beta", "C", "N_G", "N_SIDX", "n_act", "n_act_p1", "n_param",
+  "eps_prob", "use_alpha", "USE_BATCHED_MV",
+  "kernel", "ss",
+  "k_vec", "m_vec", "act_keys", "all_action_keys", "act_row",
+  "env_tbl", "param_struct", "param_alpha", "param_names", "ff_envs",
+  "imap0", "rmap0", "GaT_list",
+  "prem_ej", "haz_j", "feas_mask", "post_cm",
+  "ord", "A_perm", "uplo_flag",
+  "agg_keep",
+  "build_basis_env", "build_coeffs_env", "build_minv_p1", "build_cpp_op", "bicgstab_pc"
+)
+parallel::clusterExport(cl, .static_vars, envir = .GlobalEnv)
+cat(sprintf("  Static vars exported (%d names) [OK]\n", length(.static_vars)))
+
+# Round-robin chunk assignment: env w, w+n_wk, w+2*n_wk, ... -> worker w
+.n_wk <- min(n_workers, n_env)
+.env_chunks <- lapply(seq_len(.n_wk), function(w) seq(w, n_env, by = .n_wk))
+.env_chunks <- Filter(length, .env_chunks)
+cat(sprintf("  Env assignment (%d workers): sizes %s\n", .n_wk,
+            paste(sapply(.env_chunks, length), collapse = "+")))
+
+# === PM08_VALIDATE_B: in-process serial vs parallel basis check ===
+# Run with PM08_VALIDATE_B=1 (+ small PM08_TEST_NENV for speed).
+# Compares on identical in-memory P_envs so any deviation is a parallelism bug.
+if (nzchar(Sys.getenv("PM08_VALIDATE_B"))) {
+  cat("\n=== PM08_VALIDATE_B: serial vs parallel basis check ===\n")
+  cat(sprintf("  Comparing all %d available envs on identical P_envs (warm=NULL)\n", n_env))
+
+  cat("  Serial build...\n")
+  .t0_ser <- proc.time()["elapsed"]
+  .bases_ser <- vector("list", n_env)
+  for (.e in seq_len(n_env)) .bases_ser[[.e]] <- build_basis_env(.e, P_envs[[.e]])
+  cat(sprintf("  Serial: %.1f sec\n", proc.time()["elapsed"] - .t0_ser))
+
+  cat("  Parallel build (same P_envs, no warm-starts)...\n")
+  .val_chunks <- lapply(.env_chunks, function(es)
+    lapply(es, function(e) list(e = e, p_e = P_envs[[e]], vc_warm = NULL, w_warm = NULL)))
+  .t0_par <- proc.time()["elapsed"]
+  .val_res <- parallel::parLapply(cl, .val_chunks, function(wk_chunk) {
+    lapply(wk_chunk, function(item)
+      list(e = item$e, basis = build_basis_env(item$e, item$p_e)))
+  })
+  cat(sprintf("  Parallel: %.1f sec\n", proc.time()["elapsed"] - .t0_par))
+  .bases_par <- vector("list", n_env)
+  for (.wr in .val_res) for (.ir in .wr) .bases_par[[.ir$e]] <- .ir$basis
+
+  .max_dev <- 0.0
+  for (.e in seq_len(n_env)) {
+    .dv <- max(abs(.bases_ser[[.e]]$V_const - .bases_par[[.e]]$V_const))
+    .dw <- max(sapply(param_names, function(pn)
+      max(abs(.bases_ser[[.e]]$W_list[[pn]] - .bases_par[[.e]]$W_list[[pn]]))))
+    cat(sprintf("  env %d (%s): V_const dev=%.3e  W_list dev=%.3e\n",
+                .e, env_tbl$env_key[.e], .dv, .dw))
+    .max_dev <- max(.max_dev, .dv, .dw)
+  }
+  cat(sprintf("  Max dev across all envs: %.3e (tol 1e-8)\n", .max_dev))
+  stopifnot(.max_dev < 1e-8)
+  cat("  PM08_VALIDATE_B PASS\n\n")
+}
+
 t_npl_start <- proc.time()["elapsed"]
 
 for (npl_iter in seq_len(max_npl_iter)) {
   cat(sprintf("[%s] === NPL ITER %d ===\n", format(Sys.time(), "%H:%M:%S"), npl_iter))
 
-  # Build basis for all envs (serial; warm-start from previous iter)
-  cat(sprintf("  Building basis for %d envs...\n", n_env))
+  # Build basis for all envs — PSOCK parallel; warm-starts sliced per-worker to avoid broadcast
+  cat(sprintf("  Building basis for %d envs (parallel, %d workers)...\n", n_env, n_workers))
   t0_basis <- proc.time()["elapsed"]
+  .par_chunks <- lapply(.env_chunks, function(es) lapply(es, function(e) list(
+    e       = e,
+    p_e     = P_envs[[e]],
+    vc_warm = if (!is.null(bases_warm[[e]])) bases_warm[[e]]$V_const else NULL,
+    w_warm  = if (!is.null(bases_warm[[e]])) bases_warm[[e]]$W_list  else NULL
+  )))
+  .res_chunks <- parallel::parLapply(cl, .par_chunks, function(wk_chunk) {
+    lapply(wk_chunk, function(item) {
+      basis_e  <- build_basis_env(item$e, item$p_e, item$vc_warm, item$w_warm)
+      coeffs_e <- build_coeffs_env(item$e, basis_e)
+      list(e = item$e, basis = basis_e, coeffs = coeffs_e)
+    })
+  })
   bases_all  <- vector("list", n_env)
   coeffs_all <- vector("list", n_env)
-  for (e in seq_len(n_env)) {
-    Vc_warm <- if (!is.null(bases_warm[[e]])) bases_warm[[e]]$V_const else NULL
-    W_warm  <- if (!is.null(bases_warm[[e]])) bases_warm[[e]]$W_list  else NULL
-    bases_all[[e]]  <- build_basis_env(e, P_envs[[e]], Vc_warm, W_warm)
-    coeffs_all[[e]] <- build_coeffs_env(e, bases_all[[e]])
-  }
+  for (.wk in .res_chunks)
+    for (.it in .wk) { bases_all[[.it$e]] <- .it$basis; coeffs_all[[.it$e]] <- .it$coeffs }
   cat(sprintf("  Basis built for all envs: %.1f sec\n", proc.time()["elapsed"] - t0_basis))
-  bases_warm <- bases_all   # save for warm-start next iter
+  bases_warm <- bases_all
 
   # Inner optim: PROFILE alpha_g out per FF env (1-D FOC), optimize the 9 structural
   # params only. Concentrated LL; structural gradient is exact by the envelope theorem
