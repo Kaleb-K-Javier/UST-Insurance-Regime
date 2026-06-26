@@ -67,11 +67,23 @@ CAP_LABS   <- c("G1_lt9k", "G2_9to20k", "G3_20to30k", "G4_gt30k")
 # === STEP 1 — LOAD MATCHED FACILITY PANEL ===
 cat("=== STEP 1: LOAD ===\n")
 .hdr <- names(fread(file.path(ANALYSIS_DIR, FAC_FILE), nrows = 0L))
+cat("capacity-related cols in .hdr:\n")
+print(grep("capac|tank_change|total_cap", .hdr, value = TRUE, ignore.case = TRUE))
+.cap_chg <- if ("capacity_change"      %in% .hdr) "capacity_change"
+             else if ("capacity_change_year" %in% .hdr) "capacity_change_year"
+             else NULL
+.cap_lev <- if ("total_capacity_dec" %in% .hdr) "total_capacity_dec"
+             else if ("total_capacity"     %in% .hdr) "total_capacity"
+             else NULL
+if (is.null(.cap_chg) || is.null(.cap_lev))
+  stop("capacity_change / total_capacity_dec absent from matched_facs_birth_cem.csv — carry them\n through facility_panel in 02b (built at 02b:1135 / 02b:995) and rebuild the matched panel.")
+cat(sprintf("  resolved: cap_change='%s'  cap_level='%s'\n", .cap_chg, .cap_lev))
 keep <- intersect(c("panel_id","state","panel_year","texas_treated","cem_weight",
   "n_tanks_active","n_closures","any_closure","facility_exit",
   "n_closures_permanent","n_closures_replacement","net_tank_change","capacity_decreased",
   "make_model_fac","fac_vintage","total_capacity_reform","n_tanks_at_reform",
-  "has_gasoline","facility_id", MAND), .hdr)
+  "has_gasoline","facility_id", MAND,
+  .cap_chg, .cap_lev), .hdr)
 fy <- fread(file.path(ANALYSIS_DIR, FAC_FILE), select = keep,
             colClasses = list(character = c("panel_id","state","facility_id")))
 mand_have <- intersect(MAND, names(fy))
@@ -83,7 +95,27 @@ fy[, rel_year := as.integer(panel_year) - 1998L]
 fy[, closure_share := pmin(n_closures / pmax(n_tanks_active, 1L), 1)]
 if ("n_closures_permanent"   %in% names(fy)) fy[, perm_share := pmin(n_closures_permanent   / pmax(n_tanks_active,1L), 1)]
 if ("n_closures_replacement" %in% names(fy)) fy[, repl_share := pmin(n_closures_replacement / pmax(n_tanks_active,1L), 1)]
-fy[, downsize := as.integer(n_closures > 0L & facility_exit == 0L)]   # closed some, stayed open
+REL_THRESH <- 0.05   # 5% capacity band; flip to 0.10 here to retest
+setorder(fy, panel_id, panel_year)
+fy[, dC   := get(.cap_chg)]
+fy[, Ceoy := get(.cap_lev)]
+fy[, Clag := Ceoy - dC]
+fy[, rel_cap := fifelse(Clag > 0, dC / Clag, NA_real_)]
+fy[, contraction := as.integer(facility_exit == 0L & net_tank_change < 0L & Clag > 0 & !is.na(dC))]
+fy[, consolidate    := as.integer(contraction == 1L & abs(rel_cap) <= REL_THRESH)]
+fy[, downsize       := as.integer(contraction == 1L & rel_cap <  -REL_THRESH)]
+fy[, reconfigure_up := as.integer(contraction == 1L & rel_cap >   REL_THRESH)]
+fy[is.na(consolidate),    consolidate    := 0L]
+fy[is.na(downsize),       downsize       := 0L]
+fy[is.na(reconfigure_up), reconfigure_up := 0L]
+stopifnot(fy[, max(consolidate + downsize + reconfigure_up)] <= 1L)
+stopifnot(fy[facility_exit == 1L,   sum(consolidate + downsize + reconfigure_up)] == 0L)
+stopifnot(fy[net_tank_change >= 0L, sum(consolidate + downsize + reconfigure_up)] == 0L)
+stopifnot(fy[is.na(dC),             sum(consolidate + downsize + reconfigure_up)] == 0L)
+fy[, contraction := NULL]
+n_elig <- fy[facility_exit == 0L & net_tank_change < 0L & Clag > 0 & !is.na(dC), .N]
+cat(sprintf("  contraction partition: n_eligible=%d | consolidate=%.4f | downsize=%.4f | reconfigure_up=%.4f\n",
+            n_elig, mean(fy$consolidate), mean(fy$downsize), mean(fy$reconfigure_up)))
 if ("capacity_decreased" %in% names(fy)) fy[, cap_decrease := as.integer(capacity_decreased)]
 
 # Facility cell x year FE = portfolio-mix x year (tank cell_vintage_year_fe twin).
@@ -150,6 +182,7 @@ FE  <- "panel_id + cell_fac_year"
 # === STEP 3 — ROUTE A STATIC ATT (per margin) + ROUTE B ===
 cat("=== STEP 3: ROUTE A STATIC ATT ===\n")
 outs <- intersect(c("closure_share","any_closure","facility_exit","downsize",
+                    "consolidate","reconfigure_up",
                     "perm_share","repl_share","cap_decrease"), names(fy))
 att <- list(); mA_list <- list()
 for (yv in outs) {
@@ -169,7 +202,9 @@ cat(sprintf("  [B] %-14s did=%+.4f (SE %.4f, p %.3f)\n", "tau", eB, sB, ctB["did
 fwrite(rbindlist(att), file.path(OUTPUT_TABLES, "T_Facility_Portfolio_ATT.csv"))
 
 ATT_HEAD <- c(closure_share="Closure share", any_closure="Any closure", facility_exit="Facility exit",
-              downsize="Downsize", perm_share="Permanent", repl_share="Replacement", cap_decrease="Capacity cut")
+              downsize="Downsize (fewer tanks & gallons)", consolidate="Consolidate (fewer tanks, ~same gal)",
+              reconfigure_up="Reconfigure-up (fewer tanks, +gal)",
+              perm_share="Permanent", repl_share="Replacement", cap_decrease="Capacity cut")
 pub_etable(c(mA_list, list(B = mB)),
   file.path(OUTPUT_TABLES, "T_Facility_Portfolio_ATT_Pub.tex"),
   headers = c(unname(ATT_HEAD[names(mA_list)]), "Closure (impute)"),
@@ -181,7 +216,7 @@ cat("=== STEP 4: HTE (fuel / spatial / competition) x margins ===\n")
 ZLAB <- c(gas_station="Gas station", rural="Rural", low_pop="Low population",
           low_income="Low income", high_pov="High poverty", thin_market="Thin market")
 DIMS <- intersect(names(ZLAB), names(fy))
-MARG <- intersect(c("closure_share","facility_exit","downsize","repl_share"), names(fy))
+MARG <- intersect(c("closure_share","facility_exit","downsize","consolidate","repl_share"), names(fy))
 hte_bin <- function(yv, z) {
   d <- fy[!is.na(get(z))]
   if (z == "thin_market" && "gas_station" %in% names(d)) d <- d[gas_station == 1L]   # competition: gas retail only
@@ -212,13 +247,50 @@ cat_hte <- function(yv, fvar, ref) {
   feols(as.formula(sprintf("%s ~ i(%s, did_term, ref = '%s') + did_term %s | %s",
                            yv, fvar, ref, RHS, FE)), data = d, cluster = ~state)
 }
-SZM <- intersect(c("closure_share","facility_exit","downsize","repl_share","cap_decrease"), names(fy))
+SZM <- intersect(c("closure_share","facility_exit","downsize","consolidate","reconfigure_up","repl_share","cap_decrease"), names(fy))
 mS <- setNames(lapply(SZM, function(yv) cat_hte(yv, "cap_G", CAP_LABS[1])), SZM)
 pub_etable(mS, file.path(OUTPUT_TABLES, "T_Facility_SizeHTE_Pub.tex"),
   headers = unname(ATT_HEAD[names(mS)]),
   title   = "Size heterogeneity (DCM total-capacity bins) by margin (facility-year)",
   notes   = "Reform x Post = smallest bin (G1, total < 9k gal); cap_G rows = differential for larger bins (9-20k / 20-30k / 30k+ total gallons). Facility + portfolio-mix x year FE. SE clustered by state.")
 cat(sprintf("  size HTE: %d margins\n", length(mS)))
+
+# Machine-readable size HTE CSV: reuse mS (no refit).
+cat_hte_coefs <- function(model_list, dimension_label) {
+  ref_level <- if (dimension_label == "cap_G") CAP_LABS[1] else VREF
+  rows <- list()
+  for (nm in names(model_list)) {
+    m  <- model_list[[nm]]
+    ct <- as.data.table(coeftable(m), keep.rownames = "term")
+    if (nm == names(model_list)[1L])
+      cat(sprintf("  [%s dim=%s] head(term): %s\n", nm, dimension_label,
+                  paste(head(ct$term), collapse = " | ")))
+    ref_row  <- ct[term == "did_term"]
+    int_rows <- ct[grepl(paste0(dimension_label, "::"), term, fixed = TRUE)]
+    stopifnot(nrow(ref_row) == 1L)
+    lvls <- sub(":did_term$", "",
+                sub(paste0("^", dimension_label, "::"), "", int_rows$term))
+    out <- rbind(
+      data.table(margin = nm, dimension = dimension_label, level = ref_level,
+                 is_reference = TRUE,
+                 estimate  = ref_row$Estimate,
+                 std_error = ref_row[["Std. Error"]],
+                 p_value   = ref_row[["Pr(>|t|)"]]),
+      if (nrow(int_rows) > 0L)
+        data.table(margin = nm, dimension = dimension_label, level = lvls,
+                   is_reference = FALSE,
+                   estimate  = int_rows$Estimate,
+                   std_error = int_rows[["Std. Error"]],
+                   p_value   = int_rows[["Pr(>|t|)"]])
+    )
+    rows[[nm]] <- out
+  }
+  rbindlist(rows)
+}
+sz_csv <- cat_hte_coefs(mS, "cap_G")
+stopifnot(all(is.finite(sz_csv$estimate)))
+fwrite(sz_csv, file.path(OUTPUT_TABLES, "T_Facility_SizeHTE_byMargin.csv"))
+cat(sprintf("  T_Facility_SizeHTE_byMargin.csv: %d rows\n", nrow(sz_csv)))
 
 # === STEP 5b — VINTAGE-AT-TREATMENT HTE (who moves by age) x margins ===
 cat("=== STEP 5b: VINTAGE HTE (age at treatment) ===\n")
@@ -230,6 +302,10 @@ if ("vintage" %in% names(fy) && VREF %in% levels(fy$vintage)) {
     title   = "Vintage-at-treatment heterogeneity by margin (facility-year)",
     notes   = sprintf("Reform x Post = the %s cohort (reference); vintage rows = differential for older/younger cohorts. Facility + portfolio-mix x year FE. SE clustered by state.", VREF))
   cat(sprintf("  vintage HTE: %d margins (ref %s)\n", length(mV), VREF))
+  vint_csv <- cat_hte_coefs(mV, "vintage")
+  stopifnot(all(is.finite(vint_csv$estimate)))
+  fwrite(vint_csv, file.path(OUTPUT_TABLES, "T_Facility_VintageHTE_byMargin.csv"))
+  cat(sprintf("  T_Facility_VintageHTE_byMargin.csv: %d rows\n", nrow(vint_csv)))
 } else cat("  vintage var/ref absent -> vintage HTE skipped.\n")
 
 # === STEP 6 — CAUSAL EVENT STUDIES on closure / downsize / replace ===
@@ -267,10 +343,15 @@ es_one <- function(yv, ylab, stem) {
   cat(sprintf("  %-13s -> %s | PRE max|coef|=%.4f max|t|=%.2f\n", yv, stem, pt$max_abs_pre, pt$max_t))
   co
 }
+.n_reconf_post <- fes[texas_treated == 1L & rel_year >= 0L, sum(reconfigure_up)]
+cat(sprintf("  reconfigure_up treated post events (ES window): %d\n", .n_reconf_post))
 es_all <- rbindlist(list(
-  es_one("closure_share", "Effect on facility closure share", "Fig_ES_Facility_Portfolio"),
-  if ("downsize"   %in% names(fy)) es_one("downsize",   "Effect on facility downsize",    "Fig_ES_Facility_Downsize"),
-  if ("repl_share" %in% names(fy)) es_one("repl_share", "Effect on facility replacement", "Fig_ES_Facility_Replace")
+  es_one("closure_share",  "Effect on facility closure share",     "Fig_ES_Facility_Portfolio"),
+  if ("downsize"    %in% names(fy)) es_one("downsize",    "Effect on facility downsize",      "Fig_ES_Facility_Downsize"),
+  if ("consolidate" %in% names(fy)) es_one("consolidate", "Effect on facility consolidation", "Fig_ES_Facility_Consolidate"),
+  if ("repl_share"  %in% names(fy)) es_one("repl_share",  "Effect on facility replacement",   "Fig_ES_Facility_Replace"),
+  if ("reconfigure_up" %in% names(fy) && .n_reconf_post >= 200L)
+    es_one("reconfigure_up", "Effect on facility reconfigure-up",  "Fig_ES_Facility_ReconfigureUp")
 ), use.names = TRUE)
 fwrite(es_all, file.path(OUTPUT_TABLES, "T_Facility_ES_Coefs_byMargin.csv"))
 cat("\n=== 02j COMPLETE ===\n")

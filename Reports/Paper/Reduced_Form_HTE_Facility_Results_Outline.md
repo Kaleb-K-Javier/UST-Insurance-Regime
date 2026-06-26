@@ -16,7 +16,7 @@ server (GIS lookups are local-only); run those locally or copy the lookups over.
 
 ---
 
-## Results so far (first pass — cluster-robust by state)
+## Results (verified on server 2026-06-26 — cluster-robust by state)
 
 **Tank-level HTE (verified, 02g):**
 
@@ -31,26 +31,64 @@ The closure response is concentrated in **pure-gasoline facilities** — they cl
 the bite is on the cleanest motor-fuel-retail / steepest-premium-gradient cell, not on
 gasoline presence per se.
 
-**Facility-level causal portfolio (02j) — expanded, pending re-run.** Outcomes now cover the
-full portfolio: closure share, any-closure, **exit**, **downsize** (closed some, stayed open),
-permanent, replacement, **capacity cut**. HTE dimensions:
-- **Fuel:** gas-station (earlier run: did×Z = **+0.0190***, response is entirely in gas stations).
-- **Spatial (Census-2000, fixed at treatment, git-shipped in `Output/GIS/`):** rural, low population
-  density, low income, high poverty.
-- **Competition:** thin vs dense market = active neighbors within 1 mi at the 1998 reform
-  (pre-reform, non-endogenous), restricted to gas retail.
-- **Size (DCM capacity bins, total capacity 9k/20k/30k → G1–G4):** `did × cap_G` on every margin —
-  "which size of firm moves on which margin (exit / downsize / replace / capacity cut)."
+**Facility-level causal portfolio (02j) — verified.** Sample: **3.44M facility-years, 18
+states** (active-at-treatment via the $\hat Y^0$ join). Facility + portfolio-mix×year FE
+(`make_model_fac × year`) + $\hat Y^0$ control, cluster by state, no bootstrap.
 
-Fill from `T_Facility_Portfolio_ATT_Pub.tex`, `T_Facility_Portfolio_HTE_Pub.tex`,
-`T_Facility_SizeHTE_Pub.tex`, and the event-study figure.
+*Portfolio ATTs (all positive, significant):*
 
-**Event studies:** pooled tank ES (`Fig_ES_HTE_Pooled`) and facility ES
-(`Fig_ES_Facility_Portfolio`), both in the headline slide style.
+| margin | ATT | note |
+|---|---|---|
+| closure share | $+0.0162$ | Route A (mix×year FE). Route B imputation $\tau$ = $+0.0118$ — footnote the gap. |
+| facility exit | $+0.0125$ | |
+| downsize (fewer tanks **and** gallons) | $+0.0058$* | *provisional* — being repartitioned (Ticket 031) |
+| consolidate (fewer tanks, ~same gallons) | *pending re-run* | new margin: viable/modernization move |
+| reconfigure-up (fewer tanks, +gallons) | *pending re-run* | rare upgrade flag |
+| replacement (rare, 1-for-1) | $+0.0029$ | measured by `repl_share` |
+| capacity cut | $+0.0148$ | |
+
+\* The old `downsize` flag was tank-count-only and lumped together capacity-preserving
+*consolidation* with genuine *contraction*. Ticket 031 splits it by net gallons (relative-5%
+band): **downsize** = fewer tanks **and** fewer gallons; **consolidate** = fewer tanks, ~same
+gallons; **reconfigure-up** = fewer tanks, more gallons. The $+0.0058$ here is the old
+combined number — it will be replaced by separate consolidate / downsize ATTs after the 02j
+re-run. The DCM scoping shows consolidate and downsize are the two dominant heterogeneous
+actions; true 1-for-1 replacement is rare.
+
+**The sorting story (the payoff).** The reform pushed **marginal** facilities to **exit**
+and **viable** ones to **downsize / replace**:
+
+- **Size (DCM total-capacity bins, monotone):** G1 (<9k gal) **exit +6.6 pp / closure +6.3 pp**;
+  large bins ≈ 0 exit but **downsize** (G4 +1.2 pp) and **replace** (G4 +0.8 pp). Small exit,
+  large reinvest.
+- **Vintage (ref 1989–98):** pre-1975 **exit +2.5 pp**, no downsize/replace; 1989–98 **reinvest**
+  (downsize +1.7, replace +0.7), ≈ 0 exit. Old exit, young reinvest.
+- **Fuel ($did\times$gas):** gas stations drive every margin — closure +0.018, exit +0.007,
+  downsize +0.020, replace +0.009. The response is entirely in gas stations.
+- **Spatial (Census-2000, fixed at treatment):** rural & thin-market facilities **exit less**
+  (rural −0.42 pp, thin −1.6 pp on exit) = captive demand, stay open; low-income & high-poverty
+  facilities **exit more but downsize/replace less** = permanent exit, no reinvestment.
+
+*Numbers above fill from* `T_Facility_Portfolio_ATT_Pub.tex`, the `T_Facility_HTE_*_Pub.tex`
+*set, and `T_Facility_SizeHTE_Pub.tex` / `T_Facility_VintageHTE_Pub.tex`. The long-format size
+and vintage CSVs (`T_Facility_SizeHTE_byMargin.csv`, `T_Facility_VintageHTE_byMargin.csv`) are
+being added to 02j (Ticket 031) so every size/vintage × margin coefficient is machine-readable
+alongside `T_Facility_HTE_byMargin.csv`.*
+
+**Event studies.**
+
+- **Closure ES (causal):** flat pre-period, sharp break at the reform — clean parallel trends.
+  This is the design's identification check. `Fig_ES_Facility_Portfolio`.
+- **Replacement ES (causal):** moderate; pre-period acceptable. `Fig_ES_Facility_Replace`.
+- **Downsize ES (descriptive):** pre-trend is elevated (≈ post), so parallel trends is **not**
+  credible for this margin. The downsize *ATT* stays in the portfolio table (it shares closure's
+  static-DiD identification), but the downsize *figure* is presented as descriptive/suggestive
+  only, with an explicit pre-trend caveat. `Fig_ES_Facility_Downsize`.
+- Pooled tank ES: `Fig_ES_HTE_Pooled` (headline slide style).
 
 **Caveat.** Single treated state → cluster-robust SEs are the fast first pass. The
-pure-gasoline result is large and highly significant; any borderline coefficient needs the
-wild cluster bootstrap before it goes in a final table.
+pure-gasoline tank result and the size/vintage sorting gradients are large; any borderline
+coefficient needs the **wild cluster bootstrap** (deferred) before it goes in a final table.
 
 ## 0. Notation
 
