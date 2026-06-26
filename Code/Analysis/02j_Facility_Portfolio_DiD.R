@@ -69,12 +69,10 @@ cat("=== STEP 1: LOAD ===\n")
 .hdr <- names(fread(file.path(ANALYSIS_DIR, FAC_FILE), nrows = 0L))
 cat("capacity-related cols in .hdr:\n")
 print(grep("capac|tank_change|total_cap", .hdr, value = TRUE, ignore.case = TRUE))
-.cap_chg <- if ("capacity_change"      %in% .hdr) "capacity_change"
-             else if ("capacity_change_year" %in% .hdr) "capacity_change_year"
-             else NULL
-.cap_lev <- if ("total_capacity_dec" %in% .hdr) "total_capacity_dec"
-             else if ("total_capacity"     %in% .hdr) "total_capacity"
-             else NULL
+.cap_chg <- if ("capacity_change"      %in% .hdr) "capacity_change" else
+            if ("capacity_change_year" %in% .hdr) "capacity_change_year" else NULL
+.cap_lev <- if ("total_capacity_dec" %in% .hdr) "total_capacity_dec" else
+            if ("total_capacity"     %in% .hdr) "total_capacity" else NULL
 if (is.null(.cap_chg) || is.null(.cap_lev))
   stop("capacity_change / total_capacity_dec absent from matched_facs_birth_cem.csv — carry them\n through facility_panel in 02b (built at 02b:1135 / 02b:995) and rebuild the matched panel.")
 cat(sprintf("  resolved: cap_change='%s'  cap_level='%s'\n", .cap_chg, .cap_lev))
