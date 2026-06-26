@@ -100,9 +100,7 @@ print(stat[order(state, panel_year),
 
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 theme_pub <- function(base = 12) theme_minimal(base_size = base) +
-  theme(plot.title    = element_text(face = "bold", size = rel(1.05)),
-        plot.subtitle = element_text(color = "grey40", size = rel(0.82)),
-        plot.caption  = element_text(color = "grey45", size = rel(0.7), hjust = 0),
+  theme(plot.title = element_blank(), plot.subtitle = element_blank(), plot.caption = element_blank(),  # titles/notes live in the LaTeX caption
         legend.position  = "bottom", legend.title = element_blank(),
         panel.grid.minor = element_blank(),
         strip.text       = element_text(face = "bold"))
