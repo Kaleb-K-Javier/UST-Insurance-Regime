@@ -194,8 +194,7 @@ setnames(haz, "pred_elnet_full", "lambda")
 
 stopifnot(all(haz$lambda >= 0 & haz$lambda <= 1))
 stopifnot(!anyNA(haz$lambda))
-stopifnot(all(FIG_STATES %in% unique(haz$state)),
-          "Not all figure states present in hazard file")
+stopifnot("Not all figure states present in hazard file" = all(FIG_STATES %in% unique(haz$state)))
 
 cat("N by state:\n")
 print(haz[, .N, by = state][order(state)])
