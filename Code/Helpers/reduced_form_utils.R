@@ -304,3 +304,49 @@ run_wcb_cox <- function(model, data, param = "did_term",
     n_clusters = data.table::uniqueN(data[["state"]])
   )
 }
+
+# =============================================================================
+# === PUBLICATION TABLES + THREADING ===
+# =============================================================================
+
+# Enable multithreading for fixest + data.table (call once at script top).
+rf_use_threads <- function() {
+  nthr <- max(1L, parallel::detectCores())
+  fixest::setFixest_nthreads(nthr)
+  data.table::setDTthreads(nthr)
+  cat(sprintf("threads: fixest=%d data.table=%d\n",
+              fixest::getFixest_nthreads(), data.table::getDTthreads()))
+  invisible(nthr)
+}
+
+# Clean labels for publication tables (NO code/variable names appear in output).
+RF_DICT <- c(
+  did_term      = "Reform $\\times$ Post",
+  did_Z         = "\\quad $\\times$ subgroup ($=1$)",
+  closure_event = "Tank closure",
+  closure_share = "Closure share",
+  any_closure   = "Any closure",
+  facility_exit = "Facility exit",
+  perm_share    = "Permanent closure",
+  repl_share    = "Replacement",
+  tau           = "Closure share",
+  Yhat0         = "Predicted baseline",
+  panel_id      = "Facility",
+  tank_panel_id = "Tank",
+  cell_vintage_year_fe = "Cell $\\times$ year",
+  panel_year    = "Year",
+  state         = "State"
+)
+
+# Publication regression table via fixest::etable. Drops the nuisance controls
+# (mandate dummies, the predicted-baseline control) and all FE/coef code names
+# are renamed via RF_DICT. SEs are whatever each model carries (cluster ~ state).
+pub_etable <- function(models, file, headers = NULL, title = NULL, notes = NULL,
+                       drop = c("Yhat0", "mandate", "pct_sw", "avg_tank_age")) {
+  fixest::etable(models, tex = TRUE, file = file, replace = TRUE,
+                 dict = RF_DICT, drop = drop, headers = headers,
+                 title = title, notes = notes, fitstat = ~ n,
+                 digits = 4, digits.stats = 0,
+                 style.tex = fixest::style.tex("aer"), se.below = TRUE)
+  message(sprintf("  Written (pub): %s", file))
+}

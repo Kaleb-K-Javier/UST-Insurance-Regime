@@ -1,3 +1,56 @@
+# HANDOFF -- 2026-06-25 (Reduced-form HTE + facility causal-portfolio: server-ready; Sonnet to edit results into paper)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: RF HTE + facility portfolio DiD/ES — server-ready (2026-06-25, Opus)  [REDUCED-FORM workstream, separate from the structural 024q/r below]
+═══════════════════════════════════════════════════
+WHAT: tank-level HTE + facility-level causal-portfolio DiD/ES, mirroring the tank
+  headline identification. Full spec + equations + code (results-section style):
+  Reports/Paper/Reduced_Form_HTE_Facility_Results_Outline.md
+SCRIPTS (parse-clean; cluster-robust by STATE; NO bootstrap / NO HonestDiD; multithreaded):
+  Code/Helpers/reduced_form_utils.R  -- +rf_use_threads(), +RF_DICT, +pub_etable() (etable, clean labels)
+  Code/Analysis/02g_HTE_GIS_FirstPass.R          tank HTE (interaction, NOT split-sample)
+  Code/Analysis/02h_HTE_EventStudy_FirstPass.R   tank pooled ES (slide style -> Fig_ES_HTE_Pooled)
+  Code/Analysis/02k_Facility_CellFE_Crosswalk.R  exact tank cell x year baseline -> Yhat0/tau per fac-yr
+  Code/Analysis/02j_Facility_Portfolio_DiD.R     facility ATT (route A control + route B impute) + ES + HTE
+  (Code/Analysis/Archive/02i_*.R RETIRED -- matched_facs_birth_cem already exists; do not use)
+KEY DECISIONS:
+  - Facility cell-FE carried up EXACTLY: 02k Yhat0 = composition-weighted UNTREATED
+    cell(make_model_noage x cohort) x year closure rate; left-join on (panel_id, panel_year).
+  - HTE = INTERACTION only (did x Z), common FEs. Split-sample REMOVED (it re-estimates FEs per group).
+  - Population HTE = LOW population (bottom 25% tract pop vs upper 3 quartiles) = dem_lowpop.
+  - Competition (gis_02 neighbor counts) PARKED -- counts not trustworthy yet.
+  - Inference = analytic cluster ~ state. WCB is the proper 1-treated-cluster test -> re-enable for FINAL tables.
+RUN ON SERVER (frees local for the structural model; Z PATHS DO NOT EXIST ON SERVER):
+  Data/ is gitignored -> git carries CODE ONLY. Panels (matched_tanks_birth_cem.csv,
+  matched_facs_birth_cem.csv) are ALREADY on the server in-repo Data/Analysis.
+  DO NOT set UST_ANALYSIS_DIR on the server (defaults to here()/Data/Analysis = in-repo). Order:
+    Rscript --vanilla Code/Analysis/02k_Facility_CellFE_Crosswalk.R
+    Rscript --vanilla Code/Analysis/02j_Facility_Portfolio_DiD.R
+    Rscript --vanilla Code/Analysis/02g_HTE_GIS_FirstPass.R
+    Rscript --vanilla Code/Analysis/02h_HTE_EventStudy_FirstPass.R
+  GIS lookups (Data/Processed/GIS/gis_0{3,9}_*.csv) + coord-xwalk
+  (Data/Analysis/_facility_xwalk_coords.csv) are LOCAL-ONLY -> NOT on server. Scripts SKIP
+  rural/low-pop HTE gracefully when GIS absent; core ATT/ES/gas-station HTE still run. To add
+  rural/low-pop on the server, copy those 3 CSVs into the server repo (they are gitignored).
+OUTPUTS (Output/Tables + Output/Figures):
+  Publication etable: T_Facility_Portfolio_ATT_Pub.tex, T_Facility_Portfolio_HTE_Pub.tex, T_HTE_Tank_Pub.tex
+  Slide-style ES: Fig_ES_Facility_Portfolio.{pdf,png}, Fig_ES_HTE_Pooled.{pdf,png}
+  CSVs: T_Facility_Portfolio_ATT.csv/_HTE.csv/_ES_Coefs.csv, T_HTE_GIS_FirstPass.csv
+FOR THE SONNET EDITOR (editing handoff):
+  Task = integrate the publication tables + ES figures into the paper/slides.
+  - .tex are etable (clean labels via RF_DICT, no code var names). Wrap with econ-journal
+    captions (memory feedback_econ_journal_table_captions: short tbl-cap + \textit{Notes:} block).
+  - Fig_ES_* match the existing slide ES (Fig_ES_Full) style exactly.
+  - Write results prose against the equations in the outline doc; plain language
+    (feedback_writing_plain_language). FLAG any coefficient whose cluster-robust SE looks
+    fragile (single treated cluster) as needing WCB before a FINAL table.
+DEFERRED: wild cluster bootstrap (final inference), HonestDiD, route-B 45-degree figure,
+  interaction event study (group dynamics), GIS dims on the server.
+Resume: "Load CLAUDE.md. RF HTE + facility portfolio on main; run 02k->02j->02g->02h on the
+  server (no UST_ANALYSIS_DIR). Then Sonnet edits the pub tables + ES figs into the paper."
+═══════════════════════════════════════════════════
+
+
 # HANDOFF -- 2026-06-25 (First full portfolio fit DONE; FE-on settled; pooled-exposure+RB respec 024q validated; full pooled fit then CFs 024r next)
 
 ═══════════════════════════════════════════════════
@@ -30,7 +83,12 @@ NEXT (in order):
      $env:PM08_POOLED="1"; $env:PM08_MAXITER="25"; & $rs Code/Dynamic_Model/PM08_Estimator_v4.R
      then Remove-Item Env:PM08_POOLED,Env:PM08_MAXITER. ~30-40 min. Sanity: gamma_pool>0,
      gamma_RB sign (the RB increment), costs/phi steady vs two-gamma FE-on.
-  2. 024r = CFs on the pooled fit (gated on #1; architect pulls NPL_REFERENCE first, gate#8):
+  2. 024r = CFs on the pooled fit -- TICKET NOW WRITTEN (.claude/TICKETS/024r_cf_portfolio.md;
+     NPL_REFERENCE pulled, gate#8 done). Build the CF machinery NOW in parallel (theta-indep,
+     phi_G/psi*R-invariant) via the advanced builder runner .claude/run_builder_pro_api.ps1
+     (Sonnet --effort max, own Max budget pool, doesn't touch Opus): .\.claude\run_builder_pro_api.ps1
+     -TicketID 024r. 6 phases (solver+GATE CF-A -> welfare+CF-B -> CF3 -> CF1 -> CF4 -> deliverables).
+     Final CF RUN gated on the converged pooled/revenue fit. Spec detail (gated on #1, gate#8):
      solve_equilibrium(theta,policy) reusing kernel+P1+BiCGSTAB; baseline re-solved from theta.
      CF1 TX-as-FF: FULL CONTRACT swap (premium->control flat fee AND D->control D; data
        can't move just one) + knob decomp CF1a(contract only, keep gamma_RB) / CF1b(+1[RB]->0).
