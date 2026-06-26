@@ -77,7 +77,7 @@ save_fig <- function(p, name, w = 8, h = 5) {
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 SEV_STATES <- c("CO", "NM", "PA", "TN")   # severity pool
-FIG_STATES <- c("CO", "LA", "NM", "PA", "TN")  # figure states (have lambda)
+FIG_STATES <- c("CO", "LA", "NM", "TN")  # figure states (PA dropped: degenerate 01n hazard)
 D_NM       <- 10000  # NM is GROSS state; net = max(C - D_NM, 0)
 
 
@@ -203,9 +203,9 @@ print(haz[, .N, by = state][order(state)])
 # =============================================================================
 cat("=== STEP 4: SNAPSHOT + FAIR PREMIUM ===\n")
 # =============================================================================
-# One row per facility: latest active panel year <= 2020.
-
-snap <- haz[panel_year <= 2020][, .SD[which.max(panel_year)], by = panel_id]
+# Single-year cross-section: facilities active in SNAP_YEAR (consistent across states).
+SNAP_YEAR <- 2005L
+snap <- haz[panel_year == SNAP_YEAR]
 cat(sprintf("Snapshot: %d facilities, %d states\n",
             nrow(snap), uniqueN(snap$state)))
 
