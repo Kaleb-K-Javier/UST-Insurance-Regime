@@ -65,7 +65,7 @@ XWALK_PATH   <- Sys.getenv("UST_XWALK_PATH",
 ES_WIN  <- c(-13L, 22L)   # event-time span (matches the slide's -14..22 axis)
 MANDATES <- c("mandate_release_det", "mandate_spill_overfill", "mandate_integrity")
 
-stopifnot(file.exists(file.path(ANALYSIS_DIR, PANEL_FILE)), file.exists(XWALK_PATH))
+stopifnot(file.exists(file.path(ANALYSIS_DIR, PANEL_FILE)))   # pooled ES needs only the panel
 dir.create(OUTPUT_FIGURES, recursive = TRUE, showWarnings = FALSE)
 
 # === STEP 1 — SAMPLE (same builder + headline mandate controls) ===
@@ -88,25 +88,9 @@ cat(sprintf("  sample (rel_year in [%d,%d]): %s tank-years | %s facilities | man
             ES_WIN[1], ES_WIN[2], fmt_n(nrow(data_active)), fmt_n(uniqueN(data_active$panel_id)),
             if (length(mand_have)) paste(mand_have, collapse = ",") else "NONE (absent)"))
 
-# === STEP 2 — FACILITY COVARIATES (gas station, fuel, rural) ===
-cat("=== STEP 2: COVARIATES ===\n")
-xw <- fread(XWALK_PATH, select = c("panel_id", "facility_id", "state"),
-            colClasses = list(character = c("panel_id", "facility_id", "state")))
-g_ur <- fread(file.path(GIS_DIR, "gis_03_urban_rural.csv"),
-              select = c("facility_id", "state", "ruca_primary"),
-              colClasses = list(character = c("facility_id", "state")))
-fac  <- merge(unique(xw), g_ur, by = c("facility_id", "state"), all.x = TRUE)
-fac[, geo_rural := as.integer(ruca_primary >= 7)]
-fac_cov <- fac[, .(panel_id, geo_rural)]
-if (has_fuel) {
-  fuel_fac <- data_active[, .(
-    gas_station  = as.integer(any(mm_fuel == "Gasoline-Only", na.rm = TRUE)),
-    fuel_gasonly = as.integer(all(mm_fuel == "Gasoline-Only", na.rm = TRUE) &
-                              any(mm_fuel == "Gasoline-Only", na.rm = TRUE))
-  ), by = panel_id]
-  fac_cov <- merge(fac_cov, fuel_fac, by = "panel_id", all = TRUE)
-}
-data_active <- merge(data_active, fac_cov, by = "panel_id", all.x = TRUE)
+# (No covariate step: this script produces only the POOLED event study, which
+#  uses the panel alone. Group dynamics are an interaction-ES follow-up; GIS
+#  covariates are local-only and not needed here.)
 
 # === STEP 3 — EVENT-STUDY FITTER (headline spec) ===
 cat("=== STEP 3: EVENT STUDIES ===\n")
