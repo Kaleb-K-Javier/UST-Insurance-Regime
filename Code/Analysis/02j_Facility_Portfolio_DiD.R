@@ -20,7 +20,7 @@
 #
 # HTE (interaction only, common FEs):
 #   (a) fuel/geo: gas_station, low-population (bottom pop quartile), rural.
-#   (b) SIZE: did x capacity bin, DCM-aligned (mean tank capacity at 9k/20k/30k =
+#   (b) SIZE: did x capacity bin, DCM-aligned (TOTAL facility capacity at 9k/20k/30k =
 #       G1..G4), on each behavior margin -> "what size of firm moves on which margin".
 #
 # Inference: analytic cluster-robust by state (G=18). Bootstrap/HonestDiD deferred.
@@ -87,9 +87,9 @@ if ("capacity_decreased" %in% names(fy)) fy[, cap_decrease := as.integer(capacit
 
 # Facility cell x year FE = portfolio-mix x year (tank cell_vintage_year_fe twin).
 fy[, cell_fac_year := .GRP, by = .(make_model_fac, panel_year)]
-# DCM-aligned size: mean tank capacity (reform) binned at the structural G breaks.
-fy[, mean_tank_cap := total_capacity_reform / pmax(n_tanks_at_reform, 1L)]
-fy[, cap_G := factor(cut(mean_tank_cap, CAP_BREAKS, labels = CAP_LABS), levels = CAP_LABS)]
+# DCM-aligned size: TOTAL facility capacity (reform) at the structural G breaks --
+# the DCM capacity state is built on total portfolio capacity, not per-tank.
+fy[, cap_G := factor(cut(total_capacity_reform, CAP_BREAKS, labels = CAP_LABS), levels = CAP_LABS)]
 cat(sprintf("  facility-years: %s | facilities: %s | states: %d | TX share: %.3f\n",
             fmt_n(nrow(fy)), fmt_n(uniqueN(fy$panel_id)), uniqueN(fy$state), mean(fy$texas_treated)))
 cat(sprintf("  make_model_fac mixes: %d | cap_G dist: %s\n",
@@ -201,7 +201,7 @@ fwrite(rbindlist(size_rows), file.path(OUTPUT_TABLES, "T_Facility_SizeHTE.csv"))
 pub_etable(mS_list, file.path(OUTPUT_TABLES, "T_Facility_SizeHTE_Pub.tex"),
   headers = unname(ATT_HEAD[names(mS_list)]),
   title   = "Size heterogeneity (DCM capacity bins) by behavior margin (facility-year)",
-  notes   = "Each column is a portfolio margin. 'Reform x Post' is the effect for the smallest capacity bin (G1, mean tank < 9k gal); the cap_G interactions are the differential for larger bins (G2 9-20k, G3 20-30k, G4 30k+). Facility + portfolio-mix x year FE. SE clustered by state.")
+  notes   = "Each column is a portfolio margin. 'Reform x Post' is the effect for the smallest total-capacity bin (G1, under 9k gal); the cap_G interactions are the differential for larger bins (G2 9-20k, G3 20-30k, G4 30k+ total gallons). Facility + portfolio-mix x year FE. SE clustered by state.")
 
 # === STEP 6 — ROUTE A EVENT STUDY (slide style) ===
 cat("=== STEP 6: EVENT STUDY ===\n")
