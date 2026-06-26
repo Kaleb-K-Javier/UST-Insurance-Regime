@@ -8,6 +8,50 @@ the facility-level block carries the *same* identification up to the portfolio.
 cluster bootstrap (proper one-treated-cluster inference) and HonestDiD sensitivity
 are **deferred** for speed — re-enable for final tables.
 
+**Run.** All four scripts run on the server (ucbare2) off the in-repo panels — no Z paths.
+Sample (headline birth-CEM panel): **9,761,982 tank-years | 117,250 facilities | 18 states.**
+The RCRA mandate dummies are absorbed by the cell×year FE (fixest drops them for
+collinearity) — they do not move the estimates. Rural / low-population HTE skip on the
+server (GIS lookups are local-only); run those locally or copy the lookups over.
+
+---
+
+## Results so far (first pass — cluster-robust by state)
+
+**Tank-level HTE (verified, 02g):**
+
+| cut | baseline ATT ($Z=0$) | differential $\beta_Z$ | $p$ |
+|---|---|---|---|
+| Gas station (any gasoline tank) | $+0.0197$ (non-gas) | $-0.0051$ | 0.22 |
+| Pure gasoline (all tanks gasoline) | $+0.0068$ (mixed) | $\mathbf{+0.0431}$ | $<0.001$ |
+
+The closure response is concentrated in **pure-gasoline facilities** — they close about
+**+4.3 pp more** than mixed-fuel facilities (pure-gasoline total ≈ +5.0 pp). "Any gasoline"
+(84% of facilities) does **not** separate the response. That is the gas-vs-non-gas result:
+the bite is on the cleanest motor-fuel-retail / steepest-premium-gradient cell, not on
+gasoline presence per se.
+
+**Facility-level causal portfolio (02j) — expanded, pending re-run.** Outcomes now cover the
+full portfolio: closure share, any-closure, **exit**, **downsize** (closed some, stayed open),
+permanent, replacement, **capacity cut**. HTE dimensions:
+- **Fuel:** gas-station (earlier run: did×Z = **+0.0190***, response is entirely in gas stations).
+- **Spatial (Census-2000, fixed at treatment, git-shipped in `Output/GIS/`):** rural, low population
+  density, low income, high poverty.
+- **Competition:** thin vs dense market = active neighbors within 1 mi at the 1998 reform
+  (pre-reform, non-endogenous), restricted to gas retail.
+- **Size (DCM capacity bins, total capacity 9k/20k/30k → G1–G4):** `did × cap_G` on every margin —
+  "which size of firm moves on which margin (exit / downsize / replace / capacity cut)."
+
+Fill from `T_Facility_Portfolio_ATT_Pub.tex`, `T_Facility_Portfolio_HTE_Pub.tex`,
+`T_Facility_SizeHTE_Pub.tex`, and the event-study figure.
+
+**Event studies:** pooled tank ES (`Fig_ES_HTE_Pooled`) and facility ES
+(`Fig_ES_Facility_Portfolio`), both in the headline slide style.
+
+**Caveat.** Single treated state → cluster-robust SEs are the fast first pass. The
+pure-gasoline result is large and highly significant; any borderline coefficient needs the
+wild cluster bootstrap before it goes in a final table.
+
 ## 0. Notation
 
 | symbol | meaning |
@@ -129,13 +173,17 @@ $$
 $$
 (control $\tau\approx0$ by construction, so $\beta$ is the TX-post jump = ATT.)
 
+FE is the **portfolio-mix × year** fixed effect `cell_fac_year = make_model_fac × panel_year`
+(47 mixes × years) — the facility twin of the tank `cell_vintage_year_fe` — *plus* `Yhat0` kept
+as the composition-weighted baseline control. So $\lambda_t$ above is really $\delta^{\text{fac}}_{m(f),t}$
+(mix × year).
+
 ```r
 # Code/Analysis/02j_Facility_Portfolio_DiD.R   (RHS = "+ Yhat0 + <mandates>")
-# Route A:
-feols(closure_share ~ did_term + Yhat0 + any_mandate_release_det +
-        any_mandate_spill_overfill + any_mandate_integrity |
-        panel_id + panel_year, data = fy, cluster = ~state)
-# Route B:
+# Route A — facility mix x year FE + Yhat0 control:
+feols(closure_share ~ did_term + Yhat0 + <mandates> | panel_id + cell_fac_year,
+      data = fy, cluster = ~state)
+# Route B — imputation (tau already nets the composition baseline):
 feols(tau ~ did_term | panel_id + panel_year, data = fy, cluster = ~state)
 ```
 
