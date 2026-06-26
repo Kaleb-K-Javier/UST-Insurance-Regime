@@ -50,12 +50,13 @@ source(here::here("Code", "Helpers", "reduced_form_utils.R"))
 rf_use_threads()
 ANALYSIS_DIR <- Sys.getenv("UST_ANALYSIS_DIR", here::here("Data", "Analysis"))
 FAC_FILE     <- Sys.getenv("UST_FAC_FILE", "matched_facs_birth_cem.csv")
-GIS_DIR      <- here::here("Data", "Processed", "GIS")
-XW_PATH      <- here::here("Data", "Analysis", "facility_cellfe_xwalk.csv")  # 02k output
+XW_PATH   <- here::here("Data", "Analysis", "facility_cellfe_xwalk.csv")  # 02k output
+GIS_HTE   <- here::here("Output", "GIS", "gis_hte_vars.csv")             # git-tracked, panel_id
+EDGES     <- here::here("Output", "GIS", "gis_neighbor_edges.parquet")   # git-tracked (force-added)
 stopifnot(file.exists(file.path(ANALYSIS_DIR, FAC_FILE)))
 stopifnot("Run 02k first (exact tank cell-FE crosswalk)" = file.exists(XW_PATH))
-HAS_GIS <- file.exists(file.path(GIS_DIR, "gis_03_urban_rural.csv")) &&
-           file.exists(file.path(GIS_DIR, "gis_09_demographics.csv"))
+HAS_GIS   <- file.exists(GIS_HTE)                                        # census splits (Census 2000)
+HAS_EDGES <- file.exists(EDGES) && requireNamespace("arrow", quietly = TRUE)  # competition edges
 dir.create(OUTPUT_FIGURES, recursive = TRUE, showWarnings = FALSE)
 BOOT_B <- as.integer(Sys.getenv("UST_BOOT_B", "1999"))   # unused (bootstrap deferred)
 ES_WIN <- c(-13L, 22L)
@@ -107,21 +108,39 @@ cat(sprintf("  Yhat0 matched %.1f%%\n", 100 * mean(!is.na(fy$Yhat0))))
 fy <- fy[!is.na(Yhat0)]
 
 # === STEP 2 — COVARIATES (gas-station from panel; rural/low-pop from GIS if present) ===
-cat("=== STEP 2: COVARIATES ===\n")
+cat("=== STEP 2: COVARIATES (gas-station + spatial HTE, all panel_id-keyed) ===\n")
 if ("has_gasoline" %in% names(fy)) fy[, gas_station := has_gasoline]
+
+# Spatial HTE vars FIXED AT TREATMENT (Census 2000), git-tracked in Output/GIS/,
+# keyed on panel_id -> reach the server via git pull (no GIS toolchain needed).
 if (HAS_GIS) {
-  g_ur <- fread(file.path(GIS_DIR, "gis_03_urban_rural.csv"),
-                select = c("facility_id","state","ruca_primary"),
-                colClasses = list(character = c("facility_id","state")))
-  g_dm <- fread(file.path(GIS_DIR, "gis_09_demographics.csv"),
-                select = c("facility_id","state","tract_pop"),
-                colClasses = list(character = c("facility_id","state")))
-  gis <- merge(g_ur, g_dm, by = c("facility_id","state"), all = TRUE)
-  gis[, geo_rural  := as.integer(ruca_primary >= 7)]
-  gis[, dem_lowpop := as.integer(tract_pop <= quantile(tract_pop, 0.25, na.rm = TRUE))]
-  fy <- merge(fy, gis[, .(facility_id, state, geo_rural, dem_lowpop)],
-              by = c("facility_id","state"), all.x = TRUE)
-} else cat("  GIS lookups absent -> rural / low-population HTE skipped.\n")
+  gv <- fread(GIS_HTE, select = c("panel_id","rural_2000","low_pop_density",
+              "med_hh_income_2000","pct_poverty_2000"),
+              colClasses = list(character = "panel_id"))
+  fy <- merge(fy, gv, by = "panel_id", all.x = TRUE)
+  fy[, rural      := rural_2000]
+  fy[, low_pop    := low_pop_density]
+  fy[, low_income := as.integer(med_hh_income_2000 < median(med_hh_income_2000, na.rm = TRUE))]
+  fy[, high_pov   := as.integer(pct_poverty_2000   > median(pct_poverty_2000,   na.rm = TRUE))]
+  cat(sprintf("  census HTE matched: rural %.1f%% | low_pop %.1f%% | income %.1f%%\n",
+              100*mean(!is.na(fy$rural)), 100*mean(!is.na(fy$low_pop)), 100*mean(!is.na(fy$low_income))))
+} else cat("  gis_hte_vars.csv absent -> census spatial HTE skipped.\n")
+
+# Competition: PRE-REFORM (fixed) count of active neighbors within 1 mi at 1998.
+# Fixed at treatment -> a clean, non-endogenous split (matches the census-vars logic),
+# and far cheaper than the time-varying cross. Restricted to gas retail in Step 4.
+if (HAS_EDGES) {
+  ed <- as.data.table(arrow::read_parquet(EDGES, col_select = c("panel_id_i","panel_id_j")))
+  active98 <- fy[panel_year == 1998L & n_tanks_active > 0L, unique(panel_id)]
+  el  <- rbind(ed[, .(p = panel_id_i, nb = panel_id_j)], ed[, .(p = panel_id_j, nb = panel_id_i)])
+  nnb <- el[nb %in% active98, .(n_neigh98 = .N), by = p]
+  fy  <- merge(fy, nnb, by.x = "panel_id", by.y = "p", all.x = TRUE)
+  fy[is.na(n_neigh98), n_neigh98 := 0L]
+  thr <- fy[gas_station == 1L, median(n_neigh98, na.rm = TRUE)]
+  fy[, thin_market := as.integer(n_neigh98 <= thr)]
+  cat(sprintf("  competition: %s edges | median active-98 neighbors (gas) = %.0f\n",
+              fmt_n(nrow(ed)), thr))
+} else cat("  edges parquet / arrow absent -> competition HTE skipped.\n")
 
 # Control block: Yhat0 (KEPT) + mandate dummies. FE = facility + portfolio-mix x year.
 RHS <- paste("+", paste(c("Yhat0", mand_have), collapse = " + "))
@@ -157,11 +176,14 @@ pub_etable(c(mA_list, list(B = mB)),
   notes   = "Facility-year sample. Columns 1-k: two-way (facility, portfolio-mix x year) fixed-effects estimator controlling for the composition-weighted baseline. Final column: imputation (predicted-rate) estimator on the baseline-netted outcome. SE clustered by state (18 clusters).")
 
 # === STEP 4 — HTE (interaction did_Z, common FEs) ===
-cat("=== STEP 4: HTE (interaction) ===\n")
-ZLAB <- c(gas_station = "Gas station", dem_lowpop = "Low population", geo_rural = "Rural")
+cat("=== STEP 4: HTE (interaction; fuel / spatial / competition) ===\n")
+ZLAB <- c(gas_station = "Gas station", rural = "Rural", low_pop = "Low population",
+          low_income = "Low income", high_pov = "High poverty", thin_market = "Thin market")
 hte <- list(); mH_list <- list()
-for (z in intersect(c("gas_station","dem_lowpop","geo_rural"), names(fy))) {
-  d <- fy[!is.na(get(z))]; d[, did_Z := did_term * get(z)]
+for (z in intersect(c("gas_station","rural","low_pop","low_income","high_pov","thin_market"), names(fy))) {
+  d <- fy[!is.na(get(z))]
+  if (z == "thin_market" && "gas_station" %in% names(d)) d <- d[gas_station == 1L]  # competition: gas retail only
+  d[, did_Z := did_term * get(z)]
   m  <- feols(as.formula(sprintf("closure_share ~ did_term + did_Z %s | %s", RHS, FE)), data = d, cluster = ~state)
   mH_list[[z]] <- m
   ct <- coeftable(m); eZ <- ct["did_Z","Estimate"]; sZ <- ct["did_Z","Std. Error"]
