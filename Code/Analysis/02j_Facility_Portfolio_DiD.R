@@ -70,7 +70,7 @@ cat("=== STEP 1: LOAD ===\n")
 keep <- intersect(c("panel_id","state","panel_year","texas_treated","cem_weight",
   "n_tanks_active","n_closures","any_closure","facility_exit",
   "n_closures_permanent","n_closures_replacement","net_tank_change","capacity_decreased",
-  "make_model_fac","total_capacity_reform","n_tanks_at_reform",
+  "make_model_fac","fac_vintage","total_capacity_reform","n_tanks_at_reform",
   "has_gasoline","facility_id", MAND), .hdr)
 fy <- fread(file.path(ANALYSIS_DIR, FAC_FILE), select = keep,
             colClasses = list(character = c("panel_id","state","facility_id")))
@@ -91,6 +91,7 @@ fy[, cell_fac_year := .GRP, by = .(make_model_fac, panel_year)]
 # DCM-aligned size: TOTAL facility capacity (reform) at the structural G breaks --
 # the DCM capacity state is built on total portfolio capacity, not per-tank.
 fy[, cap_G := factor(cut(total_capacity_reform, CAP_BREAKS, labels = CAP_LABS), levels = CAP_LABS)]
+if ("fac_vintage" %in% names(fy)) fy[, vintage := factor(fac_vintage)]   # age/cohort at treatment
 cat(sprintf("  facility-years: %s | facilities: %s | states: %d | TX share: %.3f\n",
             fmt_n(nrow(fy)), fmt_n(uniqueN(fy$panel_id)), uniqueN(fy$state), mean(fy$texas_treated)))
 cat(sprintf("  make_model_fac mixes: %d | cap_G dist: %s\n",
@@ -175,88 +176,101 @@ pub_etable(c(mA_list, list(B = mB)),
   title   = "Effect of the 1998 Texas reform on facility portfolio actions",
   notes   = "Facility-year sample. Columns 1-k: two-way (facility, portfolio-mix x year) fixed-effects estimator controlling for the composition-weighted baseline. Final column: imputation (predicted-rate) estimator on the baseline-netted outcome. SE clustered by state (18 clusters).")
 
-# === STEP 4 — HTE (interaction did_Z, common FEs) ===
-cat("=== STEP 4: HTE (interaction; fuel / spatial / competition) ===\n")
-ZLAB <- c(gas_station = "Gas station", rural = "Rural", low_pop = "Low population",
-          low_income = "Low income", high_pov = "High poverty", thin_market = "Thin market")
-hte <- list(); mH_list <- list()
-for (z in intersect(c("gas_station","rural","low_pop","low_income","high_pov","thin_market"), names(fy))) {
+# === STEP 4 — HTE (interaction) across DIMS x KEY MARGINS ===
+cat("=== STEP 4: HTE (fuel / spatial / competition) x margins ===\n")
+ZLAB <- c(gas_station="Gas station", rural="Rural", low_pop="Low population",
+          low_income="Low income", high_pov="High poverty", thin_market="Thin market")
+DIMS <- intersect(names(ZLAB), names(fy))
+MARG <- intersect(c("closure_share","facility_exit","downsize","repl_share"), names(fy))
+hte_bin <- function(yv, z) {
   d <- fy[!is.na(get(z))]
-  if (z == "thin_market" && "gas_station" %in% names(d)) d <- d[gas_station == 1L]  # competition: gas retail only
+  if (z == "thin_market" && "gas_station" %in% names(d)) d <- d[gas_station == 1L]   # competition: gas retail only
   d[, did_Z := did_term * get(z)]
-  m  <- feols(as.formula(sprintf("closure_share ~ did_term + did_Z %s | %s", RHS, FE)), data = d, cluster = ~state)
-  mH_list[[z]] <- m
-  ct <- coeftable(m); eZ <- ct["did_Z","Estimate"]; sZ <- ct["did_Z","Std. Error"]
-  hte[[z]] <- data.table(dimension = z, did_term = ct["did_term","Estimate"], did_Z = eZ,
-                         se = sZ, ci_lo = eZ-1.96*sZ, ci_hi = eZ+1.96*sZ, p = ct["did_Z","Pr(>|t|)"])
-  cat(sprintf("  %-12s did=%+.4f  didxZ=%+.4f (p %.3f)\n", z, ct["did_term","Estimate"], eZ, ct["did_Z","Pr(>|t|)"]))
+  feols(as.formula(sprintf("%s ~ did_term + did_Z %s | %s", yv, RHS, FE)), data = d, cluster = ~state)
 }
-if (length(hte)) {
-  fwrite(rbindlist(hte), file.path(OUTPUT_TABLES, "T_Facility_Portfolio_HTE.csv"))
-  pub_etable(mH_list, file.path(OUTPUT_TABLES, "T_Facility_Portfolio_HTE_Pub.tex"),
-    headers = unname(ZLAB[names(mH_list)]),
-    title   = "Heterogeneous portfolio response (facility-year): fuel / geography",
-    notes   = "Dependent variable: facility closure share. Reform x Post and its interaction with the subgroup. Facility + portfolio-mix x year FE; composition-weighted baseline control. SE clustered by state.")
+hte_rows <- list(); mH <- list()
+for (yv in MARG) for (z in DIMS) {
+  m <- hte_bin(yv, z); mH[[paste(yv, z)]] <- m; ct <- coeftable(m)
+  hte_rows[[paste(yv, z)]] <- data.table(margin = yv, dimension = z,
+    did_term = ct["did_term","Estimate"], did_Z = ct["did_Z","Estimate"],
+    se_Z = ct["did_Z","Std. Error"], p_Z = ct["did_Z","Pr(>|t|)"])
+  cat(sprintf("  %-13s x %-11s didxZ=%+.4f (p %.3f)\n", yv, z, ct["did_Z","Estimate"], ct["did_Z","Pr(>|t|)"]))
+}
+fwrite(rbindlist(hte_rows), file.path(OUTPUT_TABLES, "T_Facility_HTE_byMargin.csv"))
+for (yv in intersect(c("closure_share","facility_exit","repl_share"), MARG)) {
+  ms <- mH[paste(yv, DIMS)]; names(ms) <- DIMS
+  pub_etable(ms, file.path(OUTPUT_TABLES, sprintf("T_Facility_HTE_%s_Pub.tex", yv)),
+    headers = unname(ZLAB[DIMS]),
+    title   = sprintf("Heterogeneous response (facility-year): %s", ATT_HEAD[[yv]]),
+    notes   = "Reform x Post and its interaction with each subgroup (one regression per column). Facility + portfolio-mix x year FE; composition-weighted baseline control. Thin-market column = gas retail only. SE clustered by state.")
 }
 
-# === STEP 5 — SIZE HTE (did x capacity bin) ON EACH BEHAVIOR MARGIN ===
-cat("=== STEP 5: SIZE HTE (DCM capacity bins) ===\n")
-size_margins <- intersect(c("closure_share","facility_exit","downsize","repl_share","cap_decrease"), names(fy))
-ds   <- fy[!is.na(cap_G)]
-size_rows <- list(); mS_list <- list()
-for (yv in size_margins) {
-  m  <- feols(as.formula(sprintf("%s ~ i(cap_G, did_term, ref = '%s') + did_term %s | %s",
-                                  yv, CAP_LABS[1], RHS, FE)), data = ds, cluster = ~state)
-  mS_list[[yv]] <- m
-  ct <- as.data.table(coeftable(m), keep.rownames = "term")
-  base <- ct[term == "did_term"]
-  size_rows[[paste0(yv,"|",CAP_LABS[1])]] <- data.table(margin=yv, cap_bin=CAP_LABS[1],
-    did_effect=base$Estimate, se=base$`Std. Error`, p=base$`Pr(>|t|)`)   # G1 base effect
-  for (g in CAP_LABS[-1]) {                                              # G2..G4 differentials
-    r <- ct[grepl(g, term, fixed = TRUE)]
-    if (nrow(r)) size_rows[[paste0(yv,"|",g)]] <- data.table(margin=yv, cap_bin=paste0("x ",g),
-      did_effect=r$Estimate, se=r$`Std. Error`, p=r$`Pr(>|t|)`)
-  }
-  cat(sprintf("  %-13s G1 did=%+.4f\n", yv, base$Estimate))
+# === STEP 5 — SIZE HTE (did x DCM total-capacity bin) x margins ===
+cat("=== STEP 5: SIZE HTE (DCM total-capacity bins) ===\n")
+cat_hte <- function(yv, fvar, ref) {
+  d <- fy[!is.na(get(fvar))]
+  feols(as.formula(sprintf("%s ~ i(%s, did_term, ref = '%s') + did_term %s | %s",
+                           yv, fvar, ref, RHS, FE)), data = d, cluster = ~state)
 }
-fwrite(rbindlist(size_rows), file.path(OUTPUT_TABLES, "T_Facility_SizeHTE.csv"))
-pub_etable(mS_list, file.path(OUTPUT_TABLES, "T_Facility_SizeHTE_Pub.tex"),
-  headers = unname(ATT_HEAD[names(mS_list)]),
-  title   = "Size heterogeneity (DCM capacity bins) by behavior margin (facility-year)",
-  notes   = "Each column is a portfolio margin. 'Reform x Post' is the effect for the smallest total-capacity bin (G1, under 9k gal); the cap_G interactions are the differential for larger bins (G2 9-20k, G3 20-30k, G4 30k+ total gallons). Facility + portfolio-mix x year FE. SE clustered by state.")
+SZM <- intersect(c("closure_share","facility_exit","downsize","repl_share","cap_decrease"), names(fy))
+mS <- setNames(lapply(SZM, function(yv) cat_hte(yv, "cap_G", CAP_LABS[1])), SZM)
+pub_etable(mS, file.path(OUTPUT_TABLES, "T_Facility_SizeHTE_Pub.tex"),
+  headers = unname(ATT_HEAD[names(mS)]),
+  title   = "Size heterogeneity (DCM total-capacity bins) by margin (facility-year)",
+  notes   = "Reform x Post = smallest bin (G1, total < 9k gal); cap_G rows = differential for larger bins (9-20k / 20-30k / 30k+ total gallons). Facility + portfolio-mix x year FE. SE clustered by state.")
+cat(sprintf("  size HTE: %d margins\n", length(mS)))
 
-# === STEP 6 — ROUTE A EVENT STUDY (slide style) ===
-cat("=== STEP 6: EVENT STUDY ===\n")
-fes  <- fy[rel_year %between% ES_WIN]
-m_es <- feols(as.formula(sprintf(
-  "closure_share ~ i(rel_year, texas_treated, ref = -1L) %s | %s", RHS, FE)), data = fes, cluster = ~state)
-ct <- as.data.table(coeftable(m_es), keep.rownames = "term")[grepl("rel_year::", term, fixed = TRUE)]
-ct[, rel_year := as.integer(tstrsplit(sub("rel_year::", "", term, fixed = TRUE), ":", fixed = TRUE)[[1]])]
-co <- ct[, .(rel_year, est = Estimate, se = `Std. Error`)]
-co <- rbind(co, data.table(rel_year = -1L, est = 0, se = 0))
-co[, `:=`(ci_lo = est - 1.96*se, ci_hi = est + 1.96*se,
-          period = factor(fifelse(rel_year < 0L,"pre",fifelse(rel_year==0L,"event","post")),
-                          levels = c("pre","event","post")))]
-setorder(co, rel_year)
-fwrite(co, file.path(OUTPUT_TABLES, "T_Facility_Portfolio_ES_Coefs.csv"))
+# === STEP 5b — VINTAGE-AT-TREATMENT HTE (who moves by age) x margins ===
+cat("=== STEP 5b: VINTAGE HTE (age at treatment) ===\n")
+VREF <- "1989-1998"   # newest pre-reform cohort = reference
+if ("vintage" %in% names(fy) && VREF %in% levels(fy$vintage)) {
+  mV <- setNames(lapply(SZM, function(yv) cat_hte(yv, "vintage", VREF)), SZM)
+  pub_etable(mV, file.path(OUTPUT_TABLES, "T_Facility_VintageHTE_Pub.tex"),
+    headers = unname(ATT_HEAD[names(mV)]),
+    title   = "Vintage-at-treatment heterogeneity by margin (facility-year)",
+    notes   = sprintf("Reform x Post = the %s cohort (reference); vintage rows = differential for older/younger cohorts. Facility + portfolio-mix x year FE. SE clustered by state.", VREF))
+  cat(sprintf("  vintage HTE: %d margins (ref %s)\n", length(mV), VREF))
+} else cat("  vintage var/ref absent -> vintage HTE skipped.\n")
 
-p <- ggplot(co, aes(rel_year, est, colour = period)) +
-  geom_hline(yintercept = 0, colour = "grey55", linetype = "dashed", linewidth = 0.45) +
-  geom_vline(xintercept = -1.5, colour = "grey40", linetype = "dotted", linewidth = 0.5) +
-  geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi), width = 0.25, linewidth = 0.5) +
-  geom_point(size = 2.0, shape = 21, fill = "white", stroke = 1.2) +
-  scale_colour_manual(values = c(pre="#3A6BBF", event="#888888", post="#BF3A3A"),
-                      labels = c(pre="Pre-treatment", event="Event", post="Post-treatment"), name = NULL) +
-  scale_x_continuous(breaks = seq(-14, 22, by = 2)) +
-  labs(x = "Years relative to Dec 22 1998", y = "Effect on facility closure share") +
-  theme_classic(base_size = 11, base_family = "Times") +
-  theme(legend.position = "bottom", legend.key.width = unit(1.2, "cm"),
-        axis.line = element_line(colour = "black", linewidth = 0.4),
-        axis.ticks = element_line(colour = "black", linewidth = 0.3),
-        axis.text = element_text(colour = "black"),
-        panel.grid.major.y = element_line(colour = "grey92", linewidth = 0.3),
-        panel.grid.minor = element_blank(), plot.margin = margin(8, 12, 8, 8))
-save_gg(p, "Fig_ES_Facility_Portfolio", width = 7.6, height = 4.8)
-pre <- co[rel_year < -1L, .(max_abs_pre = max(abs(est)), max_t = max(abs(est/pmax(se,1e-12))))]
-cat(sprintf("  PRE-TREND: max|coef|=%.4f  max|t|=%.2f\n", pre$max_abs_pre, pre$max_t))
+# === STEP 6 — CAUSAL EVENT STUDIES on closure / downsize / replace ===
+cat("=== STEP 6: EVENT STUDIES (closure / downsize / replace) ===\n")
+fes <- fy[rel_year %between% ES_WIN]
+es_one <- function(yv, ylab, stem) {
+  m  <- feols(as.formula(sprintf("%s ~ i(rel_year, texas_treated, ref = -1L) %s | %s", yv, RHS, FE)),
+              data = fes, cluster = ~state)
+  ct <- as.data.table(coeftable(m), keep.rownames = "term")[grepl("rel_year::", term, fixed = TRUE)]
+  ct[, rel_year := as.integer(tstrsplit(sub("rel_year::", "", term, fixed = TRUE), ":", fixed = TRUE)[[1]])]
+  co <- ct[, .(rel_year, est = Estimate, se = `Std. Error`)]
+  co <- rbind(co, data.table(rel_year = -1L, est = 0, se = 0))
+  co[, `:=`(ci_lo = est-1.96*se, ci_hi = est+1.96*se, margin = yv,
+            period = factor(fifelse(rel_year<0L,"pre",fifelse(rel_year==0L,"event","post")),
+                            levels = c("pre","event","post")))]
+  setorder(co, rel_year)
+  p <- ggplot(co, aes(rel_year, est, colour = period)) +
+    geom_hline(yintercept = 0, colour = "grey55", linetype = "dashed", linewidth = 0.45) +
+    geom_vline(xintercept = -1.5, colour = "grey40", linetype = "dotted", linewidth = 0.5) +
+    geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi), width = 0.25, linewidth = 0.5) +
+    geom_point(size = 2.0, shape = 21, fill = "white", stroke = 1.2) +
+    scale_colour_manual(values = c(pre="#3A6BBF", event="#888888", post="#BF3A3A"),
+                        labels = c(pre="Pre-treatment", event="Event", post="Post-treatment"), name = NULL) +
+    scale_x_continuous(breaks = seq(-14, 22, by = 2)) +
+    labs(x = "Years relative to Dec 22 1998", y = ylab) +
+    theme_classic(base_size = 11, base_family = "Times") +
+    theme(legend.position = "bottom", legend.key.width = unit(1.2, "cm"),
+          axis.line = element_line(colour = "black", linewidth = 0.4),
+          axis.ticks = element_line(colour = "black", linewidth = 0.3),
+          axis.text = element_text(colour = "black"),
+          panel.grid.major.y = element_line(colour = "grey92", linewidth = 0.3),
+          panel.grid.minor = element_blank(), plot.margin = margin(8, 12, 8, 8))
+  save_gg(p, stem, width = 7.6, height = 4.8)
+  pt <- co[rel_year < -1L, .(max_abs_pre = max(abs(est)), max_t = max(abs(est/pmax(se,1e-12))))]
+  cat(sprintf("  %-13s -> %s | PRE max|coef|=%.4f max|t|=%.2f\n", yv, stem, pt$max_abs_pre, pt$max_t))
+  co
+}
+es_all <- rbindlist(list(
+  es_one("closure_share", "Effect on facility closure share", "Fig_ES_Facility_Portfolio"),
+  if ("downsize"   %in% names(fy)) es_one("downsize",   "Effect on facility downsize",    "Fig_ES_Facility_Downsize"),
+  if ("repl_share" %in% names(fy)) es_one("repl_share", "Effect on facility replacement", "Fig_ES_Facility_Replace")
+), use.names = TRUE)
+fwrite(es_all, file.path(OUTPUT_TABLES, "T_Facility_ES_Coefs_byMargin.csv"))
 cat("\n=== 02j COMPLETE ===\n")
