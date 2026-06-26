@@ -11,8 +11,10 @@
 # OUTPUTS : Output/Figures/Fig_CrossSub_Paid_<ST>.{png,pdf} + _Panel
 ################################################################################
 
+if (!requireNamespace("ggpattern", quietly = TRUE))
+  install.packages("ggpattern", repos = "https://cloud.r-project.org", quiet = TRUE)
 suppressPackageStartupMessages({
-  library(data.table); library(ggplot2); library(scales); library(here)
+  library(data.table); library(ggplot2); library(ggpattern); library(scales); library(here)
 })
 source(here::here("Code", "Helpers", "data_paths.R"))
 cat("=== 07d: paid-share framing ===\n")
@@ -51,6 +53,12 @@ theme_pub <- function(base = 12) theme_minimal(base_size = base) +
 build <- function(d, s, facet = TRUE) {
   p <- ggplot(d, aes(x = pct)) +
     geom_ribbon(aes(ymin = fee_fac, ymax = PP, fill = "Subsidized share")) +
+    # Hatch the wedge above break-even τ: cross-subsidy that persists even under a
+    # neutral (break-even) flat fee — high-risk firms still underpay relative to it.
+    ggpattern::geom_ribbon_pattern(
+      data = d[PP >= tau], aes(ymin = tau, ymax = PP),
+      fill = NA, pattern = "stripe", pattern_fill = "grey12", pattern_colour = "grey12",
+      pattern_angle = 45, pattern_density = 0.07, pattern_spacing = 0.017) +
     geom_ribbon(aes(ymin = 0, ymax = fee_fac, fill = "Share firm pays (fee)")) +
     geom_line(aes(y = PP), color = "#1a1a1a", linewidth = 0.6) +
     geom_line(aes(y = tau), color = "grey45", linetype = "dashed", linewidth = 0.4) +
@@ -67,19 +75,25 @@ build <- function(d, s, facet = TRUE) {
 }
 save_fig <- function(p, name, w, h) {
   ggsave(file.path(OUTPUT_FIGURES, paste0(name, ".png")), p, width = w, height = h, dpi = 300, bg = "white")
-  ggsave(file.path(OUTPUT_FIGURES, paste0(name, ".pdf")), p, width = w, height = h, device = grDevices::cairo_pdf)
-  cat(sprintf("  Saved: %s\n", name))
+  # PDF can fail if the file is open in a viewer (file lock). Surface it with a
+  # message and keep going rather than halting the whole figure set.
+  pdf_ok <- tryCatch({
+    ggsave(file.path(OUTPUT_FIGURES, paste0(name, ".pdf")), p, width = w, height = h, device = grDevices::cairo_pdf)
+    TRUE
+  }, error = function(e) { message("  PDF locked/skipped: ", name, ".pdf"); FALSE })
+  cat(sprintf("  Saved: %s (%s)\n", name, if (pdf_ok) ".png + .pdf" else ".png only"))
 }
 
-p_panel <- build(fac, stat, TRUE) +
-  labs(title = "Firms pay only a sliver of their fair cost",
-       subtitle = "Black = the flat fee each firm pays; blue = the rest of its actuarially fair premium, covered by the fund.",
-       caption = "PP = λ·S̄. Fee = fr_premium_per_tank_yr × tanks (NM gas-tax, ≈0). Dashed = break-even fee τ = mean PP.")
-save_fig(p_panel, "Fig_CrossSub_Paid_Panel", 10, 7.5)
+# Individual figures first (so an open viewer locking the panel PDF can't block them).
 for (st in FIG_STATES) {
   p <- build(fac[state == st], stat[state == st], FALSE) +
     labs(title = sprintf("%s: share paid vs subsidized (2005)", STATE_LAB[st]),
-         subtitle = "Black = fee paid; blue = subsidized share of fair cost.")
+         subtitle = "Black = fee paid; blue = subsidized; hatched = cross-subsidy above a neutral break-even fee.")
   save_fig(p, sprintf("Fig_CrossSub_Paid_%s", st), 7, 5)
 }
+p_panel <- build(fac, stat, TRUE) +
+  labs(title = "Firms pay a sliver of their fair cost — and a neutral flat fee still cross-subsidizes",
+       subtitle = "Black = fee paid; blue = subsidized share. Hatched (above τ) = the wedge that stays cross-subsidy even under a neutral break-even fee.",
+       caption = "PP = λ·S̄. Fee = fr_premium_per_tank_yr × tanks (NM gas-tax, ≈0). Dashed = break-even fee τ = mean PP.")
+save_fig(p_panel, "Fig_CrossSub_Paid_Panel", 10, 7.5)
 cat("\n07d complete.\n")
