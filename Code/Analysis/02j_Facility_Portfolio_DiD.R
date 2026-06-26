@@ -2,40 +2,33 @@
 # Code/Analysis/02j_Facility_Portfolio_DiD.R
 #
 # CAUSAL PORTFOLIO EFFECTS at the facility-year level, on the EXISTING matched
-# facility panel (matched_facs_birth_cem.csv from 02b_Tank_level_Panel_Build.R) —
-# the facility analogue of matched_tanks_birth_cem. No rebuild: outcomes,
-# composition, fuel, mandates, did, rel_year, cem all already in that file.
+# facility panel (matched_facs_birth_cem.csv) — the facility analogue of
+# matched_tanks_birth_cem.
 #
-# Identification (mirrors the tank headline, aggregated): parallel trends
-# CONDITIONAL ON TANK MIX. The tank cell x year FE is carried up EXACTLY via the
-# 02k crosswalk Yhat0 (composition-weighted untreated cell x year closure rate),
-# left-joined on (panel_id, panel_year) -- NOT the coarse pct_sw/avg_age proxy.
-#   ROUTE A (control):    Y_ft ~ did_term + Yhat0 + mandates | panel_id + year
-#   ROUTE B (imputation): tau = closure_share_tank - Yhat0 ; tau ~ did_term | ...
-# Both use the same exact cell baseline as the tank-level cell_vintage_year_fe.
+# IDENTIFICATION mirrors the tank headline, aggregated. The tank cell x year FE
+# (cell_vintage_year_fe = make_model_noage x install_yr x panel_year) has a clean
+# FACILITY twin: make_model_fac x panel_year, where make_model_fac is the
+# facility's portfolio-mix signature (wall-mix | fuel-mix | age-band; 47 values).
+# So the facility spec is the SAME FE design as the tank one:
+#     Y_ft ~ did_term + Yhat0 + mandates | panel_id + cell_fac_year
+#   cell_fac_year = portfolio-mix x year FE  ("same mix, same year, TX vs control")
+#   Yhat0 (02k composition-weighted untreated baseline) KEPT as an extra control.
+# Route B (imputation) kept as a robustness: tau = closure_share_tank - Yhat0.
 #
-# Outcomes (portfolio actions, all per active-tank or 0/1):
-#   closure_share = n_closures / n_tanks_active   [primary intensity margin]
-#   any_closure   = 1 if >=1 tank closed
-#   facility_exit = facility leaves (from panel)
-#   perm_share    = n_closures_permanent / n_tanks_active
-#   repl_share    = n_closures_replacement / n_tanks_active
+# MARGINS (facility portfolio actions): closure_share, any_closure, facility_exit,
+#   downsize (closed some, did not fully exit), permanent, replacement, capacity-decrease.
 #
-# HTE = INTERACTION only (did_Z, common FEs): gas_station (=has_gasoline),
-#   dem_dense (top tract-pop quartile, GIS), geo_rural (RUCA>=7, GIS).
-# Inference: wild cluster bootstrap by state (reduced_form_utils).
+# HTE (interaction only, common FEs):
+#   (a) fuel/geo: gas_station, low-population (bottom pop quartile), rural.
+#   (b) SIZE: did x capacity bin, DCM-aligned (mean tank capacity at 9k/20k/30k =
+#       G1..G4), on each behavior margin -> "what size of firm moves on which margin".
 #
-# Yhat0 + tau come from 02k (one tank pass over matched_tanks_birth_cem). The
-# 45-degree predicted-rate figure can be added once this lands.
+# Inference: analytic cluster-robust by state (G=18). Bootstrap/HonestDiD deferred.
 #
-# Outputs:
-#   Output/Tables/T_Facility_Portfolio_ATT.csv   (route A, per outcome)
-#   Output/Tables/T_Facility_Portfolio_HTE.csv   (interaction did_Z, per Z)
-#   Output/Tables/T_Facility_Portfolio_ES_Coefs.csv
-#   Output/Figures/Fig_ES_Facility_Portfolio.{pdf,png}   (slide style)
+# Outputs: Output/Tables/T_Facility_Portfolio_ATT_Pub.tex, _HTE_Pub.tex,
+#   T_Facility_SizeHTE_Pub.tex (+ CSVs), Output/Figures/Fig_ES_Facility_Portfolio.*
 #
-# Run (panel on Z):
-#   UST_ANALYSIS_DIR=Z:/ust_ins_move_to_github/Data/Analysis  Rscript ... 02j...R
+# Run (panel on Z locally; in-repo on server — DO NOT set UST_ANALYSIS_DIR there).
 ################################################################################
 
 suppressPackageStartupMessages({
@@ -61,54 +54,61 @@ GIS_DIR      <- here::here("Data", "Processed", "GIS")
 XW_PATH      <- here::here("Data", "Analysis", "facility_cellfe_xwalk.csv")  # 02k output
 stopifnot(file.exists(file.path(ANALYSIS_DIR, FAC_FILE)))
 stopifnot("Run 02k first (exact tank cell-FE crosswalk)" = file.exists(XW_PATH))
-# GIS lookups are LOCAL-only (Data/ gitignored) -> OPTIONAL (rural / low-pop HTE).
 HAS_GIS <- file.exists(file.path(GIS_DIR, "gis_03_urban_rural.csv")) &&
            file.exists(file.path(GIS_DIR, "gis_09_demographics.csv"))
 dir.create(OUTPUT_FIGURES, recursive = TRUE, showWarnings = FALSE)
-BOOT_B <- as.integer(Sys.getenv("UST_BOOT_B", "1999"))
+BOOT_B <- as.integer(Sys.getenv("UST_BOOT_B", "1999"))   # unused (bootstrap deferred)
 ES_WIN <- c(-13L, 22L)
 MAND   <- c("any_mandate_release_det", "any_mandate_spill_overfill", "any_mandate_integrity")
+CAP_BREAKS <- c(-Inf, 9000, 20000, 30000, Inf)           # DCM G breaks (per-tank gallons)
+CAP_LABS   <- c("G1_lt9k", "G2_9to20k", "G3_20to30k", "G4_gt30k")
 
 # === STEP 1 — LOAD MATCHED FACILITY PANEL ===
 cat("=== STEP 1: LOAD ===\n")
 .hdr <- names(fread(file.path(ANALYSIS_DIR, FAC_FILE), nrows = 0L))
 keep <- intersect(c("panel_id","state","panel_year","texas_treated","cem_weight",
   "n_tanks_active","n_closures","any_closure","facility_exit",
-  "n_closures_permanent","n_closures_replacement","pct_sw","avg_tank_age",
-  "has_gasoline","is_motor_fuel","facility_id", MAND), .hdr)
+  "n_closures_permanent","n_closures_replacement","net_tank_change","capacity_decreased",
+  "make_model_fac","total_capacity_reform","n_tanks_at_reform",
+  "has_gasoline","facility_id", MAND), .hdr)
 fy <- fread(file.path(ANALYSIS_DIR, FAC_FILE), select = keep,
             colClasses = list(character = c("panel_id","state","facility_id")))
 mand_have <- intersect(MAND, names(fy))
 
-# Reconstruct did/rel/post on the 1999 cutoff (match the tank headline exactly).
 fy[, post     := as.integer(panel_year >= 1999L)]
 fy[, did_term := texas_treated * post]
 fy[, rel_year := as.integer(panel_year) - 1998L]
-# Portfolio-action outcomes (shares of active tanks).
+# Portfolio-action outcomes.
 fy[, closure_share := pmin(n_closures / pmax(n_tanks_active, 1L), 1)]
 if ("n_closures_permanent"   %in% names(fy)) fy[, perm_share := pmin(n_closures_permanent   / pmax(n_tanks_active,1L), 1)]
 if ("n_closures_replacement" %in% names(fy)) fy[, repl_share := pmin(n_closures_replacement / pmax(n_tanks_active,1L), 1)]
+fy[, downsize := as.integer(n_closures > 0L & facility_exit == 0L)]   # closed some, stayed open
+if ("capacity_decreased" %in% names(fy)) fy[, cap_decrease := as.integer(capacity_decreased)]
+
+# Facility cell x year FE = portfolio-mix x year (tank cell_vintage_year_fe twin).
+fy[, cell_fac_year := .GRP, by = .(make_model_fac, panel_year)]
+# DCM-aligned size: mean tank capacity (reform) binned at the structural G breaks.
+fy[, mean_tank_cap := total_capacity_reform / pmax(n_tanks_at_reform, 1L)]
+fy[, cap_G := factor(cut(mean_tank_cap, CAP_BREAKS, labels = CAP_LABS), levels = CAP_LABS)]
 cat(sprintf("  facility-years: %s | facilities: %s | states: %d | TX share: %.3f\n",
             fmt_n(nrow(fy)), fmt_n(uniqueN(fy$panel_id)), uniqueN(fy$state), mean(fy$texas_treated)))
-cat(sprintf("  closure_share mean: %.4f | any_closure: %.4f | facility_exit: %.4f\n",
-            mean(fy$closure_share), mean(fy$any_closure, na.rm=TRUE),
-            if ("facility_exit" %in% names(fy)) mean(fy$facility_exit, na.rm=TRUE) else NA_real_))
+cat(sprintf("  make_model_fac mixes: %d | cap_G dist: %s\n",
+            uniqueN(fy$make_model_fac),
+            paste(names(table(fy$cap_G)), round(prop.table(table(fy$cap_G)),3), sep="=", collapse=" ")))
+cat(sprintf("  margins: closure=%.4f exit=%.4f downsize=%.4f cap_decr=%.4f\n",
+            mean(fy$closure_share), mean(fy$facility_exit,na.rm=TRUE), mean(fy$downsize),
+            if ("cap_decrease" %in% names(fy)) mean(fy$cap_decrease,na.rm=TRUE) else NA_real_))
 
-# Left-join the EXACT tank cell x year baseline (02k) by (panel_id, panel_year).
-# Yhat0 = composition-weighted untreated cell x year closure rate; tau = the
-# imputation residual. This makes the facility control = the SAME cell FE as the
-# tank-level analysis (not the coarse pct_sw/avg_age proxy).
+# Left-join the 02k cell-FE crosswalk (Yhat0 baseline + tau).
 xw <- fread(XW_PATH, colClasses = list(character = "panel_id"))
 fy <- merge(fy, xw[, .(panel_id, panel_year, Yhat0, closure_share_tank, tau)],
             by = c("panel_id", "panel_year"), all.x = TRUE)
-cat(sprintf("  cell-FE xwalk join: Yhat0 matched %.1f%% | corr(Y, Yhat0)=%.3f\n",
-            100 * mean(!is.na(fy$Yhat0)),
-            cor(fy$closure_share, fy$Yhat0, use = "complete.obs")))
-fy <- fy[!is.na(Yhat0)]   # keep facility-years with the cell-FE baseline
+cat(sprintf("  Yhat0 matched %.1f%%\n", 100 * mean(!is.na(fy$Yhat0))))
+fy <- fy[!is.na(Yhat0)]
 
-# === STEP 2 — GIS COVARIATES (rural, population) + gas-station ===
+# === STEP 2 — COVARIATES (gas-station from panel; rural/low-pop from GIS if present) ===
 cat("=== STEP 2: COVARIATES ===\n")
-if ("has_gasoline" %in% names(fy)) fy[, gas_station := has_gasoline]   # from panel (no GIS)
+if ("has_gasoline" %in% names(fy)) fy[, gas_station := has_gasoline]
 if (HAS_GIS) {
   g_ur <- fread(file.path(GIS_DIR, "gis_03_urban_rural.csv"),
                 select = c("facility_id","state","ruca_primary"),
@@ -118,36 +118,29 @@ if (HAS_GIS) {
                 colClasses = list(character = c("facility_id","state")))
   gis <- merge(g_ur, g_dm, by = c("facility_id","state"), all = TRUE)
   gis[, geo_rural  := as.integer(ruca_primary >= 7)]
-  # Low population = bottom 25% of tract population (vs the upper three quartiles).
   gis[, dem_lowpop := as.integer(tract_pop <= quantile(tract_pop, 0.25, na.rm = TRUE))]
   fy <- merge(fy, gis[, .(facility_id, state, geo_rural, dem_lowpop)],
               by = c("facility_id","state"), all.x = TRUE)
-  cat(sprintf("  geo_rural matched: %.1f%% | dem_lowpop matched: %.1f%%\n",
-              100*mean(!is.na(fy$geo_rural)), 100*mean(!is.na(fy$dem_lowpop))))
 } else cat("  GIS lookups absent -> rural / low-population HTE skipped.\n")
-cat(sprintf("  gas_station mean: %.3f\n",
-            if ("gas_station" %in% names(fy)) mean(fy$gas_station, na.rm=TRUE) else NA_real_))
 
-# Cell-FE control = the EXACT tank cell x year baseline carried up (Yhat0, 02k),
-# plus the mandate dummies. Replaces the coarse pct_sw/avg_age x year proxy.
-ctrl <- c("Yhat0", mand_have)
-RHS  <- paste("+", paste(ctrl, collapse = " + "))
+# Control block: Yhat0 (KEPT) + mandate dummies. FE = facility + portfolio-mix x year.
+RHS <- paste("+", paste(c("Yhat0", mand_have), collapse = " + "))
+FE  <- "panel_id + cell_fac_year"
 
-# === STEP 3 — ROUTE A STATIC ATT (per outcome) ===
+# === STEP 3 — ROUTE A STATIC ATT (per margin) + ROUTE B ===
 cat("=== STEP 3: ROUTE A STATIC ATT ===\n")
-outs <- intersect(c("closure_share","any_closure","facility_exit","perm_share","repl_share"), names(fy))
+outs <- intersect(c("closure_share","any_closure","facility_exit","downsize",
+                    "perm_share","repl_share","cap_decrease"), names(fy))
 att <- list(); mA_list <- list()
 for (yv in outs) {
-  m  <- feols(as.formula(sprintf("%s ~ did_term %s | panel_id + panel_year", yv, RHS)),
-              data = fy, cluster = ~state)
+  m  <- feols(as.formula(sprintf("%s ~ did_term %s | %s", yv, RHS, FE)), data = fy, cluster = ~state)
   mA_list[[yv]] <- m
   ct <- coeftable(m); est <- ct["did_term","Estimate"]; se <- ct["did_term","Std. Error"]
   att[[yv]] <- data.table(outcome = yv, beta = est, se = se,
                           ci_lo = est-1.96*se, ci_hi = est+1.96*se, p = ct["did_term","Pr(>|t|)"], n = m$nobs)
   cat(sprintf("  [A] %-14s did=%+.4f (SE %.4f, p %.3f)\n", yv, est, se, ct["did_term","Pr(>|t|)"]))
 }
-# Route B (imputation): tau = closure_share_tank - Yhat0 already nets the cell-FE
-# baseline, so a plain DiD on tau recovers the ATT (control tau ~ 0).
+# Route B (imputation): tau already nets the composition baseline.
 mB  <- feols(tau ~ did_term | panel_id + panel_year, data = fy, cluster = ~state)
 ctB <- coeftable(mB); eB <- ctB["did_term","Estimate"]; sB <- ctB["did_term","Std. Error"]
 att[["B_tau"]] <- data.table(outcome = "closure_share (route B: tau)", beta = eB, se = sB,
@@ -155,45 +148,66 @@ att[["B_tau"]] <- data.table(outcome = "closure_share (route B: tau)", beta = eB
 cat(sprintf("  [B] %-14s did=%+.4f (SE %.4f, p %.3f)\n", "tau", eB, sB, ctB["did_term","Pr(>|t|)"]))
 fwrite(rbindlist(att), file.path(OUTPUT_TABLES, "T_Facility_Portfolio_ATT.csv"))
 
-# Publication table: route-A outcomes (cols 1..k) + route-B imputation (last col).
-ATT_HEAD <- c(closure_share="Closure share", any_closure="Any closure",
-              facility_exit="Facility exit", perm_share="Permanent", repl_share="Replacement")
+ATT_HEAD <- c(closure_share="Closure share", any_closure="Any closure", facility_exit="Facility exit",
+              downsize="Downsize", perm_share="Permanent", repl_share="Replacement", cap_decrease="Capacity cut")
 pub_etable(c(mA_list, list(B = mB)),
   file.path(OUTPUT_TABLES, "T_Facility_Portfolio_ATT_Pub.tex"),
   headers = c(unname(ATT_HEAD[names(mA_list)]), "Closure (impute)"),
   title   = "Effect of the 1998 Texas reform on facility portfolio actions",
-  notes   = "Facility-year sample. Columns 1-5: two-way (facility, year) fixed-effects estimator controlling for the composition-weighted closure baseline. Final column: imputation (predicted-rate) estimator on the baseline-netted outcome. Standard errors clustered by state (18 clusters).")
+  notes   = "Facility-year sample. Columns 1-k: two-way (facility, portfolio-mix x year) fixed-effects estimator controlling for the composition-weighted baseline. Final column: imputation (predicted-rate) estimator on the baseline-netted outcome. SE clustered by state (18 clusters).")
 
-# === STEP 4 — HTE (INTERACTION did_Z, common FEs) ===
+# === STEP 4 — HTE (interaction did_Z, common FEs) ===
 cat("=== STEP 4: HTE (interaction) ===\n")
 ZLAB <- c(gas_station = "Gas station", dem_lowpop = "Low population", geo_rural = "Rural")
 hte <- list(); mH_list <- list()
 for (z in intersect(c("gas_station","dem_lowpop","geo_rural"), names(fy))) {
-  d <- fy[!is.na(get(z))]
-  d[, did_Z := did_term * get(z)]
-  m  <- feols(as.formula(sprintf("closure_share ~ did_term + did_Z %s | panel_id + panel_year", RHS)),
-              data = d, cluster = ~state)
+  d <- fy[!is.na(get(z))]; d[, did_Z := did_term * get(z)]
+  m  <- feols(as.formula(sprintf("closure_share ~ did_term + did_Z %s | %s", RHS, FE)), data = d, cluster = ~state)
   mH_list[[z]] <- m
   ct <- coeftable(m); eZ <- ct["did_Z","Estimate"]; sZ <- ct["did_Z","Std. Error"]
   hte[[z]] <- data.table(dimension = z, did_term = ct["did_term","Estimate"], did_Z = eZ,
                          se = sZ, ci_lo = eZ-1.96*sZ, ci_hi = eZ+1.96*sZ, p = ct["did_Z","Pr(>|t|)"])
-  cat(sprintf("  %-12s did=%+.4f  didxZ=%+.4f (p %.3f)\n",
-              z, ct["did_term","Estimate"], eZ, ct["did_Z","Pr(>|t|)"]))
+  cat(sprintf("  %-12s did=%+.4f  didxZ=%+.4f (p %.3f)\n", z, ct["did_term","Estimate"], eZ, ct["did_Z","Pr(>|t|)"]))
 }
 if (length(hte)) {
   fwrite(rbindlist(hte), file.path(OUTPUT_TABLES, "T_Facility_Portfolio_HTE.csv"))
   pub_etable(mH_list, file.path(OUTPUT_TABLES, "T_Facility_Portfolio_HTE_Pub.tex"),
     headers = unname(ZLAB[names(mH_list)]),
-    title   = "Heterogeneous portfolio response to the 1998 Texas reform (facility-year)",
-    notes   = "Dependent variable: facility closure share. Each column reports the average effect (Reform $\\times$ Post) and its interaction with the subgroup indicator. Facility and year fixed effects; composition-weighted baseline control. Standard errors clustered by state (18 clusters).")
+    title   = "Heterogeneous portfolio response (facility-year): fuel / geography",
+    notes   = "Dependent variable: facility closure share. Reform x Post and its interaction with the subgroup. Facility + portfolio-mix x year FE; composition-weighted baseline control. SE clustered by state.")
 }
 
-# === STEP 5 — ROUTE A EVENT STUDY (slide style) ===
-cat("=== STEP 5: EVENT STUDY ===\n")
-fes <- fy[rel_year %between% ES_WIN]
+# === STEP 5 — SIZE HTE (did x capacity bin) ON EACH BEHAVIOR MARGIN ===
+cat("=== STEP 5: SIZE HTE (DCM capacity bins) ===\n")
+size_margins <- intersect(c("closure_share","facility_exit","downsize","repl_share","cap_decrease"), names(fy))
+ds   <- fy[!is.na(cap_G)]
+size_rows <- list(); mS_list <- list()
+for (yv in size_margins) {
+  m  <- feols(as.formula(sprintf("%s ~ i(cap_G, did_term, ref = '%s') + did_term %s | %s",
+                                  yv, CAP_LABS[1], RHS, FE)), data = ds, cluster = ~state)
+  mS_list[[yv]] <- m
+  ct <- as.data.table(coeftable(m), keep.rownames = "term")
+  base <- ct[term == "did_term"]
+  size_rows[[paste0(yv,"|",CAP_LABS[1])]] <- data.table(margin=yv, cap_bin=CAP_LABS[1],
+    did_effect=base$Estimate, se=base$`Std. Error`, p=base$`Pr(>|t|)`)   # G1 base effect
+  for (g in CAP_LABS[-1]) {                                              # G2..G4 differentials
+    r <- ct[grepl(g, term, fixed = TRUE)]
+    if (nrow(r)) size_rows[[paste0(yv,"|",g)]] <- data.table(margin=yv, cap_bin=paste0("x ",g),
+      did_effect=r$Estimate, se=r$`Std. Error`, p=r$`Pr(>|t|)`)
+  }
+  cat(sprintf("  %-13s G1 did=%+.4f\n", yv, base$Estimate))
+}
+fwrite(rbindlist(size_rows), file.path(OUTPUT_TABLES, "T_Facility_SizeHTE.csv"))
+pub_etable(mS_list, file.path(OUTPUT_TABLES, "T_Facility_SizeHTE_Pub.tex"),
+  headers = unname(ATT_HEAD[names(mS_list)]),
+  title   = "Size heterogeneity (DCM capacity bins) by behavior margin (facility-year)",
+  notes   = "Each column is a portfolio margin. 'Reform x Post' is the effect for the smallest capacity bin (G1, mean tank < 9k gal); the cap_G interactions are the differential for larger bins (G2 9-20k, G3 20-30k, G4 30k+). Facility + portfolio-mix x year FE. SE clustered by state.")
+
+# === STEP 6 — ROUTE A EVENT STUDY (slide style) ===
+cat("=== STEP 6: EVENT STUDY ===\n")
+fes  <- fy[rel_year %between% ES_WIN]
 m_es <- feols(as.formula(sprintf(
-  "closure_share ~ i(rel_year, texas_treated, ref = -1L) %s | panel_id + panel_year", RHS)),
-  data = fes, cluster = ~state)
+  "closure_share ~ i(rel_year, texas_treated, ref = -1L) %s | %s", RHS, FE)), data = fes, cluster = ~state)
 ct <- as.data.table(coeftable(m_es), keep.rownames = "term")[grepl("rel_year::", term, fixed = TRUE)]
 ct[, rel_year := as.integer(tstrsplit(sub("rel_year::", "", term, fixed = TRUE), ":", fixed = TRUE)[[1]])]
 co <- ct[, .(rel_year, est = Estimate, se = `Std. Error`)]
@@ -221,7 +235,6 @@ p <- ggplot(co, aes(rel_year, est, colour = period)) +
         panel.grid.major.y = element_line(colour = "grey92", linewidth = 0.3),
         panel.grid.minor = element_blank(), plot.margin = margin(8, 12, 8, 8))
 save_gg(p, "Fig_ES_Facility_Portfolio", width = 7.6, height = 4.8)
-cat("  saved Fig_ES_Facility_Portfolio\n")
 pre <- co[rel_year < -1L, .(max_abs_pre = max(abs(est)), max_t = max(abs(est/pmax(se,1e-12))))]
 cat(sprintf("  PRE-TREND: max|coef|=%.4f  max|t|=%.2f\n", pre$max_abs_pre, pre$max_t))
 cat("\n=== 02j COMPLETE ===\n")
