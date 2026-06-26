@@ -346,7 +346,7 @@ pub_etable <- function(models, file, headers = NULL, title = NULL, notes = NULL,
   fixest::etable(models, tex = TRUE, file = file, replace = TRUE,
                  dict = RF_DICT, drop = drop, headers = headers,
                  title = title, notes = notes, fitstat = ~ n,
-                 digits = 4, digits.stats = 0,
+                 digits = 4,
                  style.tex = fixest::style.tex("aer"), se.below = TRUE)
   message(sprintf("  Written (pub): %s", file))
 }
