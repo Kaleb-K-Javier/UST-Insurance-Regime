@@ -257,16 +257,18 @@ state_sum <- snap[, {
     share_subsidized  = mean(PP > tau))
 }, by = state]
 
-# Pooled row: each facility vs its OWN state tau_s
-pool_pos <- sum(pmax(snap$PP - snap$tau_s, 0))
+# Pooled row: ALL facilities vs ONE grand-mean break-even fee (single-fund view,
+# consistent with the figure). The within-state total = sum of the per-state rows.
+grand_tau <- mean(snap$PP)
+pool_pos  <- sum(pmax(snap$PP - grand_tau, 0))
 pool_row <- data.table(
   state             = "POOLED",
   N                 = nrow(snap),
-  tau_breakeven     = mean(snap$PP),
+  tau_breakeven     = grand_tau,
   total_transfer    = pool_pos,
   transfer_pct_prem = pool_pos / sum(snap$PP),
-  crossing_pct      = mean(snap$PP <= snap$tau_s),
-  share_subsidized  = mean(snap$PP > snap$tau_s)
+  crossing_pct      = mean(snap$PP <= grand_tau),
+  share_subsidized  = mean(snap$PP > grand_tau)
 )
 state_sum <- rbind(state_sum, pool_row)
 
