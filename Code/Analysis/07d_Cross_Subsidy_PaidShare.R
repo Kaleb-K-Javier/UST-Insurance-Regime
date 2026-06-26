@@ -35,9 +35,10 @@ fac[is.na(fee_fac), fee_fac := 0]
 setorder(fac, state, PP)
 fac[, pct := (seq_len(.N) - 0.5) / .N * 100, by = state]
 fac[, tau := mean(PP), by = state]
+YEAR <- fac$panel_year[1L]   # snapshot year (from 07's output)
 
 stat <- fac[, .(tau = mean(PP), paid_pct = sum(fee_fac) / sum(PP)), by = state]
-stat[, lab := sprintf("Firms pay %.0f%% of fair cost\n%.0f%% is subsidized", paid_pct * 100, (1 - paid_pct) * 100)]
+stat[, lab := sprintf("%d · firms pay %.0f%% of fair cost\n(flat fee ÷ fair premium)\n%.0f%% is subsidized", YEAR, paid_pct * 100, (1 - paid_pct) * 100)]
 cat("Paid share of fair cost by state:\n"); print(stat[, .(state, paid_pct = round(paid_pct, 3))])
 
 mk <- function(d){ d <- copy(d); d[, state_lab := factor(STATE_LAB[state], levels = STATE_LAB[FIG_STATES])]; d }
@@ -67,7 +68,7 @@ build <- function(d, s, facet = TRUE) {
     scale_fill_manual(values = c("Share firm pays (fee)" = COL_PAID, "Subsidized share" = COL_SUB),
                       breaks = c("Share firm pays (fee)", "Subsidized share")) +
     scale_x_continuous("Facilities, ranked by fair premium (within state)", labels = function(x) paste0(x, "%")) +
-    scale_y_continuous("Fair premium PP (2023 USD / facility-yr)", labels = dollar_format(accuracy = 1, big.mark = ",")) +
+    scale_y_continuous("Fair premium (2023 USD / facility-yr)", labels = dollar_format(accuracy = 1, big.mark = ",")) +
     theme_pub()
   if (facet) p + facet_wrap(~ state_lab, scales = "free_y", ncol = 2) else p
 }

@@ -42,12 +42,13 @@ fac[is.na(fee_fac), fee_fac := 0]
 setorder(fac, state, PP)
 fac[, pct := (seq_len(.N) - 0.5) / .N * 100, by = state]
 fac[, tau := mean(PP), by = state]
+YEAR <- fac$panel_year[1L]   # snapshot year (from 07's output)
 
 stat <- fac[, .(tau = mean(PP),
                 xfer_pct = sum(pmax(PP - mean(PP), 0)) / sum(PP),
                 over_pct = mean(PP <= mean(PP))), by = state]
-stat[, lab := sprintf("Cross-subsidy = %.0f%% of premiums\n%.0f%% overpay → %.0f%% subsidized",
-                      xfer_pct * 100, over_pct * 100, (1 - over_pct) * 100)]
+stat[, lab := sprintf("%d · cross-subsidy = %.0f%% of premiums\n(total underpaid ÷ total fair premium)\n%.0f%% overpay, %.0f%% subsidized",
+                      YEAR, xfer_pct * 100, over_pct * 100, (1 - over_pct) * 100)]
 cat("Per-state cross-subsidy (% of premiums):\n"); print(stat[, .(state, tau = round(tau), xfer_pct = round(xfer_pct,3))])
 
 mk_lab <- function(d) { d <- copy(d); d[, state_lab := factor(STATE_LAB[state], levels = STATE_LAB[FIG_STATES])]; d }
@@ -78,7 +79,7 @@ build <- function(d, s, facet = TRUE) {
                       breaks = c("Share firm pays (fee)", "Overpay (subsidizers)", "Subsidized")) +
     scale_x_continuous("Facilities, ranked by fair premium (within state)",
                        labels = function(x) paste0(x, "%")) +
-    scale_y_continuous("Fair premium PP (2023 USD / facility-yr)",
+    scale_y_continuous("Fair premium (2023 USD / facility-yr)",
                        labels = dollar_format(accuracy = 1, big.mark = ",")) +
     theme_pub()
   if (facet) p + facet_wrap(~ state_lab, scales = "free_y", ncol = 2) else p

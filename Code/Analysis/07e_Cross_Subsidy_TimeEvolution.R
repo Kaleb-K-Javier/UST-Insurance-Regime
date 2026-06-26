@@ -142,7 +142,7 @@ build_time <- function(d, s) {
       breaks = c("Share firm pays (fee)", "Overpay (subsidizers)", "Subsidized")) +
     scale_x_continuous("Facilities, ranked by fair premium (within state / year)",
                        labels = function(x) paste0(x, "%")) +
-    scale_y_continuous("Fair premium PP (2023 USD / facility-yr)",
+    scale_y_continuous("Fair premium (2023 USD / facility-yr)",
                        labels = dollar_format(accuracy = 1, big.mark = ",")) +
     facet_wrap(~ year_lab, nrow = 1, scales = "free_y") +
     theme_pub()
