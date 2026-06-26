@@ -1,3 +1,72 @@
+# HANDOFF -- 2026-06-26 (Reduced-form facility HTE: RAN + VERIFIED on server; results in hand; editor + cleanups next)  [RF workstream]
+
+═══════════════════════════════════════════════════
+CHECKPOINT: Facility causal-portfolio HTE complete + verified (2026-06-26, Opus)
+═══════════════════════════════════════════════════
+RF workstream (separate from the structural T025 below). All RUN + VERIFIED on the
+server (ucbare2, R 4.4.3, renv) off the in-repo panels. Spec/equations/results:
+  Reports/Paper/Reduced_Form_HTE_Facility_Results_Outline.md  (fill the results block — TODO)
+SCRIPTS (on main; cluster-robust by state; NO bootstrap/HonestDiD; multithreaded):
+  02g tank HTE (interaction) | 02h tank pooled ES (Fig_ES_HTE_Pooled)
+  02k cell-FE crosswalk (Yhat0/tau per fac-yr) | 02j facility causal portfolio (the big one)
+  Code/Helpers/reduced_form_utils.R: rf_use_threads(), RF_DICT, pub_etable().
+02j DESIGN (locked): FE = panel_id + cell_fac_year (cell_fac_year = make_model_fac x year =
+  portfolio-mix x year, the facility twin of tank cell_vintage_year_fe) + Yhat0 control kept.
+  Margins: closure_share, any_closure, facility_exit, downsize, perm/repl_share, cap_decrease.
+  HTE dims: gas_station, rural, low_pop, low_income, high_pov, thin_market (gas-only),
+  + SIZE (did x cap_G, DCM TOTAL-capacity bins 9k/20k/30k) + VINTAGE (did x fac_vintage, ref 1989-98),
+  run across margins. ES (causal) on closure/downsize/replace.
+SPATIAL DATA: Output/GIS/gis_hte_vars.csv (Census-2000, panel_id-keyed, git-tracked) +
+  gis_neighbor_edges.parquet (force-added; arrow). Census match ~98%. Competition = active
+  neighbors within 1mi at 1998 (fixed/pre-reform).
+HEADLINE RESULTS (the SORTING story; full numbers in memory project_facility_hte_results):
+  ATT closure +0.0162, exit +0.0125, downsize +0.0058, replace +0.0029, cap-cut +0.0148 (all sig).
+  SIZE: small (G1<9k) EXIT +6.6pp; large DOWNSIZE+REPLACE. VINTAGE: old(pre-75) EXIT, young(89-98) REINVEST.
+  FUEL: gas stations drive all margins. SPATIAL: rural/thin EXIT LESS (stay); poor EXIT MORE, reinvest LESS.
+  ES: closure CLEAN; replace OK; downsize WEAK pre-trend. Route A closure +0.0162 vs Route B (tau) +0.0118.
+ESTIMATING SAMPLE (for the editor): active-at-treatment incumbents (operating Dec-22-1998, install<1999),
+  birth-CEM matched, FOLLOWED FORWARD (exit measured, not selected). Old "install 1990+/drop 1988 cohort"
+  cut is GONE. Birth-CEM matches: TANK on make-model x cohort (wall+fuel+capacity+install_cohort);
+  FACILITY on birth-cohort x total-tanks-bin x sw-share-bin. 1988 federal upgrade mandate (Dec-1998
+  deadline, shares the reform date) is COMMON to TX+controls -> differenced out by the DiD + absorbed by
+  cell/mix x year FE; mandate controls M are redundant (collinear, dropped). No cohort dropped.
+SERVER RUN (Z paths DO NOT exist there; Rscript not on PATH; renv): in the R GUI, fresh session,
+  setwd to repo, then loop:
+    rs <- file.path(R.home("bin"),"Rscript.exe")
+    for (s in c("02k_Facility_CellFE_Crosswalk","02j_Facility_Portfolio_DiD",
+                "02g_HTE_GIS_FirstPass","02h_HTE_EventStudy_FirstPass")) {
+      message("=== ",s," ==="); if (system2(rs, file.path("Code","Analysis",paste0(s,".R")))!=0) break }
+  (NO --vanilla -> .Rprofile/renv loads. git pull origin main first. Read figs/logs locally via Z.)
+TODO (next RF session): (1) researcher decides downsize ES = causal vs descriptive (closure clean,
+  downsize weak). (2) add size/vintage CSV outputs to 02j (only .tex now). (3) fill the outline-doc
+  results block with the verified numbers; hand the editor agent (jmp_editor) the direction (in chat
+  2026-06-26) to write the results section + formulas. (4) re-enable WCB for FINAL tables. (5) interaction
+  event study for group dynamics (deferred). (6) lat/long geocode QC (deferred to Jul 2026).
+Resume: "Load CLAUDE.md + HANDOFF.md + memory project_facility_hte_results +
+  Reports/Paper/Reduced_Form_HTE_Facility_Results_Outline.md. Facility HTE RAN+VERIFIED on server.
+  Today: [pick a TODO] — likely fill the outline results block + add size/vintage CSVs, then hand to editor."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-25 (T025 DONE; reviewer not yet run)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T025 M01_SEDS_tax.R — Attempt 2 PASS (2026-06-25, Sonnet coder)
+═══════════════════════════════════════════════════
+DONE: Data/Macro/seds_gasoline_state_year.csv written; all Section 5 assertions PASS.
+  Section 2 replaced: FHWA URL loop (all-404) → local fread of
+    Data/Macro/raw/Tax_Rates_by_Motor_Fuel_and_State_20260625.csv
+  Key sanity checks: tax_dt rows 1999-2020 = 396 (18×22) ✓; TX=$0.200/gal every year ✓
+  Study states 1999-2020 NAs: price=0, consumption=0, tax=0 ✓
+  Expenditure vs price×consumption: max rel diff 0.00063 (< 0.01) ✓
+  981 NAs in gas_tax_state_usd_gal / gas_price_pretax_usd_gal = expected
+    (non-study states have no tax; study states 1994-1998 unused by 028+)
+REVIEWER: not run (session ended before user finished the instruction).
+  Next step: run Sonnet reviewer on T025 via .claude/run_reviewer_pro_api.ps1 -TicketID 025
+Resume: "Load CLAUDE.md. T025 code+data done, reviewer pending. Run reviewer then proceed to T026/028."
+═══════════════════════════════════════════════════
+
+
 # HANDOFF -- 2026-06-25 (Reduced-form HTE + facility causal-portfolio: server-ready; Sonnet to edit results into paper)
 
 ═══════════════════════════════════════════════════
