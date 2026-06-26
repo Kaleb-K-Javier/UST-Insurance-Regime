@@ -11,14 +11,10 @@
 # OUTPUTS : Data/Analysis/cross_subsidy_timeevolution.csv
 #           Output/Tables/cross_subsidy_timeevolution_summary.csv
 #           Output/Figures/Fig_CrossSub_AreaTime_{CO,LA,NM,TN}.{png,pdf}
-#           Output/Figures/Fig_CrossSub_TransferTrend.{png,pdf}
 ################################################################################
 
-if (!requireNamespace("patchwork", quietly = TRUE))
-  install.packages("patchwork", repos = "https://cloud.r-project.org", quiet = TRUE)
-
 suppressPackageStartupMessages({
-  library(data.table); library(ggplot2); library(patchwork); library(scales); library(here)
+  library(data.table); library(ggplot2); library(scales); library(here)
 })
 source(here::here("Code", "Helpers", "data_paths.R"))
 cat("=== 07e: Cross-subsidy time evolution ===\n")
@@ -161,37 +157,8 @@ for (st in FIG_STATES) {
   save_fig(p, sprintf("Fig_CrossSub_AreaTime_%s", st), 11, 3.6)
 }
 
-# ── Step 6: F2 — transfer trend (patchwork) ───────────────────────────────────
-cat("=== STEP 6: Figure F2 (transfer trend) ===\n")
-
-stat_p <- copy(stat)
-
-p_xfer <- ggplot(stat_p, aes(x = panel_year, y = xfer_pct * 100,
-                              color = state, group = state)) +
-  geom_line(linewidth = 0.9) +
-  geom_point(size = 2.5) +
-  scale_color_manual(values = STATE_COL, labels = STATE_LAB) +
-  scale_x_continuous(breaks = YEARS) +
-  scale_y_continuous("% of premiums",
-                     labels = function(x) paste0(x, "%")) +
-  labs(title = "Cross-subsidy over time: dollars vs share of premiums", x = NULL) +
-  theme_pub() +
-  theme(legend.position = "none",
-        axis.text.x = element_blank(), axis.ticks.x = element_blank())
-
-p_tau <- ggplot(stat_p, aes(x = panel_year, y = tau,
-                             color = state, group = state)) +
-  geom_line(linewidth = 0.9) +
-  geom_point(size = 2.5) +
-  scale_color_manual(values = STATE_COL, labels = STATE_LAB) +
-  scale_x_continuous(breaks = YEARS) +
-  scale_y_continuous("Break-even τ ($/facility-yr)",
-                     labels = dollar_format(accuracy = 1, big.mark = ",")) +
-  labs(x = "Year") +
-  theme_pub() + theme(legend.position = "bottom", legend.title = element_blank())
-
-p_trend <- p_xfer / p_tau
-save_fig(p_trend, "Fig_CrossSub_TransferTrend", 9, 6)
+# (Trend figure Fig_CrossSub_TransferTrend removed — not used. The AreaTime panels
+#  and cross_subsidy_timeevolution_summary.csv carry the by-year tau and xfer numbers.)
 
 # ── Step 7: Summary print ─────────────────────────────────────────────────────
 cat("=== STEP 7: Summary ===\n")
