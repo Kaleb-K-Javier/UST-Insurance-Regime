@@ -50,10 +50,11 @@ on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
 rel <- sprintf("read_csv_auto('%s', all_varchar=true, ignore_errors=true, header=true)", fr_path)
 
 # ---- 1. sniff column names so we lock onto the right ones --------------------
-cat("\n--- candidate columns (verify the chosen names below) ---\n")
+# the panel carries ~600 ISSUER_NAME_* one-hot dummies that bury the real schema;
+# print only the substantive (non-dummy) columns so we can find the limit fields.
+cat("\n--- substantive columns (excluding the ISSUER_NAME_* one-hot dummies) ---\n")
 cols <- as.data.table(dbGetQuery(con, sprintf("DESCRIBE SELECT * FROM %s", rel)))
-patt <- "issuer|carrier|company|insurer|naic|coverage|amount|occur|aggreg|facility|fac|year|begin|expir|effect|date|prepaid|mechanism|method"
-print(cols[grepl(patt, column_name, ignore.case = TRUE), .(column_name)])
+print(cols[!grepl("^ISSUER_NAME_.", column_name, ignore.case = TRUE), column_name])
 
 # ---- CONFIG: if any auto-pick below is wrong, hard-set it from the list above -
 COL <- list(facility = NA_character_, year = NA_character_, issuer = NA_character_,
@@ -63,8 +64,8 @@ cn   <- cols$column_name
 pick <- function(rx) { h <- cn[grepl(rx, cn, ignore.case = TRUE)]; if (length(h)) h[1] else NA_character_ }
 if (is.na(COL$facility)) COL$facility <- pick("^facility_?id|fac_?id|facility_?number|facility_?id_?number")
 if (is.na(COL$issuer))   COL$issuer   <- pick("issuer_?name|insurer_?name|carrier_?name|company_?name")
-if (is.na(COL$occ))      COL$occ      <- pick("occurrence")
-if (is.na(COL$agg))      COL$agg      <- pick("aggregate")
+if (is.na(COL$occ))      COL$occ      <- pick("occurrence|per_?occ|occ.*amount|amount.*occ|cov.*occur")
+if (is.na(COL$agg))      COL$agg      <- pick("aggregate|per_?agg|agg.*amount|amount.*agg|cov.*aggreg")
 if (is.na(COL$year))     COL$year     <- pick("^year$|policy_?year|coverage_?year|report_?year")
 if (is.na(COL$begin))    COL$begin    <- pick("begin_?date|effective_?begin|coverage_?effective|effective_?date")
 
@@ -108,16 +109,41 @@ dbExecute(con, "
   FROM fm WHERE year IS NOT NULL
   GROUP BY facility, year")
 n_fy <- dbGetQuery(con, "SELECT COUNT(*) n, COUNT(DISTINCT facility) f FROM fy")
-cat(sprintf("  insured facility-years: %s  (distinct facilities: %s)\n",
+cat(sprintf("  facility-years (ALL FR mechanisms): %s  (distinct facilities: %s)\n",
             format(n_fy$n, big.mark = ","), format(n_fy$f, big.mark = ",")))
 
-# carrier-family map (refine these patterns after eyeballing Q1)
+# ---- 2b. mechanism split + INSURED sample in the model window ----------------
+# ISSUER_NAME is the FR *mechanism*: most facility-years are NO COVERAGE / SELF /
+# PARENT (state-fund era / self-insured / out of compliance) -> NOT premium-bearing.
+# Insured = the value names a real carrier (contains INS / ASSURANCE / UNDERWRITER).
+INS_FILTER <- "(carrier LIKE '%INS%' OR carrier LIKE '%ASSURANCE%' OR carrier LIKE '%UNDERWRITER%')"
+YEAR_LO <- 2006L; YEAR_HI <- 2020L   # TX structural 'observed' window (RB era)
+
+cat("\n--- FR mechanism split (full panel, all years) ---\n")
+print(dbGetQuery(con, sprintf("
+  SELECT CASE WHEN %s THEN 'INSURED (real carrier)'
+              WHEN carrier LIKE 'NO COVERAGE%%' THEN 'NO COVERAGE'
+              WHEN carrier LIKE 'SELF%%'        THEN 'SELF / FIN TEST'
+              WHEN carrier LIKE 'PARENT%%'      THEN 'PARENT GUARANTEE'
+              ELSE 'OTHER MECHANISM' END AS mechanism,
+         COUNT(*) fac_years, ROUND(100.0*COUNT(*)/SUM(COUNT(*)) OVER (),2) pct
+  FROM fy GROUP BY mechanism ORDER BY fac_years DESC", INS_FILTER)))
+
+dbExecute(con, sprintf("CREATE TEMP TABLE ins AS
+  SELECT * FROM fy WHERE %s AND year BETWEEN %d AND %d", INS_FILTER, YEAR_LO, YEAR_HI))
+ni <- dbGetQuery(con, "SELECT COUNT(*) n, COUNT(DISTINCT facility) f FROM ins")
+cat(sprintf("\nINSURED facility-years in [%d,%d]: %s  (facilities: %s)\n  -> Q1-Q4 below run on THIS insured sample\n",
+            YEAR_LO, YEAR_HI, format(ni$n, big.mark = ","), format(ni$f, big.mark = ",")))
+
+# carrier-family map. ACE has its own Iowa rate manuals (like Zurich) -> priceable.
+# AIG family appears as CHARTIS / AIG / COMMERCE & INDUSTRY / AMERICAN INTL (abbrev).
 fam <- function(x) fcase(
   grepl("MID.?CONT", x), "Mid-Continent",
   grepl("TOMIC|TANK ?OWNER", x), "TOMICS",
   grepl("GREAT ?AMERICAN", x), "Great American",
   grepl("ZURICH", x), "Zurich",
-  grepl("COMMERCE|CHARTIS|\\bAIG\\b|AMERICAN INTERNATIONAL|C ?& ?I", x), "AIG/C&I",
+  grepl("\\bACE\\b|ILLINOIS UNION", x), "ACE (Iowa proxy)",
+  grepl("COMMERCE|CHARTIS|\\bAIG\\b|AMERICAN INTL|AMERICAN INTERNATIONAL|C ?& ?I", x), "AIG/C&I",
   default = "OTHER (impute)")
 
 # ---- Q1. carrier share + priceable coverage ---------------------------------
@@ -125,10 +151,10 @@ cat("\n=== Q1. carrier share of insured facility-years (top 40) ===\n")
 q1 <- as.data.table(dbGetQuery(con, "
   SELECT carrier, COUNT(*) fac_years,
          ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) pct
-  FROM fy GROUP BY carrier ORDER BY fac_years DESC LIMIT 40"))
+  FROM ins GROUP BY carrier ORDER BY fac_years DESC LIMIT 40"))
 print(q1)
 
-allc <- as.data.table(dbGetQuery(con, "SELECT carrier, COUNT(*) fac_years FROM fy GROUP BY carrier"))
+allc <- as.data.table(dbGetQuery(con, "SELECT carrier, COUNT(*) fac_years FROM ins GROUP BY carrier"))
 allc[, family := fam(carrier)]
 cov <- allc[, .(fac_years = sum(fac_years)), by = family][, pct := round(100 * fac_years / sum(fac_years), 2)][order(-pct)]
 cat("\n--- priceable coverage by carrier family (THE go/no-go number) ---\n")
@@ -137,7 +163,7 @@ print(cov)
 # ---- Q2. carrier composition by era -----------------------------------------
 cat("\n=== Q2. carrier-family facility-year counts by ERA ===\n")
 allc_era <- as.data.table(dbGetQuery(con, "
-  SELECT era, carrier, COUNT(*) n FROM fy WHERE era IS NOT NULL GROUP BY era, carrier"))
+  SELECT era, carrier, COUNT(*) n FROM ins WHERE era IS NOT NULL GROUP BY era, carrier"))
 allc_era[, family := fam(carrier)]
 print(dcast(allc_era[, .(n = sum(n)), by = .(era, family)], family ~ era, value.var = "n", fill = 0))
 
@@ -145,7 +171,7 @@ print(dcast(allc_era[, .(n = sum(n)), by = .(era, family)], family ~ era, value.
 cat("\n=== Q3. within-facility carrier movement ===\n")
 ever <- dbGetQuery(con, "
   SELECT COUNT(*) n_fac, SUM(CASE WHEN nc > 1 THEN 1 ELSE 0 END) n_switchers
-  FROM (SELECT facility, COUNT(DISTINCT carrier) nc FROM fy GROUP BY facility)")
+  FROM (SELECT facility, COUNT(DISTINCT carrier) nc FROM ins GROUP BY facility)")
 cat(sprintf("  facilities that ever change carrier: %s of %s (%.1f%%)\n",
             format(ever$n_switchers, big.mark = ","), format(ever$n_fac, big.mark = ","),
             100 * ever$n_switchers / ever$n_fac))
@@ -153,7 +179,7 @@ cat("\n--- where Zurich / TOMICS / Tank-Owners books go (year-over-year switches
 flows <- dbGetQuery(con, "
   WITH t AS (
     SELECT a.facility, a.carrier AS from_c, b.carrier AS to_c
-    FROM fy a JOIN fy b ON a.facility = b.facility AND b.year = a.year + 1
+    FROM ins a JOIN ins b ON a.facility = b.facility AND b.year = a.year + 1
     WHERE a.carrier <> b.carrier)
   SELECT from_c, to_c, COUNT(*) n FROM t
   WHERE from_c LIKE '%ZURICH%' OR from_c LIKE '%TOMIC%' OR from_c LIKE '%TANK OWNER%'
@@ -164,6 +190,6 @@ print(flows)
 cat("\n=== Q4. per-occurrence coverage-limit distribution (top 20) ===\n")
 print(dbGetQuery(con, "
   SELECT occ_limit, COUNT(*) n, ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) pct
-  FROM fy WHERE occ_limit IS NOT NULL GROUP BY occ_limit ORDER BY n DESC LIMIT 20"))
+  FROM ins WHERE occ_limit IS NOT NULL GROUP BY occ_limit ORDER BY n DESC LIMIT 20"))
 
 cat(sprintf("\n=== done in %.1f min ===\n", as.numeric(difftime(Sys.time(), t0, units = "mins"))))
