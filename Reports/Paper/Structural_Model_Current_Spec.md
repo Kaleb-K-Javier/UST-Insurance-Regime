@@ -1,8 +1,13 @@
 # Structural Model — Current Specification (for the editor)
-# As of 2026-06-26. This supersedes the single-tank 6p+FE model.
+# As of 2026-06-26. This supersedes the single-tank 6p+FE model AND the earlier
+# pooled-exposure portfolio spec (now a REJECTED spec — see §8/§10).
 # Plain-language spec + equations + identification + CFs, ready to draft from.
-# NOTE: numbers from the FE-on fit are flagged; the pooled-gamma headline
-#       estimates are pending the converged pooled run (see "Estimates").
+# FINAL SPEC, in one line: operating term = psi * MEASURED revenue R(G,state,era);
+#   risk exposure = TWO separate weights (gamma_p on premium, gamma_r on out-of-
+#   pocket). gamma_r is identified (~4.32); gamma_p is NOT separately identified ->
+#   money-metric reframe + a BRACKETED CF1 (§7-§9). Numbers from the FE-on anchor fit
+#   are flagged; psi and the final two-gamma+revenue fit are pending the gated run
+#   (tickets 028/029; see §8).
 
 ═══════════════════════════════════════════════════
 1. ONE-PARAGRAPH OVERVIEW
@@ -65,43 +70,45 @@ which specific tank leaves. Installs are double-wall by regulation (not a choice
 For a non-exit action a leading to resulting portfolio n' in environment e, the
 per-period payoff is:
 
-  u_a(s,e) = phi_{G}                      operating value (by capacity bin)
+  u_a(s,e) = psi * R(G, state, era)       operating value (MEASURED revenue)
            + alpha_e                      environment fixed effect
-           - ( gamma_pool + gamma_RB * 1[RB_e] ) * E(n', e)   risk-exposure cost
+           - gamma_p * P(n', e)           response to the insurance PREMIUM
+           - gamma_r * H(n') * D_e        response to expected OUT-OF-POCKET cost
            - k * c_rem  -  m * c_inst     action costs
 
   Exit value:  u_exit = kappa_1 * N       (N = number of tanks; kappa_0 := 0)
 
-where TOTAL RISK EXPOSURE is
-
-  E(n', e) = P(n', e)        insurance premium the facility pays
-           + H(n') * D_e     expected out-of-pocket cost of a leak
-                             ( H = facility hazard = prob. any tank leaks;
-                               D_e = deductible the facility bears )
+The two risk terms together are the facility's TOTAL RISK EXPOSURE, but each dollar
+channel carries its OWN behavioral weight:
+  - P(n', e)      = insurance premium the facility pays in environment e
+  - H(n') * D_e   = expected out-of-pocket cost of a leak
+                    ( H = facility hazard = prob. any tank leaks;
+                      D_e = deductible the facility bears; large, ~$5k-$55k )
 
 Key modeling choices, in plain terms:
-  - ONE pooled coefficient gamma_pool on TOTAL risk exposure (premium + expected
-    out-of-pocket), NOT two separate coefficients on premium and on out-of-pocket.
-    The data cannot separately identify the two (see Identification); a dollar of
-    premium and a dollar of expected out-of-pocket are treated as equivalent.
-  - gamma_RB is an EXTRA exposure response that applies only under risk-based
-    pricing (Texas). It lets the per-dollar response differ between the risk-based
-    and uniform regimes — the "is the risk-based pricing mechanism doing extra work"
-    knob. gamma_RB > 0 means firms respond more strongly to exposure when pricing is
-    risk-based; ~0 means a dollar is a dollar regardless of regime.
+  - TWO separate exposure weights, NOT one pooled coefficient. gamma_p is the
+    response to a dollar of insurance premium; gamma_r is the response to a dollar of
+    expected out-of-pocket leak cost. We do NOT force them equal. (An earlier spec
+    pooled them into a single coefficient on premium-plus-out-of-pocket; that spec is
+    REJECTED — pooling diluted the response to ~0, see §8/§10.)
+  - The OPERATING term is MEASURED revenue, psi * R(G, state, era), NOT free
+    intercepts. R is built first-stage from fuel demand x margin scaled by facility
+    capacity (representative capacity of bin G x the state-era fuel margin); psi is
+    the single free weight translating a model-dollar of revenue into utility. This
+    disciplines the "revenue scales with size" channel instead of estimating one free
+    constant per capacity bin. (The earlier free per-bin intercepts phi_1..phi_4 came
+    back flat with no size gradient and carried no revenue content — also rejected;
+    see §8.) Timing: R uses the CURRENT period's capacity bin G; capacity evolution
+    bites through the continuation value, not the within-period flow.
   - alpha_e (environment fixed effects) capture everything that differs across
     states for reasons unrelated to exposure (geology, enforcement, economy, data
     coverage). They are LOAD-BEARING: they isolate the within-state exposure signal.
-  - phi_G is the operating (revenue) value, allowed to differ by capacity bin.
-    [PLANNED REFINEMENT, in progress: replace the free phi_G intercepts with a single
-     coefficient psi on MEASURED revenue, u contains psi * R(G, state, era), where R
-     is built from gas-demand and margin data. This gives a disciplined revenue-
-     scales-with-size channel instead of free intercepts. The rest of the model is
-     unchanged. The editor can write the operating term as "phi_G (size-specific
-     operating value)" with a footnote that the estimated version uses measured
-     revenue psi*R.]
+    Texas is the reference (alpha_TX := 0), so Texas's operating level is purely
+    psi * R_TX.
   - kappa_0 := 0 is a normalization (the absorbing exit value pins the location of
-    the value function); kappa_1 then measures how exit value scales with size.
+    the value function); kappa_1 then measures how exit value scales with size. In
+    R = capacity x margin the turnover constant is normalized to 1, so psi absorbs
+    turnover (a real-dollar revenue reading divides psi by true turnover).
 
 ═══════════════════════════════════════════════════
 5. LAW OF MOTION / TRANSITIONS
@@ -132,54 +139,71 @@ controls 1999-2020).
 ═══════════════════════════════════════════════════
 7. IDENTIFICATION  (what pins each parameter, plainly)
 ═══════════════════════════════════════════════════
-  - gamma_pool (response to total risk exposure): identified from WITHIN-state
-    variation in exposure — at fixed state, facilities with older or single-wall
-    tanks, or facing higher deductibles, carry more exposure and exit/downsize more.
-    The state fixed effects are what make this clean: they remove cross-state
-    confounds so the response comes from within-state variation, which is credible.
-  - WHY POOLED, NOT SPLIT (premium vs out-of-pocket): we tried separate
-    coefficients. The premium coefficient collapses to ~0 and is not separately
-    identified, because (a) under risk-based pricing premium moves with hazard so the
-    two are collinear, and (b) premium varies mostly across states, which the fixed
-    effects absorb. Texas premium data only begins in 2006, so there is no clean
-    within-Texas uniform-vs-risk-based benchmark to separate them. We therefore
-    report the pooled response and treat premium-vs-out-of-pocket separation as not
-    identified in this data — itself a finding.
-  - gamma_RB (extra response under risk-based pricing): identified from the
-    difference in the exposure-response slope between the uniform control states and
-    risk-based Texas. CAVEAT TO STATE: in this sample "risk-based" = "Texas," so
-    gamma_RB conflates the pricing mechanism with Texas-specific factors; it is
-    suggestive, not a clean causal estimate of the mechanism.
-  - phi_G / psi (operating value by size): cross-size variation in behavior. (With
-    free intercepts phi_G came back nearly flat across capacity bins, which is part
-    of the motivation for the measured-revenue refinement.)
+  - gamma_r (response to expected OUT-OF-POCKET cost) — IDENTIFIED, ~4.32. Pinned by
+    WITHIN-state variation in hazard x deductible: at a fixed state, facilities with
+    older or single-wall tanks carry more hazard H, and the out-of-pocket term H*D_e
+    moves with it; the deductible D_e is set by the state (large, zero in some state
+    funds), orthogonal to a facility's own risk. The OOP channel therefore has a
+    clean, age-orthogonal lever — wall type at fixed age -> different hazard; the
+    state-set deductible -> different D — that a pure age effect cannot mimic. The
+    state fixed effects remove cross-state confounds so the response is within-state.
+  - gamma_p (response to the PREMIUM) — NOT SEPARATELY IDENTIFIED. Premium variation
+    is almost entirely cross-state, which the state fixed effects absorb; the within-
+    state premium variation that remains is collinear with portfolio composition
+    (under risk-based pricing the premium moves with hazard). Texas premium data
+    begins only in 2006, so there is no within-Texas uniform-vs-risk-based premium
+    benchmark to break the collinearity. We therefore do NOT report a free gamma_p
+    number; we report it as not separately identified — itself a finding about what
+    this data can and cannot price.
+  - MONEY-METRIC REFRAME (how one weight serves both channels): there is ONE marginal
+    utility of money, identified off the out-of-pocket / deductible channel as
+    gamma_r. Under risk-neutrality a dollar is a dollar, so the money-metric benchmark
+    IMPOSES gamma_p = gamma_r on the premium. Because gamma_p is not separately
+    identified, the premium counterfactual (CF1) is a BRACKET, not a point: gamma_p =
+    0 (the premium is a pure transfer firms do not behaviorally respond to) at one end,
+    gamma_p = gamma_r (full money-metric — a premium dollar moves behavior exactly
+    like an out-of-pocket dollar) at the other. The true response lies inside the
+    bracket. To TEST rather than impose the premium channel would require a within-
+    regime premium change holding hazard fixed; a second treated state (Iowa's later
+    fund -> risk-based transition) is the natural design, flagged as future work.
+  - psi (operating value, revenue weight): identified from how operating-vs-exit
+    behavior varies with size and with the state-era fuel margin that scales R. With
+    free per-bin intercepts the operating profile came back flat (no size gradient, no
+    revenue content), motivating forcing the capacity profile to measured revenue and
+    estimating the single weight psi.
   - c_rem, c_inst (per-tank removal / install costs): the frequency of downsizing
     and replacement actions.
   - kappa_1 (size gradient of exit value): how the full-exit rate varies with the
     number of tanks.
-  - The clean, age-orthogonal levers that discipline the exposure response are WALL
-    type (single vs double at the same age -> different hazard) and DEDUCTIBLE
-    (varies across states, zero in some state funds): these move exposure without
-    being driven by age, so they validate that the exposure response is genuine and
-    not just an age-of-tank effect.
 
 ═══════════════════════════════════════════════════
 8. ESTIMATES  (status + numbers)
 ═══════════════════════════════════════════════════
-Converged FE-on fit (the prior two-coefficient parameterization; the empirical
-anchor we have in hand):
-    gamma (risk/out-of-pocket) = 4.32   (premium coefficient ~ 0, not separately
-                                         identified -> motivates the pooled spec)
-    c_rem   = 3.85,  c_inst = 2.04,  kappa_1 = 0.93
-    phi_1..4 ~ -0.55 (nearly flat across capacity bins)
+Empirical anchor in hand (FE-on fit, two-coefficient operating + risk):
+    gamma_r (out-of-pocket / risk) = 4.32   IDENTIFIED — the headline behavioral weight
+    gamma_p (premium)              ~ 0       NOT separately identified (do NOT report
+                                             as a number; see §7)
+    c_rem = 3.85,  c_inst = 2.04,  kappa_1 = 0.93
+    phi_1..4 ~ -0.55 (the OLD free intercepts; flat across capacity bins -> replaced
+                      by psi*R below)
     log-likelihood = -291,648.5;  17 environments;  beta = 0.9957.
-HEADLINE (pending): gamma_pool and gamma_RB from the converged POOLED run (same
-    machinery; the pooled respec passed its gradient-correctness gate). Slot these in
-    when the pooled fit lands. Expect gamma_pool > 0 (more exposure -> less maintain);
-    gamma_RB sign is the regime-mechanism result.
+THE FINAL FIT (pending, gated): the two-gamma (gamma_p, gamma_r) + measured-revenue
+    (psi*R) specification, FE-on. It puts the single revenue weight psi in place of
+    phi_1..phi_4 and is the fit the paper reports. Gated on the revenue lookup
+    R(G,state,era) landing (ticket 028) and the estimator swap (ticket 029); the
+    counterfactual machinery is already built and validated against the model
+    primitives. Slot in psi, the refreshed gamma_r, c_rem, c_inst, kappa_1, and the
+    log-likelihood when that fit lands. Expect gamma_r > 0 (more out-of-pocket
+    exposure -> less maintain) and psi > 0 (more revenue -> more operating).
+REJECTED SPEC (report as a negative result, NOT the headline): a POOLED single
+    coefficient on premium-plus-out-of-pocket. That fit CONVERGED but the pooled
+    weight collapsed to ~0 (and its RB interaction to ~0): premium dominates the
+    pooled exposure in magnitude yet is behaviorally inert (gamma_p ~ 0), so pooling
+    drags the single coefficient to zero and DESTROYS the real out-of-pocket response
+    (gamma_r = 4.32) as collateral. This is precisely why the model keeps the two
+    channels separate (see §10).
 All values are in model units (1 unit = $10,000 / year / facility).
-Standard errors: not yet computed (point estimates); an SE pass is planned — note
-    this, since gamma_RB's significance is needed for interpretation.
+Standard errors: not yet computed (point estimates); an SE pass is planned.
 
 ═══════════════════════════════════════════════════
 9. COUNTERFACTUALS
@@ -191,11 +215,18 @@ Welfare is computed on the observed state distribution (no population reweightin
 
   CF1 — Texas under uniform pricing. Replace Texas's risk-based CONTRACT (premium
         and deductible together) with a representative uniform-state contract, and
-        re-solve. Reported as a DECOMPOSITION:
-          (a) contract change only (keep the risk-based response), vs
-          (b) contract change + turn off the risk-based mechanism (gamma_RB).
-        (b) minus (a) isolates the risk-based-pricing MECHANISM effect. This is the
-        headline "risk-based vs uniform" experiment.
+        re-solve. Because the premium response gamma_p is not separately identified
+        (§7), CF1 is reported as a BRACKET, not a point:
+          (a) gamma_p = 0       — the premium change is a pure transfer; behavior
+                                   responds only through the deductible / out-of-pocket
+                                   channel (lower bound on the behavioral response).
+          (b) gamma_p = gamma_r — full money-metric; a premium dollar moves behavior
+                                   exactly like an out-of-pocket dollar (upper bound).
+        The true effect lies between (a) and (b); report welfare and behavioral
+        outcomes as the interval. This is the headline "risk-based vs uniform"
+        experiment, now honest about the premium-channel uncertainty. (Implementation:
+        the CF solver carries the gamma_p knob; (a) and (b) are two re-solves of the
+        same contract swap.)
   CF3 — Replacement subsidy. Lower the install cost (subsidize new double-wall
         tanks), swept over subsidy levels; report the replacement-rate and welfare
         response, by regime.
@@ -215,12 +246,21 @@ Welfare accounting (per CF, with a bar chart + table):
 ═══════════════════════════════════════════════════
 10. CAVEATS THE WRITE-UP SHOULD STATE
 ═══════════════════════════════════════════════════
-  - Premium-vs-out-of-pocket response is NOT separately identified; we report a
-    pooled total-exposure response (a data limitation, stated as a finding).
-  - gamma_RB conflates risk-based pricing with Texas-specific factors (RB = TX in
-    sample); present it as suggestive, with the within-Texas pre-1999 benchmark
-    unavailable (Texas was a petroleum-fee state fund pre-reform; no firm-level
-    contract data before 2006).
+  - The PREMIUM response gamma_p is NOT separately identified (premium is cross-state
+    -> FE-absorbed; within-state collinear with hazard). State this as a finding, and
+    handle it through the money-metric reframe + the bracketed CF1 (§7, §9) rather
+    than reporting a premium coefficient.
+  - REJECTED pooled spec: pooling premium and out-of-pocket into one exposure
+    coefficient diluted the weight to ~0 and destroyed the real out-of-pocket response
+    (gamma_r = 4.32). Report this as a negative result that justifies the two-channel
+    spec; do not present a pooled number as a headline.
+  - The operating term is MEASURED revenue psi*R, not free intercepts; psi absorbs the
+    turnover normalization (kappa := 1), so psi is a utility-per-model-dollar weight,
+    not a real-dollar revenue elasticity until divided by true turnover.
+  - "Risk-based" = "Texas" in this sample: any risk-based-vs-uniform contrast (incl.
+    the CF1 contract swap) conflates the pricing mechanism with Texas-specific factors;
+    present it as suggestive, with no within-Texas pre-1999 firm-level contract data
+    (Texas was a petroleum-fee state fund pre-reform; premium data begins 2006).
   - Counterfactuals keep the state fixed effects (Semantic-1), so the baseline
     reproduces observed behavior and CF effects are clean perturbations; part of each
     FE may be data artifact rather than behavior — acknowledge.

@@ -68,15 +68,23 @@ cat("\n=== SECTION: EXTRACT THETA_HAT FROM FIT ===\n")
 use_pooled    <- isTRUE(fit$use_pooled)
 beta          <- fit$beta
 theta_hat_raw <- fit$theta_hat
-cat(sprintf("  use_pooled=%s beta=%.4f\n", use_pooled, beta))
+# use_psi: operating term = psi * MEASURED revenue R(G,state,era) (ticket 029 swap,
+# mirrored on the CF side) instead of the dead free phi_1..phi_4 capacity-bin
+# intercepts. Auto-detected from the fit (parallel to use_pooled): a psi-fit carries
+# "psi" and no "phi_*"; a legacy phi-fit takes the old path unchanged (no CF
+# regression — the existing pooled/two-gamma gates still run).
+use_psi       <- "psi" %in% names(theta_hat_raw)
+cat(sprintf("  use_pooled=%s use_psi=%s beta=%.4f\n", use_pooled, use_psi, beta))
 cat("  theta_hat:\n"); print(round(theta_hat_raw, 4))
 
-param_struct <- if (use_pooled) {
-  c("phi_1","phi_2","phi_3","phi_4","gamma_pool","gamma_RB","c_rem","c_inst","kappa_1")
-} else {
-  c("phi_1","phi_2","phi_3","phi_4","gamma_p","gamma_r","c_rem","c_inst","kappa_1")
-}
+# Operating params: psi (one revenue weight) OR the legacy phi_1..phi_4 intercepts.
+# Risk params: pooled (gamma_pool + gamma_RB) OR two-gamma (gamma_p premium, gamma_r OOP).
+op_params    <- if (use_psi)    "psi"                       else c("phi_1","phi_2","phi_3","phi_4")
+risk_params  <- if (use_pooled) c("gamma_pool","gamma_RB")  else c("gamma_p","gamma_r")
+param_struct <- c(op_params, risk_params, "c_rem", "c_inst", "kappa_1")
 stopifnot(all(param_struct %in% names(theta_hat_raw)))
+if (use_psi && any(grepl("^phi_", names(theta_hat_raw))))
+  warning("fit carries BOTH psi and phi_* — operating term uses psi*R; phi_* ignored")
 
 eps_prob <- 1e-10
 stopifnot(beta > 0, beta < 1)
@@ -195,6 +203,43 @@ for (e in seq_len(n_env)) {
   prem_ej[[e]] <- pm
 }
 cat(sprintf("  prem_ej: %d envs [OK]\n", n_env))
+
+# R_rev_e: per-env MEASURED operating revenue R(G, state, era), length-4 over G bins.
+# Consumed by compute_R_env (V-inversion) and ccp_update_cf (softmax) as psi*R, the
+# operating term that replaces phi_G (ticket 029 swap, CF side). Mirrors prem_ej's
+# env/era code path EXACTLY (ticket 029 I3):
+#   - RB envs (TX): index R_rev by the env's era_str, just as the premium card
+#     ss$P_RB_all[ , era_str] does.
+#   - FF control envs are era-pooled in the model (one env per state, all years; the
+#     premium is a single time-averaged flat fee tau, not era-specific) -> collapse R
+#     over eras by mean, the revenue analog of the era-invariant tau.
+#       *** FF-ERA RULE: this unweighted era-mean must match whatever ticket 029 uses
+#           on the ESTIMATOR side. If 029 pins a different FF collapse (e.g. a specific
+#           era or a year-weighted mean), change ONLY this one line + 029 together. ***
+# R_rev is added to PM_Lookups.rds by ticket 028; required before any psi CF run.
+R_rev_e <- vector("list", n_env)
+if (use_psi) {
+  if (!("R_rev" %in% names(lk)))
+    stop("use_psi=TRUE but lk$R_rev is absent in PM_Lookups.rds — run ticket 028 first.")
+  R_rev <- lk$R_rev
+  stopifnot(length(dim(R_rev)) == 3L, dim(R_rev)[1] == N_G)
+  r_states <- dimnames(R_rev)[[2]]; r_eras <- dimnames(R_rev)[[3]]
+  stopifnot(all(env_tbl$g %in% r_states),
+            all(env_tbl$era_str[env_tbl$type == "RB"] %in% r_eras))
+  for (e in seq_len(n_env)) {
+    ev <- env_tbl[e]
+    R_rev_e[[e]] <- if (ev$type == "RB") {
+      as.numeric(R_rev[, ev$g, ev$era_str])          # TX: this env's era
+    } else {
+      as.numeric(rowMeans(R_rev[, ev$g, ]))          # FF: era-pooled (mirrors flat tau)
+    }
+    stopifnot(length(R_rev_e[[e]]) == N_G, all(is.finite(R_rev_e[[e]])))
+  }
+  cat(sprintf("  R_rev_e: %d envs, R range [%.4f, %.4f] [OK]\n",
+      n_env, min(unlist(R_rev_e)), max(unlist(R_rev_e))))
+} else {
+  cat("  R_rev_e: not built (use_psi=FALSE; legacy phi_G operating term) [OK]\n")
+}
 
 # === SECTION A3: MU(s) ===
 cat("\n=== SECTION A3: MU(s) — OBSERVED STATE DISTRIBUTION ===\n")
@@ -358,13 +403,15 @@ compute_R_env <- function(e, p_e, prem_mat, D_e_val, rb_e_val, theta_eff = theta
 
   Pa_X <- p_e[["X"]]
 
-  # phi_G: contribution = (1 - P_X) * theta_eff["phi_G"] at G-column
-  phi_vals <- if (use_pooled) {
-    c(theta_eff["phi_1"], theta_eff["phi_2"], theta_eff["phi_3"], theta_eff["phi_4"])
+  # Operating value by capacity bin G, earned on every non-exit action (basis 1-P_X):
+  #   use_psi : psi * R(G, state, era)   measured revenue (ticket 029 swap)
+  #   legacy  : phi_G                    free capacity-bin intercepts
+  op_vals <- if (use_psi) {
+    as.numeric(theta_eff["psi"]) * R_rev_e[[e]]
   } else {
     c(theta_eff["phi_1"], theta_eff["phi_2"], theta_eff["phi_3"], theta_eff["phi_4"])
   }
-  phi_term <- (1 - Pa_X) * matrix(phi_vals, C, N_G, byrow = TRUE)
+  phi_term <- (1 - Pa_X) * matrix(op_vals, C, N_G, byrow = TRUE)
 
   # gamma terms: accumulate rho_gp and rho_gr weighted by P
   rho_gp <- matrix(0.0, C, N_G)
@@ -407,7 +454,9 @@ compute_R_env <- function(e, p_e, prem_mat, D_e_val, rb_e_val, theta_eff = theta
 ccp_update_cf <- function(e, V_mat, prem_mat, D_e_val, rb_e_val, feas_mat_e, theta_eff) {
   ev      <- env_tbl[e]
   alpha_e <- if (ev$type == "FF") alpha_hat[[paste0("alpha_", ev$g)]] else 0.0
-  phi_G   <- c(theta_eff["phi_1"], theta_eff["phi_2"], theta_eff["phi_3"], theta_eff["phi_4"])
+  # operating value by bin G: psi*R (use_psi) or legacy phi_G — added identically below
+  phi_G   <- if (use_psi) as.numeric(theta_eff["psi"]) * R_rev_e[[e]] else
+             c(theta_eff["phi_1"], theta_eff["phi_2"], theta_eff["phi_3"], theta_eff["phi_4"])
 
   v_max_mat <- matrix(-Inf, C, N_G)
   v_mats    <- vector("list", n_act_p1)
@@ -609,9 +658,9 @@ cat("  Workers initialised (kernel + C++ loaded) [OK]\n")
   "ss", "lk", "kernel", "imap0", "rmap0", "GaT_list",
   "k_vec", "m_vec", "act_keys", "C", "N_G", "N_SIDX",
   "beta", "eps_prob", "all_action_keys", "n_act", "n_act_p1",
-  "maint_idx", "feas_mask", "prem_ej", "haz_j",
+  "maint_idx", "feas_mask", "prem_ej", "haz_j", "R_rev_e",
   "env_tbl", "alpha_hat", "theta_hat", "param_struct",
-  "use_pooled", "n_env", "gamma_E", "ord", "A_perm", "uplo_flag", "MARG_BIN",
+  "use_pooled", "use_psi", "n_env", "gamma_E", "ord", "A_perm", "uplo_flag", "MARG_BIN",
   "USE_BATCHED_MV"
 )
 parallel::clusterExport(cl, .cf_static_vars, envir = .GlobalEnv)
@@ -809,9 +858,17 @@ gate_cfa_check_identity <- function(e_test, P_test_e) {
     R_const <- R_const + Pa * en
   }
   rho <- setNames(vector("list", length(param_struct)), param_struct)
-  for (G_prime in seq_len(N_G)) {
-    rp <- matrix(0.0, C, N_G); rp[, G_prime] <- 1 - Pa_X[, G_prime]
-    rho[[paste0("phi_", G_prime)]] <- rp
+  if (use_psi) {
+    # rho_psi[c,G] = R_e_era[G] * (1 - P_X[c,G]) — the phi_G basis weighted by revenue
+    rp <- matrix(0.0, C, N_G)
+    for (G_prime in seq_len(N_G))
+      rp[, G_prime] <- R_rev_e[[e_test]][G_prime] * (1 - Pa_X[, G_prime])
+    rho[["psi"]] <- rp
+  } else {
+    for (G_prime in seq_len(N_G)) {
+      rp <- matrix(0.0, C, N_G); rp[, G_prime] <- 1 - Pa_X[, G_prime]
+      rho[[paste0("phi_", G_prime)]] <- rp
+    }
   }
   rho_gp <- matrix(0.0, C, N_G); rho_gr <- matrix(0.0, C, N_G)
   for (i in seq_len(n_act)) {

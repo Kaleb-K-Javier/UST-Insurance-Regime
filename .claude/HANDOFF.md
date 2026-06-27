@@ -1,3 +1,131 @@
+# HANDOFF -- 2026-06-26 NIGHT (PIVOT TASKS 1+2+AUDIT DONE: PM09 psi*R+2gamma swap; spec+editor brief; PM08 audited + tight-tol knobs added + PUSHED. Next = run two-gamma fit tight on server -> read gamma_p)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: PM08 audit + tight-convergence knobs + push (2026-06-26 night, Opus)
+═══════════════════════════════════════════════════
+GAMMA_P IS REACHABLE (diagnostic, this session): the TX card pbar[16x3] vs retained
+  risk H*D is only R^2=0.18 collinear -> ~82% of premium variation is ORTHOGONAL to
+  hazard (cor +0.43 model-faithful via single-tank comps; the naive pbar-row vs h_aw
+  pairing gives a BOGUS -0.37 because pbar rows are NOT in h_aw cell order -- model
+  pairs them via h_idx). So gamma_p was never a missing-variation problem. The ~0 on
+  record is from an unconverged/old fit. Levers: era re-pricing (card $289->$352 over
+  2006/14/19) + card-vs-hazard mismatch (within-era R^2 0.02->0.40). Diagnostic scripts
+  in scratchpad (gamma_p_diag_aligned.R is the model-faithful one).
+PM08 AUDIT (full read, this session): correctness SOLID -- GATE B (V_basis==V_direct
+  <1e-8), GATE C (analytic vs FD grad <1e-5), PM08_VALIDATE_B (serial==parallel <1e-8),
+  hard error propagation, alpha profiled by safe uniroot bracketing, premium = era card
+  P_RB_all[pc,era] (L191), two-gamma gamma_p/gamma_r wired w/ correct analytic grad.
+  ONE GAP for "tight errors": NPL tol_theta/tol_P hardcoded 1e-5 + max_npl_iter=10
+  (vs CLAUDE.md 1e-8/1e-7). FIX (committed): tol_theta/tol_P now env-overridable
+  (PM08_TOL_THETA / PM08_TOL_P), DEFAULT 1e-5 UNCHANGED; max via PM08_MAXITER (already
+  a knob). No CCP damping in PM08 -> if tight run oscillates, watch trace_dt dTheta/dP;
+  damping is the next lever. SEs still NOT computed (separate pass).
+SERVER RUN (two-gamma, tight, parallel) -- inputs (PM_StateSpace/PM_Lookups/pm_agg_counts)
+  are NOT in git (gitignored); server already has them. Pull updates CODE only.
+    git pull origin main
+    # from repo root on ucbare2:
+    PM08_POOLED unset (two-gamma) | PM08_NO_ALPHA unset (FE on) | PM08_TEST_NENV unset (full 17 env)
+    $env:PM08_NWORKERS="13"; $env:PM08_MAXITER="200"; $env:PM08_TOL_THETA="1e-7"; $env:PM08_TOL_P="1e-7";
+    & "C:/Program Files/R/R-4.5.2/bin/x64/Rscript.exe" Code/Dynamic_Model/PM08_Estimator_v4.R
+  Optional pre-check: $env:PM08_VALIDATE_B="1"; $env:PM08_TEST_NENV="2"; <Rscript ...> (serial==parallel gate).
+  Output -> Output/Estimation_Results/Model_Portfolio_v4_two_gamma_FE_on_observed_<date>.rds;
+  CHECK fit$converged==TRUE + trace_dt dTheta/dP hit 1e-7; then read theta_hat["gamma_p"].
+PUSHED to origin/main this session: PM08 (tol knobs), PM09 (psi*R CF swap), spec doc,
+  editor brief, tickets 028/029, this handoff. (Unrelated GIS/Macro/figure working-tree
+  changes left UNcommitted on purpose.)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: CF code psi*R swap + editor brief DONE (2026-06-26 night, Opus)
+═══════════════════════════════════════════════════
+TASK 1 -- PM09_CF_Portfolio.R operating term phi_G -> psi*R (DONE, parses clean):
+  - use_psi auto-detected from fit ("psi" %in% names(theta_hat_raw)), parallel to
+    use_pooled. Legacy phi-fit -> old path unchanged (existing gates still run; NO
+    regression). psi-fit -> psi*R path.
+  - param_struct now built from op_params (psi | phi_1..4) x risk_params (gamma_p/
+    gamma_r | gamma_pool/gamma_RB) + c_rem/c_inst/kappa_1.
+  - R_rev_e[[e]] (per-env length-4 over G) built in the prem_ej section, MIRRORING
+    prem_ej's env/era path (ticket 029 I3): RB -> R_rev[,"TX",era_str]; FF -> rowMeans
+    over eras (era-pooled, mirrors the single time-avg tau). *** FF-ERA RULE =
+    UNWEIGHTED ERA-MEAN must match whatever ticket 029 uses on the estimator side;
+    one line to change in both if 029 pins differently. ***
+  - Swapped in compute_R_env (V-inversion R vector) + ccp_update_cf (softmax) + the
+    GATE CF-A basis (rho_psi[c,G]=R[G]*(1-P_X), ticket 029 Step 3) + clusterExport
+    (added R_rev_e, use_psi). Two-gamma exposure + Semantic-1 FEs untouched.
+  - GATED: needs lk$R_rev (ticket 028) + a psi-containing fit (029) before it can run;
+    hard stop() if use_psi & R_rev absent. Nothing loadable today flips use_psi, so no
+    breakage now.
+TASK 2 -- paper structural-model update (DONE):
+  - Reports/Paper/Structural_Model_Current_Spec.md rewritten (§4 flow utility, §7 ident,
+    §8 estimates, §9 CF1, §10 caveats + header): psi*R operating, two-gamma, gamma_r
+    identified / gamma_p not, money-metric + CF1 bracket [gamma_p=0 .. gamma_r], pooled
+    = rejected negative result.
+  - .claude/EDITOR_BRIEF_structural_model.md written = the prompt to hand jmp_editor.
+    FLAGS a real conflict: the agent's LOCKED CONVENTION "gamma_r << gamma_p" is the
+    OPPOSITE of the new ident (gamma_p <= gamma_r); brief tells the editor to surface +
+    reconcile (E wedge sits OUTSIDE both gammas), not write gamma_r<<gamma_p prose.
+RESEARCHER TO DECIDE: (a) confirm the FF-era collapse rule for R (unweighted era-mean)
+  so PM09 + ticket 029 agree; (b) reconcile the jmp_editor locked convention line.
+Resume: "Load CLAUDE.md + HANDOFF.md (this checkpoint). PM09 CF code is psi*R+two-gamma
+  ready (gated on 028 R_rev + 029 psi fit). Spec doc + editor brief done. Today:
+  [run 025->026->028 to land R_rev, then 029 fit, then PM09 gate+CF run] OR [launch
+  jmp_editor with .claude/EDITOR_BRIEF_structural_model.md]."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-26 EVE (PORTFOLIO MODEL PIVOT: psi*R + TWO-GAMMA; pooled DILUTES=dead, phi_G dead; next session = fix CF code to psi*R+2gamma + write editor prompt)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: portfolio model spec settled (2026-06-26 eve, Opus) -- context maxed, fresh session
+═══════════════════════════════════════════════════
+FINAL MODEL = operating term psi*R (MEASURED gas revenue) + exposure = TWO SEPARATE gammas
+  (gamma_p premium, gamma_r OOP). NOT pooled. NOT phi_G.
+WHY POOLED IS DEAD: full pooled fit CONVERGED with gamma_pool=-0.019, gamma_RB=0.013 (~0),
+  LL=-288352 (laptop, iter 9). Pooling premium+haz*D into ONE coefficient dilutes to ~0:
+  E is DOMINATED by premium (0.025-0.046 >> haz*D 0.002-0.013) and premium is behaviorally
+  INERT (gamma_p~0), so the single coeff is dragged to 0, KILLING the real OOP response
+  (gamma_r=4.32) as collateral. Documented negative result -> abandon pooled.
+WHY phi_G IS DEAD: flat free intercepts (~-0.57, no size gradient) + no revenue mechanism;
+  replaced by measured revenue psi*R (gas-agent 028/029 workstream).
+IDENTIFICATION (paper-honest):
+  - gamma_r (OOP/risk) IDENTIFIED ~4.32 off within-state hazard variation (age/wall/comp)
+    + deductible interaction (D=0 funds vs D>0; state-set, orthogonal to own risk).
+  - gamma_p (premium) NOT separately identified (premium is cross-state -> FE-absorbed;
+    within-state collinear w/ composition). Report as "premium response not separately
+    identified," not a number.
+  - HEADLINE REFRAME: ONE marginal-utility-of-money gamma = gamma_r (identified off OOP/
+    deductible), IMPOSED on premium (risk-neutral, $1=$1). CF1 (premium change) BRACKETED:
+    gamma_p=0 (premium pure transfer, no behavior) ... gamma_p=gamma_r (full money-metric).
+    To TEST (not impose) premium channel -> NEW TREATED STATE (Iowa, 2nd FF->RB transition).
+DEPENDENCY CHAIN: ticket 028 (gas-agent) lands R_rev[G,state,era] in PM_Lookups.rds (verify
+  >0) -> 029 RE-SCOPED: PM08 swap phi_G->psi*R in the TWO-GAMMA path (NOT pooled) -> re-fit
+  two-gamma+psi*R FE-on = THE headline fit -> then CFs.
+CF INFRA (Code/Dynamic_Model/PM09_CF_Portfolio.R, committed 0693a7d): solver + welfare +
+  CF1/CF3/CF4 built; gates CF-A/CF-B PASS. attempt-5 = always-rebuild precond (build cheap
+  0.68s/env; hoist/adaptive abandoned) + PSOCK (PM09_NWORKERS, parallel==serial NOT yet
+  validated) + theta_eff in compute_R_env (CF3 fix). Semantic-1 (FEs kept in CF). CURRENTLY
+  uses phi_G -> MUST change to psi*R operating + two-gamma exposure (compute_R_env +
+  ccp_update_cf are where phi_G lives).
+FITS: NONE usable. 20260625 two-gamma rds = 1-iter only (NOT converged). Pooled converged =
+  the dead negative result. Nothing has psi*R yet.
+RUNS: laptop pooled KILLED (job done). Server two-gamma+phi run (18:15, PM08_POOLED unset)
+  is MOOT (phi, no revenue) -> kill to free the server.
+NEXT SESSION -- 2 TASKS:
+  (1) FIX CF CODE: PM09 operating phi_G -> psi*R (read R_rev from PM_Lookups), KEEP two-gamma
+      exposure (gamma_p/gamma_r) + Semantic-1 FEs. Mirror of the PM08 029 swap on the CF side.
+      Gate against the two-gamma+psi*R fit when it exists (post-028).
+  (2) EDITOR PROMPT: write a clear prompt for .claude/agents/jmp_editor.md to update the
+      structural-model section. Basis = Reports/Paper/Structural_Model_Current_Spec.md, BUT
+      that doc currently describes the POOLED model -> must be updated to: psi*R operating,
+      two-gamma exposure, gamma_r identified/gamma_p not, money-metric reframe + CF1 bracket,
+      pooled-dilution as a rejected-spec note.
+Resume: "Load CLAUDE.md + HANDOFF.md (this checkpoint) + Reports/Paper/Structural_Model_Current_Spec.md
+  + .claude/TICKETS/024r_cf_portfolio.md. Portfolio model = psi*R + two-gamma (pooled dead,
+  phi dead). Do 2 things: (1) fix PM09 CF code to psi*R operating + two-gamma exposure;
+  (2) write the editor-agent prompt to update the structural-model section. psi*R fit is gated
+  on ticket 028 landing R_rev in PM_Lookups."
+═══════════════════════════════════════════════════
+
+
 # HANDOFF -- 2026-06-26 (M1 cross-subsidy figures: first pass DONE + pushed; reviewer comments in hand; TANK-LEVEL rebuild next)  [M1 cross-subsidy workstream]
 
 ═══════════════════════════════════════════════════
