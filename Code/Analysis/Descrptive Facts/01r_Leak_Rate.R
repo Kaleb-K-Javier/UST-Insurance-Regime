@@ -38,10 +38,11 @@ cat(sprintf("LOG START %s\nScript: 01r_Leak_Rate.R\nR: %s\nWD: %s\n\n", .log_pat
 # === PARAMETERS ===
 SMOKE          <- nzchar(Sys.getenv("LEAKRATE_SMOKE"))
 DETECTION_START<- 1990L; TRAIN_END <- 2016L
-K              <- if (SMOKE) 5L else 10L
-ALPHAS         <- if (SMOKE) c(0, 0.5, 1) else c(0, 0.25, 0.5, 0.75, 1)
-NLAMBDA        <- if (SMOKE) 30L else 60L
-NBOOT          <- if (SMOKE) 40L else 300L
+K              <- if (SMOKE) 3L else 10L
+ALPHAS         <- if (SMOKE) c(0.5, 1) else c(0, 0.25, 0.5, 0.75, 1)   # smoke drops slow ridge
+NLAMBDA        <- if (SMOKE) 20L else 60L
+NBOOT          <- if (SMOKE) 20L else 300L
+SMOKE_NFAC     <- 8000L
 NWORKERS       <- max(1L, min(parallel::detectCores() - 1L, as.integer(Sys.getenv("LEAKRATE_NWORKERS", 8L))))
 CONTROL_STATES <- c("ME","NM","AR","OK","LA","KS","MT","ID","SD","AL","MN","NC","IL","MA","OH","PA","TN","VA","CO")
 ALL_STUDY_STATES <- c("TX", CONTROL_STATES)
@@ -65,7 +66,7 @@ d <- d[panel_year >= DETECTION_START & panel_year <= TRAIN_END &
        fac_wall != "Unknown-Wall" & fac_fuel != "Unknown-Fuel" &
        age_bins %in% AGE9_LAB & state %in% ALL_STUDY_STATES]
 if (SMOKE) {
-  set.seed(20260627L); fk <- sample(unique(d$panel_id), min(uniqueN(d$panel_id), 40000L))
+  set.seed(20260627L); fk <- sample(unique(d$panel_id), min(uniqueN(d$panel_id), SMOKE_NFAC))
   d <- d[panel_id %in% fk]; cat(sprintf("*** SMOKE: %s facilities ***\n", format(length(fk), big.mark=",")))
 }
 d[, age_bin  := factor(age_bins, levels = AGE9_LAB)]                                   # 9-bin feature
@@ -106,9 +107,12 @@ cat("=== STEP 3: ALPHA TUNE (shared foldid) -> best (alpha, lambda) ===\n")
 cl <- makeCluster(NWORKERS); registerDoParallel(cl); on.exit(stopCluster(cl), add = TRUE)
 cat(sprintf("Workers: %d\n", NWORKERS)); flush(.log)
 res <- lapply(ALPHAS, function(a) {
+  t0 <- Sys.time()
   f <- cv.glmnet(X, y, family="poisson", offset=off, foldid=foldid, alpha=a,
                  nlambda=NLAMBDA, type.measure="deviance", parallel=TRUE)
-  cat(sprintf("  alpha=%.2f  lambda.min=%.6f  cvdev=%.5f\n", a, f$lambda.min, min(f$cvm))); flush(.log)
+  cat(sprintf("  [%s] alpha=%.2f  lambda.min=%.6f  cvdev=%.5f  (%.0fs)\n",
+              format(Sys.time(),"%H:%M:%S"), a, f$lambda.min, min(f$cvm),
+              as.numeric(difftime(Sys.time(), t0, units="secs")))); flush(.log)
   list(alpha=a, dev=min(f$cvm))
 })
 best_alpha <- ALPHAS[which.min(sapply(res, `[[`, "dev"))]
