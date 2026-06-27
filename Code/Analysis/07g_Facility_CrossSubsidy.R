@@ -165,6 +165,11 @@ cat("=== STEP 6: FIGURES ===\n")
 # =============================================================================
 rank_dt <- function(dt) { d <- copy(dt)[order(fair)]; d[, pct := (seq_len(.N)-0.5)/.N*100]; d[] }
 
+# A few mega multi-tank facilities have huge summed premiums; cap the y-VIEW (zoom,
+# not drop) to the 98th percentile so the redistribution around tau stays readable.
+YCAP <- ceiling(as.numeric(quantile(fac$fair, 0.98)) / 10000) * 10000
+cat(sprintf("Display y-cap (98th pct facility fair): %s (top ~2%% extend beyond)\n", dollar(YCAP)))
+
 # Fig A: single-year per state
 for (st in FIG_STATES) {
   d <- rank_dt(fac[state == st & panel_year == SNAP_YEAR]); tau <- mean(d$fair)
@@ -180,7 +185,8 @@ for (st in FIG_STATES) {
     labs(title = sprintf("%s: facility fair premium vs uniform premium, %d", st, SNAP_YEAR),
          subtitle = sprintf("Uniform premium tau = %s/facility-yr (mean %.1f tanks). Band = severity 95%% CI.",
                             dollar(tau, accuracy = 1), s$mean_tanks),
-         caption = "Facility fair premium = sum over tanks of (age x wall cell hazard, 01p) x mean net-of-deductible severity.") +
+         caption = "Facility fair premium = sum over tanks of (age x wall cell hazard, 01p) x mean net-of-deductible severity. Y capped at p98 (top ~2% exceed).") +
+    coord_cartesian(ylim = c(0, YCAP)) +
     theme_pub()
   save_fig(pA, sprintf("Fig_FacCrossSub_Single_%s", st), 8, 5)
 }
@@ -194,11 +200,12 @@ pB <- ggplot(pool, aes(pct, fair)) +
   geom_ribbon(aes(ymin = fairlo, ymax = fairhi), fill = COL_BAND, alpha = 0.45) +
   geom_line(color = COL_LINE, linewidth = 0.5) +
   geom_hline(data = tau_lab, aes(yintercept = tau), linetype = "dashed", color = COL_TAU, linewidth = 0.45) +
-  facet_wrap(~ state, scales = "free", nrow = 1) +
+  facet_wrap(~ state, nrow = 1) +
   scale_x_continuous("Facility-years, ranked low to high fair premium (percentile)", labels = function(x) paste0(x,"%")) +
   scale_y_continuous("Fair premium ($ / facility-year, 2023)", labels = dollar_format(accuracy = 1)) +
+  coord_cartesian(ylim = c(0, YCAP)) +
   labs(title = "Facility fair premium vs uniform premium (all years pooled)",
-       subtitle = "Each facility = sum of its tanks' fair premiums. Dashed = break-even uniform premium. Band = severity 95% CI.",
+       subtitle = "Each facility = sum of its tanks' fair premiums. Dashed = uniform premium. Band = severity 95% CI. Y capped at p98 (top ~2% exceed).",
        caption = "Fair premium = sum over tanks of (age x wall cell hazard, 01p) x mean net-of-deductible severity. Blue: pays less than tau. Terracotta: pays more.") +
   theme_pub()
 save_fig(pB, "Fig_FacCrossSub_Pooled_Panel", 12, 4)
@@ -209,11 +216,12 @@ pC <- ggplot(paid, aes(pct, fair)) +
   geom_ribbon(aes(ymin = fee, ymax = fair), fill = COL_OVER) +
   geom_line(color = COL_LINE, linewidth = 0.5) +
   geom_line(aes(y = fee), color = COL_FEE, linewidth = 0.5) +
-  facet_wrap(~ state, scales = "free", nrow = 1) +
+  facet_wrap(~ state, nrow = 1) +
   scale_x_continuous("Facility-years, ranked low to high fair premium (percentile)", labels = function(x) paste0(x,"%")) +
   scale_y_continuous("$ / facility-year (2023)", labels = dollar_format(accuracy = 1)) +
+  coord_cartesian(ylim = c(0, YCAP)) +
   labs(title = "What the fund charges vs the fair premium (facility level)",
-       subtitle = "Black = actual facility fee (sum of per-tank fees). Line = fair premium. The gap is the gas-tax-funded shortfall.",
+       subtitle = "Black = actual facility fee (sum of per-tank fees). Line = fair premium. The gap is the gas-tax-funded shortfall. Y capped at p98.",
        caption = "Fee = active_tanks x fr_premium_per_tank_yr.") +
   theme_pub()
 save_fig(pC, "Fig_FacPaidShare_Pooled", 12, 4)
