@@ -41,7 +41,7 @@
 #                                        has_single_walled,lambda (+ national rows)
 #   analysis_hazard_predictions_pricing.csv  per-facility-year predictions at
 #                                        OBSERVED covariates (descriptive/continuity)
-#   analysis_pricing_hazard_model.rds    fitted elnet + platt + metadata
+#   analysis_pricing_hazard_model.rds    fitted elnet + metadata
 #
 # RUN: Rscript "Code/Analysis/Descrptive Facts/01p_Pricing_Hazard.R"
 ################################################################################
@@ -174,7 +174,7 @@ X <- model.matrix(FEAT_FORMULA, data = as.data.frame(cv))[, -1L]
 cat(sprintf("Design matrix: %s rows x %d cols\n", format(nrow(X), big.mark=","), ncol(X)))
 
 # =============================================================================
-cat("=== STEP 3: ELASTIC NET (alpha tune -> full CV -> Platt) ===\n")
+cat("=== STEP 3: ELASTIC NET (alpha tune -> full CV) ===\n")
 # =============================================================================
 ELNET_FOLDS <- if (SMOKE) 3L else 10L
 ELNET_ALPHA <- if (SMOKE) c(0.0, 0.5, 1.0) else c(0.0, 0.25, 0.5, 0.75, 1.0)

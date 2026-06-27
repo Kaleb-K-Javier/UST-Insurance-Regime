@@ -97,4 +97,29 @@ HOW TO VERIFY
 ═══════════════════════════════════════════════════
 ATTEMPT LOG
 ═══════════════════════════════════════════════════
-[blank until first review]
+### Attempt 1 — 2026-06-26
+Transcript: none (Opus-authored; skipped per spec)
+Result: PASS
+
+Criteria — 01p_Pricing_Hazard.R:
+- ✓ C1: sample filter exact — panel_year in [1990,2016] & has_previous_leak==0 & is_make_model==1 & has_single_walled %in% c(0,1) & !is.na(active_tanks/total_capacity/event_first_leak) (lines 139-142)
+- ✓ C2: Y <- cv$event_first_leak (line 168)
+- ✓ C3: FEAT_FORMULA matches spec exactly, year_f present as main effect (lines 101-102)
+- ✓ C4: no weights= on any cv.glmnet/glmnet call (lines 191, 201, 208); no Platt glm; predict(type="response") used (line 216)
+- ✓ C5: grid at year_f=2008, active_tanks=1, ref_cap=median single-tank capacity, gasoline=1, diesel=0; NATIONAL=mean over states (lines 222-236)
+- ✓ C6: dcm_cell_hazard_pricing.csv cols (state,age_bin,has_single_walled,lambda); (n_states+1)×18 rows from CJ + natl (lines 237-240)
+- ✓ C7: analysis_hazard_predictions_pricing.csv cols exact: panel_id,panel_year,state,has_single_walled,age_bin,pred_pricing (lines 278-279)
+- ✓ C8: analysis_pricing_hazard_model.rds has fit+feature_cols+metadata; no platt element (lines 283-289). NOTE: header comment line 44 still says "platt" — stale doc, not a code failure.
+- ✓ C9: only 3 new files written; no write to analysis_hazard_predictions_full.csv; 01n untouched
+- ✓ C10: no tryCatch swallowing errors, no try(silent=TRUE); logging block present (lines 65-73); PRICING_SMOKE subsamples CV and reduces folds only, schema unchanged
+
+Criteria — 07f_Tank_CrossSubsidy.R:
+- ✓ C11: file.exists check + stop() with clear message (lines 128-130)
+- ✓ C12: SEV_STATES={CO,NM,PA,TN}; net_nom=fifelse(NM, pmax(cost-10000,0), cost); net_2023 deflated; S_bar=mean; bootstrap N_BOOT=1000, 2.5/97.5 quantiles (lines 69-118)
+- ✓ C13: HAZARD_SCOPE=="national" selects NATIONAL rows; cell_aw keyed (age_bin,has_single_walled); cell_age=mean(lambda) by age_bin (lines 134-143)
+- ✓ C14: FIG_STATES={CO,LA,NM,TN}; mm_wall filter correct; age_bin via AGE_BIN_BREAKS matching 01p; both lookups merged; fair_m/fairlo_m/fairhi_m = lambda_m × S_bar/S_lo/S_hi (lines 155-173)
+- ✓ C15: fr_premium_per_tank_yr joined by (panel_id,panel_year); NA→0 (lines 181-185)
+- ✓ C16: "subsidy"/"subsidized"/"subsidizers" absent from all figure text; tau=mean(fair premium) over shown tanks per state (lines 233, 253)
+- ✓ C17: outer loop over WALL_MODES emits all 3 figure families × 2 modes; Fig names match spec; PNG always, PDF attempted (lines 225-288)
+- ✓ C18: tank_crosssub_state_summary.csv cols (scope,wall_mode,state,N,uniform_prem,share_over,spread_pct,fee_pct_fair); tank_crosssub_tankyears.csv cols exact (lines 199-214)
+- ✓ C19: save_fig PNG-always + PDF in the ONE allowed tryCatch that only messages; logging block present; no other silent error catching (lines 52-59, 92-99)
