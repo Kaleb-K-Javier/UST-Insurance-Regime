@@ -122,7 +122,26 @@ USES / PAPER ALIGNMENT (02_JMP_Draft.qmd — what these feed)
   fair-premium gradient now comes from BOTH. All cross-subsidy numbers update. ***
 - §4.2 "Pricing observable risk": fig-actuarial-alignment (empirical risk vs TX premium) = the
   CURRENT comparison; ADD the fair-premium(λ·S)-vs-real-TX-premium version (researcher wants both).
-- §5 DCM: reuses dcm_cell_hazard_pricing.csv (new λ) + dcm_cell_severity_pricing.csv.
+- §5 DCM: reuses the cell schedules — BUT at the DCM's OWN granularity, not the figure bins.
+  DCM-INPUT SCHEDULE (additional outputs, built on the structural state space):
+    * AGE bins = PM03 AGE_BREAKS = c(0,5,10,15,20,25,30,35,Inf) -> 8 five-year bins
+      (NOT the 9 three-year figure bins; the estimators must re-bin to these for the DCM file).
+    * WALL = SW/DW (16 MARG cells: SW_8(oldest)..SW_1, DW_8..DW_1).
+    * CAPACITY = N_G=4 bins (NEW: the portfolio model now tracks capacity/size in the env, so the
+      hazard/severity should vary by capacity bin G, not just age×wall). Both 01r and 01q already
+      carry total_capacity as a feature, so predict by (age × wall × G).
+  OPEN QUESTIONS for the structural-model agent (researcher offered pointers — these pin the DCM
+  output shape; figures/Parts 1-3 do NOT depend on them and proceed now):
+    Q1. Exact 4 capacity-bin (G) breaks — from facility total_cap_capped (winsorized 60k, PM01)?
+        quantile or fixed edges?
+    Q2. Is the hazard primitive indexed by capacity (age×wall×G) or only (age×wall)? (Memory says
+        capacity enters REVENUE via capbar_G; confirm whether the kernel's hazard slot is G-indexed.)
+    Q3. National vs state- and/or regime(FF/RB)-specific hazard/severity for the DCM? (04b built it
+        national, regime-replicated; the new env may want state.)
+    Q4. Exact cell/sidx ordering the kernel expects when it reads the hazard vector (so the CSV
+        rows line up with the state index).
+  Output (once Q1-Q4 known): dcm_cell_hazard_pricing_struct.csv / dcm_cell_severity_pricing_struct.csv
+  on the DCM bins. Keep the figure-bin schedules (dcm_cell_*_pricing.csv) for the M1 figures.
 
 ═══════════════════════════════════════════════════
 PART 1 — FREQUENCY: 01r_Leak_Rate.R  (NEW; archive 01p)
