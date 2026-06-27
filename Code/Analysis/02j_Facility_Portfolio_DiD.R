@@ -401,6 +401,14 @@ es_all <- rbindlist(list(
 ), use.names = TRUE)
 fwrite(es_all, file.path(OUTPUT_TABLES, "T_Facility_ES_Coefs_byMargin.csv"))
 
+# Matched-panel FE-only closure ES (NO Yhat0) — the EXACT facility mirror of the tank ES
+# (Fig_ES_Full / Fig_ES_HTE_Pooled). Same matched sample (fy) and same panel_id + cell_fac_year
+# FE as the headline, but Yhat0 dropped so it (a) tosses no facility-years (no 68% Yhat0 coverage
+# cut) and (b) is the tank ES spec verbatim: closure_share ~ i(rel_year, texas_treated) + mandates.
+es_one("closure_share", "Effect on facility closure share",
+       "Fig_ES_Facility_Portfolio_noYhat0",
+       data = fy, rhs = rhs_feonly, fe = FE)
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # TICKET 035 — SAMPLE ROBUSTNESS: matched birth-CEM vs ALL incumbents
 # Three configs: C1=matched_full (FE+Yhat0), C2=matched_feonly, C3=allinc_feonly.
