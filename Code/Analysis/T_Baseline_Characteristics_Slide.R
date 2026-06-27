@@ -1,99 +1,138 @@
 # T_Baseline_Characteristics_Slide.R
-# Real values for the "baseline characteristics" slide table (Setting/Data section).
-# Columns: Full sample (18 study states) | Texas | Controls (17 states).
-# Blocks: (1) Coverage of the alive-at-reform sample; (2) tank attributes AT reform
-#         (Dec 22, 1998); (3) average facility profile over the full study sample.
-# Sources: Data/Analysis/exact_base.csv  (tank-level: wall, install yr, age, enter/exit)
-#          Data/Analysis/facility_panel.csv (facility-year: counts, capacity, leaks)
+# Texas-vs-control BALANCE table, before (alive-at-reform) and after (birth-CEM matched).
+# Shows the imbalance the matching removes. Backs Setting/Data section (tbl-summary, ¶8).
+# Columns: Alive-at-reform {Texas, Control} | Matched {Texas, Control} | SMD {before, after}.
+# Sources: Data/Analysis/exact_base.csv      (tank-level: wall, install yr, age, enter/exit)
+#          Data/Analysis/facility_panel.csv  (facility-year: counts, capacity, age)
+#          Data/Analysis/matched_tanks_birth_cem.csv  (headline tank-DiD matched panel; same
+#            file 02c_Stepped_DiD.R reads. Matched facility set = unique(panel_id) after
+#            cem_weight>0 & install_yr_int<1999 & first_year_churn==0  -> should be 117,250.)
 # Output:  Output/Tables/T_Baseline_Characteristics_Slide.{tex,csv}
+#          (the two figures Fig_Baseline_{Tanks,Capacity}AtReform.png are unchanged — raw
+#           pre-match distributions §3 ¶8 cites.)
 
 suppressPackageStartupMessages({ library(data.table); library(here) })
-cat("=== BASELINE CHARACTERISTICS TABLE ===\n")
+cat("=== BASELINE BALANCE TABLE (alive-at-reform vs birth-CEM matched) ===\n")
 
-REFORM_DAY <- as.integer(as.Date("1998-12-22"))   # 10582 days since 1970 origin
+ANALYSIS_DIR <- Sys.getenv("UST_ANALYSIS_DIR", here("Data", "Analysis"))
+REFORM_DAY   <- as.integer(as.Date("1998-12-22"))   # days since 1970 origin
 cat(sprintf("Reform day (since 1970): %d\n", REFORM_DAY))
 
 # ---- tank-level: attributes among tanks ACTIVE at reform ----
-tk <- fread(here("Data","Analysis","exact_base.csv"),
-  select = c("panel_id","texas_treated","mm_wall","install_yr_int",
-             "release_det_deadline_yr","t_enter","t_exit","age_enter"))
-tk <- tk[!is.na(texas_treated)]
-tkr <- tk[t_enter <= REFORM_DAY & t_exit >= REFORM_DAY]           # active at reform
+tk <- fread(file.path(ANALYSIS_DIR, "exact_base.csv"),
+  select = c("panel_id", "texas_treated", "mm_wall", "install_yr_int",
+             "t_enter", "t_exit", "age_enter"))
+tk  <- tk[!is.na(texas_treated)]
+tkr <- tk[t_enter <= REFORM_DAY & t_exit >= REFORM_DAY]          # active at reform
 tkr[, age_reform := age_enter + (REFORM_DAY - t_enter) / 365.25]
-tkr[, sw      := mm_wall == "Single-Walled"]
-tkr[, pre89   := install_yr_int < 1989]
-tkr[, leakdet := release_det_deadline_yr <= 1998]                 # past leak-detection deadline by reform
-cat(sprintf("Tanks active at reform: %d (TX %d, Ctrl %d)\n",
-            nrow(tkr), tkr[texas_treated==1,.N], tkr[texas_treated==0,.N]))
+tkr[, sw    := as.integer(mm_wall == "Single-Walled")]
+tkr[, pre89 := as.integer(install_yr_int < 1989L)]
+cat(sprintf("Tanks active at reform: %d\n", nrow(tkr)))
 
-# ---- facility-year: coverage, profile, releases ----
-fp <- fread(here("Data","Analysis","facility_panel.csv"),
-  select = c("panel_id","panel_year","texas_treated","active_tanks","total_capacity",
-             "avg_tank_age","n_tanks_at_reform","total_capacity_reform","fac_is_incumbent",
-             "n_leaks","n_leak_incidents"))
+# ---- facility-year: profile rows ----
+fp <- fread(file.path(ANALYSIS_DIR, "facility_panel.csv"),
+  select = c("panel_id", "texas_treated", "active_tanks", "total_capacity",
+             "avg_tank_age", "n_tanks_at_reform", "total_capacity_reform", "fac_is_incumbent"))
 fp <- fp[!is.na(texas_treated)]
-fac_inc <- unique(fp[fac_is_incumbent == 1L | n_tanks_at_reform > 0L, .(panel_id, texas_treated)])
-fp_inc  <- fp[panel_id %in% fac_inc$panel_id]
-cat(sprintf("Incumbent (alive-at-reform) facilities: %d; facility-years: %d\n",
-            nrow(fac_inc), nrow(fp_inc)))
 
-col_stats <- function(tt) {
-  sel <- function(d) if (tt == "Full") d else d[texas_treated == ifelse(tt == "Texas", 1L, 0L)]
-  T <- sel(tkr); FAC <- sel(fac_inc); FYi <- sel(fp_inc); FYa <- sel(fp)
-  data.table(
-    facilities    = nrow(FAC),
-    tanks_reform  = nrow(T),
-    fac_years     = nrow(FYi),
-    pct_sw        = 100 * mean(T$sw,      na.rm = TRUE),
-    pct_pre89     = 100 * mean(T$pre89,   na.rm = TRUE),
-    med_age       = median(T$age_reform,  na.rm = TRUE),
-    tanks_med     = as.numeric(median(FYa$active_tanks, na.rm = TRUE)),
-    tanks_p25     = as.numeric(quantile(FYa$active_tanks, 0.25, na.rm = TRUE)),
-    tanks_p75     = as.numeric(quantile(FYa$active_tanks, 0.75, na.rm = TRUE)),
-    cap_med       = median(FYa$total_capacity, na.rm = TRUE) / 1000,
-    cap_p25       = as.numeric(quantile(FYa$total_capacity, 0.25, na.rm = TRUE)) / 1000,
-    cap_p75       = as.numeric(quantile(FYa$total_capacity, 0.75, na.rm = TRUE)) / 1000,
-    mean_age      = mean(FYa$avg_tank_age,   na.rm = TRUE),
-    rel_rate      = 100 * mean(FYa$n_leak_incidents > 0L, na.rm = TRUE))
+# ---- alive-at-reform incumbent facilities (the "before matching" sample) ----
+fac_inc <- unique(fp[fac_is_incumbent == 1L | n_tanks_at_reform > 0L, .(panel_id, texas_treated)])
+cat(sprintf("Alive-at-reform incumbent facilities: %d (TX %d, Ctrl %d)\n",
+            nrow(fac_inc), fac_inc[texas_treated==1L,.N], fac_inc[texas_treated==0L,.N]))
+
+# ---- matched facility set from the headline tank-DiD panel (the "after matching" sample) ----
+cat("Reading matched_tanks_birth_cem.csv (4.6 GB; this is the slow step)...\n")
+.mh   <- names(fread(file.path(ANALYSIS_DIR, "matched_tanks_birth_cem.csv"), nrows = 0L))
+.msel <- intersect(c("panel_id","texas_treated","install_yr_int","cem_weight","first_year_churn"), .mh)
+mt <- fread(file.path(ANALYSIS_DIR, "matched_tanks_birth_cem.csv"), select = .msel)
+if ("cem_weight"       %in% names(mt)) mt <- mt[cem_weight > 0]
+if ("install_yr_int"   %in% names(mt)) mt <- mt[install_yr_int < 1999L]
+if ("first_year_churn" %in% names(mt)) mt <- mt[first_year_churn == 0L | is.na(first_year_churn)]
+matched_fac <- unique(mt[, .(panel_id, texas_treated)])
+cat(sprintf("Matched facilities: %d (TX %d, Ctrl %d)  [target 117,250]\n",
+            nrow(matched_fac), matched_fac[texas_treated==1L,.N], matched_fac[texas_treated==0L,.N]))
+
+# ---- one cell = stats for a given facility-id set ----
+# Returns display stats (medians/IQRs/%) plus means+SDs for SMD.
+cell_stats <- function(ids) {
+  T  <- tkr[panel_id %in% ids]
+  FY <- fp[panel_id %in% ids]
+  q  <- function(x, p) as.numeric(quantile(x, p, na.rm = TRUE))
+  list(
+    n_fac     = length(ids),
+    n_tanks   = nrow(T),
+    pct_sw    = 100 * mean(T$sw, na.rm = TRUE),
+    pct_pre89 = 100 * mean(T$pre89, na.rm = TRUE),
+    med_age   = median(T$age_reform, na.rm = TRUE),
+    tanks_med = as.numeric(median(FY$active_tanks, na.rm = TRUE)),
+    tanks_p25 = q(FY$active_tanks, .25), tanks_p75 = q(FY$active_tanks, .75),
+    cap_med   = median(FY$total_capacity, na.rm = TRUE) / 1000,
+    cap_p25   = q(FY$total_capacity, .25) / 1000, cap_p75 = q(FY$total_capacity, .75) / 1000,
+    mean_age  = mean(FY$avg_tank_age, na.rm = TRUE),
+    # means / sds for SMD (var order: sw, pre89, age_reform, tanks, cap_k, avg_age)
+    m = c(mean(T$sw,na.rm=TRUE), mean(T$pre89,na.rm=TRUE), mean(T$age_reform,na.rm=TRUE),
+          mean(FY$active_tanks,na.rm=TRUE), mean(FY$total_capacity,na.rm=TRUE)/1000,
+          mean(FY$avg_tank_age,na.rm=TRUE)),
+    s = c(sd(T$sw,na.rm=TRUE), sd(T$pre89,na.rm=TRUE), sd(T$age_reform,na.rm=TRUE),
+          sd(FY$active_tanks,na.rm=TRUE), sd(FY$total_capacity,na.rm=TRUE)/1000,
+          sd(FY$avg_tank_age,na.rm=TRUE))
+  )
 }
-S <- list(Full = col_stats("Full"), Texas = col_stats("Texas"), Controls = col_stats("Controls"))
-res <- rbindlist(S, idcol = "group")
-print(res)
+
+A_tx <- cell_stats(fac_inc[texas_treated==1L, panel_id])
+A_ct <- cell_stats(fac_inc[texas_treated==0L, panel_id])
+M_tx <- cell_stats(matched_fac[texas_treated==1L, panel_id])
+M_ct <- cell_stats(matched_fac[texas_treated==0L, panel_id])
+
+# ---- standardized mean differences (TX vs Ctrl), before & after ----
+smd_vec <- function(tx, ct) (tx$m - ct$m) / sqrt((tx$s^2 + ct$s^2) / 2)   # length 6
+smd_before <- smd_vec(A_tx, A_ct)
+smd_after  <- smd_vec(M_tx, M_ct)
+
+# ---- assemble the table (formatted strings; one row per metric) ----
+cm  <- function(x) format(round(x), big.mark = ",")
+pc  <- function(x) sprintf("%.0f%%", x)
+d1  <- function(x) sprintf("%.1f", x)
+iqr <- function(m,lo,hi) sprintf("%.0f [%.0f-%.0f]", m, lo, hi)
+sm  <- function(x) sprintf("%+.3f", x)
+
+row_csv <- function(lab, fa, fb, fc, fd, sb, sa)
+  data.table(metric=lab, alive_texas=fa, alive_control=fb,
+             matched_texas=fc, matched_control=fd, smd_before=sb, smd_after=sa)
+
+res <- rbindlist(list(
+  row_csv("Facilities",              cm(A_tx$n_fac),  cm(A_ct$n_fac),  cm(M_tx$n_fac),  cm(M_ct$n_fac),  "", ""),
+  row_csv("Tanks at reform",         cm(A_tx$n_tanks),cm(A_ct$n_tanks),cm(M_tx$n_tanks),cm(M_ct$n_tanks),"", ""),
+  row_csv("Share single-walled",     pc(A_tx$pct_sw), pc(A_ct$pct_sw), pc(M_tx$pct_sw), pc(M_ct$pct_sw), sm(smd_before[1]), sm(smd_after[1])),
+  row_csv("Share pre-1989 vintage",  pc(A_tx$pct_pre89),pc(A_ct$pct_pre89),pc(M_tx$pct_pre89),pc(M_ct$pct_pre89), sm(smd_before[2]), sm(smd_after[2])),
+  row_csv("Median tank age (yrs)",   d1(A_tx$med_age),d1(A_ct$med_age),d1(M_tx$med_age),d1(M_ct$med_age), sm(smd_before[3]), sm(smd_after[3])),
+  row_csv("Tanks per facility",      iqr(A_tx$tanks_med,A_tx$tanks_p25,A_tx$tanks_p75), iqr(A_ct$tanks_med,A_ct$tanks_p25,A_ct$tanks_p75),
+                                     iqr(M_tx$tanks_med,M_tx$tanks_p25,M_tx$tanks_p75), iqr(M_ct$tanks_med,M_ct$tanks_p25,M_ct$tanks_p75), sm(smd_before[4]), sm(smd_after[4])),
+  row_csv("Total capacity, k gal",   iqr(A_tx$cap_med,A_tx$cap_p25,A_tx$cap_p75), iqr(A_ct$cap_med,A_ct$cap_p25,A_ct$cap_p75),
+                                     iqr(M_tx$cap_med,M_tx$cap_p25,M_tx$cap_p75), iqr(M_ct$cap_med,M_ct$cap_p25,M_ct$cap_p75), sm(smd_before[5]), sm(smd_after[5])),
+  row_csv("Mean tank age (yrs)",     d1(A_tx$mean_age),d1(A_ct$mean_age),d1(M_tx$mean_age),d1(M_ct$mean_age), sm(smd_before[6]), sm(smd_after[6]))
+))
+cat("\n"); print(res)
 fwrite(res, here("Output","Tables","T_Baseline_Characteristics_Slide.csv"))
 
-# ---- format helpers ----
-cm  <- function(x) format(round(x), big.mark = ",")
-M   <- function(x) sprintf("%.2fM", x / 1e6)
-p0  <- function(x) sprintf("%.0f\\%%", x)
-p1  <- function(x) sprintf("%.1f\\%%", x)
-n1  <- function(x) sprintf("%.1f", x)
-row3 <- function(lab, f, fmt) sprintf("\\quad %s & %s & %s & %s \\\\",
-                                      lab, fmt(S$Full[[f]]), fmt(S$Texas[[f]]), fmt(S$Controls[[f]]))
-iqr_row <- function(lab, m, lo, hi) { g <- function(k)
-  sprintf("%.0f [%.0f--%.0f]", S[[k]][[m]], S[[k]][[lo]], S[[k]][[hi]])
-  sprintf("\\quad %s & %s & %s & %s \\\\", lab, g("Full"), g("Texas"), g("Controls")) }
-
+# ---- LaTeX (two-level header; 4 data cols + 2 SMD cols) ----
+tx <- function(s) gsub("%", "\\\\%", s)                       # escape % for LaTeX
+trow <- function(r) sprintf("%s & %s & %s & %s & %s & %s & %s \\\\",
+  r$metric, tx(r$alive_texas), tx(r$alive_control), tx(r$matched_texas), tx(r$matched_control),
+  r$smd_before, r$smd_after)
 tex <- c(
-  "\\begin{center}", "\\scriptsize", "\\setlength{\\tabcolsep}{6pt}",
-  "\\renewcommand{\\arraystretch}{1.05}", "\\begin{tabular}{lrrr}", "\\hline",
-  " & \\textbf{Full sample} & \\textbf{Texas} & \\textbf{Controls} \\\\", "\\hline",
-  "\\multicolumn{4}{l}{\\textit{Coverage (alive-at-reform sample)}} \\\\",
-  row3("Facilities",            "facilities",   cm),
-  row3("Tanks at reform",       "tanks_reform", cm),
-  sprintf("\\quad Facility-years & %s & %s & %s \\\\[4pt]", M(S$Full$fac_years), M(S$Texas$fac_years), M(S$Controls$fac_years)),
-  "\\multicolumn{4}{l}{\\textit{At reform (Dec 22, 1998)}} \\\\",
-  row3("Share single-walled",   "pct_sw",      p0),
-  row3("Share pre-1989 vintage","pct_pre89",   p0),
-  sprintf("\\quad Median tank age (years) & %s & %s & %s \\\\[4pt]", n1(S$Full$med_age), n1(S$Texas$med_age), n1(S$Controls$med_age)),
-  "\\multicolumn{4}{l}{\\textit{Average facility profile (full sample)}} \\\\",
-  iqr_row("Tanks per facility (med.\\ [IQR])", "tanks_med", "tanks_p25", "tanks_p75"),
-  iqr_row("Total capacity, k gal (med.\\ [IQR])", "cap_med", "cap_p25", "cap_p75"),
-  row3("Mean tank age (years)",    "mean_age",      n1),
-  row3("Annual release rate",      "rel_rate",      p1),
+  "\\begin{center}", "\\footnotesize", "\\setlength{\\tabcolsep}{5pt}",
+  "\\renewcommand{\\arraystretch}{1.08}", "\\begin{tabular}{l rr rr cc}", "\\hline",
+  " & \\multicolumn{2}{c}{\\textbf{Alive-at-reform}} & \\multicolumn{2}{c}{\\textbf{Matched (birth-CEM)}} & \\multicolumn{2}{c}{\\textbf{SMD}} \\\\",
+  "\\cline{2-3}\\cline{4-5}\\cline{6-7}",
+  " & Texas & Control & Texas & Control & Before & After \\\\", "\\hline",
+  vapply(seq_len(nrow(res)), function(i) trow(res[i]), character(1)),
   "\\hline", "\\end{tabular}", "\\end{center}")
 writeLines(tex, here("Output","Tables","T_Baseline_Characteristics_Slide.tex"))
+cat(sprintf("\nSMD before (TX vs Ctrl): %s\n", paste(sprintf("%+.3f", smd_before), collapse=" ")))
+cat(sprintf("SMD after  (TX vs Ctrl): %s\n", paste(sprintf("%+.3f", smd_after),  collapse=" ")))
 
-# ---- overlapping histograms at the treatment date (TX vs control) ----
+# ---- overlapping histograms at the treatment date (TX vs control) — UNCHANGED ----
 suppressPackageStartupMessages(library(ggplot2))
 fr <- unique(fp[fac_is_incumbent == 1L | n_tanks_at_reform > 0L,
   .(panel_id, texas_treated, n_tanks_at_reform, total_capacity_reform)], by = "panel_id")
