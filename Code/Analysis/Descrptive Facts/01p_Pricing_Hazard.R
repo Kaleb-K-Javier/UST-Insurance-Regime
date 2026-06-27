@@ -176,39 +176,43 @@ cat(sprintf("Design matrix: %s rows x %d cols\n", format(nrow(X), big.mark=","),
 # =============================================================================
 cat("=== STEP 3: ELASTIC NET (alpha tune -> full CV) ===\n")
 # =============================================================================
-ELNET_FOLDS <- if (SMOKE) 3L else 10L
+ELNET_FOLDS <- if (SMOKE) 3L else 5L     # 5-fold is plenty for lambda; full 2.3M x 10-fold was the slow pole
 ELNET_ALPHA <- if (SMOKE) c(0.0, 0.5, 1.0) else c(0.0, 0.25, 0.5, 0.75, 1.0)
+TUNE_N <- min(nrow(X), 200000L)          # alpha-tuning subsample
+CV_N   <- min(nrow(X), 600000L)          # lambda-CV subsample (final fit is on FULL X)
 
-# alpha tuning on a 200k subsample (parallel); full data used for OOS predictions
-set.seed(20260626L)
-tune_idx <- sample(nrow(X), min(200000L, nrow(X)))
 cl <- makeCluster(NUM_THREADS); registerDoParallel(cl)
 on.exit(stopCluster(cl), add = TRUE)
-cat(sprintf("Tuning alpha over %d values, %d-fold CV, %d threads...\n",
-            length(ELNET_ALPHA), ELNET_FOLDS, NUM_THREADS))
+
+# alpha tuning on a subsample (parallel across folds)
+set.seed(20260626L); tune_idx <- sample(nrow(X), TUNE_N)
+cat(sprintf("Tuning alpha over %d values, %d-fold CV on %s rows, %d threads...\n",
+            length(ELNET_ALPHA), ELNET_FOLDS, format(TUNE_N, big.mark=","), NUM_THREADS)); flush(.log)
 alpha_res <- lapply(ELNET_ALPHA, function(a) {
   set.seed(20260626L)
   f <- cv.glmnet(X[tune_idx,], Y[tune_idx], family="binomial", alpha=a,
                  nfolds=ELNET_FOLDS, type.measure="deviance", parallel=TRUE)
-  cat(sprintf("  alpha=%.2f  lambda.min=%.6f  dev=%.5f\n", a, f$lambda.min, min(f$cvm)))
+  cat(sprintf("  alpha=%.2f  lambda.min=%.6f  dev=%.5f\n", a, f$lambda.min, min(f$cvm))); flush(.log)
   list(alpha=a, dev=min(f$cvm))
 })
 best_alpha <- ELNET_ALPHA[which.min(sapply(alpha_res, `[[`, "dev"))]
-cat(sprintf(">> best alpha: %.2f\n", best_alpha))
+cat(sprintf(">> best alpha: %.2f\n", best_alpha)); flush(.log)
 
-cat("Full-data CV at best alpha (sequential)...\n")
-set.seed(20260626L)
-cvfit <- cv.glmnet(X, Y, family="binomial", alpha=best_alpha,
-                   nfolds=ELNET_FOLDS, type.measure="deviance", parallel=FALSE)
+# lambda CV at best alpha on a CAPPED subsample (parallel). Picking lambda does not
+# need all rows; the final fit below uses the FULL data at the chosen lambda.
+cat(sprintf("CV for lambda at best alpha on %s rows (parallel)...\n",
+            format(CV_N, big.mark=","))); flush(.log)
+set.seed(20260626L); cv_idx <- sample(nrow(X), CV_N)
+cvfit <- cv.glmnet(X[cv_idx,], Y[cv_idx], family="binomial", alpha=best_alpha,
+                   nfolds=ELNET_FOLDS, type.measure="deviance", parallel=TRUE)
 best_lambda <- cvfit$lambda.min
 
-# refit on full data at best (alpha, lambda). Unweighted binomial -> predictions
-# are calibrated probabilities directly; no Platt step.
+# refit on FULL data at (best alpha, lambda). Unweighted binomial -> calibrated probs.
 set.seed(20260626L)
 fit <- glmnet(X, Y, family="binomial", alpha=best_alpha, lambda=best_lambda)
 cat(sprintf("lambda.min=%.6f | in-sample median pred: %.5f (rate %.5f)\n",
             best_lambda,
-            median(as.numeric(predict(fit, newx=X, type="response"))), event_rate))
+            median(as.numeric(predict(fit, newx=X, type="response"))), event_rate)); flush(.log)
 
 # helper: covariate frame -> per-tank hazard (calibrated probability)
 predict_haz <- function(df) {
@@ -259,6 +263,7 @@ yr_grid <- data.table(age_bin = factor("9-11", levels=AGE_BIN_LABELS),
 yr_grid[, lambda := predict_haz(as.data.frame(yr_grid))]
 print(yr_grid[as.integer(as.character(year_f)) %% 5 == 0,
               .(year = year_f, per1k = round(lambda*1000,2))])
+flush(.log)   # stream the schedule + both diagnostics before the slow STEP 5 scoring
 
 # =============================================================================
 cat("=== STEP 5: PER-FACILITY-YEAR PREDICTIONS (observed covariates) ===\n")
