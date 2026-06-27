@@ -105,11 +105,23 @@ priceable families were not pattern-matched (e.g. `WESTCHESTER FIRE` = ACE/Chubb
 These shifts give the three model eras (`≤2013` / `2014–18` / `2019+`) genuinely different
 carrier mixes, which is exactly the cross-era premium variation the single-card model erased.
 
-## Coverage limits
-Per-occurrence / aggregate limit fields are **`max_COVER_OCC`** / **`max_COVER_AGG`** (not
-"occurrence"/"amount"). The diagnostic's Table E prints the pooled distribution + modal limit
-by year — used to decide whether to fix the limit at the modal value or carry it as a premium
-dimension.
+## Coverage limits — effectively constant at $1M (hold fixed, do not model)
+Per-occurrence / aggregate limit fields are **`max_COVER_OCC`** / **`max_COVER_AGG`**, stored
+as **scientific-notation text** (`1e+06` = \$1M, `2e+06` = \$2M). Distribution of the
+per-occurrence limit among insured facility-years:
+
+| Per-occurrence limit | Share of insured |
+|---|---:|
+| **\$1,000,000** (EPA UST statutory minimum) | **90.8%** |
+| \$2,000,000 | 8.1% |
+| other (\$0.5M, \$3–5M, \$10M+) | ~1% combined |
+
+The modal limit is **\$1M in every year 2001–2022** — no drift. **Decision: hold the coverage
+limit fixed at \$1M** in the premium rebuild; do not carry it as a premium dimension. (Optional
+refinement: apply the carrier's \$2M rate factor to the ~8% on a \$2M limit.)
+
+Parsing note: the diagnostic's `num()` reads these as sci-notation; cast the raw column with
+a plain `TRY_CAST(max_COVER_OCC AS DOUBLE)` for exact dollars (`1e+06` → `1000000`).
 
 ## Reproduce
 ```powershell

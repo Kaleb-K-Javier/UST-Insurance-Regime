@@ -73,8 +73,8 @@ stopifnot(!is.na(COL$facility), !is.na(COL$issuer))
 if (is.na(COL$year) && is.na(COL$begin)) stop("no YEAR or begin-date column auto-found; set COL$year in CONFIG")
 
 # ---- 2. one full scan -> compact facility-month table -----------------------
-num <- function(c) if (is.na(c)) "NULL" else
-  sprintf("TRY_CAST(regexp_replace(\"%s\", '[^0-9.]', '', 'g') AS DOUBLE)", c)
+num <- function(c) if (is.na(c)) "NULL" else   # keep e/E/sign so sci-notation "1e+06" -> 1000000
+  sprintf("TRY_CAST(regexp_replace(\"%s\", '[^0-9.eE+-]', '', 'g') AS DOUBLE)", c)
 year_expr <- if (!is.na(COL$year))
   sprintf("TRY_CAST(regexp_replace(\"%s\", '[^0-9]', '', 'g') AS INTEGER)", COL$year) else
   sprintf("TRY_CAST(substr(\"%s\", 1, 4) AS INTEGER)", COL$begin)
