@@ -5,9 +5,12 @@
 # Type: ESTIMATION CORE (touches PM08 basis + gradient). GATED — full Sonnet review.
 # SEAT: STRUCTURAL MODEL BUILDER (run_builder_pro_api.ps1), NOT the data coder — this
 #       edits the estimator. Runs on the SERVER (Rcpp engine; PM00 preflight gate).
-# Depends on: ticket 028 (R_rev in PM_Lookups.rds) + coordinate with the pooled
-#       total-exposure risk change (gamma + 1[RB]gamma_RB): land that rename FIRST,
-#       then this psi-for-phi swap (both touch PM08 param vector/basis — see Step 2).
+# Depends on: ticket 028 (R_rev in PM_Lookups.rds, VERIFIED present & > 0 on the run
+#       machine — re-check: as of 2026-06-26 the LOCAL PM_Lookups has NO R_rev).
+#       The risk side is SETTLED = two-gamma (gamma_p, gamma_r), ALREADY in PM08 (the
+#       estimator that just ran: gamma_p~0.14, gamma_r~2.36). There is NO pooled rename
+#       to land first — pooled was tried and REJECTED (diluted to ~0, killed gamma_r).
+#       This ticket touches ONLY the operating slot (phi -> psi*R); risk side untouched.
 
 ═══════════════════════════════════════════════════
 ECONOMIC MOTIVATION
@@ -71,8 +74,8 @@ Step 1 — Load R_rev:
 Step 2 — Parameter vector:
   param_struct: REMOVE "phi_1","phi_2","phi_3","phi_4"; ADD "psi" (first position).
   -> param_struct <- c("psi", "gamma_p", "gamma_r", "c_rem", "c_inst", "kappa_1")
-     (keep the risk names matching the CURRENT spec; if the pooled-risk rename has
-      landed, use those names instead — do not re-introduce phi.)
+     (the settled two-gamma risk names; do NOT re-introduce phi, and do NOT introduce
+      the rejected pooled gamma_pool/gamma_RB.)
   Update n_param, param_names, and theta_test (drop phi_* lines; add
   theta_test["psi"] <- a sign-correct nonzero start, e.g. 1.0).
 
@@ -92,10 +95,23 @@ Step 5 — ccp_update_env:
   and added to the operating value, REPLACE with psi_G <- theta_k[["psi"]] * R_e_era
   (length-4 over G), added identically to the operating value by bin.
 
+Step 5b — Warm start (researcher-requested; env knob PM08_WARM_FIT):
+  If PM08_WARM_FIT points to a prior CONVERGED two-gamma+phi fit .rds, seed the NPL
+  start theta from it: copy gamma_p, gamma_r, c_rem, c_inst, kappa_1, and every alpha_g
+  ACROSS BY NAME. Set psi to its OWN start (PM08_PSI_START, default 0). Do NOT inherit
+  phi for psi: the phi intercepts came back NEGATIVE (~-0.59) and psi*R needs psi>0, so
+  matching phi's level would force the wrong sign. Drop phi_* entirely. CCP still inits
+  from Hotz-Miller (the saved fit stores no P_envs); the warm start is theta-only, which
+  still cuts NPL iters on the shared (risk/cost/exit/FE) params. PM08_WARM_FIT unset ->
+  all-zeros start with psi at PM08_PSI_START.
+
 Step 6 — Estimate:
-  Run the existing NPL / optim path unchanged (tolerances per CLAUDE.md: tol_theta=1e-8,
-  tol_P=1e-7, max_npl_iter=600, ccp_damping_lambda=0.6). Respect PM08_NO_ALPHA.
-  Save fit to Output/Estimation_Results/pm_psi_revenue_<sample>_20260625.rds.
+  Run the existing NPL / optim path unchanged. PM08 has env-overridable tolerances
+  (added 2026-06-26): tight run = PM08_TOL_THETA=1e-7 PM08_TOL_P=1e-7 PM08_MAXITER=200
+  (defaults 1e-5/1e-5/10). NOTE: PM08 has NO CCP damping; if the tight run oscillates,
+  that is the lever to add. Respect PM08_NO_ALPHA / PM08_POOLED(unset=two-gamma) /
+  PM08_NWORKERS. Save fit to Output/Estimation_Results/
+  Model_Portfolio_v4_two_gamma_psiR_FE_on_observed_<date>.rds.
 
 Step 7 — Print (CLAUDE.md output rules):
   Estimator name | Sample | Converged T/F at iter N | LL | theta_hat (names+values incl psi)
