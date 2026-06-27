@@ -3,6 +3,23 @@
 # Pre-reform window = 1994–1997 (four full years before the Dec 22 1998 reform).
 # texas_treated: 1 = Texas, 0 = the 17 controls. For the editor — verified, with flags.
 
+## DECISIONS LOCKED (2026-06-27)
+- **Headline sample = birth-CEM MATCHED** (facility 3.44M facility-years; tank 9.76M tank-years /
+  117,250 facilities). All-incumbents is a **robustness only** (see "Sample robustness" below).
+- **Event studies use `panel_id + cell_fac_year`** (facility + portfolio-mix × year FE) — the same
+  FE×year design as the static DiD, on both tank and facility.
+- Consolidation is an **informative null**; the sorting story is the payoff.
+
+## Sample robustness (Ticket 035 — matched vs all-incumbents)
+Re-ran the facility portfolio DiD on all alive-at-reform incumbents (4.82M facility-years, FE-only),
+vs the matched headline. Result: **the sorting is fully robust** — every size/vintage gradient holds
+(small→exit, large→downsize/replace, consolidate null) with the same shape and significance. Pooled
+ATTs attenuate ~25% on all-incumbents and pooled downsize/repl significance softens (their gradients
+stay strong). The **closure pre-trend is cleaner under matching even net of the mix×year FE** — so
+matched is the headline; all-incumbents goes in one robustness sentence ("results hold, attenuated,
+sorting unchanged"). Files: `T_Facility_SampleCompare_{ATT,SizeHTE,VintageHTE}.csv`,
+`Fig_ES_Facility_*_allinc.*`.
+
 ## Q1 — Sample counts (two DIFFERENT samples; the draft conflated them)
 
 **Alive-at-reform (incumbent) descriptive sample** — facilities with a tank operating on
