@@ -62,11 +62,11 @@ to review. Status: **[built]** = exists, **[rewire]** = exists, switching to the
 | **fair-premium vs real TX premium** | `Output/Figures/Fig_TX_fair_vs_real.*` | our λ·S estimate vs what TX insurers charge **[to build]** |
 | TX premium by age | `Output/Figures/Fig_premium_by_age.*` | the Mid-Continent schedule **[built]** |
 
-### 5. DCM structural inputs
+### 5. DCM structural inputs (contract verified vs saved PM objects)
 | output | path | what |
 |---|---|---|
-| leak-rate cells | `Data/Analysis/dcm_cell_hazard_pricing.csv` | feeds the structural hazard primitive |
-| severity cells | `Data/Analysis/dcm_cell_severity_pricing.csv` | feeds the structural cost |
+| leak-rate, DCM bins | `Data/Analysis/dcm_cell_hazard_struct.csv` | **NATIONAL age×wall only (16)**, keyed (wall, age 1..8 on 5-yr breaks) → kernel hazard primitive `h_aw`. No capacity, no state/regime. |
+| severity → welfare | `Data/Analysis/dcm_cell_severity_pricing.csv` | feeds **welfare / E_ext** (kernel risk is γ_r·H·**D**, the deductible — severity is **not** in the kernel) |
 
 ### 6. Saved trained models (reload without refitting)
 | output | path | what |

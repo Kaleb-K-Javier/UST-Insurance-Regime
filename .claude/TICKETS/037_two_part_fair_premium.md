@@ -122,26 +122,26 @@ USES / PAPER ALIGNMENT (02_JMP_Draft.qmd — what these feed)
   fair-premium gradient now comes from BOTH. All cross-subsidy numbers update. ***
 - §4.2 "Pricing observable risk": fig-actuarial-alignment (empirical risk vs TX premium) = the
   CURRENT comparison; ADD the fair-premium(λ·S)-vs-real-TX-premium version (researcher wants both).
-- §5 DCM: reuses the cell schedules — BUT at the DCM's OWN granularity, not the figure bins.
-  DCM-INPUT SCHEDULE (additional outputs, built on the structural state space):
-    * AGE bins = PM03 AGE_BREAKS = c(0,5,10,15,20,25,30,35,Inf) -> 8 five-year bins
-      (NOT the 9 three-year figure bins; the estimators must re-bin to these for the DCM file).
-    * WALL = SW/DW (16 MARG cells: SW_8(oldest)..SW_1, DW_8..DW_1).
-    * CAPACITY = N_G=4 bins (NEW: the portfolio model now tracks capacity/size in the env, so the
-      hazard/severity should vary by capacity bin G, not just age×wall). Both 01r and 01q already
-      carry total_capacity as a feature, so predict by (age × wall × G).
-  OPEN QUESTIONS for the structural-model agent (researcher offered pointers — these pin the DCM
-  output shape; figures/Parts 1-3 do NOT depend on them and proceed now):
-    Q1. Exact 4 capacity-bin (G) breaks — from facility total_cap_capped (winsorized 60k, PM01)?
-        quantile or fixed edges?
-    Q2. Is the hazard primitive indexed by capacity (age×wall×G) or only (age×wall)? (Memory says
-        capacity enters REVENUE via capbar_G; confirm whether the kernel's hazard slot is G-indexed.)
-    Q3. National vs state- and/or regime(FF/RB)-specific hazard/severity for the DCM? (04b built it
-        national, regime-replicated; the new env may want state.)
-    Q4. Exact cell/sidx ordering the kernel expects when it reads the hazard vector (so the CSV
-        rows line up with the state index).
-  Output (once Q1-Q4 known): dcm_cell_hazard_pricing_struct.csv / dcm_cell_severity_pricing_struct.csv
-  on the DCM bins. Keep the figure-bin schedules (dcm_cell_*_pricing.csv) for the M1 figures.
+- §5 DCM — CONTRACT VERIFIED by the structural agent against saved PM_Lookups/PM_StateSpace:
+  HAZARD primitive = NATIONAL, age×wall ONLY (16 cells = 2 wall × 8 age). NOT capacity-indexed
+  (G lives only in the state space + revenue capbar_G; a G-indexed hazard would be a kernel change,
+  out of scope). NOT state/regime-specific (per-state/regime risk variation comes from the per-state
+  deductible D in gamma_r·H·D; same national + regime-replicated structure as old 04b).
+    * AGE = AGE_BREAKS c(0,5,10,15,20,25,30,35,Inf): bin 1 = 0-5 (youngest) .. bin 8 = 35+ (oldest).
+      01r RE-BINS the rebuilt per-tank rate to these 8 bins for the DCM file (NOT the 9 three-year
+      figure bins).
+    * DELIVER KEYED by (wall ∈ {SW,DW}, age_bin ∈ 1..8) so the merge is column-order-proof. If a
+      positional vector is ever needed it MUST be exactly [SW1..SW8, DW1..DW8] to line up with
+      h_aw / ss$h_idx.
+    * OUTPUT: Data/Analysis/dcm_cell_hazard_struct.csv — cols (wall, age_bin, lambda, lambda_lo,
+      lambda_hi); national; 16 rows. Drops into the kernel's h_aw unchanged.
+  SEVERITY is NOT in the kernel. The kernel risk term is gamma_r·H·D (deductible, not cleanup cost).
+  Severity feeds the WELFARE / external-damage side (national pooled S_bar / the E_ext input) and the
+  M1 figures — NOT the hazard primitive. So 01q output = figures + welfare, never the DCM kernel.
+  (For reference only — NOT used by the hazard — the env's 4 G breaks are fixed edges on facility
+  total_cap_capped: [1, 9000, 20000, 30000, 360000] = G1[1,9k) G2[9k,20k) G3[20k,30k) G4[30k,360k].)
+  NOTE: current h_aw has young DW > young SW (vintage/detection confound) — exactly what 01r's
+  de-confounding fixes; expect the DW age profile to change shape. Keep the 16-cell (wall,age) keying.
 
 ═══════════════════════════════════════════════════
 PART 1 — FREQUENCY: 01r_Leak_Rate.R  (NEW; archive 01p)
