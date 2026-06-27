@@ -211,8 +211,15 @@ figure bands use only the flat-S̄ bootstrap.
 
 ## 7. Open decisions / issues to resolve
 
-- **LA / full sample:** can LA claims be used (per-incident vs facility-total)? UT? (data
-  check pending). Frequency is already broad; severity is the binding constraint.
+- **LA / full sample — RESOLVED 2026-06-27.** Claims file = 6 states. CO/PA/TN/NM/UT are
+  per-incident (1.1–1.3 rows/facility, distinct lust_ids). **LA is site-aggregated**:
+  *exactly* 1.00 rows/facility (no multi-incident facilities) and median cost ~2× CO →
+  one aggregated cleanup per facility, not per-release. Keep LA OUT of per-incident
+  severity training (mixes units, biases up); LA figures borrow national Ŝ (already so).
+  **UT is per-incident but tiny (88 claims)** — addable for completeness; not a figure
+  state. Full usable per-incident severity sample = CO/NM/PA/TN(+UT) ≈ 7,422. Frequency is
+  already the full 2.3M panel; severity is small *by construction* (cost observed only on
+  the ~7.4k realized releases).
 - **Tank vs facility** cross-subsidy as the headline.
 - **Coverage cap** on severity (fund liability vs gross expected loss).
 - **Wall** in figures: AgeWall vs AgeOnly (now both defensible; ~2% on τ).
