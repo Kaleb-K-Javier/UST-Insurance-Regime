@@ -149,6 +149,16 @@ for (i in seq_len(n_env)) {
 }
 env_tbl[, D   := d_vals]
 env_tbl[, tau := tau_vals]
+# PM08_RISK_LOSS=<model units>: replace the per-state DEDUCTIBLE D with a constant FULL
+# LOSS L in the risk term (gamma_r*H*D -> gamma_r*H*L), matching the single-tank model's
+# hazard*L spec. Reconciliation test for the gamma_p gap (single-tank empirically est.
+# gamma_price~1). e.g. S_bar~$378k -> PM08_RISK_LOSS="37.8".
+if (nzchar(Sys.getenv("PM08_RISK_LOSS"))) {
+  .L_const <- as.numeric(Sys.getenv("PM08_RISK_LOSS"))
+  env_tbl[, D := .L_const]
+  cat(sprintf("  *** PM08_RISK_LOSS: risk term uses constant FULL LOSS L=%.2f ($%.0f), NOT the deductible ***\n",
+              .L_const, .L_const * lk$SCALE))
+}
 stopifnot(!anyNA(env_tbl$D))
 stopifnot(!anyNA(env_tbl$tau[env_tbl$type == "FF"]))
 cat("  env_tbl:\n"); print(env_tbl)
