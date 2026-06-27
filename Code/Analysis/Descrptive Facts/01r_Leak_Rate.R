@@ -134,8 +134,8 @@ cat(sprintf("COUNT calibration: mean(exp_count_oos)=%.5f vs mean(n_leaks)=%.5f\n
             mean(exp_count_oos), mean(y)))
 cat(sprintf("RATE  calibration: wmean(mu, tanks)=%.5f vs raw=%.5f  (want ~equal)\n",
             wmean(mu_oos, d$active_tanks), raw_rate))
-cv_dev <- min(cvb$cvm); null_dev <- cvb$cvm[length(cvb$cvm)]
-cat(sprintf("OOS CV deviance=%.5f | null=%.5f | pseudo-R2=%.4f | lambda.min=%.6f\n",
+cv_dev <- min(cvb$cvm); null_dev <- cvb$cvm[1]   # cvm[1] = largest lambda (most regularized ~ null); cvm[last] can diverge at tiny lambda
+cat(sprintf("OOS CV deviance=%.5f | null(CV)=%.5f | pseudo-R2=%.4f | lambda.min=%.6f\n",
             cv_dev, null_dev, 1 - cv_dev/null_dev, best_lambda)); flush(.log)
 
 # =============================================================================
@@ -166,7 +166,7 @@ fit_full <- glmnet(X, y, family="poisson", offset=off, alpha=best_alpha, lambda=
 keyf <- d[, paste(state, age_bin, has_single_walled, sep="|")]; keyn <- d[, paste(age_bin, has_single_walled, sep="|")]
 keyd <- d[, paste(wall, age8, sep="|")]
 act  <- d$active_tanks            # export the vector, not the whole table
-clusterEvalQ(cl, { suppressPackageStartupMessages({library(glmnet); library(Matrix)}) })
+invisible(clusterEvalQ(cl, { suppressPackageStartupMessages({library(glmnet); library(Matrix)}) }))
 clusterExport(cl, c("X","y","off","fac_rows","fac_ids","best_alpha","best_lambda",
                     "act","keyf","keyn","keyd","wmean"), envir=environment())
 boot1 <- function(b) {
