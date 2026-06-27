@@ -1,124 +1,117 @@
 # T_Baseline_Characteristics_Slide.R
 # Texas-vs-control BALANCE table, before (alive-at-reform) and after (birth-CEM matched).
-# Shows the imbalance the matching removes. Backs Setting/Data section (tbl-summary, ¶8).
+# Shows the imbalance the FACILITY-level birth-CEM match removes. Backs Setting/Data (tbl-summary, ¶8).
 # Columns: Alive-at-reform {Texas, Control} | Matched {Texas, Control} | SMD {before, after}.
-# Sources: Data/Analysis/exact_base.csv      (tank-level: wall, install yr, age, enter/exit)
-#          Data/Analysis/facility_panel.csv  (facility-year: counts, capacity, age)
-#          Data/Analysis/matched_tanks_birth_cem.csv  (headline tank-DiD matched panel; same
-#            file 02c_Stepped_DiD.R reads. Matched facility set = unique(panel_id) after
-#            cem_weight>0 & install_yr_int<1999 & first_year_churn==0  -> should be 117,250.)
-# Output:  Output/Tables/T_Baseline_Characteristics_Slide.{tex,csv}
-#          (the two figures Fig_Baseline_{Tanks,Capacity}AtReform.png are unchanged — raw
-#           pre-match distributions §3 ¶8 cites.)
+#   "Matched" = facility-level birth-CEM (fac_cem_matched==1 in facility_panel.csv) = the 02j /
+#   facility-DiD sample (105,245 facilities). The match is WEIGHTED (fac_cem_weight), so the Matched
+#   columns and the "after" SMD are fac_cem_weight-WEIGHTED; Alive columns are unweighted. A balance
+#   table reports means (weighting medians is ill-defined), so rows 3-8 are means, not median[IQR].
+# Sources: Data/Analysis/exact_base.csv (tank-level), Data/Analysis/facility_panel.csv (facility-year,
+#   carries fac_cem_matched + fac_cem_weight). NO 4.6 GB matched-tank read needed.
+# Output:  Output/Tables/T_Baseline_Characteristics_Slide.{tex,csv}  (figures unchanged).
 
 suppressPackageStartupMessages({ library(data.table); library(here) })
-cat("=== BASELINE BALANCE TABLE (alive-at-reform vs birth-CEM matched) ===\n")
+cat("=== BASELINE BALANCE TABLE (alive-at-reform vs facility birth-CEM matched) ===\n")
 
 ANALYSIS_DIR <- Sys.getenv("UST_ANALYSIS_DIR", here("Data", "Analysis"))
-REFORM_DAY   <- as.integer(as.Date("1998-12-22"))   # days since 1970 origin
-cat(sprintf("Reform day (since 1970): %d\n", REFORM_DAY))
+REFORM_DAY   <- as.integer(as.Date("1998-12-22"))
 
 # ---- tank-level: attributes among tanks ACTIVE at reform ----
 tk <- fread(file.path(ANALYSIS_DIR, "exact_base.csv"),
-  select = c("panel_id", "texas_treated", "mm_wall", "install_yr_int",
-             "t_enter", "t_exit", "age_enter"))
+  select = c("panel_id", "texas_treated", "mm_wall", "install_yr_int", "t_enter", "t_exit", "age_enter"))
 tk  <- tk[!is.na(texas_treated)]
-tkr <- tk[t_enter <= REFORM_DAY & t_exit >= REFORM_DAY]          # active at reform
+tkr <- tk[t_enter <= REFORM_DAY & t_exit >= REFORM_DAY]
 tkr[, age_reform := age_enter + (REFORM_DAY - t_enter) / 365.25]
 tkr[, sw    := as.integer(mm_wall == "Single-Walled")]
 tkr[, pre89 := as.integer(install_yr_int < 1989L)]
-cat(sprintf("Tanks active at reform: %d\n", nrow(tkr)))
 
-# ---- facility-year: profile rows ----
+# ---- facility-year: profile + the facility CEM match ----
 fp <- fread(file.path(ANALYSIS_DIR, "facility_panel.csv"),
-  select = c("panel_id", "texas_treated", "active_tanks", "total_capacity",
-             "avg_tank_age", "n_tanks_at_reform", "total_capacity_reform", "fac_is_incumbent"))
+  select = c("panel_id", "texas_treated", "active_tanks", "total_capacity", "avg_tank_age",
+             "n_tanks_at_reform", "total_capacity_reform", "fac_is_incumbent",
+             "fac_cem_matched", "fac_cem_weight"))
 fp <- fp[!is.na(texas_treated)]
 
-# ---- alive-at-reform incumbent facilities (the "before matching" sample) ----
-fac_inc <- unique(fp[fac_is_incumbent == 1L | n_tanks_at_reform > 0L, .(panel_id, texas_treated)])
-cat(sprintf("Alive-at-reform incumbent facilities: %d (TX %d, Ctrl %d)\n",
-            nrow(fac_inc), fac_inc[texas_treated==1L,.N], fac_inc[texas_treated==0L,.N]))
+# attach the facility weight to each tank (constant within facility)
+fw  <- unique(fp[, .(panel_id, fac_cem_weight)], by = "panel_id")
+tkr <- merge(tkr, fw, by = "panel_id", all.x = TRUE)
 
-# ---- matched facility set from the headline tank-DiD panel (the "after matching" sample) ----
-cat("Reading matched_tanks_birth_cem.csv (4.6 GB; this is the slow step)...\n")
-.mh   <- names(fread(file.path(ANALYSIS_DIR, "matched_tanks_birth_cem.csv"), nrows = 0L))
-.msel <- intersect(c("panel_id","texas_treated","install_yr_int","cem_weight","first_year_churn"), .mh)
-mt <- fread(file.path(ANALYSIS_DIR, "matched_tanks_birth_cem.csv"), select = .msel)
-if ("cem_weight"       %in% names(mt)) mt <- mt[cem_weight > 0]
-if ("install_yr_int"   %in% names(mt)) mt <- mt[install_yr_int < 1999L]
-if ("first_year_churn" %in% names(mt)) mt <- mt[first_year_churn == 0L | is.na(first_year_churn)]
-matched_fac <- unique(mt[, .(panel_id, texas_treated)])
-cat(sprintf("Matched facilities: %d (TX %d, Ctrl %d)  [target 117,250]\n",
+# ---- the two samples ----
+fac_inc     <- unique(fp[fac_is_incumbent == 1L | n_tanks_at_reform > 0L, .(panel_id, texas_treated)])
+matched_fac <- unique(fp[fac_cem_matched == 1L, .(panel_id, texas_treated)])
+cat(sprintf("Alive-at-reform incumbents: %d (TX %d, Ctrl %d)\n",
+            nrow(fac_inc), fac_inc[texas_treated==1L,.N], fac_inc[texas_treated==0L,.N]))
+cat(sprintf("Facility birth-CEM matched: %d (TX %d, Ctrl %d)\n",
             nrow(matched_fac), matched_fac[texas_treated==1L,.N], matched_fac[texas_treated==0L,.N]))
 
-# ---- one cell = stats for a given facility-id set ----
-# Returns display stats (medians/IQRs/%) plus means+SDs for SMD.
-cell_stats <- function(ids) {
+# ---- weighted moments ----
+wmean <- function(x, w) { ok <- is.finite(x) & is.finite(w) & w > 0; sum(w[ok]*x[ok]) / sum(w[ok]) }
+wsd   <- function(x, w) { ok <- is.finite(x) & is.finite(w) & w > 0
+                          m <- sum(w[ok]*x[ok])/sum(w[ok]); sqrt(sum(w[ok]*(x[ok]-m)^2)/sum(w[ok])) }
+
+# cell: stats for a facility-id set. weighted = TRUE -> use fac_cem_weight (matched columns).
+cell_stats <- function(ids, weighted) {
   T  <- tkr[panel_id %in% ids]
   FY <- fp[panel_id %in% ids]
-  q  <- function(x, p) as.numeric(quantile(x, p, na.rm = TRUE))
-  list(
-    n_fac     = length(ids),
-    n_tanks   = nrow(T),
-    pct_sw    = 100 * mean(T$sw, na.rm = TRUE),
-    pct_pre89 = 100 * mean(T$pre89, na.rm = TRUE),
-    med_age   = median(T$age_reform, na.rm = TRUE),
-    tanks_med = as.numeric(median(FY$active_tanks, na.rm = TRUE)),
-    tanks_p25 = q(FY$active_tanks, .25), tanks_p75 = q(FY$active_tanks, .75),
-    cap_med   = median(FY$total_capacity, na.rm = TRUE) / 1000,
-    cap_p25   = q(FY$total_capacity, .25) / 1000, cap_p75 = q(FY$total_capacity, .75) / 1000,
-    mean_age  = mean(FY$avg_tank_age, na.rm = TRUE),
-    # means / sds for SMD (var order: sw, pre89, age_reform, tanks, cap_k, avg_age)
-    m = c(mean(T$sw,na.rm=TRUE), mean(T$pre89,na.rm=TRUE), mean(T$age_reform,na.rm=TRUE),
-          mean(FY$active_tanks,na.rm=TRUE), mean(FY$total_capacity,na.rm=TRUE)/1000,
-          mean(FY$avg_tank_age,na.rm=TRUE)),
-    s = c(sd(T$sw,na.rm=TRUE), sd(T$pre89,na.rm=TRUE), sd(T$age_reform,na.rm=TRUE),
-          sd(FY$active_tanks,na.rm=TRUE), sd(FY$total_capacity,na.rm=TRUE)/1000,
-          sd(FY$avg_tank_age,na.rm=TRUE))
-  )
+  wT <- if (weighted) T$fac_cem_weight  else rep(1, nrow(T))
+  wF <- if (weighted) FY$fac_cem_weight else rep(1, nrow(FY))
+  m <- c(sw    = wmean(T$sw, wT),        pre89 = wmean(T$pre89, wT),
+         tage  = wmean(T$age_reform, wT), tanks = wmean(FY$active_tanks, wF),
+         capk  = wmean(FY$total_capacity, wF) / 1000, fage = wmean(FY$avg_tank_age, wF))
+  s <- c(sw    = wsd(T$sw, wT),          pre89 = wsd(T$pre89, wT),
+         tage  = wsd(T$age_reform, wT),  tanks = wsd(FY$active_tanks, wF),
+         capk  = wsd(FY$total_capacity, wF) / 1000, fage = wsd(FY$avg_tank_age, wF))
+  q <- function(x, p) as.numeric(quantile(x, p, na.rm = TRUE))   # robust display for skewed vars
+  list(n_fac = length(ids), n_tanks = nrow(T), m = m, s = s,
+       tanks_med = median(FY$active_tanks, na.rm=TRUE), tanks_p25 = q(FY$active_tanks,.25), tanks_p75 = q(FY$active_tanks,.75),
+       cap_med   = median(FY$total_capacity, na.rm=TRUE)/1000, cap_p25 = q(FY$total_capacity,.25)/1000, cap_p75 = q(FY$total_capacity,.75)/1000)
 }
 
-A_tx <- cell_stats(fac_inc[texas_treated==1L, panel_id])
-A_ct <- cell_stats(fac_inc[texas_treated==0L, panel_id])
-M_tx <- cell_stats(matched_fac[texas_treated==1L, panel_id])
-M_ct <- cell_stats(matched_fac[texas_treated==0L, panel_id])
+A_tx <- cell_stats(fac_inc[texas_treated==1L, panel_id],     weighted = FALSE)
+A_ct <- cell_stats(fac_inc[texas_treated==0L, panel_id],     weighted = FALSE)
+M_tx <- cell_stats(matched_fac[texas_treated==1L, panel_id], weighted = TRUE)
+M_ct <- cell_stats(matched_fac[texas_treated==0L, panel_id], weighted = TRUE)
 
-# ---- standardized mean differences (TX vs Ctrl), before & after ----
-smd_vec <- function(tx, ct) (tx$m - ct$m) / sqrt((tx$s^2 + ct$s^2) / 2)   # length 6
-smd_before <- smd_vec(A_tx, A_ct)
-smd_after  <- smd_vec(M_tx, M_ct)
+smd_vec    <- function(tx, ct) (tx$m - ct$m) / sqrt((tx$s^2 + ct$s^2) / 2)   # length 6
+smd_before <- smd_vec(A_tx, A_ct)   # alive, unweighted
+smd_after  <- smd_vec(M_tx, M_ct)   # matched, weighted
 
-# ---- assemble the table (formatted strings; one row per metric) ----
+# ---- assemble (means; counts on rows 1-2) ----
 cm  <- function(x) format(round(x), big.mark = ",")
-pc  <- function(x) sprintf("%.0f%%", x)
+pc  <- function(x) sprintf("%.0f%%", 100*x)
 d1  <- function(x) sprintf("%.1f", x)
-iqr <- function(m,lo,hi) sprintf("%.0f [%.0f-%.0f]", m, lo, hi)
 sm  <- function(x) sprintf("%+.3f", x)
+iqr <- function(m,lo,hi) sprintf("%.0f [%.0f-%.0f]", m, lo, hi)
+vi <- c(sw=1, pre89=2, tage=3, tanks=4, capk=5, fage=6)   # var -> index in m/s/smd
 
-row_csv <- function(lab, fa, fb, fc, fd, sb, sa)
+rowdt <- function(lab, fa, fb, fc, fd, sb, sa)
   data.table(metric=lab, alive_texas=fa, alive_control=fb,
              matched_texas=fc, matched_control=fd, smd_before=sb, smd_after=sa)
+mrow <- function(lab, key, fmt) rowdt(lab,
+  fmt(A_tx$m[key]), fmt(A_ct$m[key]), fmt(M_tx$m[key]), fmt(M_ct$m[key]),
+  sm(smd_before[vi[key]]), sm(smd_after[vi[key]]))
 
 res <- rbindlist(list(
-  row_csv("Facilities",              cm(A_tx$n_fac),  cm(A_ct$n_fac),  cm(M_tx$n_fac),  cm(M_ct$n_fac),  "", ""),
-  row_csv("Tanks at reform",         cm(A_tx$n_tanks),cm(A_ct$n_tanks),cm(M_tx$n_tanks),cm(M_ct$n_tanks),"", ""),
-  row_csv("Share single-walled",     pc(A_tx$pct_sw), pc(A_ct$pct_sw), pc(M_tx$pct_sw), pc(M_ct$pct_sw), sm(smd_before[1]), sm(smd_after[1])),
-  row_csv("Share pre-1989 vintage",  pc(A_tx$pct_pre89),pc(A_ct$pct_pre89),pc(M_tx$pct_pre89),pc(M_ct$pct_pre89), sm(smd_before[2]), sm(smd_after[2])),
-  row_csv("Median tank age (yrs)",   d1(A_tx$med_age),d1(A_ct$med_age),d1(M_tx$med_age),d1(M_ct$med_age), sm(smd_before[3]), sm(smd_after[3])),
-  row_csv("Tanks per facility",      iqr(A_tx$tanks_med,A_tx$tanks_p25,A_tx$tanks_p75), iqr(A_ct$tanks_med,A_ct$tanks_p25,A_ct$tanks_p75),
-                                     iqr(M_tx$tanks_med,M_tx$tanks_p25,M_tx$tanks_p75), iqr(M_ct$tanks_med,M_ct$tanks_p25,M_ct$tanks_p75), sm(smd_before[4]), sm(smd_after[4])),
-  row_csv("Total capacity, k gal",   iqr(A_tx$cap_med,A_tx$cap_p25,A_tx$cap_p75), iqr(A_ct$cap_med,A_ct$cap_p25,A_ct$cap_p75),
-                                     iqr(M_tx$cap_med,M_tx$cap_p25,M_tx$cap_p75), iqr(M_ct$cap_med,M_ct$cap_p25,M_ct$cap_p75), sm(smd_before[5]), sm(smd_after[5])),
-  row_csv("Mean tank age (yrs)",     d1(A_tx$mean_age),d1(A_ct$mean_age),d1(M_tx$mean_age),d1(M_ct$mean_age), sm(smd_before[6]), sm(smd_after[6]))
+  rowdt("Facilities",            cm(A_tx$n_fac),  cm(A_ct$n_fac),  cm(M_tx$n_fac),  cm(M_ct$n_fac),  "", ""),
+  rowdt("Tanks at reform",       cm(A_tx$n_tanks),cm(A_ct$n_tanks),cm(M_tx$n_tanks),cm(M_ct$n_tanks),"", ""),
+  mrow("Share single-walled",      "sw",    pc),
+  mrow("Share pre-1989 vintage",   "pre89", pc),
+  mrow("Mean tank age at reform",  "tage",  d1),
+  rowdt("Tanks per facility (med [IQR])",
+        iqr(A_tx$tanks_med,A_tx$tanks_p25,A_tx$tanks_p75), iqr(A_ct$tanks_med,A_ct$tanks_p25,A_ct$tanks_p75),
+        iqr(M_tx$tanks_med,M_tx$tanks_p25,M_tx$tanks_p75), iqr(M_ct$tanks_med,M_ct$tanks_p25,M_ct$tanks_p75), "", ""),
+  rowdt("Total capacity, k gal (med [IQR])",
+        iqr(A_tx$cap_med,A_tx$cap_p25,A_tx$cap_p75), iqr(A_ct$cap_med,A_ct$cap_p25,A_ct$cap_p75),
+        iqr(M_tx$cap_med,M_tx$cap_p25,M_tx$cap_p75), iqr(M_ct$cap_med,M_ct$cap_p25,M_ct$cap_p75), "", ""),
+  mrow("Mean facility tank age",   "fage",  d1)
 ))
 cat("\n"); print(res)
 fwrite(res, here("Output","Tables","T_Baseline_Characteristics_Slide.csv"))
 
 # ---- LaTeX (two-level header; 4 data cols + 2 SMD cols) ----
-tx <- function(s) gsub("%", "\\\\%", s)                       # escape % for LaTeX
+esc  <- function(s) gsub("%", "\\\\%", s)
 trow <- function(r) sprintf("%s & %s & %s & %s & %s & %s & %s \\\\",
-  r$metric, tx(r$alive_texas), tx(r$alive_control), tx(r$matched_texas), tx(r$matched_control),
+  r$metric, esc(r$alive_texas), esc(r$alive_control), esc(r$matched_texas), esc(r$matched_control),
   r$smd_before, r$smd_after)
 tex <- c(
   "\\begin{center}", "\\footnotesize", "\\setlength{\\tabcolsep}{5pt}",
@@ -129,8 +122,8 @@ tex <- c(
   vapply(seq_len(nrow(res)), function(i) trow(res[i]), character(1)),
   "\\hline", "\\end{tabular}", "\\end{center}")
 writeLines(tex, here("Output","Tables","T_Baseline_Characteristics_Slide.tex"))
-cat(sprintf("\nSMD before (TX vs Ctrl): %s\n", paste(sprintf("%+.3f", smd_before), collapse=" ")))
-cat(sprintf("SMD after  (TX vs Ctrl): %s\n", paste(sprintf("%+.3f", smd_after),  collapse=" ")))
+cat(sprintf("\nSMD before (alive):   %s\n", paste(sprintf("%+.3f", smd_before), collapse=" ")))
+cat(sprintf("SMD after  (matched): %s\n", paste(sprintf("%+.3f", smd_after),  collapse=" ")))
 
 # ---- overlapping histograms at the treatment date (TX vs control) — UNCHANGED ----
 suppressPackageStartupMessages(library(ggplot2))

@@ -1,24 +1,21 @@
 \begin{center}
-\scriptsize
-\setlength{\tabcolsep}{6pt}
-\renewcommand{\arraystretch}{1.05}
-\begin{tabular}{lrrr}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{l rr rr cc}
 \hline
- & \textbf{Full sample} & \textbf{Texas} & \textbf{Controls} \\
+ & \multicolumn{2}{c}{\textbf{Alive-at-reform}} & \multicolumn{2}{c}{\textbf{Matched (birth-CEM)}} & \multicolumn{2}{c}{\textbf{SMD}} \\
+\cline{2-3}\cline{4-5}\cline{6-7}
+ & Texas & Control & Texas & Control & Before & After \\
 \hline
-\multicolumn{4}{l}{\textit{Coverage (alive-at-reform sample)}} \\
-\quad Facilities & 252,670 & 54,379 & 198,291 \\
-\quad Tanks at reform & 330,311 & 60,651 & 269,660 \\
-\quad Facility-years & 4.82M & 0.90M & 3.93M \\[4pt]
-\multicolumn{4}{l}{\textit{At reform (Dec 22, 1998)}} \\
-\quad Share single-walled & 89\% & 89\% & 89\% \\
-\quad Share pre-1989 vintage & 69\% & 75\% & 68\% \\
-\quad Median tank age (years) & 14.0 & 14.4 & 14.0 \\[4pt]
-\multicolumn{4}{l}{\textit{Average facility profile (full sample)}} \\
-\quad Tanks per facility (med.\ [IQR]) & 2 [1--3] & 3 [2--3] & 2 [1--3] \\
-\quad Total capacity, k gal (med.\ [IQR]) & 15 [4--27] & 20 [8--30] & 14 [3--26] \\
-\quad Mean tank age (years) & 18.8 & 15.5 & 19.6 \\
-\quad Annual release rate & 1.4\% & 0.5\% & 1.6\% \\
+Facilities & 54,379 & 198,291 & 18,914 & 86,331 &  &  \\
+Tanks at reform & 60,651 & 269,660 & 52,173 & 235,423 &  &  \\
+Share single-walled & 89\% & 89\% & 89\% & 89\% & -0.011 & -0.001 \\
+Share pre-1989 vintage & 75\% & 68\% & 75\% & 72\% & +0.157 & +0.071 \\
+Mean tank age at reform & 15.4 & 16.8 & 15.3 & 15.2 & -0.117 & +0.015 \\
+Tanks per facility (med [IQR]) & 3 [2-3] & 2 [1-3] & 3 [2-3] & 3 [2-4] &  &  \\
+Total capacity, k gal (med [IQR]) & 18 [8-29] & 13 [3-25] & 22 [14-30] & 16 [4-28] &  &  \\
+Mean facility tank age & 16.1 & 20.1 & 17.4 & 18.9 & -0.264 & -0.091 \\
 \hline
 \end{tabular}
 \end{center}
