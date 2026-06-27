@@ -1,0 +1,27 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcccccccccc}
+   \toprule
+                                    & Closure share  & Any closure    & Facility exit  & Downsize                           & consolidate                          & reconfigure\_up                    & Permanent closure & Replacement    & Capacity cut   & Closure share\\  
+                                    & Closure share  & Any closure    & Facility exit  & Downsize (fewer tanks \& gallons)  & Consolidate (fewer tanks, ~same gal) & Reconfigure-up (fewer tanks, +gal) & Permanent         & Replacement    & Capacity cut   & Closure (impute) \\   
+                                    & (1)            & (2)            & (3)            & (4)                                & (5)                                  & (6)                                & (7)               & (8)            & (9)            & (10)\\  
+   \midrule 
+   Reform $\times$ Post             & 0.0162$^{***}$ & 0.0183$^{***}$ & 0.0125$^{**}$  & 0.0026$^{***}$                     & -0.0004                              & 0.0016$^{***}$                     & 0.0133$^{***}$    & 0.0029$^{***}$ & 0.0148$^{***}$ & 0.0118$^{***}$\\   
+                                    & (0.0046)       & (0.0046)       & (0.0045)       & (0.0009)                           & (0.0003)                             & (0.0003)                           & (0.0044)          & (0.0005)       & (0.0044)       & (0.0038)\\   
+   Predicted baseline               & 0.8352$^{***}$ & 1.002$^{***}$  & 0.5569$^{***}$ & 0.3103$^{***}$                     & 0.0470$^{***}$                       & 0.0685$^{***}$                     & 0.6719$^{***}$    & 0.1634$^{***}$ & 0.9021$^{***}$ &   \\   
+                                    & (0.1146)       & (0.1330)       & (0.0937)       & (0.0355)                           & (0.0079)                             & (0.0089)                           & (0.1049)          & (0.0204)       & (0.1258)       &   \\   
+    \\
+   Observations                     & 3,443,560      & 3,443,560      & 3,443,560      & 3,443,560                          & 3,443,560                            & 3,443,560                          & 3,443,560         & 3,443,560      & 3,443,560      & 3,443,560\\  
+    \\
+   Facility fixed effects           & $\checkmark$   & $\checkmark$   & $\checkmark$   & $\checkmark$                       & $\checkmark$                         & $\checkmark$                       & $\checkmark$      & $\checkmark$   & $\checkmark$   & $\checkmark$\\   
+   Mix $\times$ year fixed effects  & $\checkmark$   & $\checkmark$   & $\checkmark$   & $\checkmark$                       & $\checkmark$                         & $\checkmark$                       & $\checkmark$      & $\checkmark$   & $\checkmark$   & \\  
+   Year fixed effects               &                &                &                &                                    &                                      &                                    &                   &                &                & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+ 
+\par \raggedright 
+Facility-year sample. Columns 1-k: two-way (facility, portfolio-mix x year) fixed-effects estimator controlling for the composition-weighted baseline. Final column: imputation (predicted-rate) estimator on the baseline-netted outcome. SE clustered by state (18 clusters).
+\par\endgroup
+
+
