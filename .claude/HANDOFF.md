@@ -1,3 +1,127 @@
+# HANDOFF -- 2026-06-26 (M1 cross-subsidy figures: first pass DONE + pushed; reviewer comments in hand; TANK-LEVEL rebuild next)  [M1 cross-subsidy workstream]
+
+═══════════════════════════════════════════════════
+CHECKPOINT: M1 cross-subsidy figures first pass complete; reviewer comments to fold in (2026-06-26, Opus)
+═══════════════════════════════════════════════════
+WORKSTREAM: M1 dollar cross-subsidy (fair premium vs flat fee). Separate from the structural
+  estimator (024r) and the RF HTE checkpoints below. All on main (through f145eb9).
+
+WHAT'S BUILT (FACILITY-level, 2005 cross-section; states CO/LA/NM/TN; PA dropped = degenerate hazard):
+  Code/Analysis/07_Cross_Subsidy_Figure.R  -> Data/Analysis/cross_subsidy_facility.csv
+    (one row/facility, 2005; PP = lambda*S_bar; S_bar=$377,838 = pooled mean (C-D)+ severity).
+  07c_Cross_Subsidy_Area.R       AREA fig: blue overpay = red subsidy around break-even tau (the M1 figure).
+  07d_Cross_Subsidy_PaidShare.R  PAID fig: black fee vs blue subsidized rest; ggpattern hatch above tau.
+  07e_Cross_Subsidy_TimeEvolution.R  year-faceted area at 2000/05/10/15 (TransferTrend line chart DROPPED).
+  Figs Output/Figures/ (.pdf+.png): Fig_CrossSub_{Area,Paid}_{Panel,CO,LA,NM,TN}, Fig_CrossSub_AreaTime_{CO,LA,NM,TN}.
+  Headline: within-state cross-subsidy 16-26% of premiums (CO 18 / LA 18 / NM 26 / TN 16);
+    firms pay 1-17% of fair cost (gas-tax funded). Dollars up / share down over time.
+  Per-figure file paths + all-state numbers + methods written in chat 2026-06-26 (for the editor agent).
+  Full detail: memory project_cross_subsidy_state_coverage.
+
+REVIEWER COMMENTS TO FOLD IN (Meredith + Qs -- these improve the first-pass figures):
+  1. NAMING: stop saying "subsidy" (confusing). Reframe around the UNIFORM PREMIUM: tau = the "(total)
+     uniform premium" (the break-even flat fee). Drop cross-subsidy/subsidized/subsidizers in figure text;
+     frame as fair premium vs uniform premium, over- vs under-paying the uniform premium.
+  2. FIRST-ORDER = PRICE TOO LOW (Meredith; flood-insurance / NFIP analogy): the first-order problem is the
+     fee is FAR BELOW fair (the 07d "firms pay 1-17%" figure), not the redistribution. Lead with that.
+  3. WELFARE TEE-UP (Qs): moving from the super-low fee to the break-even uniform premium has UNCLEAR welfare
+     consequences (raise price -> uniform premium up, gas tax down, demand up, firms pass through -> ambiguous).
+     This MOTIVATES the STRUCTURAL MODEL: descriptive figures pose the question, the structural model answers it.
+     (Framing for the editor; structural model must mature to answer.)
+  4. *** MOVE TO THE TANK LEVEL *** (Meredith, the big one): rates are priced PER TANK (Mid-Continent card is
+     per-tank by age x wall), so facility-level risk is "wonky." Redo at the TANK level: one row per TANK.
+     tank fair premium = (tank leak hazard from its age x wall CELL) x severity S_bar; tank fee =
+     fr_premium_per_tank_yr (already per-tank). Rank tanks lowest->highest by premium/risk (premium-rank is a
+     monotone map from risk). Single-year version first; THEN the clean headline: POOL ALL YEARS, FACET BY STATE.
+  5. CI ON THE COST LINE: add a confidence band to the fair-premium (black) line so readers see it is an
+     ESTIMATE -- propagate uncertainty in the cost/severity estimate (S_bar SE / bootstrap the claims).
+
+NEXT SESSION (architect writes the spec, coder builds):
+  - TANK-LEVEL rebuild (main task): tank panel (one row/tank/year), age x wall -> cell hazard
+    (01n cell risk, e.g. Data/Analysis/dcm_state_hazard_rates.csv) -> tank fair premium; per-tank fee from
+    fr_premium_per_tank_yr. Two figures: (a) single-year tank-level (07c/07d analogs), (b) POOLED-all-years
+    FACETED-by-state (the clean one). Rank tanks by premium.
+  - Severity-uncertainty CI band on the fair-premium line.
+  - Rename throughout to uniform-premium framing (no "subsidy").
+  - Decide tank-level SUPERSEDES facility-level (07c/07d/07e -> Code/Analysis/Archive) or runs alongside.
+  - PA add-back still queued (claim-based lambda from C:/Users/kaleb/Documents/PA_UST_Auction_Analysis; own ticket; ~half day).
+Resume: "Load CLAUDE.md + HANDOFF.md + memory project_cross_subsidy_state_coverage. M1 cross-subsidy figures
+  first pass done (facility-level, on main). Today: rebuild at the TANK level (rates are per-tank) -- one row/
+  tank, fair premium = (age x wall cell hazard) x S_bar, per-tank fee = fr_premium_per_tank_yr; single-year +
+  pooled-all-years-faceted-by-state; rank tanks by premium; add a CI band to the fair-premium line for cost
+  uncertainty; rename away from 'subsidy' to uniform-premium framing. Then the PA add-back ticket."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-26 (024r attempt-5 written; gates-only run pending)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: 024r attempt-5 — PSOCK parallel + theta_eff fix (2026-06-26, builder Sonnet)
+═══════════════════════════════════════════════════
+WHAT CHANGED (PM09_CF_Portfolio.R):
+  1. CORRECTNESS FIX (compute_R_env): added theta_eff arg (default theta_hat);
+     all structural coefs (phi_G, gamma_pool/RB, c_rem, c_inst, kappa_1) now read
+     theta_eff not global theta_hat. Required for CF3 (c_inst subsidy) correctness.
+     alpha stays alpha_hat (Semantic-1; not a CF lever). Backward-compat: gate and
+     CF1/CF4 callers pass theta_hat (default or explicit).
+  2. REVERT attempt-3/4: removed BICG_REFRESH_THRESH, bicg_iters_prev, hoisted
+     Minv_envs block, adaptive refresh block. Plain Minv_e <- build_minv_p1(P_env_e)
+     inside worker closure, rebuilt every iter (cheap: 0.68s/env total).
+  3. PSOCK (Lever-B from 024p):
+     - makeCluster(n_workers, PSOCK) at script level; stopCluster on.exit.
+     - Knob: PM09_NWORKERS (default min(n_env, detectCores()-1, 8)).
+     - Knob: PM09_MEM_CEIL (default 20 GB; server: PM09_MEM_CEIL=64).
+     - clusterEvalQ: kernel + cpp per worker; clusterExport: statics + 5 CF functions.
+     - solve_equilibrium_portfolio: inner for-loop -> parLapply(.cf_env_chunks).
+       label + it passed as item fields (not closured) to avoid serialization issues.
+     - Function moved after PSOCK setup so cl is in scope at definition time.
+  PARSE CHECK: PARSE OK (R --vanilla --no-restore).
+NEXT:
+  Run gates-only on local 3-env fit (PM09_NWORKERS default on laptop = min(3,7,8)=3):
+    $env:CF_GATES_ONLY="1"; "C:/Program Files/R/R-4.5.2/bin/x64/Rscript.exe" Code/Dynamic_Model/PM09_CF_Portfolio.R
+  Expected: GATE CF-A + CF-B PASS; timing ~3-5 min (3 env, 3 workers, 1 worker/env).
+  On PASS: full CF set on server:
+    $env:CF_FIT_PATH="<path>"; $env:CF_E_EXT="5.0"; $env:PM09_NWORKERS="15"; $env:PM09_MEM_CEIL="64"; "C:/Program Files/R/R-4.5.2/bin/x64/Rscript.exe" Code/Dynamic_Model/PM09_CF_Portfolio.R
+USER INPUTS NEEDED:
+  - CF_FIT_PATH: exact converged 17-env pooled fit path on server.
+  - CF_E_EXT: confirm 5.0 ($50k) or supply new value.
+REVENUE (028/029): compute_R_env now uses theta_eff throughout. When psi*R lands,
+  update compute_R_env to swap phi_1..4 for psi in theta_eff.
+Resume: "Load CLAUDE.md + HANDOFF.md. 024r attempt-5 written (PSOCK + theta_eff fix).
+  Run CF_GATES_ONLY=1; confirm GATE CF-A + CF-B PASS + timing; then full CF run."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-26 (024r attempt 3: Minv hoist applied; gates-only re-run pending)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: 024r attempt 3 — preconditioner hoist applied (2026-06-26, builder Sonnet)
+═══════════════════════════════════════════════════
+WHAT: Performance fix for PM09_CF_Portfolio.R. All gates and CF logic VALIDATED in
+  attempt 2. The only change: hoist build_minv_p1() outside the outer fixed-point loop.
+WHAT CHANGED (5 edits, PM09_CF_Portfolio.R):
+  L474-486: Minv_envs precompute block before `for (it ...)` — builds P1 once per env
+    from P_init[[e]] (P_hm for baseline, P_base for CFs). Logs build time per env.
+  L491: max_bicg_iters init before env loop (to track if BiCGSTAB iters balloon).
+  L504: Minv_e <- Minv_envs[[e]]  (was build_minv_p1(P_envs[[e]]) — the hot path).
+  L516: max_bicg_iters <- max(max_bicg_iters, sol_e$iters) after each env.
+  L525: convergence line now prints max_bicg=%d for monitoring.
+WHY: build_minv_p1 performs a ~25s triangular factorization of the 298k aging backbone.
+  Was called n_env × n_outer_iter (~33× for 3-env baseline) — ~825s just for precon.
+  After hoist: built once (75s for 3 envs) then free. Expected ~3 min / 3-env baseline.
+NEXT: run gates-only on local 3-env fit to confirm timing + unchanged PASS.
+  Then user supplies CF_FIT_PATH (converged 17-env pooled fit) + CF_E_EXT for full run.
+OPEN INPUTS STILL NEEDED FROM USER:
+  Q3: exact converged pooled fit filename on server (iter 11, LL=-291648.5)
+  Q4: confirm E_ext = 5.0 ($50k) or supply new value
+RUN (gates-only, local fit):
+  $env:CF_GATES_ONLY="1"; C:/Programs/R/R-4.5.2/bin/x64/Rscript.exe Code/Dynamic_Model/PM09_CF_Portfolio.R
+RUN (full, server):
+  $env:CF_FIT_PATH="<path>"; $env:CF_E_EXT="5.0"; Rscript.exe Code/Dynamic_Model/PM09_CF_Portfolio.R
+Resume: "Load CLAUDE.md + HANDOFF.md. 024r attempt 3 hoist applied; run gates-only,
+  report timing, confirm PASS; then full CF run once Q3+Q4 answered."
+═══════════════════════════════════════════════════
+
 # HANDOFF -- 2026-06-26 (Reduced-form facility HTE: RAN + VERIFIED on server; results in hand; editor + cleanups next)  [RF workstream]
 
 ═══════════════════════════════════════════════════
