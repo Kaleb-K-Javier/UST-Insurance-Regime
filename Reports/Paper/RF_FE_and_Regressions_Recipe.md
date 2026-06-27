@@ -185,6 +185,13 @@ All are facility-year outcomes built in `02j` (lines ~83–87, plus the Ticket-0
 - `repl_share` = replacement closures / tanks (true 1-for-1 swap; **rare**)
 - `cap_decrease` = any capacity drop (boolean)
 
+*Exact rule (implemented in `02j`, Ticket 031, reviewer PASS 2026-06-26):* among non-exited
+facility-years with **fewer tanks** (`net_tank_change < 0`) and a valid prior size
+(`Clag > 0`), let `rel = capacity_change / Clag` (`Clag` = last year's total gallons). Then
+`consolidate = |rel| ≤ 0.05`, `downsize = rel < −0.05`, `reconfigure_up = rel > 0.05` —
+mutually exclusive; everything else (expansion, replacement, no change) is 0/0/0. The 5% band
+is a single named constant (`REL_THRESH`), trivially moved to 10% for a robustness check.
+
 **Why the downsize split matters for the write-up.** The portfolio response is a *sorting*
 story: the reform pushed **marginal** facilities to **exit** and **viable** ones to
 **downsize / consolidate**. `downsize` and `consolidate` are the two dominant heterogeneous
@@ -233,6 +240,43 @@ tanks" (consolidate). Each margin runs through (A)–(E) above on the same FE de
 - Don't present HTE as split-sample — it is a single interaction regression with shared FEs.
 - Don't claim every event study is causal — closure's ES is clean; downsize's pre-trend is
   weak (present that figure as descriptive); consolidate's is to be judged from its own figure.
+
+---
+
+## 9. Outputs — where the numbers, tables, and figures live
+
+All under `Output/Tables/` and `Output/Figures/` (written by `02j` unless noted). **Pull point
+estimates from the CSVs; `\input{}` the `_Pub.tex` files for rendering.**
+
+**Publication tables (`.tex`, ready to `\input`):**
+| file | holds |
+|---|---|
+| `T_Facility_Portfolio_ATT_Pub.tex` | ATT, all margins, Route A + Route B |
+| `T_Facility_HTE_{closure_share,facility_exit,repl_share}_Pub.tex` | fuel/spatial HTE per margin |
+| `T_Facility_SizeHTE_Pub.tex` | size (`cap_G`) HTE across margins |
+| `T_Facility_VintageHTE_Pub.tex` | vintage HTE across margins |
+
+**Machine-readable coefficients (`.csv`, for pulling numbers into prose):**
+| file | holds |
+|---|---|
+| `T_Facility_Portfolio_ATT.csv` | every ATT point estimate + SE |
+| `T_Facility_HTE_byMargin.csv` | fuel/spatial `did_Z` per margin × dimension |
+| `T_Facility_SizeHTE_byMargin.csv` | **(new, T031)** size coef per margin × bin (long) |
+| `T_Facility_VintageHTE_byMargin.csv` | **(new, T031)** vintage coef per margin × cohort (long) |
+| `T_Facility_ES_Coefs_byMargin.csv` | event-study coefficients per margin |
+
+Long-format columns for the size/vintage byMargin CSVs: `margin, dimension, level,
+is_reference, estimate, std_error, p_value` — one `is_reference=TRUE` row per margin (the
+reference-bin/cohort ATT) plus one row per non-reference level.
+
+**Figures:**
+| file | holds |
+|---|---|
+| `Fig_ES_Facility_Portfolio.*` | closure event study (**causal** — clean pre-trend) |
+| `Fig_ES_Facility_Downsize.*` | downsize ES (**descriptive** — weak pre-trend) |
+| `Fig_ES_Facility_Consolidate.*` | **(new, T031)** consolidate ES (judge causal/descriptive from the figure) |
+| `Fig_ES_Facility_Replace.*` | replacement ES |
+| `Fig_ES_HTE_Pooled.*` | pooled tank event study |
 
 ---
 
