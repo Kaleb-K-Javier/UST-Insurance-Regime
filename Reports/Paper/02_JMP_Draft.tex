@@ -1,0 +1,1577 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
+%
+\documentclass[
+  12pt,
+]{article}
+
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else  
+    % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\setcounter{secnumdepth}{3}
+% Make \paragraph and \subparagraph free-standing
+\ifx\paragraph\undefined\else
+  \let\oldparagraph\paragraph
+  \renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+  \let\oldsubparagraph\subparagraph
+  \renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{threeparttable}
+\usepackage{threeparttablex}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{tablefootnote}
+\usepackage{tikz}
+\usepackage{pdflscape}
+\usepackage{etoolbox}
+\usepackage{graphicx}
+\usepackage{adjustbox}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{hypcap}
+
+\preto\section{\clearpage}
+
+\renewcommand{\tableautorefname}{Table}
+\renewcommand{\figureautorefname}{Figure}
+\renewcommand{\equationautorefname}{Equation}
+\renewcommand{\sectionautorefname}{Section}
+\renewcommand{\subsectionautorefname}{Section}
+\renewcommand{\subsubsectionautorefname}{Section}
+
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\AtBeginDocument{%
+\ifdefined\contentsname
+  \renewcommand*\contentsname{Table of contents}
+\else
+  \newcommand\contentsname{Table of contents}
+\fi
+\ifdefined\listfigurename
+  \renewcommand*\listfigurename{List of Figures}
+\else
+  \newcommand\listfigurename{List of Figures}
+\fi
+\ifdefined\listtablename
+  \renewcommand*\listtablename{List of Tables}
+\else
+  \newcommand\listtablename{List of Tables}
+\fi
+\ifdefined\figurename
+  \renewcommand*\figurename{Figure}
+\else
+  \newcommand\figurename{Figure}
+\fi
+\ifdefined\tablename
+  \renewcommand*\tablename{Table}
+\else
+  \newcommand\tablename{Table}
+\fi
+}
+\@ifpackageloaded{float}{}{\usepackage{float}}
+\floatstyle{ruled}
+\@ifundefined{c@chapter}{\newfloat{codelisting}{h}{lop}}{\newfloat{codelisting}{h}{lop}[chapter]}
+\floatname{codelisting}{Listing}
+\newcommand*\listoflistings{\listof{codelisting}{List of Listings}}
+\makeatother
+\makeatletter
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\@ifpackageloaded{subcaption}{}{\usepackage{subcaption}}
+\makeatother
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\usepackage[]{natbib}
+\bibliographystyle{plainnat}
+\usepackage{bookmark}
+
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same} % disable monospaced font for URLs
+\hypersetup{
+  colorlinks=true,
+  linkcolor={blue},
+  filecolor={Maroon},
+  citecolor={Blue},
+  urlcolor={Blue},
+  pdfcreator={LaTeX via pandoc}}
+
+\author{}
+\date{}
+
+\begin{document}
+
+% Switch footnotes to symbols for title page only
+\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+
+\thispagestyle{empty}
+
+\begin{center}
+\vspace*{3cm}
+
+{\Large Internalizing Environmental Risk: Insurance Design and Firm Behavior in Hazardous Industries}
+
+\vspace{1cm}
+
+{\normalsize \href{https://www.kalebkjavier.com}{Kaleb K. Javier}\footnote{University of California, Berkeley, Department of Agricultural and Resource Economics. Email: \texttt{kalebkja@berkeley.edu}. Website: \texttt{kalebkjavier.com}. I thank Meredith Fowlie, Billy Pizer, James Sallee, Nano Barahona, Ben Handel, Matt Backus, and Cailin Slattery for their invaluable comments and feedback. I also thank the participants and discussants at Camp Resources XXXI and the AERE Summer Conference 2025 for helpful discussions. All remaining errors are my own.}}
+
+\vspace{0.2cm}
+
+{\normalsize [Month] 2026}
+
+\end{center}
+
+\vspace{.2cm}
+
+\begin{center}
+{\small \textbf{Abstract}}
+\end{center}
+
+\begin{quote}
+{\small \noindent Public trust funds in thirty-eight U.S. states insure underground storage tank
+(UST) leaks at a uniform flat fee, even though leak risk varies widely with observable
+traits such as tank age and wall construction. This paper quantifies how replacing
+flat-fee pooling with actuarially priced coverage changes firm behavior and environmental
+outcomes. I exploit Texas's 1999 closure of its trust fund, which forced all owners into
+a private market that sets premiums according to facility risk. A facility-year panel
+covering 1990--2021 links EPA inventories with administrative microdata for Texas and
+eighteen control states that retained public funds. I construct a make-model comparison
+sample that matches Texas facilities to control-state counterparts on the observable risk
+characteristics, tank age bin and wall construction type, that private insurers price,
+ensuring the comparison group is balanced on the dimensions along which the treatment
+effect is theoretically heterogeneous. Difference-in-differences and event-study estimates
+show that risk-rated premiums increased annual closure rates by two to three percentage
+points, shifted closures from market exit to on-site replacement with safer equipment,
+and reduced the probability of a reported leak by about one percentage point, nearly the
+entire pre-policy baseline for the high-risk single-wall cohort. The treatment effect is
+concentrated among older and single-walled facilities, consistent with the
+premium-gradient mechanism, and is near zero for young double-walled tanks. The findings
+provide the first causal micro-evidence that cost-based environmental liability insurance
+can internalize pollution risk more effectively than uniform public pooling, offering
+clear guidance for states that are reconsidering the structure of UST insurance programs.}
+\end{quote}
+
+% Switch back to arabic numerals for the rest of the document
+\renewcommand{\thefootnote}{\arabic{footnote}}
+\setcounter{footnote}{0}
+
+\newpage
+
+\section{Introduction}\label{introduction}
+
+Compulsory liability insurance is the primary instrument through which
+environmental law makes hazardous firms internalize the risk of harm
+they cause, but whether it does so depends on how the insurance is
+priced.
+
+A uniform per-tank premium sets the marginal cost of operating an
+additional aging, high-risk tank to zero, which removes the financial
+incentive to retire it.
+
+Underground petroleum storage tanks are a dominant source of groundwater
+contamination in the United States, the harm is costly, and the
+regulatory system, not private tort law, is the operative instrument for
+controlling it.
+
+Federal law requires every operator to carry financial responsibility
+coverage, but it is silent on pricing, and 38 states met the mandate
+with uniform per-tank premiums that price no risk.
+
+On December 22, 1998 the Texas Petroleum Storage Tank Fund closed
+because it was insolvent, and about 26,000 facilities moved to
+risk-rated private insurance at once.
+
+Risk-based pricing raises the annual tank closure rate by 1.58
+percentage points (s.e. 0.40) on a pre-reform control mean of about 2
+percent, and the response concentrates among old single-walled tanks.
+
+The difference-in-differences design identifies the average effect of
+the reform, but dollar welfare, counterfactual policies, and the
+uninternalized health externality lie beyond its reach.
+
+This paper contributes to the literatures on environmental liability and
+financial responsibility, on hazardous capital under financial-assurance
+rules, and on the welfare analysis of insurance markets.
+
+The paper proceeds as follows: setting (§2), data (§3), reduced-form
+evidence (§4), the structural model (§5), counterfactual welfare (§6),
+and conclusion (§7).
+
+\section{Setting}\label{setting}
+
+An underground storage tank holds motor fuel at a gas station or a
+commercial site. It sits in the ground for decades. A single-walled tank
+is a bare shell. A double-walled tank adds a second wall and a monitored
+space between the two. Single-walled tanks are cheaper to put in and
+they leak more. The wall is set when the tank goes in the ground. To
+change it, the operator has to dig the tank out and install a new one,
+which costs about as much as starting fresh. In the Texas data, only
+0.003\% of active facilities ever changed a tank's wall before closing
+it. The wall is a fixed trait, not a dial an operator turns.
+
+An operator who faces a higher price for risk has few ways to respond.
+The cheap risk-reduction steps were already done. Federal deadlines in
+1993 and 1998 required leak detection, spill protection, and corrosion
+control, and almost every tank met them by the reform. A partial wall
+upgrade does not help. Under 40 CFR Part 280, any such change
+reclassifies the whole facility to current standards, and that cost
+dwarfs any premium saving.\footnote{This is vintage-differentiated
+  regulation (Gruenspecht 1982, Stavins 2005). Exempting existing
+  capital from new standards extends the life of the oldest and most
+  hazardous stock, because any modification triggers the current
+  standards and that cost dwarfs the gain. It is the same mechanism as
+  New Source Review in the Clean Air Act, where the threat of
+  reclassification deterred investment at grandfathered plants (Bushnell
+  2012, Heutel 2011). When new-capital rules cannot reach the existing
+  stock, retirement-focused instruments are the right complement (Sallee
+  2023, Jacobsen 2023).} Replacing a tank with a new double-walled one
+works but is expensive, about \$55,000 a tank, and rare. That leaves one
+lever that actually cuts risk: pull the old tank and close it. The
+hazard is already in the ground, and it comes out only when the old
+tanks do. So the margin I study is closure, and the policy question is
+how to price keeping an old tank in service.
+
+A typical site is one gas station with a handful of tanks. The country
+has about {[}140,000{]} active facilities and {[}550,000{]} active
+tanks. Sites differ in the fuel they sell and in how many tanks they
+run. I use both later to see who responds to the reform.
+
+The risk a tank carries is not hidden. It rises with two things anyone
+can read off the tank: its age and its wall. Old tanks leak more than
+new ones. Single-walled tanks leak more than double-walled ones. An
+insurer can check both when it writes the policy. So it can charge a
+riskier tank more. This is the fact the paper turns on, and I show it in
+§4.1.
+
+A leak is hard to catch and hard to pin on anyone. Fuel seeps into soil
+and groundwater. It can travel for years before a drinking-water well or
+a basement reveals it. By then the source is often unclear, and the
+people harmed are spread out and may not know. Private lawsuits cannot
+do much here. So the job of preventing leaks falls to regulation, not to
+the courts.
+
+A leak creates two kinds of cost. The first is cleanup, digging out and
+treating the contaminated soil and water. Cleanup is expensive, with a
+median around {[}\$136k{]} and a mean around {[}\$403k{]} per site. The
+second is harm to people nearby. \citet{marcus_going_2021} shows that
+UST leaks damage infant health, lowering birth weight among births near
+a leak. Insurance pays for cleanup, because cleanup files a claim. It
+does not pay for the health harm, because that harm files no claim. So
+even a fairly priced premium leaves the health cost uncovered. That gap
+is the wedge I return to in §6.
+
+Federal law requires every tank operator to carry financial
+responsibility for cleanup. The rule is RCRA Subtitle I, in force since
+{[}1988{]}, with a minimum of {[}\$1 million{]} in coverage. Federal law
+does not say how to price it. States chose one of three paths. Some let
+operators buy risk-rated private insurance. Some set up a state trust
+fund that charges every tank the same flat fee. Some did neither.
+Thirty-eight states ran a flat-fee fund. A flat fee meets the mandate
+but prices no risk. An old single-walled tank pays the same as a new
+double-walled one.
+
+Texas ran a flat-fee fund until it ran out of money. On December 22,
+1998 the state closed the fund because it was insolvent, and about
+{[}26,000{]} facilities moved to risk-rated private insurance at once.
+The fund failed for a budget reason, not because any one facility got
+riskier. So the price of risk changed for reasons outside any operator's
+control. That is the shock I use. Texas went from a flat fee to a
+risk-rated premium overnight, while the flat-fee control states did not.
+
+\section{Data}\label{data}
+
+I construct a facility-year panel of the underground storage tank
+industry in Texas and 17 flat-fee control states, 1990--2021, by merging
+four sources: a harmonized national tank registry, state leak-incident
+records, Texas insurance-pricing data, and location and market measures
+from the 2000 Census and facility geography. Appendix {[}X{]} documents
+the construction.
+
+The backbone of the panel is the EPA's LUST Finder, which harmonizes
+state UST registries into one national schema
+\citep{EPA2017USTCompendium}. My unit of observation is the
+facility-year. A facility is a retail or commercial site with a unique
+state registry number that operates one or more underground tanks. I
+follow each facility from its first tank installation to its last
+closure or to the end of 2021. The panel covers 117,250 facilities
+across 18 states.
+
+The registry has gaps in the fields a causal design needs. Of the 38
+states with a uniform-premium trust fund, I keep the ones with complete
+closure dates, install dates, and wall type. That drops 20 states and
+leaves Texas and 17 controls. My sample is the tanks and facilities that
+were open on the reform date, December 22, 1998. I follow each one
+forward, year by year. A tank that closes later counts as a closure, not
+a dropped observation. So closure and exit are outcomes I measure, not
+cases the sample loses. I match Texas units to control units so I
+compare like with like. The match is coarsened exact matching. At the
+tank level I match on make-model and install year. At the facility level
+I match on install year, facility size, and single-wall share. The
+cell-by-year fixed effects in §4 control for these traits again.
+
+Each registry record is a physical tank. It reports the tank's install
+date, closure date, wall type (single-walled or double-walled), stored
+fuel, and capacity. These attributes set the leak hazard and the
+insurance premium. They also define the make-model cells used in §4.
+From them I build each facility's stock variables: active tank count,
+total capacity, average tank age, and single-walled share. I define two
+fuel cuts for later. A gas station is any facility with a gasoline tank.
+A motor-fuel-only facility is one whose tanks are all motor fuel. I also
+sort facilities into four size groups by total capacity, G1 to G4.
+
+My primary outcome is tank closure. It equals one in the year a tank is
+permanently removed. At the facility I track the whole portfolio. A
+facility can downsize, which means it closes some tanks but stays open.
+It can also cut capacity, replace tanks, or exit. I split each closure
+into two kinds. A replacement is a closure where the facility puts in a
+new tank. A permanent exit is a closure where it does not. I use the
+facility's full install history to tell them apart, so I do not count a
+replacement as an exit.
+
+Leak discovery comes from the state LUST incident files. Each record
+gives a confirmed release by facility and report date. I split
+discoveries by how they are found. Some show up in routine monitoring.
+Others show up when a tank is closed and inspected. I drop states
+without usable release dates when I pick the study states. So I measure
+leak discovery for every state in the panel and do not need a separate
+leak sample. One note on the dates. The 1995 move of state records into
+the LUST Finder bunched install and closure dates near 1995. That
+bunching is an administrative artifact, not real activity. I treat those
+dates as artifacts, and I set the event-study reference year
+(\(rel\_year = -1\)) after it.
+
+For the heterogeneity analysis I attach measures fixed at the reform
+that do not move with the policy. From the 2000 Census I classify each
+facility as rural, low-population, low-income, or high-poverty. From
+facility geography I build a market-thinness measure for gas retailers,
+the count of active competitors within one mile in 1998. Because all of
+these are set before or at the reform, they do not pick up the reform's
+own effect on the market.
+
+The insurance data let me measure the price each facility pays for risk.
+For Texas I collected the filed rate manuals of the largest UST insurer
+in the state through public-record requests to the Texas Department of
+Insurance. I link these manuals to facilities through the Texas
+Commission on Environmental Quality (TCEQ) database. That database
+records each facility's insurance contract for about the past twenty
+years. Texas is unusual in keeping this detail. It is what lets me
+rebuild an annual premium for each Texas facility. For the control
+states I use the ASTSWMO survey of state-fund fees. The survey gives the
+flat per-tank fee each fund charged. The premium data have one main
+limit. The Texas manuals cover the largest carrier, so the reconstructed
+premium is the price under that carrier's filed schedule, not the
+realized price across all carriers. I also collected trust-fund claims
+data from 6 of the 17 control states. These records link LUST sites to
+their cleanup claims. They are the basis for the cleanup-cost
+distribution I show below.
+
+\autoref{tbl-summary} reports summary statistics for the study
+facilities at the reform date, with Texas and the control states in
+separate columns. Panel A describes the capital stock. Texas facilities
+are larger on average. They hold more three- and four-tank sites, while
+the control states hold more single-tank sites
+(\autoref{fig-baseline-tanks}). Texas capacity is also shifted toward
+the larger bins (\autoref{fig-baseline-capacity}). The average Texas
+facility holds {[}N{]} tanks and {[}N{]} gallons of capacity, against
+{[}N{]} tanks and {[}N{]} gallons in the controls. Panel B reports
+pre-reform annual rates. The closure rate is {[}N{]} percent and the
+leak-discovery rate is {[}N{]} percent, and the two groups track each
+other before the reform. \autoref{fig-cost-distribution} shows the
+distribution of cleanup costs across LUST sites in the six claims
+states. The median cleanup cost is {[}\$N{]} and the mean is {[}\$N{]},
+which reflects a long right tail.
+
+\section{Reduced-Form Evidence}\label{reduced-form-evidence}
+
+This section presents the reduced-form evidence in five steps. I first
+show that the traits an insurer can observe predict releases (§4.1). I
+then show how the Texas market prices those traits, and how the Texas
+premium pulled away from the flat control fee at the reform (§4.2). I
+then state the design (§4.3). Section 4.4 asks whether the policy
+worked: the average effect on tank closure, its timing, and whether
+leaks fell. Section 4.5 asks who it worked on, where, and what
+facilities did in response.
+
+\subsection{Observable risk and the age-hazard
+gradient}\label{observable-risk-and-the-age-hazard-gradient}
+
+Risk-based pricing can only change behavior if the traits an insurer
+sees at underwriting actually predict releases. They do, and the
+clearest case is wall construction crossed with age.
+\autoref{fig-cell-risk} shows the chance a facility has a first
+confirmed release in a year, by tank age and wall type. For
+single-walled facilities that annual chance climbs with age, from about
+{[}X{]} percent in the youngest tanks to about {[}X{]} percent in the
+oldest. For double-walled facilities it stays low and nearly flat, near
+{[}X{]} percent, across the same ages. The two pull apart as tanks get
+older. The lifetime picture is starker. Over a 30-year life about
+{[}X{]} percent of single-walled facilities leak at least once, against
+about {[}X{]} percent of double-walled facilities. Risk is not a
+surprise that arrives at random. It is written in traits an underwriter
+can read when the policy is written.
+
+A single trait gradient is suggestive, but a premium rests on all the
+traits together, and on whether the pattern holds for facilities the
+model has not seen. So I estimate each facility's annual first-release
+probability from its full set of observable traits, then check the
+predictions out of sample. The model answers the underwriter's question.
+For a facility that has never leaked, what is the chance of a first
+release in the coming year? It uses only what an underwriter can see at
+the start of the year. The traits are wall construction, tank age,
+portfolio size, total capacity, and fuel type, with a state baseline. I
+fit the model on pre-reform years only, and every facility's predicted
+risk is scored by a model fit on data that left it out, so nothing here
+is in-sample fit. Two facts show the predictions are usable. Risk
+concentrates: the {[}10{]} percent of facilities the model ranks highest
+hold {[}X{]} percent of next-year releases, about {[}Z{]} times what
+random screening would catch (\autoref{fig-lift}). And the predictions
+are right in levels, not just in rank: average predicted risk tracks the
+observed release rate across the whole range of the score
+(\autoref{fig-calibration}).
+
+The model does more than rank facilities. It reproduces the level of
+risk in each cell the market actually prices on. When I compare its
+predicted release chance in each age-and-wall cell to the raw chance in
+that cell, the points fall along the 45-degree line
+(\autoref{fig-cell-gof}), so the model recovers the risk map rather than
+just sorting facilities along it. It also separates leakers from
+non-leakers well out of sample (ROC AUC {[}AUC{]}, precision-recall AUC
+{[}PR\_AUC{]}). This predicted probability is what a risk-based premium
+puts a price on. I reuse the same facility-level hazard as an input to
+the structural model in §5. The lesson for the reform is plain. An
+insurer can tell risky facilities from safe ones in advance, so a
+premium can be made to rise with risk, and a flat per-tank fee chooses
+not to.
+
+\subsection{Pricing observable risk}\label{pricing-observable-risk}
+
+After the fund closed, Texas facilities bought coverage from private
+insurers, and I observe what they paid. I reconstruct each facility's
+annual premium from the filed rate manuals of the state's largest UST
+insurer, linked to the facility through the TCEQ contract records. The
+schedule prices the same traits that predict releases. The per-tank
+premium rises with tank age, and at any given age it is higher for
+single-walled tanks than for double-walled tanks
+(\autoref{fig-premium-by-age}). In the control states, where the public
+fund still sets the price, I use the ASTSWMO survey of fund fees. Those
+funds charge a flat amount per tank that does not move with age or wall
+type.
+
+The premium gradient is not arbitrary. It follows the risk map from
+§4.1. When I line up each age-and-wall cell's premium against its
+predicted release probability, the two move together: cells the model
+flags as higher risk carry higher premiums
+(\autoref{fig-actuarial-alignment}). The price an insurer charges rises
+with the risk the same observables predict, which is what makes the
+Texas schedule a risk-based price and not a relabeled flat fee.
+
+Before the reform, Texas and the control states both paid a flat
+per-tank fee, so their prices moved together. At the 1998 reform the
+Texas price split off. \autoref{fig-premium-divergence} plots the
+average per-tank premium in Texas against the control states from 1992
+to 2020. The two track each other before 1998 and pull apart after, as
+the Texas schedule starts to charge more for older single-walled tanks
+while the control fee stays flat. Across matched facilities the premium
+gap at the switch is about {[}\$X{]}. This change in the price of risk,
+with the facilities themselves held fixed, is the variation the
+difference-in-differences design uses in §4.3.
+
+\subsubsection{The flat fee cross-subsidizes
+risk}\label{the-flat-fee-cross-subsidizes-risk}
+
+I can now compare what each facility pays under a flat fee to what its
+risk actually costs. The fair premium for a facility is its leak risk
+times the cost of a cleanup. I take the leak risk from the §4.1 hazard
+model and the cleanup cost from incident-level claims in the states
+where I have them, net of the deductible the facility would bear. The
+claims show that cleanup cost barely depends on a tank's age or wall
+type, so I use a single pooled cleanup cost across facilities and let
+the whole risk gradient come from how often a facility leaks.\footnote{The
+  leak frequency is the out-of-sample prediction from the §4.1 hazard
+  model, a cross-validated penalized logistic regression on tank age,
+  wall type, fuel, and capacity. The cleanup cost is the average claim
+  paid net of the deductible, pooled across the states with usable
+  claims data and deflated to 2023 dollars, about \$377,838 per release.}
+The fair premium is what a facility's risk costs the fund each year, and
+it is the vertical axis in the figures that follow. It runs from a few
+hundred dollars for the safest facilities to over \$10,000 for the
+riskiest in Tennessee, and the spread is similar in every state.
+
+Today these facilities pay almost nothing toward that risk.
+\autoref{fig-cross-paid} lines up each state's facilities from safest to
+riskiest and marks what each one pays, its flat fund fee, against its
+fair premium. The fee is a thin strip along the bottom. The share of its
+fair premium a facility actually pays is small everywhere: 17 percent in
+Tennessee, 14 percent in Louisiana, 1 percent in Colorado, and near zero
+in New Mexico, which levies no flat fee and funds its program through a
+per-gallon gas tax. The rest, from 83 percent in Tennessee to 100
+percent in New Mexico, is covered by someone other than the facility
+that carries the risk.
+
+A flat fee that paid for itself would still cross-subsidize risk. Set
+the flat fee at break-even, the average fair premium, so the fund
+collects exactly what it pays out and needs no gas-tax help. In 2005
+that fee is \$7,592 in Colorado, \$5,027 in New Mexico, \$4,160 in
+Tennessee, and \$990 in Louisiana. \autoref{fig-cross-area} draws that
+break-even line across the facilities. The safe facilities sit below it
+and overpay, the blue area. The risky facilities sit above it and pay
+less than they cost, the red area. The two areas are equal, so the safe
+half's overpayments exactly fund the risky half's discount. The transfer
+is 26 percent of premiums in New Mexico, 18 percent in Colorado, 18
+percent in Louisiana, and 16 percent in Tennessee. The split of
+facilities runs from 60 percent overpaying in Colorado to 77 percent in
+New Mexico, where a small, very risky tail is carried by a large safe
+majority. This is the cross-subsidy a flat fee creates, even when it is
+priced to break even.
+
+The cross-subsidy moves over time, and its two readings move in opposite
+directions. \autoref{fig-cross-time} follows Tennessee across 2000,
+2005, 2010, and 2015. Read in dollars, the transfer grows. The
+break-even fee climbs as the fleet ages, because older tanks leak more
+and the average cleanup cost rises, and a larger average pulls the gaps
+between facilities up with it: the fee rises from \$3,845 to \$5,068 in
+Tennessee, \$7,042 to \$8,728 in Colorado, and \$920 to \$1,137 in
+Louisiana. Read as a share of premiums, the transfer shrinks, from 18 to
+15 percent in Tennessee, 19 to 17 percent in Colorado, and 18 to 11
+percent in Louisiana. What governs the share is not the level of risk
+but its spread relative to the average, and that spread compresses as
+the fleet ages together. New installations slow, the young low-risk end
+thins out, facilities grow more alike, and there is proportionally less
+to redistribute. The two readings answer different questions. The dollar
+transfer is the size of the hidden subsidy a flat fee creates, and it is
+rising, so the stakes of mispricing grow. The share is how distortionary
+the fee is per dollar collected, and it is easing, because a maturing
+fleet is a more homogeneous risk pool. Neither dominates, the flat fee
+moves more money every year even as it becomes proportionally less
+unfair. New Mexico is too thin to read a trend, so I report its 2005
+level only.
+
+A few choices shape these figures. Deductibles are large, so the fair
+premium uses cleanup cost net of the deductible. New Mexico reports
+gross cost, so I net out its deductible. The figures cover four states:
+Colorado, Louisiana, New Mexico, and Tennessee. Louisiana has no
+cleanup-cost data of its own, so it borrows the pooled average cost
+across states. Pennsylvania is dropped because its hazard estimate is
+degenerate. The cross-section is for 2005 unless noted, and the New
+Mexico panel is small, about 70 facilities, so I use it for the 2005
+level only and not for any trend.
+
+\subsection{Design and identification}\label{design-and-identification}
+
+I measure the effect of the reform on tank closure with a
+difference-in-differences regression:
+\[\text{closure}_{it}=\beta\,\text{did}_{it}+\gamma'M_{it}+\alpha_f+\delta_{ct}+\varepsilon_{it}.\]
+The outcome is one in the year tank \(i\) is permanently removed. The
+term \(\text{did}_{it}\) turns on for Texas tanks from 1998, the year
+the fund closed (December 22, 1998). The facility fixed effect
+\(\alpha_f\) holds the site fixed, so the comparison is within a
+facility over time. The cell-by-year fixed effect \(\delta_{ct}\) sets
+the comparison group. A cell is a make and model: wall type, fuel,
+capacity, and install cohort. So a Texas tank is compared only to
+control tanks of the same make and model in the same year. The 1988
+federal upgrade deadline is national, so it is common to treated and
+control states and differences out of the difference-in-differences. The
+cell-by-year fixed effects absorb cohort-specific mandate timing, and
+the mandate indicators \(M_{it}\) are an additional and largely
+redundant control, dropped in estimation for collinearity. No
+installation cohort is dropped.\footnote{The federal deadline shares its
+  December 1998 date with the Texas reform. That coincidence is
+  precisely why the common-shock differencing of the
+  difference-in-differences, not a cohort drop, is what isolates the
+  Texas risk-based-pricing effect.} The coefficient \(\beta\) is the
+average change in a Texas tank's annual closure probability after the
+reform, within its make-model-cohort and year. This \(\beta\) is causal
+under one assumption. Without the reform, Texas tanks and their matched
+controls in the same cell would have followed the same closure path. The
+event study in the next subsection tests it. The headline sample is 9.76
+million tank-years across 117,250 facilities in 18 states.
+
+To see the timing, I replace the single post indicator with one
+coefficient per year relative to the reform:
+\[\text{closure}_{it}=\sum_{k\ne -1}\beta_k\,\mathbf 1\{k_{it}=k\}\,\text{TX}_f+\gamma'M_{it}+\alpha_f+\delta_{ct}+\varepsilon_{it},\]
+where \(k=t-1998\) is event time and I normalize to the year before the
+reform, \(k=-1\). The pre-reform coefficients are the parallel-trends
+test: if Texas and control tanks moved together before the reform, the
+\(\beta_k\) for \(k<0\) sit near zero. The post-reform coefficients
+trace the path of the response.
+
+A firm decides at the facility, not tank by tank, so I carry the same
+design up to the portfolio. I build each facility's no-reform benchmark
+from how untreated tanks of the same make and model behaved,
+\(\hat Y^0_{ft}=\sum_c s_{fct}\,\hat\delta_{ct}\), where \(s_{fct}\) is
+the facility's share of tanks in cell \(c\) and \(\hat\delta_{ct}\) is
+the untreated closure rate in that cell. The facility regression mirrors
+the tank one:
+\[Y_{ft}=\beta\,\text{did}_{ft}+\mu\,\hat Y^0_{ft}+\gamma'M_{ft}+\alpha_f+\delta^{\text{mix}}_{m(f),t}+\varepsilon_{ft}.\]
+It holds the facility fixed with \(\alpha_f\), holds a
+portfolio-mix-by-year fixed effect \(\delta^{\text{mix}}_{m(f),t}\)
+fixed (the facility's tank mix interacted with the year, the facility
+twin of the tank make-model-by-year cell), and keeps \(\hat Y^0_{ft}\)
+as a control. The outcome \(Y_{ft}\) is any of the portfolio margins. As
+a check I also regress the imputation residual
+\(\tau_{ft}=\overline{\text{closure}}_{ft}-\hat Y^0_{ft}\) on the
+treatment, which gives the same answer.
+
+I cluster standard errors by state. Texas is the only treated state, so
+I compute valid standard errors with a wild cluster bootstrap.
+
+\subsection{Does the policy work?}\label{does-the-policy-work}
+
+Risk-based pricing raised tank closures. After the reform, the annual
+chance that a Texas tank is permanently removed rose by 1.58 percentage
+points (s.e. 0.40), on a pre-reform control mean of about 2 percent
+(\autoref{tbl-stepped-did}). That is close to an 80 percent increase,
+measured within make-model-cohort cells and holding the facility fixed.
+The reform moved real capital.
+
+The response lines up with the reform date. \autoref{fig-es-tank} plots
+the year-by-year closure gap between Texas and control tanks. Before the
+reform the gap is flat and close to zero, so the two groups were on
+parallel paths. At the reform the gap opens, and it stays open for years
+after. The effect is a clean break at 1998, not the continuation of a
+pre-existing trend.
+
+The effect is the reform, not something else that hit Texas in 1998. A
+recession or an oil-price swing would close tanks across the board. The
+reform instead repriced risk, so it should bite hardest on the tanks
+whose price rose most, the old single-walled ones, and barely touch new
+double-walled tanks. To test this I set aside the make-model fixed
+effect, which would otherwise absorb wall and age, and interact the
+treatment with tank age and wall type. The closure response is {[}β{]}
+points larger for old single-walled tanks and near zero for new
+double-walled tanks (\autoref{tbl-risk-conc}). It lands on the tanks
+whose premium rose most under risk-based pricing, which a uniform
+statewide shock cannot produce.
+
+The same result appears when I move from the tank to the facility. With
+the facility fixed and the portfolio-mix-by-year baseline held fixed,
+the share of a facility's tanks that close rose by 1.62 percentage
+points after the reform (s.e. 0.46), and the chance a facility closed
+any tank rose by 1.83 points (s.e. 0.46) (\autoref{tbl-fac-att}). A
+second route, which imputes each facility's no-reform closure share and
+regresses the residual on the treatment, gives a similar 1.18 points
+(s.e. 0.38).\footnote{Route A is the direct fixed-effects estimate on
+  the portfolio-mix-by-year cell. Route B imputes the no-reform baseline
+  from untreated tanks of the same make and model and uses a plain
+  facility-and-year fixed effect. The mix-by-year cell is what lifts
+  Route A above Route B. The two bracket the facility-level effect.} So
+the reform changed behavior at the level a firm actually decides, the
+whole facility, not only the single tank.
+
+The facility path tells the same story. \autoref{fig-es-fac} plots the
+facility-level closure gap by year, with the mix-by-year baseline and
+the composition control held fixed. It is flat before the reform and
+rises after, matching the tank-level path. The portfolio response and
+the tank response line up.
+
+The reform also lowered leaks. Annual confirmed leak discovery in Texas
+fell by about 1.2 percentage points (s.e. 0.003) after the reform, on a
+pre-reform control mean of about 1.5 percent (\autoref{tbl-leak-did}).
+This drop is the environmental payoff, and it is not a mechanical
+artifact of closing more tanks. Closing a tank usually triggers an
+inspection that can surface a hidden leak, which would push discovery
+up, yet discovery fell. It fell through both the routine-monitoring
+channel and the closure-inspection channel (\autoref{tbl-leak-decomp}),
+so the reform lowered the true rate of leaks, not just how they are
+found. The leak event study is noisier than the closure one, so I read
+this result from the average effect rather than the year-by-year path.
+
+\subsection{Who, where, and what}\label{who-where-and-what}
+
+Facing the new prices, a facility had several moves on its portfolio,
+and I line them up with the actions in the structural model. It can
+downsize, cutting both tank count and capacity. It can consolidate,
+cutting tanks while holding capacity. It can reconfigure up, cutting
+tanks while adding capacity, which is rare. It can replace tanks at the
+same capacity, or it can exit. I split the contraction moves by net
+gallons, so shedding capacity is kept apart from holding it, and I
+estimate each margin on all facilities, not only the ones that close.
+The reform raised genuine downsizing by 0.26 points (s.e. 0.09) and the
+rare capacity-adding reconfiguration by 0.16 points (s.e. 0.03), while
+same-capacity consolidation did not move, at −0.04 points and not
+significant. The contraction the reform produced is real capacity
+shedding, not a relabeling of the same fleet.
+
+I also trace each contraction margin year by year. The downsizing path
+wobbles before the reform, so I read it as descriptive
+(\autoref{fig-es-downsize}). The consolidation path shows no clear break
+(\autoref{fig-es-consolidate}), matching its null average. The
+replacement path is moderate with an acceptable pre-period
+(\autoref{fig-es-replace}).
+
+The response is concentrated in motor-fuel retailers. At the tank level,
+facilities whose tanks are all motor fuel close about 4.3 percentage
+points more than other facilities after the reform (p \textless{}
+0.001). Their total response is near 5 percentage points. Having any
+gasoline tank, which describes most facilities, does not separate the
+response. That differential is about −0.5 points and is not significant.
+At the facility level the pattern holds and runs across the whole
+portfolio. Gas stations close about 1.8 percentage points more than
+other facilities (s.e. 0.16), and the gas-station differential is
+positive on every margin I measure, including exit and replacement
+(\autoref{tbl-hte-tank}, \autoref{tbl-fac-hte}). Motor-fuel retailers
+carry the response.
+
+The response also sorts by how big a facility is and how old its tanks
+are, and it sorts the same way on both. I interact the treatment with
+the facility's total-capacity bin, four bins from small to large, and
+with its tank vintage at the reform. Small facilities exit. The smallest
+bin, under 9,000 gallons, raises its closure share by 6.3 points (s.e.
+0.5) and its exit rate by 6.6 points (s.e. 0.5), and that response falls
+toward zero across the larger bins (\autoref{tbl-size-hte}). Large
+facilities reinvest instead. The largest bin, over 30,000 gallons,
+barely exits but downsizes 1.0 point and replaces tanks 0.7 points, each
+rising monotonically across the bins (p \textless{} 0.001 for every
+differential). Vintage sorts the same way. The oldest tanks, installed
+before 1975, exit 2.7 points more than the youngest cohort (s.e. 0.3)
+and do not reinvest, while the youngest cohort, 1989 to 1998, barely
+exits but downsizes 0.5 points (s.e. 0.04) and replaces tanks 0.7 points
+(s.e. 0.04) (\autoref{tbl-vintage-hte}). The marginal facilities, small
+and old, leave the market. The viable ones, large and young, upgrade and
+stay.
+
+Where a facility sits matters too. I interact the treatment with
+location and market measures fixed at the reform: rural, low-population,
+low-income, and high-poverty areas from the 2000 Census, and a
+thin-market indicator for gas retailers with few active competitors
+within a mile in 1998. The competition measure is set before the reform,
+so it does not pick up the reform's own effect on the market. Two
+patterns stand out. Where demand is captive, facilities stay open. Rural
+facilities exit 0.42 points less than others (s.e. 0.03), and
+thin-market gas retailers exit 1.64 points less (s.e. 0.09). Where
+facilities serve poor areas, they exit but do not reinvest. Low-income
+and high-poverty facilities exit more, by 0.22 and 0.18 points (s.e.
+0.04 each), yet downsize and replace less, with low-income facilities
+downsizing 0.86 points less (s.e. 0.02) and replacing 0.32 points less
+(s.e. 0.01). So the policy retired tanks fastest in poor areas, with no
+upgrading there, and slowest where a single station holds a captive
+market.
+
+Put together, the reduced form answers the policy question. Risk-based
+pricing made facilities retire risky tanks, the response was a clean
+break at the reform, and it lowered leaks. It fell hardest on the
+operators carrying the most risk, with facilities upgrading as well as
+exiting. Because the response concentrated in the oldest single-walled
+tanks, where the premium rose most, rather than spreading evenly (§4.4),
+a statewide shock that happened to coincide with 1998 cannot explain it.
+What the reduced form cannot do is put these responses in dollars, price
+the policies Texas never ran, or separate deterrence from selection.
+That is the work of the structural model in §5.
+
+\section{Dynamic Structural Model}\label{dynamic-structural-model}
+
+The reduced form shows that the 1998 reform changed closure behavior. It
+cannot value that change in dollars, price a policy Texas never ran, or
+say how far the reform moved firms toward the social optimum. To answer
+those questions I build a dynamic structural model of how a facility
+manages its tank portfolio. Each year a facility chooses what to do with
+its tanks. It can keep operating them, remove some, replace some, or
+shut down. It weighs the operating value of its tanks against the cost
+of the risk they carry and the cost of acting. I estimate the model on
+Texas and the uniform-pricing control states, then re-solve it under
+policies that were never tried.
+
+The agent is the facility, not the tank. A facility with several aging
+tanks does not decide tank by tank. It decides how many of its tanks to
+remove as one choice. The state has to track the facility's whole
+portfolio, not one representative tank. A model built on a single tank
+cannot tell a facility that slowly retires an old fleet apart from one
+that replaces tanks one for one, and those two paths carry different
+consequences for a removal mandate. Tracking the portfolio is what lets
+the model price the partial-closure margin the reduced form found.
+
+\subsection{Measured operating revenue (first
+stage)}\label{measured-operating-revenue-first-stage}
+
+The model needs to know what a facility earns, not only what it pays for
+insurance. I build a per-period operating-revenue measure for each
+facility from public data. The retail gasoline price and gallons sold by
+state and year come from the EIA State Energy Data System. The state
+gasoline tax comes from the FHWA ``Tax Rates by Motor Fuel and State''
+series. The wholesale price refiners charge resellers comes from the EIA
+refiner ``sales for resale'' prices, reported by region (PADD). The
+federal gasoline tax is 18.4 cents a gallon. Facility size comes from
+the tank registry: I sum each facility's tank capacity and sort
+facilities into four size groups. The series cover the 18 study states
+from 1999 to 2020.
+
+Most of the retail price of gasoline is the cost of the fuel itself, so
+the retail price is a poor measure of what a station earns. The right
+measure is the margin: the retail price minus the wholesale price, the
+state tax, and the federal tax. The margin is the money a station makes
+on a gallon. A facility's revenue is its margin times how much fuel it
+moves, and throughput scales with size. So I measure revenue as capacity
+times the local fuel margin. Everything is in nominal dollars, to match
+the nominal premium and deductible already in the model. I average the
+margin within three eras rather than tracking every year, so a facility
+forecasts a steady local margin instead of chasing the year-to-year
+swing.
+
+The model used to carry one free number per size group for the operating
+payoff. Now that size profile is tied to measured revenue. The term
+becomes \(\psi R\), where \(R\) is the measured revenue and \(\psi\) is
+a single weight I estimate. \(\psi\) says how much a dollar of revenue
+moves a facility's choices, on the same footing as the weights on the
+premium and the deductible. This follows Sweeting (2013): measure
+revenue outside the dynamic model, then estimate only the weight. A
+constant linking storage capacity to gallons sold is folded into
+\(\psi\), so \(\psi\) is a weight, not a dollar amount. Because revenue
+enters the post-action payoff, a facility that downsizes or exits gives
+up measured revenue right away, which ties the size margins to real
+dollars. \(\psi\) is identified mainly across facilities, from a
+facility's size crossed with its state's fuel margin, not from the
+national time path of prices.\footnote{One state's early-period margin
+  is bounded, not measured. North Carolina sits in the Lower Atlantic,
+  which the Gulf supplies through the Colonial Pipeline, but EIA reports
+  wholesale prices only for the whole East Coast region, which is pulled
+  up by the Northeast. With no sub-region wholesale price published,
+  North Carolina's margin before 2014 is floored at a small positive
+  value. It is one cell of fifty-four, and the state fixed effect
+  absorbs the rest.}
+
+\subsection{State space}\label{state-space}
+
+The portfolio \(c\) records how many tanks a facility holds across 16
+categories. The categories cross two wall types, single-walled and
+double-walled, with eight five-year age bands. A facility holds between
+one and six tanks. Counting every combination of tank counts across the
+categories gives 74,612 distinct portfolios. A separate term \(G\) sorts
+each facility into one of four bins by total storage capacity. I keep
+capacity apart from the portfolio because capacity drives revenue, while
+tank count and age drive the premium and the hazard. Two facilities with
+the same tanks can still differ in scale. Crossing portfolios with
+capacity bins gives a state space of \(74{,}612 \times 4 = 298{,}448\)
+states.
+
+Two facilities show what a state is. The first holds three tanks: two
+single-walled tanks in the oldest band and one double-walled tank in the
+youngest, with capacity in the smallest bin. The second holds four
+double-walled tanks in a middle band, with capacity in the largest bin.
+The two face different premiums and different hazard even under the same
+contract, because premium and hazard depend on the full portfolio, not
+on a summary like tank count or average age. All facility heterogeneity
+in the model is where the facility sits in this state space.
+
+Most facilities sit in a simple part of this space. About 82 percent of
+facility-years hold tanks of a single wall type and age band, so the
+portfolio collapses to a count for them. The full richness of the state
+is used only by the large, mixed facilities, which are also the ones
+whose partial-closure choices the reduced form flagged.
+
+\subsection{Actions}\label{actions}
+
+Each year a facility chooses an action \(a = (k, m)\). It removes \(k\)
+tanks and installs \(m\) new ones. Removal follows a fixed order: oldest
+tanks first, single-walled before double-walled, smallest first. That
+order matches the order in 84 percent of removal events in the data, so
+I build it in as a rule rather than estimate a separate choice over
+which tank leaves. Installation is restricted to double-walled tanks,
+because federal and state rules ended new single-walled installation
+over the sample.\footnote{New single-walled installation was foreclosed
+  by state requirements that new tanks and piping be secondarily
+  contained, that is, double-walled. Most states followed the federal
+  secondary-containment requirement added by the Energy Policy Act of
+  2005. Effective dates run from 1989 in Massachusetts and 1991 in Maine
+  through 2013 in Kansas, with most concentrated in 2007 to 2009.} There
+is no separate choice over wall type when a facility installs.
+
+The menu covers the behaviors the reduced form measured. Maintaining is
+\((0,0)\). Downsizing is \((k,0)\), removing tanks and operating with
+fewer. Replacing or upgrading is \((k, m>0)\), removing tanks and
+installing new double-walled ones. A facility can also exit, which is
+absorbing. Removal and installation are one joint choice, not two steps,
+so a facility's plan to replace tanks can shape how many it removes in
+the same year. A two-step model would force a facility to decide whether
+to close before it could decide whether to reopen, which is not how
+replacement looks in the data.
+
+Premium and hazard are evaluated on the fleet left after the action,
+before that year's aging. A facility that downsizes sees its premium
+fall in the same year it removes tanks, not later. This matches how an
+insurer re-rates a facility after its tank count changes.
+
+\subsection{Flow utility}\label{flow-utility}
+
+A facility that does not exit gets a per-period payoff from operating
+the fleet \(n'\) left after its action:
+\[u_a(s,e)=\phi_G+\alpha_e-\big(\gamma_{\text{pool}}+\gamma_{\text{RB}}\,\mathbf 1[\text{RB}_e]\big)\,E(n',e)-k\,c_{\text{rem}}-m\,c_{\text{inst}}.\]
+Here \(\phi_G\) is the operating value of the fleet, allowed to vary
+with the capacity bin \(G\). \(\alpha_e\) is a fixed effect for the
+facility's regulatory environment. \(E(n',e)\) is the total risk
+exposure the fleet carries. \(c_{\text{rem}}\) and \(c_{\text{inst}}\)
+are the per-tank costs of removing and installing.
+\(\gamma_{\text{pool}}\) and \(\gamma_{\text{RB}}\) convert exposure
+into the same units as operating value, and I return to them below.
+
+Total risk exposure is the sum of two costs a facility bears for holding
+risky tanks: \[E(n',e)=P(n',e)+H(n')\,D_e.\] \(P(n',e)\) is the
+insurance premium the facility pays on the fleet \(n'\) under its
+contract \(e\). \(H(n')\) is the facility's hazard, the chance that any
+of its tanks leaks in the year. \(D_e\) is the deductible the facility
+pays out of pocket when a leak occurs, so the second term is the
+expected out-of-pocket cost of a leak. Both pieces rise with older and
+single-walled tanks. The hazard \(H\) comes from the facility-level
+model in §4.1, the premium \(P\) from the reconstructed schedule in
+§4.2, and the deductible \(D_e\) from the contract terms. All three are
+first-stage inputs, estimated outside the dynamic model and held fixed.
+
+The model puts one coefficient \(\gamma_{\text{pool}}\) on total
+exposure, not separate coefficients on the premium and on the expected
+out-of-pocket cost. A dollar of premium and a dollar of expected
+out-of-pocket loss enter the payoff the same way. I do this because the
+data cannot tell the two apart. Under risk-based pricing the premium
+moves with the hazard, so the premium and the expected loss are
+collinear. The premium also varies mostly across states, which the
+environment fixed effects absorb. And the Texas premium data begin only
+in 2006, so there is no clean within-Texas window in which to separate
+them. I report the pooled response to total exposure and treat the
+premium-versus-out-of-pocket split as not identified in this data. That
+non-identification is itself a result. It says a facility responds to
+the size of its risk bill, not to which channel delivers it.
+
+The second coefficient \(\gamma_{\text{RB}}\) is an extra response that
+applies only under risk-based pricing. It lets a dollar of exposure move
+behavior more, or less, when the price is risk-based than when it is a
+flat fund fee. A positive \(\gamma_{\text{RB}}\) means firms respond
+more strongly to exposure under risk-based pricing, which is the sign
+that the pricing mechanism does work beyond the level of the bill. A
+value near zero means a dollar is a dollar whatever the regime. In this
+sample risk-based pricing means Texas, so \(\gamma_{\text{RB}}\) also
+picks up anything specific to Texas. I read it as suggestive of the
+mechanism, not as a clean causal estimate, and I say so again where it
+matters for the counterfactuals.
+
+The environment fixed effects \(\alpha_e\) are load-bearing. They absorb
+everything that differs across states for reasons unrelated to exposure:
+geology, enforcement, the local economy, data coverage. Holding them
+fixed is what leaves a clean within-state exposure signal for
+\(\gamma_{\text{pool}}\) to read. The operating value \(\phi_G\) is the
+payoff from running a fleet at a given scale. In the estimated model I
+replace the free \(\phi_G\) intercepts with the measured-revenue term
+from §5.1, so operating value is \(\psi\,R\), where \(R\) is the
+measured revenue of a facility of that size in that state and era and
+\(\psi\) is the single weight that scales it. This ties operating value
+to measured revenue instead of free intercepts, which came back nearly
+flat across capacity bins.
+
+A facility that exits gets a one-time terminal value:
+\[u_{\text{exit}}(s)=\kappa_1\,N(s).\] \(N(s)\) is the number of tanks
+the facility holds. \(\kappa_1\) measures how exit value scales with
+size. I normalize the constant part of exit value to zero, which pins
+the level of the value function, so \(\kappa_1\) measures only how exit
+value grows with the number of tanks.
+
+\subsection{Bellman equation and
+estimation}\label{bellman-equation-and-estimation}
+
+Facilities are forward-looking. The value of a state solves
+\[V(s)=\max\Big\{\max_{(k,m)}\big[u_a(s,e)+\beta\,\mathbb E[V(s')\mid s,a]\big],\;u_{\text{exit}}(s)\Big\}.\]
+The discount factor \(\beta=0.9957\) is fixed in advance rather than
+estimated. Exit is absorbing. Each action carries an independent type-1
+extreme value shock, which gives closed-form logit choice probabilities
+given the state.
+
+Estimation runs in two stages. The first stage builds the premium
+schedule, the hazard model, the deductibles, the capacity transitions,
+and the revenue measure directly from the claims, premium, and registry
+data, and holds them fixed. This is the standard two-stage approach in
+this literature. It lets the data on prices and risk be taken as given
+before I ask what cost and preference parameters fit the closure
+behavior observed under those prices.
+
+The second stage estimates
+\(\theta=(\psi,\gamma_{\text{pool}},\gamma_{\text{RB}},c_{\text{rem}},c_{\text{inst}},\kappa_1)\),
+with the environment fixed effects \(\alpha_e\) estimated alongside. One
+parameter vector \(\theta\) is shared across all environments: 14
+uniform-pricing control states and three Texas risk-based rate eras, 17
+in all, with Texas the reference. Sharing one \(\theta\) across
+environments that price risk differently is the main source of
+identifying variation, which the next section takes up.
+
+I estimate \(\theta\) by nested pseudo-likelihood
+\citep{aguirregabiria_sequential_2007}. The method avoids solving the
+full dynamic program at every trial value of \(\theta\). It starts from
+the choice probabilities seen in the data, holds them fixed to turn the
+dynamic problem into a static one in which the value function is linear
+in \(\theta\), estimates \(\theta\) by maximizing the pseudo-likelihood,
+then recomputes the model's implied choice probabilities and repeats
+until \(\theta\) and the probabilities settle together. At 298,448
+states, solving the value function from scratch inside an optimizer
+would not be feasible. With the choice probabilities fixed the value
+function solves from the linear inversion \(V=(I-\beta M)^{-1}R\), which
+I compute with an iterative solver (BiCGSTAB) preconditioned on the
+tank-aging structure rather than by direct inversion. The estimating
+sample is aggregated facility-year choice counts, Texas 2006 to 2020 and
+the control states 1999 to 2020. The 2006 start for Texas is forced by
+when the premium data begin.
+
+\subsection{Identification}\label{identification}
+
+Identification of \(\theta\) rests on three things. The first is a set
+of modeling assumptions grounded in patterns in the data. The second is
+the set of assumptions that comes with choosing a dynamic discrete
+choice model estimated by NPL. The third is the actual comparison in the
+data that fixes the size of each parameter once the first two hold. I
+take them in turn, and I am explicit that some parameters rest on
+stronger variation than others.
+
+\subsubsection{Assumptions grounded in the
+data}\label{assumptions-grounded-in-the-data}
+
+The removal order, oldest first and single-walled before double-walled,
+is the order in 84 percent of removal events, so I build it in as a
+rule. Installation is double-walled only because the single-walled
+install ban removed the alternative. The premium schedule, hazard,
+deductibles, capacity transitions, and revenue are built from observed
+records and held fixed, because they are directly observed. The cost and
+preference parameters in \(\theta\) are not observed and must be
+estimated.
+
+\subsubsection{Assumptions from the model
+class}\label{assumptions-from-the-model-class}
+
+These are standard for the model class, not special to tanks. Each
+action's shock is an independent draw from a type-1 extreme value
+distribution, which gives the logit choice probabilities. Facilities
+have rational expectations: each knows its contract and correctly
+anticipates how its own portfolio evolves. The NPL mapping satisfies the
+regularity conditions needed for the iteration to converge to the
+parameters that generated the data. Convergence diagnostics are reported
+with the fit.
+
+\subsubsection{What pins each parameter}\label{what-pins-each-parameter}
+
+Conditional on those assumptions, each parameter is pinned by a distinct
+comparison. \(\gamma_{\text{pool}}\), the response to total exposure, is
+identified from within-state variation in exposure. At a fixed
+environment, facilities with older or single-walled tanks, or facing
+higher deductibles, carry more exposure and downsize or exit more. The
+environment fixed effects are what make this clean, because they strip
+out cross-state confounds and leave within-state variation. The age-free
+levers that discipline it are wall type and the deductible.
+Single-walled versus double-walled at the same age changes hazard, and
+the deductible changes out-of-pocket cost without being driven by age,
+so both move exposure for reasons other than a tank getting older. The
+premium-versus-out-of-pocket split is not identified: with separate
+coefficients the premium coefficient collapses to near zero, because
+premium moves with hazard under risk-based pricing, because premium
+varies mostly across states that the fixed effects absorb, and because
+Texas premiums begin only in 2006. I therefore report the pooled
+response. \(\gamma_{\text{RB}}\), the extra response under risk-based
+pricing, is identified from the difference in the exposure-response
+slope between the uniform control states and risk-based Texas. Because
+risk-based pricing is Texas in this sample, this comparison conflates
+the mechanism with Texas-specific factors, so it is suggestive, not a
+clean estimate of the mechanism. \(\psi\), the weight on operating
+revenue, is identified across facilities, from a facility's size crossed
+with its state's fuel margin (§5.1), not from the national time path of
+prices. \(c_{\text{rem}}\) and \(c_{\text{inst}}\) are identified from
+how often facilities downsize and replace, and from the split among
+closing facilities between downsizing, replacement, and exit.
+\(\kappa_1\) is identified from how the full-exit rate varies with the
+number of tanks, net of operating value.
+
+This strategy has clear limits. The premium-versus-out-of-pocket split
+is not identified, so I report the pooled response.
+\(\gamma_{\text{RB}}\) conflates risk-based pricing with Texas. The
+hazard model is only as precise as the leak data. The removal rule
+matches 84 percent of events, leaving a small share it does not.
+
+\section{Estimates, Counterfactuals, and
+Welfare}\label{estimates-counterfactuals-and-welfare}
+
+\subsection{Estimates}\label{estimates}
+
+\autoref{tbl-struct-estimates} reports the estimated parameters. The
+headline pooled coefficients, \(\gamma_{\text{pool}}\) on total exposure
+and \(\gamma_{\text{RB}}\) on the risk-based regime, are {[}pending the
+converged pooled run{]}. The anchor in hand is the earlier
+two-coefficient fit, in which the single exposure coefficient is 4.32,
+the removal cost is 3.85, the install cost is 2.04, and the exit-size
+gradient \(\kappa_1\) is 0.93, with a log-likelihood of \(-291{,}648.5\)
+across 17 environments. Operating value came back nearly flat across
+capacity bins under free intercepts, which is part of why I tie it to
+measured revenue. All values are in model units of \$10,000 per
+facility-year. Standard errors are {[}pending{]}. The significance of
+\(\gamma_{\text{RB}}\) is what the regime reading turns on.
+
+{[}Pending the pooled fit: the reading of the headline. A positive
+\(\gamma_{\text{pool}}\) means more exposure pushes facilities off
+maintaining toward downsizing and exit. The sign and size of
+\(\gamma_{\text{RB}}\) is the regime-mechanism result, whether a dollar
+of exposure bites harder under risk-based pricing.{]}
+
+\subsection{Counterfactuals}\label{counterfactuals}
+
+With \(\theta\) estimated, I re-solve the model under policies Texas
+never ran. Each counterfactual changes one term in the payoff and leaves
+the rest of the model unchanged, then re-solves the value function and
+the resulting fleet. I keep the environment fixed effects in the
+counterfactual, because they stand for real and persistent features of
+each state rather than a temporary effect, so the baseline reproduces
+observed behavior and each policy is a clean change against it. Part of
+each fixed effect may reflect data coverage rather than behavior, which
+I acknowledge in reading the results. Welfare is computed on the
+observed distribution of facilities, with no reweighting.
+
+The first counterfactual asks what Texas would have done if it had
+stayed on uniform pricing. I replace the Texas risk-based contract, both
+its premium and its deductible, with a representative uniform-state
+contract and re-solve. I report it as a decomposition. The first piece
+changes only the contract and keeps the risk-based response. The second
+piece changes the contract and also turns off the regime-extra response
+\(\gamma_{\text{RB}}\). The difference between the two isolates the
+risk-based-pricing mechanism, separate from the change in the dollar
+bill. This is the headline risk-based-versus-uniform experiment.
+
+The second counterfactual subsidizes new double-walled tanks by lowering
+the install cost, and sweeps the subsidy across levels. I report how the
+replacement rate and welfare respond, and how the response differs
+between the risk-based and uniform regimes. The subsidy adds a
+government outlay to the welfare account.
+
+The third counterfactual forces removal of single-walled tanks past age
+20. A facility can comply by downsizing or by upgrading to double-walled
+tanks. The mandate trades the firm's cost of forced early action against
+the leak damage it averts. I compare its welfare to the gradual response
+the price instruments produce.
+
+\subsection{Welfare accounting}\label{welfare-accounting}
+
+I score each counterfactual on one identity. Net social welfare is
+producer surplus minus external leak damage minus government outlay, all
+in present value. Producer surplus is expected discounted facility
+value. External damage is expected discounted leaks times the external
+cost per release \(E\). Government outlay is the subsidy, which enters
+only in the subsidy counterfactual. Premiums are a transfer inside firm
+value, so they net out of social welfare. The external cost \(E\) is a
+researcher input, set at a placeholder of \$50,000 per release. This
+identity makes the wedge explicit. A facility pays only its deductible
+out of pocket, the insurance pool covers the rest of the cleanup, and
+the health externality \(E\) falls outside both. So even a fairly priced
+risk-based premium internalizes only the insured part of the social
+cost, and the gap to the first best is \(E\).
+
+\section{Conclusion}\label{conclusion}
+
+\section*{Tables and Figures}\label{tables-and-figures}
+\addcontentsline{toc}{section}{Tables and Figures}
+
+\subsection{---- Section 3: data and descriptives
+----}\label{section-3-data-and-descriptives--}
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{table}{Baseline characteristics of study facilities at the reform date (December 22, 1998)}\label{tbl-summary}
+\vspace{6pt}
+\input{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/T_Baseline_Characteristics_Slide.tex}
+\par\vspace{10pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Texas and the 17 control states in separate columns. Alive-at-reform means at least one tank active on December 22, 1998. Capacity is the median, which is robust to large-facility outliers.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Tank count per incumbent facility at the reform date}\label{fig-baseline-tanks}
+\par\vspace{8pt}
+\fbox{\textit{[pending figure: Output/Figures/Figure\_Baseline\_TankCount]}}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Active tank count per facility on December 22, 1998. Control states hold more single-tank facilities; Texas is shifted toward three- and four-tank sites.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Total tank capacity per incumbent facility at the reform date}\label{fig-baseline-capacity}
+\par\vspace{8pt}
+\fbox{\textit{[pending figure: Output/Figures/Figure\_Baseline\_Capacity]}}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Total storage capacity per facility on December 22, 1998, clipped at 60,000 gallons. Control states carry a large mass of small single-tank facilities; Texas capacity is shifted right.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Distribution of cleanup costs per confirmed release}\label{fig-cost-distribution}
+\par\vspace{8pt}
+\fbox{\textit{[pending figure: Output/Figures/Figure\_Cost\_Distribution]}}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Cleanup cost per LUST site across the six control states with usable trust-fund claims data. The distribution has a long right tail.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\subsection{---- Section 4.1: observable risk
+----}\label{section-4.1-observable-risk--}
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Annual first-release probability by tank age and wall type}\label{fig-cell-risk}
+\par\vspace{8pt}
+\includegraphics[width=0.85\textwidth,height=0.58\textheight,keepaspectratio]{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/Figure_CV_CellRisk.pdf}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Annual probability of a first confirmed release by tank age band and wall type. The single-walled gradient rises with age; the double-walled line stays low and flat.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Risk concentration in the highest-ranked facilities}\label{fig-lift}
+\par\vspace{8pt}
+\includegraphics[width=0.85\textwidth,height=0.58\textheight,keepaspectratio]{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/FigureA_CV_Lift_State.pdf}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Out-of-sample lift. Facilities are ranked by predicted first-release probability; the curve plots the share of next-year releases captured against the share of facilities screened.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Calibration of predicted first-release probability}\label{fig-calibration}
+\par\vspace{8pt}
+\includegraphics[width=0.85\textwidth,height=0.58\textheight,keepaspectratio]{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/Figure_CV_Calibration.pdf}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Out-of-sample calibration. Mean predicted risk against the observed release rate across bins of the predicted score. Points on the 45-degree line indicate predictions correct in levels.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Predicted versus observed release probability, by age-and-wall cell}\label{fig-cell-gof}
+\par\vspace{8pt}
+\includegraphics[width=0.85\textwidth,height=0.58\textheight,keepaspectratio]{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/Figure_CV_CellRisk_GoF.pdf}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Out-of-sample fit at the cell level. Predicted release probability against the raw rate in each tank age-and-wall cell. Points on the 45-degree line indicate the model recovers the cell-level risk map.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\subsection{---- Section 4.2: pricing observable risk
+----}\label{section-4.2-pricing-observable-risk--}
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Total facility premium by tank age band, Texas versus control states}\label{fig-premium-by-age}
+\par\vspace{8pt}
+\includegraphics[width=0.85\textwidth,height=0.58\textheight,keepaspectratio]{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/AE_X3_Premium_by_Age.pdf}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Texas points are the mean reconstructed premium by tank age band; control points are the state flat fee times tank count. The Texas premium rises with age and is higher for single-walled tanks; the control fee is flat.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Texas premiums against predicted release probability, by risk cell}\label{fig-actuarial-alignment}
+\par\vspace{8pt}
+\includegraphics[width=0.85\textwidth,height=0.58\textheight,keepaspectratio]{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/Figure_Actuarial_Alignment.pdf}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Mean Texas premium against the predicted first-release probability for each age-and-wall cell. The two move together, so the premium gradient tracks predicted risk.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Average per-tank premium by year, Texas versus control states}\label{fig-premium-divergence}
+\par\vspace{8pt}
+\includegraphics[width=0.85\textwidth,height=0.58\textheight,keepaspectratio]{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/04e_Premium_by_Year_Treatment.png}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Average per-tank premium in Texas and the control states, 1992 to 2020. The series track before 1998 and pull apart after, as the Texas schedule begins to charge more for older single-walled tanks.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\subsection{---- Section 4.2.1: the cross-subsidy
+----}\label{section-4.2.1-the-cross-subsidy--}
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{What facilities pay versus their fair premium, by state}\label{fig-cross-paid}
+\par\vspace{8pt}
+\includegraphics[width=0.85\textwidth,height=0.58\textheight,keepaspectratio]{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/Fig_CrossSub_Paid_Panel.pdf}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Facilities in each state ordered from safest to riskiest. The fair premium (leak risk times cleanup cost, net of the deductible) is the full height; the flat fund fee actually paid is the lower band. The share of the fair premium a facility pays is 17 percent in Tennessee, 14 percent in Louisiana, 1 percent in Colorado, and near zero in New Mexico, which charges no flat fee and funds its program through a per-gallon gas tax. 2005 cross-section.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{The cross-subsidy under a break-even flat fee, by state}\label{fig-cross-area}
+\par\vspace{8pt}
+\includegraphics[width=0.85\textwidth,height=0.58\textheight,keepaspectratio]{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/Fig_CrossSub_Area_Panel.pdf}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} The break-even fee is the average fair premium, the single flat fee that exactly covers the fund's cleanups. Facilities below the line overpay (blue); facilities above it are subsidized (red); the two areas are equal. The transfer is 26 percent of premiums in New Mexico, 18 in Colorado, 18 in Louisiana, and 16 in Tennessee. 2005 cross-section.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{The cross-subsidy over time, Tennessee}\label{fig-cross-time}
+\par\vspace{8pt}
+\includegraphics[width=0.85\textwidth,height=0.58\textheight,keepaspectratio]{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Figures/Fig_CrossSub_AreaTime_TN.pdf}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Tennessee in 2000, 2005, 2010, and 2015. The break-even fee rises as the fleet ages, from \$3,845 to \$5,068, while the cross-subsidy falls as a share of premiums, from 18 to 15 percent, because facilities grow more alike. Colorado, Louisiana, and New Mexico appear in the same form by state; New Mexico is too thin to read a trend.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\subsection{---- Section 4.4: does the policy work
+----}\label{section-4.4-does-the-policy-work--}
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{table}{Difference-in-differences estimates of the tank-closure response}\label{tbl-stepped-did}
+\vspace{6pt}
+\input{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/T_Stepped_DiD_OLS.tex}
+\par\vspace{10pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Effect of the 1998 Texas reform on the annual tank-closure indicator. The preferred column adds facility and cell-by-year fixed effects. Standard errors clustered by state in parentheses.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Event study of tank closure, Texas relative to control states}\label{fig-es-tank}
+\par\vspace{8pt}
+\fbox{\textit{[pending figure: Output/Figures/Fig\_ES\_HTE\_Pooled]}}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Year-by-year closure gap between Texas and control tanks, relative to the year before the reform. Pre-reform coefficients are flat; the gap opens at the reform and persists.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{table}{Risk concentration: closure response by tank age and wall type}\label{tbl-risk-conc}
+\vspace{6pt}
+\fbox{\textit{[pending table: Output/Tables/T\_Falsification\_RiskConcentration]}}
+\par\vspace{10pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} The closure response interacted with tank age and wall type, with facility and year fixed effects placed outside the make-model cell so age and wall are not absorbed. The response concentrates in old single-walled tanks.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{table}{Facility-level portfolio response to the reform}\label{tbl-fac-att}
+\vspace{6pt}
+\fbox{\textit{[pending table: Output/Tables/T\_Facility\_Portfolio\_ATT\_Pub]}}
+\par\vspace{10pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Facility-year outcomes under facility and portfolio-mix-by-year fixed effects, with the composition-weighted baseline as a control. Standard errors clustered by state.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Event study of facility-level closure, Texas relative to control states}\label{fig-es-fac}
+\par\vspace{8pt}
+\fbox{\textit{[pending figure: Output/Figures/Fig\_ES\_Facility\_Portfolio]}}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Facility-level closure gap by year under the portfolio-mix-by-year design, relative to the year before the reform. Flat before the reform, rising after.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{table}{Effect of risk-based pricing on leak discovery}\label{tbl-leak-did}
+\vspace{6pt}
+\input{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/T_LUST_A_Total.tex}
+\par\vspace{10pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Effect of the reform on the annual confirmed-leak-discovery indicator. First column is the pre-reform control mean; second is the Texas-times-post coefficient. Facility and cell-by-year fixed effects, clustered by state.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{table}{Leak discovery by detection channel}\label{tbl-leak-decomp}
+\vspace{6pt}
+\input{C:/Users/kaleb/Documents/ust_ins_move_to_github/Output/Tables/T_LUST_B_Decomp.tex}
+\par\vspace{10pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} The leak-discovery effect split into the routine-monitoring channel and the closure-inspection channel. Discovery falls through both, so the reform lowers the true leak rate rather than only its detection.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\subsection{---- Section 4.5: who, where, and what
+----}\label{section-4.5-who-where-and-what--}
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Event study of facility downsizing, Texas relative to control states}\label{fig-es-downsize}
+\par\vspace{8pt}
+\fbox{\textit{[pending figure: Output/Figures/Fig\_ES\_Facility\_Downsize]}}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Year-by-year gap in facility downsizing (fewer tanks and fewer gallons), relative to the year before the reform. The pre-reform path is not flat, so I read this margin as descriptive.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Event study of facility consolidation, Texas relative to control states}\label{fig-es-consolidate}
+\par\vspace{8pt}
+\fbox{\textit{[pending figure: Output/Figures/Fig\_ES\_Facility\_Consolidate]}}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Year-by-year gap in facility consolidation (fewer tanks, about the same gallons), relative to the year before the reform. The path is flat and noisy with no clear break at the reform, consistent with the null average effect.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{figure}{Event study of facility replacement, Texas relative to control states}\label{fig-es-replace}
+\par\vspace{8pt}
+\fbox{\textit{[pending figure: Output/Figures/Fig\_ES\_Facility\_Replace]}}
+\par\vspace{8pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Year-by-year gap in facility replacement (tanks swapped at about the same capacity), relative to the year before the reform. The pre-reform path is acceptable and the response is moderate.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{table}{Closure response by fuel type (tank level)}\label{tbl-hte-tank}
+\vspace{6pt}
+\fbox{\textit{[pending table: Output/Tables/T\_HTE\_Tank\_Pub]}}
+\par\vspace{10pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Triple-difference interactions of the treatment with fuel type, with facility and cell-by-year fixed effects. The response concentrates in motor-fuel-only facilities.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{table}{Facility response by fuel, place, and market (heterogeneity)}\label{tbl-fac-hte}
+\vspace{6pt}
+\fbox{\textit{[pending table: Output/Tables/T\_Facility\_HTE\_closure\_share\_Pub]}}
+\par\vspace{10pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Facility-level triple-difference interactions of the treatment with facility attributes fixed at the reform. Gas stations carry the response across margins.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{table}{Portfolio response by facility size}\label{tbl-size-hte}
+\vspace{6pt}
+\fbox{\textit{[pending table: Output/Tables/T\_Facility\_SizeHTE\_Pub]}}
+\par\vspace{10pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Treatment interacted with total-capacity bin, reference the smallest bin. Small facilities exit; large facilities downsize and replace. Facility and portfolio-mix-by-year fixed effects, clustered by state.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{table}{Portfolio response by tank vintage}\label{tbl-vintage-hte}
+\vspace{6pt}
+\fbox{\textit{[pending table: Output/Tables/T\_Facility\_VintageHTE\_Pub]}}
+\par\vspace{10pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Treatment interacted with installation cohort, reference the 1989 to 1998 cohort. The oldest tanks exit without reinvesting; the youngest reinvest. Facility and portfolio-mix-by-year fixed effects, clustered by state.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+\subsection{---- Section 6: structural estimates
+----}\label{section-6-structural-estimates--}
+
+\clearpage
+\null\vfill
+\begin{center}
+\phantomsection\captionof{table}{Structural parameter estimates}\label{tbl-struct-estimates}
+\vspace{6pt}
+\fbox{\textit{[pending table: Output/Tables/T\_Struct\_Estimates]}}
+\par\vspace{10pt}
+\begin{minipage}{0.85\textwidth}\small\textit{Notes:} Nested pseudo-likelihood estimates of the dynamic portfolio model. Values are in model units of \$10,000 per facility-year. Headline pooled-exposure coefficients pending the converged run.\end{minipage}
+\end{center}
+\vfill\clearpage
+
+
+  \bibliography{UST-lit-fixed.bib}
+
+
+\end{document}

@@ -90,6 +90,15 @@ Pooled share **of insured** facility-years (the carriers themselves):
 (researcher: rate filings unreachable). They are the imputation floor and are concentrated in
 the otherwise well-covered later years, which is why priceability falls after ~2014.
 
+### Imputation rule (decided 2026-06-27)
+Colony, Ironshore, and the small unpriceable tail are **imputed, not transcribed** — their rate
+filings are unreachable. Each such facility-year gets the **share-weighted priceable-market mean
+premium for its age × wall × era cell**, carries a **`premium_imputed = TRUE`** flag (the real
+carrier label is kept for reference), and is **never dropped**. The flag lets the estimator run the
+headline fit with the imputed rows included, then **re-fit `gamma_p` on real-engine rows only**
+(`premium_imputed = FALSE`) as a robustness check — so `gamma_p` can be shown not to be an
+artifact of the imputation.
+
 The ~70% priceable figure is a mild **lower bound**: a few small carriers that belong to
 priceable families were not pattern-matched (e.g. `WESTCHESTER FIRE` = ACE/Chubb,
 `STEADFAST` = Zurich; ~0.1% combined).

@@ -36,13 +36,14 @@ CRS_MERC   <- 3857L   # Web Mercator — only used for detecting unconverted coo
 
 #### S3 Study States ####
 
-# Full set of states in the panel (26 states per memory)
-# Target + Tier 1 controls + Tier 2 controls
+# Reduced-form ESTIMATION SAMPLE states: TX (treated) + 17 controls.
+# Matches the make-model primary sample in 01m_MakeModelSample.R exactly, so the
+# GIS layers cover the regression sample (no MO/SD gap, no wasted non-sample states).
+# To restore the broader 26-state set, see git history of this file.
 STUDY_STATES <- c(
-  "TX",                                                           # Target
-  "AL", "AR", "CO", "LA", "ME", "NJ", "NM", "OK", "PA", "TN",   # Tier 1
-  "ID", "KS", "KY", "MD", "MA", "MN", "NC", "ND", "OH", "VA",   # Tier 2
-  "AZ", "CT", "FL", "IA", "MI"                                   # Treated/excluded
+  "TX",                                                          # Target (treated)
+  "AR", "CO", "ID", "KS", "KY", "LA", "MA", "MD", "ME",         # 17 control states
+  "MN", "MO", "NC", "OH", "OK", "SD", "TN", "VA"
 )
 
 #### S4 Helper Functions ####

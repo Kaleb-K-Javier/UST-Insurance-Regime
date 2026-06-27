@@ -11,7 +11,7 @@ format:
     number-depth: 1
     include-in-header: PERC_preamble.tex
     include-before-body: PERC_before-body.tex
-bibliography: UST-lit-fixed.bib
+bibliography: UST-lit-fixed.bib, UST_lit_fixed.bib
 fig-cap-location: bottom
 geometry: margin=1in
 ---

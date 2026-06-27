@@ -1,6 +1,7 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{booktabs}
+\usepackage{longtable}
 \usepackage{threeparttable}
 \usepackage{threeparttablex}
 \usepackage{caption}
@@ -11,16 +12,18 @@
 \usepackage{pdflscape}
 \usepackage{etoolbox}
 \usepackage{graphicx}
-\usepackage{hyperref}
 \usepackage{adjustbox}
-\hypersetup{
-  colorlinks  = true,
-  linkcolor   = black,
-  citecolor   = black,
-  urlcolor    = black
-}
-\usepackage[authoryear, round]{natbib}
+\usepackage{setspace}
+\usepackage{hypcap}
+
 \preto\section{\clearpage}
+
+\renewcommand{\tableautorefname}{Table}
+\renewcommand{\figureautorefname}{Figure}
+\renewcommand{\equationautorefname}{Equation}
+\renewcommand{\sectionautorefname}{Section}
+\renewcommand{\subsectionautorefname}{Section}
+\renewcommand{\subsubsectionautorefname}{Section}
 
 \makeatletter
 \def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}

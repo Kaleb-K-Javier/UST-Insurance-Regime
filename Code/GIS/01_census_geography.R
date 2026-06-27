@@ -26,6 +26,32 @@ source(here::here("Code", "GIS", "00_gis_config.R"))
 library(tigris)
 options(tigris_use_cache = TRUE)
 
+# F2 fix (project rule: hard propagation only — no tryCatch(..)->NULL, no try(silent)).
+# Single retry on a transient network blip, then let the real error surface.
+fetch_geo <- function(fun, fp, vintage) {
+  tryCatch(
+    fun(state = fp, cb = TRUE, year = vintage, class = "sf"),
+    error = function(e) {
+      log_gis(sprintf("retry FIPS %s (%d): %s", fp, vintage, conditionMessage(e)), 2)
+      Sys.sleep(2)
+      fun(state = fp, cb = TRUE, year = vintage, class = "sf")   # 2nd attempt propagates
+    }
+  )
+}
+
+# Vintage-robust GEOID: 2020 cb files carry "GEOID"; 2010 cb files carry "GEO_ID"
+# in the long "1400000US01001020100" form (strip everything through "US").
+norm_geoid <- function(sf_obj) {
+  nm <- names(sf_obj)
+  g <- if ("GEOID" %in% nm)        sf_obj[["GEOID"]]
+       else if ("GEOID10" %in% nm) sf_obj[["GEOID10"]]
+       else if ("GEOID20" %in% nm) sf_obj[["GEOID20"]]
+       else if ("GEO_ID" %in% nm)  sub("^.*US", "", sf_obj[["GEO_ID"]])
+       else stop("no GEOID-like column; have: ", paste(nm, collapse = ", "))
+  sf_obj$GEOID <- as.character(g)
+  sf_obj
+}
+
 #### S1 Configuration ####
 
 # Which Census vintage(s) to assign
@@ -56,17 +82,11 @@ run_census_join <- function(vintage, fac_sf) {
   log_gis(sprintf("Downloading %d tract boundaries for %d states...",
                   vintage, length(study_fips)), 1)
   
-  tracts_list <- lapply(study_fips, function(fp) {
-    tryCatch(
-      tigris::tracts(state = fp, cb = TRUE, year = vintage, class = "sf"),
-      error = function(e) {
-        log_gis(sprintf("Failed to download tracts for FIPS %s: %s", fp, e$message), 2)
-        return(NULL)
-      }
-    )
-  })
+  tracts_list <- lapply(study_fips, function(fp)
+    fetch_geo(tigris::tracts, fp, vintage))
   tracts_sf <- do.call(rbind, Filter(Negate(is.null), tracts_list))
   tracts_sf <- st_transform(tracts_sf, CRS_WGS84)
+  tracts_sf <- norm_geoid(tracts_sf)
   
   log_gis(sprintf("Loaded %s tracts", format(nrow(tracts_sf), big.mark = ",")), 1)
   
@@ -74,17 +94,11 @@ run_census_join <- function(vintage, fac_sf) {
   log_gis(sprintf("Downloading %d block group boundaries for %d states...",
                   vintage, length(study_fips)), 1)
   
-  bgs_list <- lapply(study_fips, function(fp) {
-    tryCatch(
-      tigris::block_groups(state = fp, cb = TRUE, year = vintage, class = "sf"),
-      error = function(e) {
-        log_gis(sprintf("Failed to download BGs for FIPS %s: %s", fp, e$message), 2)
-        return(NULL)
-      }
-    )
-  })
+  bgs_list <- lapply(study_fips, function(fp)
+    fetch_geo(tigris::block_groups, fp, vintage))
   bgs_sf <- do.call(rbind, Filter(Negate(is.null), bgs_list))
   bgs_sf <- st_transform(bgs_sf, CRS_WGS84)
+  bgs_sf <- norm_geoid(bgs_sf)
   
   log_gis(sprintf("Loaded %s block groups", format(nrow(bgs_sf), big.mark = ",")), 1)
   
