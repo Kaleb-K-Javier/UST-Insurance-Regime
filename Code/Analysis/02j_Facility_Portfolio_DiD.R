@@ -27,8 +27,11 @@
 #
 # Outputs: Output/Tables/T_Facility_Portfolio_ATT_Pub.tex, _HTE_Pub.tex,
 #   T_Facility_SizeHTE_Pub.tex (+ CSVs), Output/Figures/Fig_ES_Facility_Portfolio.*
+#   Ticket 035 additions: T_Facility_SampleCompare_ATT.csv,
+#     T_Facility_SampleCompare_SizeHTE.csv, T_Facility_SampleCompare_VintageHTE.csv,
+#     Fig_ES_Facility_{Portfolio,Downsize,Consolidate}_allinc.*
 #
-# Run (panel on Z locally; in-repo on server — DO NOT set UST_ANALYSIS_DIR there).
+# Run (panel on Z locally; in-repo on server -- DO NOT set UST_ANALYSIS_DIR there).
 ################################################################################
 
 suppressPackageStartupMessages({
@@ -50,19 +53,131 @@ source(here::here("Code", "Helpers", "reduced_form_utils.R"))
 rf_use_threads()
 ANALYSIS_DIR <- Sys.getenv("UST_ANALYSIS_DIR", here::here("Data", "Analysis"))
 FAC_FILE     <- Sys.getenv("UST_FAC_FILE", "matched_facs_birth_cem.csv")
+FAC_PANEL    <- here::here("Data", "Analysis", "facility_panel.csv")   # all-incumbents (Ticket 035)
 XW_PATH   <- here::here("Data", "Analysis", "facility_cellfe_xwalk.csv")  # 02k output
 GIS_HTE   <- here::here("Output", "GIS", "gis_hte_vars.csv")             # git-tracked, panel_id
 EDGES     <- here::here("Output", "GIS", "gis_neighbor_edges.parquet")   # git-tracked (force-added)
 stopifnot(file.exists(file.path(ANALYSIS_DIR, FAC_FILE)))
 stopifnot("Run 02k first (exact tank cell-FE crosswalk)" = file.exists(XW_PATH))
-HAS_GIS   <- file.exists(GIS_HTE)                                        # census splits (Census 2000)
-HAS_EDGES <- file.exists(EDGES) && requireNamespace("arrow", quietly = TRUE)  # competition edges
+HAS_GIS   <- file.exists(GIS_HTE)
+HAS_EDGES <- file.exists(EDGES) && requireNamespace("arrow", quietly = TRUE)
 dir.create(OUTPUT_FIGURES, recursive = TRUE, showWarnings = FALSE)
 BOOT_B <- as.integer(Sys.getenv("UST_BOOT_B", "1999"))   # unused (bootstrap deferred)
 ES_WIN <- c(-13L, 22L)
 MAND   <- c("any_mandate_release_det", "any_mandate_spill_overfill", "any_mandate_integrity")
 CAP_BREAKS <- c(-Inf, 9000, 20000, 30000, Inf)           # DCM G breaks (per-tank gallons)
 CAP_LABS   <- c("G1_lt9k", "G2_9to20k", "G3_20to30k", "G4_gt30k")
+MARG_ALL   <- c("closure_share", "facility_exit", "downsize", "consolidate",
+                "reconfigure_up", "repl_share", "cap_decrease")   # fixed vector for comparison
+
+# === HELPER FUNCTIONS ===
+cat("=== HELPERS ===\n")
+
+# Build all outcome margin columns + cell_fac_year + did_term + rel_year in-place.
+# Detects capacity column names internally. REL_THRESH from outer scope (0.05).
+build_margins <- function(fy) {
+  .hdr_bm    <- names(fy)
+  .cap_chg_bm <- if ("capacity_change"      %in% .hdr_bm) "capacity_change" else
+                 if ("capacity_change_year" %in% .hdr_bm) "capacity_change_year" else NULL
+  .cap_lev_bm <- if ("total_capacity_dec" %in% .hdr_bm) "total_capacity_dec" else
+                 if ("total_capacity"     %in% .hdr_bm) "total_capacity" else NULL
+  if (is.null(.cap_chg_bm) || is.null(.cap_lev_bm))
+    stop("build_margins: capacity_change / total_capacity_dec absent from input.")
+  cat(sprintf("  build_margins: cap_change='%s'  cap_level='%s'\n", .cap_chg_bm, .cap_lev_bm))
+  fy[, post     := as.integer(panel_year >= 1999L)]
+  fy[, did_term := texas_treated * post]
+  fy[, rel_year := as.integer(panel_year) - 1998L]
+  fy[, closure_share := pmin(n_closures / pmax(n_tanks_active, 1L), 1)]
+  if ("n_closures_permanent"   %in% .hdr_bm)
+    fy[, perm_share := pmin(n_closures_permanent   / pmax(n_tanks_active, 1L), 1)]
+  if ("n_closures_replacement" %in% .hdr_bm)
+    fy[, repl_share := pmin(n_closures_replacement / pmax(n_tanks_active, 1L), 1)]
+  setorder(fy, panel_id, panel_year)
+  fy[, dC   := get(.cap_chg_bm)]
+  fy[, Ceoy := get(.cap_lev_bm)]
+  fy[, Clag := Ceoy - dC]
+  fy[, rel_cap     := fifelse(Clag > 0, dC / Clag, NA_real_)]
+  fy[, contraction := as.integer(facility_exit == 0L & net_tank_change < 0L & Clag > 0 & !is.na(dC))]
+  fy[, consolidate    := as.integer(contraction == 1L & abs(rel_cap) <= REL_THRESH)]
+  fy[, downsize       := as.integer(contraction == 1L & rel_cap <  -REL_THRESH)]
+  fy[, reconfigure_up := as.integer(contraction == 1L & rel_cap >   REL_THRESH)]
+  fy[is.na(consolidate),    consolidate    := 0L]
+  fy[is.na(downsize),       downsize       := 0L]
+  fy[is.na(reconfigure_up), reconfigure_up := 0L]
+  stopifnot(fy[, max(consolidate + downsize + reconfigure_up)] <= 1L)
+  stopifnot(fy[facility_exit == 1L,   sum(consolidate + downsize + reconfigure_up)] == 0L)
+  stopifnot(fy[net_tank_change >= 0L, sum(consolidate + downsize + reconfigure_up)] == 0L)
+  stopifnot(fy[is.na(dC),             sum(consolidate + downsize + reconfigure_up)] == 0L)
+  fy[, contraction := NULL]
+  n_elig <- fy[facility_exit == 0L & net_tank_change < 0L & Clag > 0 & !is.na(dC), .N]
+  cat(sprintf("  contraction partition: n_eligible=%d | consolidate=%.4f | downsize=%.4f | reconfigure_up=%.4f\n",
+              n_elig, mean(fy$consolidate), mean(fy$downsize), mean(fy$reconfigure_up)))
+  if ("capacity_decreased" %in% .hdr_bm) fy[, cap_decrease := as.integer(capacity_decreased)]
+  # cell_fac_year built per-sample so each sample's FE spans its own facilities
+  fy[, cell_fac_year := .GRP, by = .(make_model_fac, panel_year)]
+  fy
+}
+
+# feols loop over MARG_ALL. Returns data.table(margin, beta, se, p, n).
+att_table <- function(fy_in, rhs) {
+  rows <- list()
+  for (mg in MARG_ALL) {
+    if (!mg %in% names(fy_in)) next
+    m  <- feols(as.formula(sprintf("%s ~ did_term %s | panel_id + cell_fac_year", mg, rhs)),
+                data = fy_in, cluster = ~state)
+    ct <- coeftable(m)
+    rows[[mg]] <- data.table(margin = mg,
+                             beta   = ct["did_term", "Estimate"],
+                             se     = ct["did_term", "Std. Error"],
+                             p      = ct["did_term", "Pr(>|t|)"],
+                             n      = m$nobs)
+  }
+  rbindlist(rows)
+}
+
+# Event study for one margin. data/rhs/fe default to matched C1 globals so
+# existing STEP 6 call sites are byte-identical.
+es_one <- function(yv, ylab, stem, data = fy, rhs = RHS, fe = FE) {
+  fes_loc <- data[rel_year %between% ES_WIN]
+  m  <- feols(as.formula(sprintf("%s ~ i(rel_year, texas_treated, ref = -1L) %s | %s", yv, rhs, fe)),
+              data = fes_loc, cluster = ~state)
+  ct <- as.data.table(coeftable(m), keep.rownames = "term")[grepl("rel_year::", term, fixed = TRUE)]
+  ct[, rel_year := as.integer(tstrsplit(sub("rel_year::", "", term, fixed = TRUE), ":", fixed = TRUE)[[1]])]
+  co <- ct[, .(rel_year, est = Estimate, se = `Std. Error`)]
+  co <- rbind(co, data.table(rel_year = -1L, est = 0, se = 0))
+  co[, `:=`(ci_lo = est-1.96*se, ci_hi = est+1.96*se, margin = yv,
+            period = factor(fifelse(rel_year<0L,"pre",fifelse(rel_year==0L,"event","post")),
+                            levels = c("pre","event","post")))]
+  setorder(co, rel_year)
+  p <- ggplot(co, aes(rel_year, est, colour = period)) +
+    geom_hline(yintercept = 0, colour = "grey55", linetype = "dashed", linewidth = 0.45) +
+    geom_vline(xintercept = -1.5, colour = "grey40", linetype = "dotted", linewidth = 0.5) +
+    geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi), width = 0.25, linewidth = 0.5) +
+    geom_point(size = 2.0, shape = 21, fill = "white", stroke = 1.2) +
+    scale_colour_manual(values = c(pre="#3A6BBF", event="#888888", post="#BF3A3A"),
+                        labels = c(pre="Pre-treatment", event="Event", post="Post-treatment"), name = NULL) +
+    scale_x_continuous(breaks = seq(-14, 22, by = 2)) +
+    labs(x = "Years relative to Dec 22 1998", y = ylab) +
+    theme_classic(base_size = 11, base_family = "Times") +
+    theme(legend.position = "bottom", legend.key.width = unit(1.2, "cm"),
+          axis.line = element_line(colour = "black", linewidth = 0.4),
+          axis.ticks = element_line(colour = "black", linewidth = 0.3),
+          axis.text = element_text(colour = "black"),
+          panel.grid.major.y = element_line(colour = "grey92", linewidth = 0.3),
+          panel.grid.minor = element_blank(), plot.margin = margin(8, 12, 8, 8))
+  save_gg(p, stem, width = 7.6, height = 4.8)
+  pt <- co[rel_year < -1L, .(max_abs_pre = max(abs(est)), max_t = max(abs(est/pmax(se,1e-12))))]
+  cat(sprintf("  %-13s -> %s | PRE max|coef|=%.4f max|t|=%.2f\n", yv, stem, pt$max_abs_pre, pt$max_t))
+  co
+}
+
+# Parameterized categorical HTE (used in Step 9 for the comparison; Steps 5/5b keep
+# the local cat_hte closure for C1 byte-identical safety).
+cat_hte_param <- function(fy_in, yv, fvar, ref, rhs) {
+  d <- fy_in[!is.na(get(fvar))]
+  feols(as.formula(sprintf("%s ~ i(%s, did_term, ref = '%s') + did_term %s | %s",
+                           yv, fvar, ref, rhs, FE)), data = d, cluster = ~state)
+}
 
 # === STEP 1 — LOAD MATCHED FACILITY PANEL ===
 cat("=== STEP 1: LOAD ===\n")
@@ -85,43 +200,14 @@ keep <- intersect(c("panel_id","state","panel_year","texas_treated","cem_weight"
 fy <- fread(file.path(ANALYSIS_DIR, FAC_FILE), select = keep,
             colClasses = list(character = c("panel_id","state","facility_id")))
 mand_have <- intersect(MAND, names(fy))
-
-fy[, post     := as.integer(panel_year >= 1999L)]
-fy[, did_term := texas_treated * post]
-fy[, rel_year := as.integer(panel_year) - 1998L]
-# Portfolio-action outcomes.
-fy[, closure_share := pmin(n_closures / pmax(n_tanks_active, 1L), 1)]
-if ("n_closures_permanent"   %in% names(fy)) fy[, perm_share := pmin(n_closures_permanent   / pmax(n_tanks_active,1L), 1)]
-if ("n_closures_replacement" %in% names(fy)) fy[, repl_share := pmin(n_closures_replacement / pmax(n_tanks_active,1L), 1)]
 REL_THRESH <- 0.05   # 5% capacity band; flip to 0.10 here to retest
-setorder(fy, panel_id, panel_year)
-fy[, dC   := get(.cap_chg)]
-fy[, Ceoy := get(.cap_lev)]
-fy[, Clag := Ceoy - dC]
-fy[, rel_cap := fifelse(Clag > 0, dC / Clag, NA_real_)]
-fy[, contraction := as.integer(facility_exit == 0L & net_tank_change < 0L & Clag > 0 & !is.na(dC))]
-fy[, consolidate    := as.integer(contraction == 1L & abs(rel_cap) <= REL_THRESH)]
-fy[, downsize       := as.integer(contraction == 1L & rel_cap <  -REL_THRESH)]
-fy[, reconfigure_up := as.integer(contraction == 1L & rel_cap >   REL_THRESH)]
-fy[is.na(consolidate),    consolidate    := 0L]
-fy[is.na(downsize),       downsize       := 0L]
-fy[is.na(reconfigure_up), reconfigure_up := 0L]
-stopifnot(fy[, max(consolidate + downsize + reconfigure_up)] <= 1L)
-stopifnot(fy[facility_exit == 1L,   sum(consolidate + downsize + reconfigure_up)] == 0L)
-stopifnot(fy[net_tank_change >= 0L, sum(consolidate + downsize + reconfigure_up)] == 0L)
-stopifnot(fy[is.na(dC),             sum(consolidate + downsize + reconfigure_up)] == 0L)
-fy[, contraction := NULL]
-n_elig <- fy[facility_exit == 0L & net_tank_change < 0L & Clag > 0 & !is.na(dC), .N]
-cat(sprintf("  contraction partition: n_eligible=%d | consolidate=%.4f | downsize=%.4f | reconfigure_up=%.4f\n",
-            n_elig, mean(fy$consolidate), mean(fy$downsize), mean(fy$reconfigure_up)))
-if ("capacity_decreased" %in% names(fy)) fy[, cap_decrease := as.integer(capacity_decreased)]
 
-# Facility cell x year FE = portfolio-mix x year (tank cell_vintage_year_fe twin).
-fy[, cell_fac_year := .GRP, by = .(make_model_fac, panel_year)]
-# DCM-aligned size: TOTAL facility capacity (reform) at the structural G breaks --
-# the DCM capacity state is built on total portfolio capacity, not per-tank.
+# Refactored margin construction (Step 1 pseudocode)
+fy <- build_margins(fy)
+
+# DCM-aligned size and vintage (per-sample, not inside build_margins)
 fy[, cap_G := factor(cut(total_capacity_reform, CAP_BREAKS, labels = CAP_LABS), levels = CAP_LABS)]
-if ("fac_vintage" %in% names(fy)) fy[, vintage := factor(fac_vintage)]   # age/cohort at treatment
+if ("fac_vintage" %in% names(fy)) fy[, vintage := factor(fac_vintage)]
 cat(sprintf("  facility-years: %s | facilities: %s | states: %d | TX share: %.3f\n",
             fmt_n(nrow(fy)), fmt_n(uniqueN(fy$panel_id)), uniqueN(fy$state), mean(fy$texas_treated)))
 cat(sprintf("  make_model_fac mixes: %d | cap_G dist: %s\n",
@@ -142,8 +228,6 @@ fy <- fy[!is.na(Yhat0)]
 cat("=== STEP 2: COVARIATES (gas-station + spatial HTE, all panel_id-keyed) ===\n")
 if ("has_gasoline" %in% names(fy)) fy[, gas_station := has_gasoline]
 
-# Spatial HTE vars FIXED AT TREATMENT (Census 2000), git-tracked in Output/GIS/,
-# keyed on panel_id -> reach the server via git pull (no GIS toolchain needed).
 if (HAS_GIS) {
   gv <- fread(GIS_HTE, select = c("panel_id","rural_2000","low_pop_density",
               "med_hh_income_2000","pct_poverty_2000"),
@@ -157,9 +241,6 @@ if (HAS_GIS) {
               100*mean(!is.na(fy$rural)), 100*mean(!is.na(fy$low_pop)), 100*mean(!is.na(fy$low_income))))
 } else cat("  gis_hte_vars.csv absent -> census spatial HTE skipped.\n")
 
-# Competition: PRE-REFORM (fixed) count of active neighbors within 1 mi at 1998.
-# Fixed at treatment -> a clean, non-endogenous split (matches the census-vars logic),
-# and far cheaper than the time-varying cross. Restricted to gas retail in Step 4.
 if (HAS_EDGES) {
   ed <- as.data.table(arrow::read_parquet(EDGES, col_select = c("panel_id_i","panel_id_j")))
   active98 <- fy[panel_year == 1998L & n_tanks_active > 0L, unique(panel_id)]
@@ -173,9 +254,10 @@ if (HAS_EDGES) {
               fmt_n(nrow(ed)), thr))
 } else cat("  edges parquet / arrow absent -> competition HTE skipped.\n")
 
-# Control block: Yhat0 (KEPT) + mandate dummies. FE = facility + portfolio-mix x year.
-RHS <- paste("+", paste(c("Yhat0", mand_have), collapse = " + "))
-FE  <- "panel_id + cell_fac_year"
+# Control strings. rhs_feonly = mandates only (no Yhat0), used for C2/C3 compare.
+RHS        <- paste("+", paste(c("Yhat0", mand_have), collapse = " + "))
+rhs_feonly <- paste("+", paste(mand_have, collapse = " + "))
+FE         <- "panel_id + cell_fac_year"
 
 # === STEP 3 — ROUTE A STATIC ATT (per margin) + ROUTE B ===
 cat("=== STEP 3: ROUTE A STATIC ATT ===\n")
@@ -191,7 +273,6 @@ for (yv in outs) {
                           ci_lo = est-1.96*se, ci_hi = est+1.96*se, p = ct["did_term","Pr(>|t|)"], n = m$nobs)
   cat(sprintf("  [A] %-14s did=%+.4f (SE %.4f, p %.3f)\n", yv, est, se, ct["did_term","Pr(>|t|)"]))
 }
-# Route B (imputation): tau already nets the composition baseline.
 mB  <- feols(tau ~ did_term | panel_id + panel_year, data = fy, cluster = ~state)
 ctB <- coeftable(mB); eB <- ctB["did_term","Estimate"]; sB <- ctB["did_term","Std. Error"]
 att[["B_tau"]] <- data.table(outcome = "closure_share (route B: tau)", beta = eB, se = sB,
@@ -217,7 +298,7 @@ DIMS <- intersect(names(ZLAB), names(fy))
 MARG <- intersect(c("closure_share","facility_exit","downsize","consolidate","repl_share"), names(fy))
 hte_bin <- function(yv, z) {
   d <- fy[!is.na(get(z))]
-  if (z == "thin_market" && "gas_station" %in% names(d)) d <- d[gas_station == 1L]   # competition: gas retail only
+  if (z == "thin_market" && "gas_station" %in% names(d)) d <- d[gas_station == 1L]
   d[, did_Z := did_term * get(z)]
   feols(as.formula(sprintf("%s ~ did_term + did_Z %s | %s", yv, RHS, FE)), data = d, cluster = ~state)
 }
@@ -253,7 +334,6 @@ pub_etable(mS, file.path(OUTPUT_TABLES, "T_Facility_SizeHTE_Pub.tex"),
   notes   = "Reform x Post = smallest bin (G1, total < 9k gal); cap_G rows = differential for larger bins (9-20k / 20-30k / 30k+ total gallons). Facility + portfolio-mix x year FE. SE clustered by state.")
 cat(sprintf("  size HTE: %d margins\n", length(mS)))
 
-# Machine-readable size HTE CSV: reuse mS (no refit).
 cat_hte_coefs <- function(model_list, dimension_label) {
   ref_level <- if (dimension_label == "cap_G") CAP_LABS[1] else VREF
   rows <- list()
@@ -308,39 +388,7 @@ if ("vintage" %in% names(fy) && VREF %in% levels(fy$vintage)) {
 
 # === STEP 6 — CAUSAL EVENT STUDIES on closure / downsize / replace ===
 cat("=== STEP 6: EVENT STUDIES (closure / downsize / replace) ===\n")
-fes <- fy[rel_year %between% ES_WIN]
-es_one <- function(yv, ylab, stem) {
-  m  <- feols(as.formula(sprintf("%s ~ i(rel_year, texas_treated, ref = -1L) %s | %s", yv, RHS, FE)),
-              data = fes, cluster = ~state)
-  ct <- as.data.table(coeftable(m), keep.rownames = "term")[grepl("rel_year::", term, fixed = TRUE)]
-  ct[, rel_year := as.integer(tstrsplit(sub("rel_year::", "", term, fixed = TRUE), ":", fixed = TRUE)[[1]])]
-  co <- ct[, .(rel_year, est = Estimate, se = `Std. Error`)]
-  co <- rbind(co, data.table(rel_year = -1L, est = 0, se = 0))
-  co[, `:=`(ci_lo = est-1.96*se, ci_hi = est+1.96*se, margin = yv,
-            period = factor(fifelse(rel_year<0L,"pre",fifelse(rel_year==0L,"event","post")),
-                            levels = c("pre","event","post")))]
-  setorder(co, rel_year)
-  p <- ggplot(co, aes(rel_year, est, colour = period)) +
-    geom_hline(yintercept = 0, colour = "grey55", linetype = "dashed", linewidth = 0.45) +
-    geom_vline(xintercept = -1.5, colour = "grey40", linetype = "dotted", linewidth = 0.5) +
-    geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi), width = 0.25, linewidth = 0.5) +
-    geom_point(size = 2.0, shape = 21, fill = "white", stroke = 1.2) +
-    scale_colour_manual(values = c(pre="#3A6BBF", event="#888888", post="#BF3A3A"),
-                        labels = c(pre="Pre-treatment", event="Event", post="Post-treatment"), name = NULL) +
-    scale_x_continuous(breaks = seq(-14, 22, by = 2)) +
-    labs(x = "Years relative to Dec 22 1998", y = ylab) +
-    theme_classic(base_size = 11, base_family = "Times") +
-    theme(legend.position = "bottom", legend.key.width = unit(1.2, "cm"),
-          axis.line = element_line(colour = "black", linewidth = 0.4),
-          axis.ticks = element_line(colour = "black", linewidth = 0.3),
-          axis.text = element_text(colour = "black"),
-          panel.grid.major.y = element_line(colour = "grey92", linewidth = 0.3),
-          panel.grid.minor = element_blank(), plot.margin = margin(8, 12, 8, 8))
-  save_gg(p, stem, width = 7.6, height = 4.8)
-  pt <- co[rel_year < -1L, .(max_abs_pre = max(abs(est)), max_t = max(abs(est/pmax(se,1e-12))))]
-  cat(sprintf("  %-13s -> %s | PRE max|coef|=%.4f max|t|=%.2f\n", yv, stem, pt$max_abs_pre, pt$max_t))
-  co
-}
+fes <- fy[rel_year %between% ES_WIN]   # kept for .n_reconf_post check below
 .n_reconf_post <- fes[texas_treated == 1L & rel_year >= 0L, sum(reconfigure_up)]
 cat(sprintf("  reconfigure_up treated post events (ES window): %d\n", .n_reconf_post))
 es_all <- rbindlist(list(
@@ -352,4 +400,140 @@ es_all <- rbindlist(list(
     es_one("reconfigure_up", "Effect on facility reconfigure-up",  "Fig_ES_Facility_ReconfigureUp")
 ), use.names = TRUE)
 fwrite(es_all, file.path(OUTPUT_TABLES, "T_Facility_ES_Coefs_byMargin.csv"))
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TICKET 035 — SAMPLE ROBUSTNESS: matched birth-CEM vs ALL incumbents
+# Three configs: C1=matched_full (FE+Yhat0), C2=matched_feonly, C3=allinc_feonly.
+# C1 outputs above are UNCHANGED (reference). Steps 7-11 are additive.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# === STEP 7 — LOAD ALL-INCUMBENTS SAMPLE ===
+cat("=== STEP 7: LOAD ALL-INCUMBENTS SAMPLE ===\n")
+stopifnot("facility_panel.csv not found — pull from server" = file.exists(FAC_PANEL))
+.fp_hdr <- names(fread(FAC_PANEL, nrows = 0L))
+allinc_keep <- intersect(c(
+  "panel_id", "state", "panel_year", "texas_treated",
+  "fac_is_incumbent", "n_tanks_at_reform",
+  "n_tanks_active", "n_closures", "any_closure", "facility_exit",
+  "n_closures_permanent", "n_closures_replacement", "net_tank_change", "capacity_decreased",
+  "make_model_fac", "fac_vintage", "total_capacity_reform",
+  "has_gasoline", "facility_id", MAND,
+  "capacity_change", "total_capacity_dec"
+), .fp_hdr)
+fy_allinc <- fread(FAC_PANEL, select = allinc_keep,
+                   colClasses = list(character = c("panel_id", "state", "facility_id")))
+
+# Incumbent filter: active-at-reform (I1; OR logic per spec)
+fy_allinc <- fy_allinc[fac_is_incumbent == 1L | n_tanks_at_reform > 0L]
+cat(sprintf("  allinc raw: %s facility-years | %s facilities\n",
+            fmt_n(nrow(fy_allinc)), fmt_n(uniqueN(fy_allinc$panel_id))))
+
+fy_allinc <- build_margins(fy_allinc)   # same margins as matched (I1)
+
+# Per-sample cap_G and vintage (I5)
+fy_allinc[, cap_G := factor(cut(total_capacity_reform, CAP_BREAKS, labels = CAP_LABS), levels = CAP_LABS)]
+if ("fac_vintage" %in% names(fy_allinc)) fy_allinc[, vintage := factor(fac_vintage)]
+
+# GIS join for allinc (~93% coverage, same file keyed on panel_id)
+if (HAS_GIS) {
+  gv_ai <- fread(GIS_HTE, select = c("panel_id", "rural_2000", "low_pop_density",
+                 "med_hh_income_2000", "pct_poverty_2000"),
+                 colClasses = list(character = "panel_id"))
+  fy_allinc <- merge(fy_allinc, gv_ai, by = "panel_id", all.x = TRUE)
+  fy_allinc[, rural   := rural_2000]
+  fy_allinc[, low_pop := low_pop_density]
+  cat(sprintf("  allinc GIS: rural %.1f%%\n", 100 * mean(!is.na(fy_allinc$rural))))
+}
+
+mand_allinc       <- intersect(MAND, names(fy_allinc))
+rhs_feonly_allinc <- paste("+", paste(mand_allinc, collapse = " + "))
+
+cat(sprintf("  allinc post-margins: %s facility-years | %s facilities | TX share %.3f\n",
+            fmt_n(nrow(fy_allinc)), fmt_n(uniqueN(fy_allinc$panel_id)), mean(fy_allinc$texas_treated)))
+cat(sprintf("  allinc margins: closure=%.4f exit=%.4f downsize=%.4f\n",
+            mean(fy_allinc$closure_share), mean(fy_allinc$facility_exit, na.rm=TRUE),
+            mean(fy_allinc$downsize)))
+
+# === STEP 8 — COMPARISON ATT (three configs, 7 MARG_ALL margins) ===
+cat("=== STEP 8: COMPARISON ATT ===\n")
+cmp <- rbind(
+  att_table(fy,        RHS           )[, `:=`(config = "matched_full",   sample = "matched", spec = "FE+Yhat0")],
+  att_table(fy,        rhs_feonly    )[, `:=`(config = "matched_feonly", sample = "matched", spec = "FE-only")],
+  att_table(fy_allinc, rhs_feonly_allinc)[, `:=`(config = "allinc_feonly", sample = "allinc", spec = "FE-only")]
+)
+setcolorder(cmp, c("margin", "config", "sample", "spec", "beta", "se", "p", "n"))
+stopifnot(nrow(cmp) == 3L * length(intersect(MARG_ALL, c(names(fy), names(fy_allinc)))))
+stopifnot(all(is.finite(cmp$beta)), all(is.finite(cmp$se)))
+fwrite(cmp, file.path(OUTPUT_TABLES, "T_Facility_SampleCompare_ATT.csv"))
+cat(sprintf("  T_Facility_SampleCompare_ATT.csv: %d rows (%d configs x margins)\n",
+            nrow(cmp), uniqueN(cmp$config)))
+
+# === STEP 9 — SIZE/VINTAGE HTE COMPARE (C2 matched_feonly vs C3 allinc_feonly) ===
+cat("=== STEP 9: HTE COMPARE (size + vintage, C2 vs C3) ===\n")
+SZM_CMP <- intersect(MARG_ALL, intersect(names(fy), names(fy_allinc)))
+
+# Size HTE compare
+sz_c2 <- cat_hte_coefs(
+  setNames(lapply(SZM_CMP, function(yv) cat_hte_param(fy,        yv, "cap_G", CAP_LABS[1], rhs_feonly)),       SZM_CMP),
+  "cap_G")
+sz_c2[, config := "matched_feonly"]
+sz_c3 <- cat_hte_coefs(
+  setNames(lapply(SZM_CMP, function(yv) cat_hte_param(fy_allinc, yv, "cap_G", CAP_LABS[1], rhs_feonly_allinc)), SZM_CMP),
+  "cap_G")
+sz_c3[, config := "allinc_feonly"]
+sz_cmp <- rbind(sz_c2, sz_c3)
+stopifnot(all(is.finite(sz_cmp$estimate)))
+fwrite(sz_cmp, file.path(OUTPUT_TABLES, "T_Facility_SampleCompare_SizeHTE.csv"))
+cat(sprintf("  T_Facility_SampleCompare_SizeHTE.csv: %d rows\n", nrow(sz_cmp)))
+
+# Vintage HTE compare (guarded: need VREF level in both samples)
+has_vint_matched <- "vintage" %in% names(fy)       && VREF %in% levels(fy$vintage)
+has_vint_allinc  <- "vintage" %in% names(fy_allinc) && VREF %in% levels(fy_allinc$vintage)
+if (has_vint_matched && has_vint_allinc) {
+  vt_c2 <- cat_hte_coefs(
+    setNames(lapply(SZM_CMP, function(yv) cat_hte_param(fy,        yv, "vintage", VREF, rhs_feonly)),       SZM_CMP),
+    "vintage")
+  vt_c2[, config := "matched_feonly"]
+  vt_c3 <- cat_hte_coefs(
+    setNames(lapply(SZM_CMP, function(yv) cat_hte_param(fy_allinc, yv, "vintage", VREF, rhs_feonly_allinc)), SZM_CMP),
+    "vintage")
+  vt_c3[, config := "allinc_feonly"]
+  vt_cmp <- rbind(vt_c2, vt_c3)
+  stopifnot(all(is.finite(vt_cmp$estimate)))
+  fwrite(vt_cmp, file.path(OUTPUT_TABLES, "T_Facility_SampleCompare_VintageHTE.csv"))
+  cat(sprintf("  T_Facility_SampleCompare_VintageHTE.csv: %d rows\n", nrow(vt_cmp)))
+} else {
+  cat(sprintf("  vintage compare skipped: matched=%s allinc=%s\n", has_vint_matched, has_vint_allinc))
+}
+
+# === STEP 10 — EVENT STUDIES: all-incumbents sample (FE-only) ===
+cat("=== STEP 10: ALLINC EVENT STUDIES (FE-only) ===\n")
+es_one("closure_share", "Effect on facility closure share",
+       "Fig_ES_Facility_Portfolio_allinc",
+       data = fy_allinc, rhs = rhs_feonly_allinc, fe = FE)
+if ("downsize" %in% names(fy_allinc))
+  es_one("downsize", "Effect on facility downsize",
+         "Fig_ES_Facility_Downsize_allinc",
+         data = fy_allinc, rhs = rhs_feonly_allinc, fe = FE)
+if ("consolidate" %in% names(fy_allinc))
+  es_one("consolidate", "Effect on facility consolidation",
+         "Fig_ES_Facility_Consolidate_allinc",
+         data = fy_allinc, rhs = rhs_feonly_allinc, fe = FE)
+
+# === STEP 11 — CONSOLE SUMMARY ===
+cat("=== STEP 11: CONSOLE SUMMARY ===\n")
+cat(sprintf("%-20s  %-22s  %-22s  %-22s\n",
+            "margin", "matched_full", "matched_feonly", "allinc_feonly"))
+for (mg in MARG_ALL) {
+  r <- cmp[margin == mg]
+  if (nrow(r) == 0L) next
+  fmt_one <- function(cfg) {
+    rr <- r[config == cfg]
+    if (nrow(rr) == 0L) return("      --      ")
+    sprintf("%+.4f (p%.3f)", rr$beta, rr$p)
+  }
+  cat(sprintf("%-20s  %-22s  %-22s  %-22s\n",
+              mg, fmt_one("matched_full"), fmt_one("matched_feonly"), fmt_one("allinc_feonly")))
+}
+
 cat("\n=== 02j COMPLETE ===\n")
