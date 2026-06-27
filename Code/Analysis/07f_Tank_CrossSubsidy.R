@@ -153,6 +153,13 @@ cat("=== STEP 3: TANK PANEL -> fair premium (both wall modes) ===\n")
 p <- fread(data_in("Data", "Analysis", "panel_dt.csv"),
            select = c("tank_panel_id", "panel_id", "state", "tank_age", "mm_wall", "panel_year"))
 p <- p[state %in% FIG_STATES & mm_wall %in% c("Single-Walled", "Double-Walled")]
+# panel_dt is the tank spine; some figure states have no tank-level rows (e.g. NM is
+# facility-level-only). Drop absent states so we don't emit empty per-state figures.
+.absent <- setdiff(FIG_STATES, unique(p$state))
+if (length(.absent))
+  cat(sprintf("  NOTE: no tank-level rows for %s (absent from panel_dt) — excluded\n",
+              paste(.absent, collapse = ", ")))
+FIG_STATES <- intersect(FIG_STATES, unique(p$state))
 p[, has_single_walled := fifelse(mm_wall == "Single-Walled", 1L, 0L)]
 p[, age_bin := as.character(cut(tank_age, AGE_BIN_BREAKS, AGE_BIN_LABELS,
                                 right = FALSE, include.lowest = TRUE))]
