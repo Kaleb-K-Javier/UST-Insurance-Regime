@@ -29,8 +29,10 @@ Rcpp::sourceCpp(cpp_path)
 cat("  pm_matvec.cpp sourced [OK]\n")
 USE_BATCHED_MV <- !nzchar(Sys.getenv("PM08_NO_BATCHED"))   # default ON; set PM08_NO_BATCHED=1 to use old op
 use_pooled     <- nzchar(Sys.getenv("PM08_POOLED"))         # PM08_POOLED=1 -> pooled total exposure + RB interaction (T024q)
+use_psi        <- nzchar(Sys.getenv("PM08_PSI"))            # PM08_PSI=1 -> operating term = psi*R(G,state,era) replaces free phi_1..4 (T029)
 cat(sprintf("  USE_BATCHED_MV: %s\n", USE_BATCHED_MV))
 cat(sprintf("  USE_POOLED:     %s\n", use_pooled))
+cat(sprintf("  USE_PSI:        %s\n", use_psi))
 
 # === SECTION: LOAD INPUTS ===
 cat("\n=== SECTION: LOAD INPUTS ===\n")
@@ -152,13 +154,9 @@ stopifnot(!anyNA(env_tbl$tau[env_tbl$type == "FF"]))
 cat("  env_tbl:\n"); print(env_tbl)
 
 # Parameter names: 9 structural + n_ff alpha_g
-param_struct <- if (use_pooled) {
-  c("phi_1", "phi_2", "phi_3", "phi_4",
-    "gamma_pool", "gamma_RB", "c_rem", "c_inst", "kappa_1")
-} else {
-  c("phi_1", "phi_2", "phi_3", "phi_4",
-    "gamma_p", "gamma_r", "c_rem", "c_inst", "kappa_1")
-}
+op_struct    <- if (use_psi)    "psi"                       else c("phi_1", "phi_2", "phi_3", "phi_4")
+risk_struct  <- if (use_pooled) c("gamma_pool", "gamma_RB") else c("gamma_p", "gamma_r")
+param_struct <- c(op_struct, risk_struct, "c_rem", "c_inst", "kappa_1")
 param_alpha  <- paste0("alpha_", ff_envs)
 param_names  <- c(param_struct, param_alpha)
 n_param      <- length(param_names)
@@ -196,6 +194,25 @@ for (e in seq_len(n_env)) {
   prem_ej[[e]] <- pm
 }
 cat(sprintf("  prem_ej: %d env x [%d x %d] [OK]\n", n_env, C, n_act))
+
+# R_rev_e: per-env MEASURED revenue R(G, state, era), length-4 over G (T029). Only built
+# under use_psi. Mirrors prem_ej's env/era path: RB -> R_rev[,"TX",era_str]; FF (era-pooled,
+# like the single time-avg tau) -> mean over eras. R uses the CURRENT state's G (same index
+# phi_G used; capacity evolution bites through the continuation, not the within-period flow).
+R_rev_e <- vector("list", n_env)
+if (use_psi) {
+  if (!("R_rev" %in% names(lk))) stop("use_psi=TRUE but lk$R_rev absent in PM_Lookups — run M03/M03b first.")
+  R_rev <- lk$R_rev
+  stopifnot(length(dim(R_rev)) == 3L, dim(R_rev)[1] == N_G)
+  r_states <- dimnames(R_rev)[[2]]; r_eras <- dimnames(R_rev)[[3]]
+  stopifnot(all(env_tbl$g %in% r_states), all(env_tbl$era_str[env_tbl$type == "RB"] %in% r_eras))
+  for (e in seq_len(n_env)) {
+    ev <- env_tbl[e]
+    R_rev_e[[e]] <- if (ev$type == "RB") as.numeric(R_rev[, ev$g, ev$era_str]) else as.numeric(rowMeans(R_rev[, ev$g, ]))
+    stopifnot(length(R_rev_e[[e]]) == N_G, all(is.finite(R_rev_e[[e]])))
+  }
+  cat(sprintf("  R_rev_e: %d envs, range [%.4f, %.4f] [OK]\n", n_env, min(unlist(R_rev_e)), max(unlist(R_rev_e))))
+} else cat("  R_rev_e: not built (use_psi=FALSE; legacy phi_G operating term)\n")
 
 # === SECTION A5: P^0 POOLED HOTZ-MILLER CCP (verbatim PM07) ===
 cat("\n=== SECTION A5: P^0 POOLED HM CCP ===\n")
@@ -437,11 +454,18 @@ cat(sprintf("  R_const range: [%.4f, %.4f]\n", min(R_const_mat), max(R_const_mat
 rho_list <- setNames(vector("list", n_param), param_names)
 Pa_X_e   <- P_envs[[e_test]][["X"]]   # C x N_G (exit CCP for env e_test)
 
-# phi_G' (G'=1..4): rho[c, G'] = 1 - P_X[c, G']; zero elsewhere
-for (G_prime in seq_len(N_G)) {
-  rho <- matrix(0.0, nrow = C, ncol = N_G)
-  rho[, G_prime] <- 1.0 - Pa_X_e[, G_prime]
-  rho_list[[paste0("phi_", G_prime)]] <- rho
+# Operating basis: psi -> rho_psi[c,G]=R_e_era[G]*(1-P_X[c,G]); legacy phi_G' -> (1-P_X)[,G']
+if (use_psi) {
+  R_e_era_t <- R_rev_e[[e_test]]
+  rp_psi <- matrix(0.0, nrow = C, ncol = N_G)
+  for (G_prime in seq_len(N_G)) rp_psi[, G_prime] <- R_e_era_t[G_prime] * (1.0 - Pa_X_e[, G_prime])
+  rho_list[["psi"]] <- rp_psi
+} else {
+  for (G_prime in seq_len(N_G)) {
+    rho <- matrix(0.0, nrow = C, ncol = N_G)
+    rho[, G_prime] <- 1.0 - Pa_X_e[, G_prime]
+    rho_list[[paste0("phi_", G_prime)]] <- rho
+  }
 }
 
 # gamma_p/gamma_pool intermediate: rho[c,G] = -sum_j work P_j[c,G] * prem_j[c]
@@ -519,8 +543,12 @@ for (pn in param_names) {
 
 # Test theta: sign-correct values (Q9/Q10; all alphas at 0)
 theta_test <- setNames(rep(0.0, n_param), param_names)
-theta_test["phi_1"] <- 0.5;  theta_test["phi_2"] <-  0.3
-theta_test["phi_3"] <- 0.1;  theta_test["phi_4"] <- -0.1
+if (use_psi) {
+  theta_test["psi"] <- 1.0
+} else {
+  theta_test["phi_1"] <- 0.5;  theta_test["phi_2"] <-  0.3
+  theta_test["phi_3"] <- 0.1;  theta_test["phi_4"] <- -0.1
+}
 if (use_pooled) {
   theta_test["gamma_pool"] <- 0.05;  theta_test["gamma_RB"] <- 0.02
 } else {
@@ -614,7 +642,8 @@ for (pn in param_names) {
     }
     # du_j/dtheta_p at each obs state
     du_dp_i <- numeric(n_obs_states)
-    if      (pn == "phi_1")   du_dp_i[obs_G == 1L] <- 1.0
+    if      (pn == "psi")     du_dp_i <- R_rev_e[[e_test]][obs_G]   # du/dpsi = R_e_era[G] for work+maintain
+    else if (pn == "phi_1")   du_dp_i[obs_G == 1L] <- 1.0
     else if (pn == "phi_2")   du_dp_i[obs_G == 2L] <- 1.0
     else if (pn == "phi_3")   du_dp_i[obs_G == 3L] <- 1.0
     else if (pn == "phi_4")   du_dp_i[obs_G == 4L] <- 1.0
@@ -753,10 +782,17 @@ build_basis_env <- function(e, p_e, V_const_warm = NULL, W_warm = NULL) {
 
   # rho_p
   rho <- setNames(vector("list", n_param), param_names)
-  for (G_prime in seq_len(N_G)) {
-    rp <- matrix(0.0, nrow = C, ncol = N_G)
-    rp[, G_prime] <- 1.0 - Pa_X[, G_prime]
-    rho[[paste0("phi_", G_prime)]] <- rp
+  if (use_psi) {
+    R_e_era <- R_rev_e[[e]]
+    rp_psi <- matrix(0.0, nrow = C, ncol = N_G)
+    for (G_prime in seq_len(N_G)) rp_psi[, G_prime] <- R_e_era[G_prime] * (1.0 - Pa_X[, G_prime])
+    rho[["psi"]] <- rp_psi
+  } else {
+    for (G_prime in seq_len(N_G)) {
+      rp <- matrix(0.0, nrow = C, ncol = N_G)
+      rp[, G_prime] <- 1.0 - Pa_X[, G_prime]
+      rho[[paste0("phi_", G_prime)]] <- rp
+    }
   }
   rho_gp <- matrix(0.0, nrow = C, ncol = N_G)
   for (i in seq_len(n_act)) rho_gp <- rho_gp - p_e[[act_keys[i]]] * prem_ej[[e]][, i]
@@ -838,7 +874,8 @@ build_coeffs_env <- function(e, basis_e) {
         FjWp_i[cbind(obs_c_e, obs_G_e)]
       }
       du_dp_i <- numeric(n_obs_s)
-      if      (pn == "phi_1")    du_dp_i[obs_G_e == 1L] <- 1.0
+      if      (pn == "psi")      du_dp_i <- R_rev_e[[e]][obs_G_e]   # du/dpsi = R_e_era[G] for work+maintain
+      else if (pn == "phi_1")    du_dp_i[obs_G_e == 1L] <- 1.0
       else if (pn == "phi_2")    du_dp_i[obs_G_e == 2L] <- 1.0
       else if (pn == "phi_3")    du_dp_i[obs_G_e == 3L] <- 1.0
       else if (pn == "phi_4")    du_dp_i[obs_G_e == 4L] <- 1.0
@@ -870,7 +907,8 @@ ccp_update_env <- function(e, theta_k, basis_e) {
   D_e   <- ev$D
   rb_e  <- (ev$type == "RB")
   alpha_e <- if (ev$type == "FF") theta_k[[paste0("alpha_", ev$g)]] else 0.0
-  phi_G   <- c(theta_k[["phi_1"]], theta_k[["phi_2"]], theta_k[["phi_3"]], theta_k[["phi_4"]])
+  phi_G   <- if (use_psi) as.numeric(theta_k[["psi"]]) * R_rev_e[[e]] else
+             c(theta_k[["phi_1"]], theta_k[["phi_2"]], theta_k[["phi_3"]], theta_k[["phi_4"]])
 
   V_mat <- matrix(basis_e$V_const, nrow = C, ncol = N_G)
   for (pn in param_names) V_mat <- V_mat + theta_k[[pn]] * matrix(basis_e$W_list[[pn]], nrow = C, ncol = N_G)
@@ -1010,12 +1048,12 @@ cat("  Workers initialised (kernel + C++ loaded) [OK]\n")
 
 .static_vars <- c(
   "beta", "C", "N_G", "N_SIDX", "n_act", "n_act_p1", "n_param",
-  "eps_prob", "use_alpha", "use_pooled", "USE_BATCHED_MV",
+  "eps_prob", "use_alpha", "use_pooled", "use_psi", "USE_BATCHED_MV",
   "kernel", "ss",
   "k_vec", "m_vec", "act_keys", "all_action_keys", "act_row",
   "env_tbl", "param_struct", "param_alpha", "param_names", "ff_envs",
   "imap0", "rmap0", "GaT_list",
-  "prem_ej", "haz_j", "feas_mask", "post_cm",
+  "prem_ej", "haz_j", "R_rev_e", "feas_mask", "post_cm",
   "ord", "A_perm", "uplo_flag",
   "agg_keep",
   "build_basis_env", "build_coeffs_env", "build_minv_p1", "build_cpp_op", "bicgstab_pc"
@@ -1208,6 +1246,7 @@ cat("\n=== SECTION: SAVE FIT ===\n")
 
 sample_label <- paste0(
   if (use_pooled) "pooled" else "two_gamma",
+  if (use_psi)    "_psiR"  else "",
   if (use_alpha)  "_FE_on" else "_FE_off"
 )
 fit_path <- here::here("Output", "Estimation_Results",
@@ -1222,6 +1261,7 @@ fit_obj <- list(
   trace_dt    = trace_dt,
   param_names = param_names,
   use_pooled  = use_pooled,
+  use_psi     = use_psi,
   beta        = beta,
   env_keys    = env_tbl$env_key,
   env_types   = env_tbl$type,
