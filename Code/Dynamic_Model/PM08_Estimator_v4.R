@@ -924,8 +924,8 @@ ccp_update_env <- function(e, theta_k, basis_e) {
 }
 
 # --- NPL outer loop ---
-tol_theta    <- 1e-5
-tol_P        <- 1e-5
+tol_theta    <- if (nzchar(Sys.getenv("PM08_TOL_THETA"))) as.numeric(Sys.getenv("PM08_TOL_THETA")) else 1e-5  # PM08_TOL_THETA overrides (tight run: 1e-7)
+tol_P        <- if (nzchar(Sys.getenv("PM08_TOL_P")))     as.numeric(Sys.getenv("PM08_TOL_P"))     else 1e-5  # PM08_TOL_P overrides (tight run: 1e-7)
 max_npl_iter <- if (nzchar(Sys.getenv("PM08_MAXITER"))) as.integer(Sys.getenv("PM08_MAXITER")) else if (.fast_test) 3L else 10L  # PM08_MAXITER overrides (e.g. =1 to time one full pass)
 
 lower_bounds <- setNames(rep(-50.0, n_param), param_names)
