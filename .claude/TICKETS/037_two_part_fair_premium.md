@@ -25,6 +25,50 @@ grid hack), which (a) counted only a site's first leak ever and (b) was site-lev
 to per-tank. The new λ counts EVERY leak as a rate per tank-year over ALL facility-years.
 
 ═══════════════════════════════════════════════════
+CROSS-VALIDATION & NO LEAKAGE — APPLIES TO ALL PARTS (non-negotiable)
+═══════════════════════════════════════════════════
+Every fitted value that feeds a cell average, a figure, or a downstream estimate MUST be an
+OUT-OF-SAMPLE (cross-validated) prediction. NO in-sample `predict(fit, newx=X)` for any value
+that gets used. Mechanics (elastic net analogue of random-forest OOB = CV "prevalidation",
+Tibshirani & Efron 2002):
+
+1. GROUPED CV FOLDS BY FACILITY. Assign foldid at the FACILITY (panel_id) level — ALL of a
+   facility's rows go in the SAME fold. (A facility spans up to 27 years; random row-folds
+   would leak its other years into its own prediction.) For severity, group by facility too
+   (a facility may have >1 claim). K = 10 folds, deterministic seed.
+2. PREVALIDATED OOS PREDICTIONS. Fit with `cv.glmnet(..., foldid=fold, keep=TRUE)`; take the
+   prevalidated predictions `fit.preval[, idx(lambda.min)]` — each row predicted from the fold
+   it was HELD OUT of. These (not the in-sample fit) are the per-unit fitted values.
+   - Poisson with offset: fit.preval is on the LINK scale incl. offset; OOS expected count =
+     exp(preval_link); OOS PER-TANK rate mu_i = exp(preval_link_i) / active_tanks_i. (Verify
+     glmnet's offset handling on a tiny check before trusting it.)
+   - Severity Poisson (no offset): OOS expected cost = exp(preval_link).
+3. CELL SCHEDULES are built by averaging the OOS (prevalidated) per-unit predictions over the
+   estimation sample — NOT a synthetic grid, NOT in-sample fits. Tanks in panel_dt then inherit
+   their cell's OOS-averaged value (leakage-free at the cell level).
+4. ALPHA + LAMBDA TUNING. Share ONE foldid vector across all alpha candidates (fair comparison);
+   pick (alpha, lambda.min) by CV deviance; use that model's fit.preval for the OOS values.
+   GOLD-STANDARD option (note, implement if cheap): nested CV — outer facility-folds for OOS,
+   inner folds for (alpha,lambda) — removes the mild alpha-selection optimism. At minimum,
+   report whether nested vs single-CV changes the cell schedule materially.
+5. BOOTSTRAP (for CIs) is SEPARATE from OOS point estimates and must ALSO be cluster-resampled
+   by FACILITY (resample facilities with replacement, carry all their rows), refit at fixed
+   (alpha,lambda), re-predict, re-average -> percentile CIs. Never resample facility-years
+   independently (breaks the panel structure).
+6. lambda.min for point predictions; report lambda.1se as a robustness line.
+7. fit.preval IS ON THE LINK SCALE (confirmed: glmnet vignette passes fit.preval + family to
+   assess.glmnet). Poisson: OOS expected count = exp(fit.preval[,idx]); per-tank rate =
+   exp(fit.preval[,idx]) / active_tanks (verify the offset is inside the link with a 3-row check).
+   Binomial-style families: inverse-logit. Severity Poisson: exp(fit.preval).
+8. HONEST FIT METRICS FOR THE PAPER: get cross-validated goodness-of-fit straight from the
+   prevalidated array — assess.glmnet(fit.preval, newy=Y, family=...) -> OOS deviance / mse /
+   (pseudo-)R^2 (severity) and OOS deviance (frequency). These are the predictability numbers to
+   report — no in-sample inflation. (Feeds the risk-predictability-stats need for the intro.)
+
+Note on terminology: we use penalized regression, so "OOB" = the CV/prevalidation analogue;
+there is no random forest here. If a tree model is ever used, use its true OOB predictions.
+
+═══════════════════════════════════════════════════
 PART 1 — FREQUENCY: 01r_Leak_Rate.R  (NEW; archive 01p)
 ═══════════════════════════════════════════════════
 Move Code/Analysis/Descrptive Facts/01p_Pricing_Hazard.R ->
@@ -109,6 +153,17 @@ PRINT: national fair-premium schedule by age×wall ($/tank-yr) + blended mean.
 ═══════════════════════════════════════════════════
 ACCEPTANCE CRITERIA
 ═══════════════════════════════════════════════════
+CV / NO-LEAKAGE (BOTH 01r and 01q):
+- [ ] foldid assigned at FACILITY (panel_id) level — all of a facility's rows share a fold
+      (grouped CV); deterministic seed; K=10. (NOT random per-row folds.)
+- [ ] alpha tuned by re-calling cv.glmnet across alpha with the SAME foldid (per glmnet docs).
+- [ ] cv.glmnet called with keep=TRUE; cell schedules + reported fitted values use the
+      prevalidated fit.preval (OOS), NOT in-sample predict(fit, newx=X).
+- [ ] fit.preval handled on the link scale (exp() for Poisson; /active_tanks for the rate);
+      a 3-row offset sanity check is printed.
+- [ ] OOS goodness-of-fit reported via assess.glmnet(fit.preval, ...) (CV deviance etc.).
+- [ ] Bootstrap CIs cluster-resample by facility (not by facility-year).
+
 01r (frequency):
 - [ ] glmnet family="poisson" with offset=log(active_tanks) on outcome n_leaks; NO weights; NO Platt.
 - [ ] Sample is ALL detection-era (1990–2016) facility-years (NO has_previous_leak filter); active_tanks>0.
