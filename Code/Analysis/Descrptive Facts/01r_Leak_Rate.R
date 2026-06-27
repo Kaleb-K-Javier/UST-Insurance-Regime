@@ -161,15 +161,16 @@ fit_full <- glmnet(X, y, family="poisson", offset=off, alpha=best_alpha, lambda=
 # keys for re-aggregation inside workers
 keyf <- d[, paste(state, age_bin, has_single_walled, sep="|")]; keyn <- d[, paste(age_bin, has_single_walled, sep="|")]
 keyd <- d[, paste(wall, age8, sep="|")]
+act  <- d$active_tanks            # export the vector, not the whole table
 clusterEvalQ(cl, { suppressPackageStartupMessages({library(glmnet); library(Matrix)}) })
 clusterExport(cl, c("X","y","off","fac_rows","fac_ids","best_alpha","best_lambda",
-                    "d","keyf","keyn","keyd","wmean"), envir=environment())
+                    "act","keyf","keyn","keyd","wmean"), envir=environment())
 boot1 <- function(b) {
   set.seed(b)
   idb <- unlist(fac_rows[sample(fac_ids, length(fac_ids), replace=TRUE)], use.names=FALSE)
   fb  <- glmnet(X[idb,], y[idb], family="poisson", offset=off[idb], alpha=best_alpha, lambda=best_lambda)
   mub <- as.numeric(predict(fb, newx=X[idb,], newoffset=rep(0, length(idb)), s=best_lambda, type="response"))
-  w   <- d$active_tanks[idb]
+  w   <- act[idb]
   agg <- function(key) { kk <- key[idb]; tapply(seq_along(kk), kk, function(i) wmean(mub[i], w[i])) }
   list(fig=agg(keyf), natl=agg(keyn), dcm=agg(keyd))
 }
