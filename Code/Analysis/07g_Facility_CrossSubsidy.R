@@ -137,7 +137,7 @@ cat(sprintf("Facility-years: %s | facilities: %s | states %s\n",
             paste(sort(unique(fac$state)), collapse=",")))
 cat("Median facility fair / fee / n_tanks by state:\n")
 print(fac[, .(med_fair = round(median(fair)), med_fee = round(median(fee)),
-              med_tanks = median(n_tanks)), by = state][order(state)])
+              med_tanks = as.double(median(n_tanks))), by = state][order(state)])
 
 # =============================================================================
 cat("=== STEP 5: UNIFORM PREMIUM tau + SUMMARY ===\n")
