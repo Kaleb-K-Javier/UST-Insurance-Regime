@@ -57,7 +57,7 @@ print(cols[!grepl("^ISSUER_NAME_.", column_name, ignore.case = TRUE), column_nam
 
 # ---- CONFIG: hard-set any column if the auto-pick below is wrong -------------
 COL <- list(facility = NA_character_, year = NA_character_, issuer = NA_character_,
-            occ = NA_character_, agg = NA_character_, begin = NA_character_)
+            occ = "max_COVER_OCC", agg = "max_COVER_AGG", begin = NA_character_)  # found in sec.1
 cn   <- cols$column_name
 pick <- function(rx) { h <- cn[grepl(rx, cn, ignore.case = TRUE)]; if (length(h)) h[1] else NA_character_ }
 if (is.na(COL$facility)) COL$facility <- pick("^facility_?id|fac_?id|facility_?number")
@@ -156,10 +156,14 @@ flows <- dbGetQuery(con, "
   GROUP BY from_c, to_c ORDER BY n DESC LIMIT 30")
 print(flows)
 
-# ---- E. coverage-limit distribution -----------------------------------------
-cat("\n=== E. per-occurrence coverage-limit distribution (insured; empty => find col in sec.1) ===\n")
+# ---- E. coverage-limit distribution + modal limit BY YEAR -------------------
+cat("\n=== E. per-occurrence coverage-limit: top values (pooled, insured) ===\n")
 print(dbGetQuery(con, "
   SELECT occ_limit, COUNT(*) n, ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) pct
-  FROM ins WHERE occ_limit IS NOT NULL GROUP BY occ_limit ORDER BY n DESC LIMIT 20"))
+  FROM ins WHERE occ_limit IS NOT NULL GROUP BY occ_limit ORDER BY n DESC LIMIT 15"))
+cat("\n--- modal per-occurrence limit BY YEAR (does it drift up over time?) ---\n")
+print(dbGetQuery(con, "
+  SELECT year, mode(occ_limit) AS modal_occ, COUNT(*) n_with_limit
+  FROM ins WHERE occ_limit IS NOT NULL GROUP BY year ORDER BY year"))
 
 cat(sprintf("\n=== done in %.1f min ===\n", as.numeric(difftime(Sys.time(), t0, units = "mins"))))
