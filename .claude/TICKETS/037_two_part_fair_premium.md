@@ -32,10 +32,15 @@ OUT-OF-SAMPLE (cross-validated) prediction. NO in-sample `predict(fit, newx=X)` 
 that gets used. Mechanics (elastic net analogue of random-forest OOB = CV "prevalidation",
 Tibshirani & Efron 2002):
 
-1. GROUPED CV FOLDS BY FACILITY. Assign foldid at the FACILITY (panel_id) level — ALL of a
-   facility's rows go in the SAME fold. (A facility spans up to 27 years; random row-folds
-   would leak its other years into its own prediction.) For severity, group by facility too
-   (a facility may have >1 claim). K = 10 folds, deterministic seed.
+1. GROUPED CV FOLDS BY FACILITY, STRATIFIED BY STATE. Assign foldid at the FACILITY
+   (panel_id) level — ALL of a facility's rows share a fold (a facility spans up to 27 years;
+   random row-folds would leak its other years into its own prediction). AND stratify by
+   state: split EACH state's facilities across all K folds, so every state appears in every
+   training fold. (Otherwise a fold could hold all of a small state's facilities -> that
+   state's fixed effect is unestimable when the fold is held out -> garbage OOS predictions
+   for it. Critical for small states.) Implementation: within each state, randomly assign its
+   facilities to folds 1..K; combine. For severity, same (group by facility, stratify by state).
+   K = 10, deterministic seed.
 2. PREVALIDATED OOS PREDICTIONS. Fit with `cv.glmnet(..., foldid=fold, keep=TRUE)`; take the
    prevalidated predictions `fit.preval[, idx(lambda.min)]` — each row predicted from the fold
    it was HELD OUT of. These (not the in-sample fit) are the per-unit fitted values.
@@ -67,6 +72,57 @@ Tibshirani & Efron 2002):
 
 Note on terminology: we use penalized regression, so "OOB" = the CV/prevalidation analogue;
 there is no random forest here. If a tree model is ever used, use its true OOB predictions.
+
+═══════════════════════════════════════════════════
+PERFORMANCE & PARALLELISM (Windows server)
+═══════════════════════════════════════════════════
+The frequency model is ~5.5M rows; the bootstrap is B≥200 refits. Speed it up:
+1. SPARSE design matrix: build X with Matrix::sparse.model.matrix (the age/wall/state/year
+   dummies are mostly zeros). glmnet is much faster + far less memory on sparse X. This is the
+   single biggest win for the 5.5M-row frequency fit and makes parallel folds memory-feasible.
+2. PARALLEL on Windows = PSOCK, not fork. The glmnet docs' doMC/registerDoMC example is
+   Unix-only. On the Windows server use:
+     library(doParallel); cl <- makeCluster(K); registerDoParallel(cl)
+     cv.glmnet(..., parallel = TRUE)   # parallelizes the K folds
+     ... ; stopCluster(cl)
+   Knob NWORKERS (default min(K, detectCores()-1)); watch memory (each PSOCK worker copies X —
+   sparse X keeps this affordable; cap workers if RAM-bound, server has 64GB).
+3. PARALLEL BOOTSTRAP (the big win): distribute the B refits across workers (parLapply/foreach);
+   each worker resamples facilities, refits glmnet at FIXED (alpha,lambda) — one fit, not a path
+   — predicts the cells, returns the draw. clusterExport the static design once.
+4. Single fit at fixed (alpha,lambda) is cheap; the path-CV is the cost — keep alpha grid modest
+   ({0,.25,.5,.75,1}) and let lambda default.
+
+═══════════════════════════════════════════════════
+SAVE TRAINED MODELS (reload without refitting)
+═══════════════════════════════════════════════════
+Researcher requirement: after fitting ON THE SERVER, save everything needed to recompute cell
+schedules / fitted values / figures WITHOUT re-running the fits. Each *_model.rds must contain:
+  - the cv.glmnet object INCLUDING fit.preval + foldid (so OOS predictions are reproducible),
+  - the final glmnet fit at (alpha,lambda),
+  - best_alpha, best_lambda, the feature formula + colnames(X), factor levels,
+  - the bootstrap draws matrix (per-cell B columns) so CIs need no refit,
+  - assess.glmnet OOS metrics, sample sizes, seed, timestamp.
+Files: analysis_leak_rate_model.rds, analysis_severity_model.rds, and a combined
+  analysis_fair_premium_models.rds (or keep separate). Saved to Data/Analysis on the server;
+  the researcher pulls them back to recompute estimates locally.
+
+═══════════════════════════════════════════════════
+USES / PAPER ALIGNMENT (02_JMP_Draft.qmd — what these feed)
+═══════════════════════════════════════════════════
+- §4.1 "Observable risk": fig-cell-risk (SW-vs-DW leak rate by age), fig-lift, fig-calibration,
+  fig-cell-gof, ROC/PR AUC — ALL from the frequency model's OOS predictions + assess.glmnet.
+  "Risk is predictable" + "SW rises with age, DW ~flat" come from here. NOTE the new model
+  REVISES current text: "first-release probability / pre-reform / logistic" -> "annual leak
+  rate per tank-year / detection-era / count-offset"; and re-check the "DW flat" claim
+  (production showed both rise, SW higher). Decision flagged for researcher (one all-years model
+  for predictability too, vs the paper's current pre-reform-only).
+- §4.1 cross-subsidy: fair premium = freq × severity. *** Current text says cleanup cost is
+  flat in age/wall so uses pooled severity — the severity model CONTRADICTS this (SW ~1.48x DW);
+  fair-premium gradient now comes from BOTH. All cross-subsidy numbers update. ***
+- §4.2 "Pricing observable risk": fig-actuarial-alignment (empirical risk vs TX premium) = the
+  CURRENT comparison; ADD the fair-premium(λ·S)-vs-real-TX-premium version (researcher wants both).
+- §5 DCM: reuses dcm_cell_hazard_pricing.csv (new λ) + dcm_cell_severity_pricing.csv.
 
 ═══════════════════════════════════════════════════
 PART 1 — FREQUENCY: 01r_Leak_Rate.R  (NEW; archive 01p)

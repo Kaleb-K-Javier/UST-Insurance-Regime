@@ -108,6 +108,35 @@ Every predicted number carries a confidence interval, from resampling the data (
 
 ---
 
+## What this CHANGES in the current draft (02_JMP_Draft.qmd) — editor action list
+
+The new two-part model touches §4.1–4.2 and §5. Specific edits:
+
+- **§4.1 hazard wording + numbers.** Current text says "annual **first-release** probability,"
+  fit "on **pre-reform** years," via "penalized **logistic** regression," with double-walled
+  "**flat**." The rebuilt model is an **annual leak rate per tank-year** (counts every leak),
+  fit on the **detection era (1990–2016)**, a **count model with tank-count exposure**.
+  → Update the method sentence; refill the `[X]` rate numbers in `fig-cell-risk`; and
+  **re-check "double-walled stays flat"** — the rebuilt rates show both walls rising with age
+  with single-walled higher, not DW flat. (Open decision: use this one all-years model for the
+  §4.1 predictability story too, vs the current pre-reform-only.)
+- **§4.1 severity claim — must change.** Current: *"cleanup cost barely depends on a tank's age
+  or wall type, so I use a single pooled cleanup cost."* The severity model shows **single-walled
+  cleanups cost ~1.48× double-walled** (no second wall → bigger spill). So the fair premium now
+  varies through **both** how often a tank leaks **and** what its cleanup costs. Rewrite the
+  `[^csmethod]` footnote and the sentence; the cross-subsidy dollar figures (fees, transfers,
+  shares) all refresh.
+- **§4.1 predictability numbers** (lift, calibration, ROC/PR AUC, cell-GoF) come from
+  `assess.glmnet` on the out-of-sample (prevalidated) predictions — honest, leave-it-out values.
+- **§4.2 add a figure.** Keep `fig-actuarial-alignment` (empirical risk vs Texas premium); ADD a
+  **fair-premium-vs-actual-Texas-premium** panel (our λ·S estimate against what TX insurers
+  charge). Both wanted.
+- **§5 DCM** consumes the rebuilt cell schedules.
+
+Everything is out-of-sample / no-leakage by construction (grouped cross-validation by facility,
+stratified by state), which matches the draft's existing "scored by a model that left it out"
+claim.
+
 ## The one-paragraph version (for an intro/abstract)
 
 We price each tank at its actuarially fair premium — the break-even charge equal to its
