@@ -1,0 +1,155 @@
+# TICKET 037 — Two-part fair premium (leak rate × cleanup cost), first-principles rebuild
+# Created: 2026-06-27
+# Status: AWAITING_IMPLEMENTATION
+# Attempt: 0
+# Type: ESTIMATORS (frequency rebuild + severity align + combine) + per-unit fitted
+#       outputs with CIs. No DCM/Bellman/C++. Supersedes the rushed 01p first-release model.
+
+═══════════════════════════════════════════════════
+FIRST-PRINCIPLES STATEMENT (what we are computing)
+═══════════════════════════════════════════════════
+Fair (break-even) premium for a tank-year = expected fund cost it generates:
+
+      fair premium per tank-year  =  (leaks per tank-year)  ×  ($ per cleanup)
+                                  =        λ(age,wall)        ×     S(age,wall)
+
+- Frequency λ: leaks per TANK-year, by age×wall. Map site→tank by EXPOSURE: a site with
+  N tanks gets N independent shots at a leak, so per-tank rate = leaks ÷ tank-years.
+  Single-tank sites identify it exactly; multi-tank sites contribute under equal-shots.
+- Severity S: average $ per CLEANUP, by age×wall. No tank mapping needed — a cleanup is
+  one event with one bill; we attach it to the age×wall of the site where it occurred.
+- Units cancel: (leaks / tank-yr) × ($ / leak) = $ / tank-yr. Facility = Σ over its tanks.
+
+This REPLACES the prior λ (facility FIRST-release logistic, never-leaked set, single-tank
+grid hack), which (a) counted only a site's first leak ever and (b) was site-level patched
+to per-tank. The new λ counts EVERY leak as a rate per tank-year over ALL facility-years.
+
+═══════════════════════════════════════════════════
+PART 1 — FREQUENCY: 01r_Leak_Rate.R  (NEW; archive 01p)
+═══════════════════════════════════════════════════
+Move Code/Analysis/Descrptive Facts/01p_Pricing_Hazard.R ->
+  Code/Analysis/Descrptive Facts/Archive/01p_Pricing_Hazard_legacy_firstrelease.R (retired-code rule).
+Write Code/Analysis/Descrptive Facts/01r_Leak_Rate.R.
+
+DATA: Data/Processed/facility_leak_behavior_annual.csv.
+SAMPLE: panel_year ∈ [1990, 2016] (detection era); active_tanks > 0; make-model
+  (fac_wall != "Unknown-Wall" & fac_fuel != "Unknown-Fuel" & non-NA age); non-NA
+  active_tanks, total_capacity, n_leaks; state ∈ ALL_STUDY_STATES.
+  *** NO has_previous_leak filter *** (recurrent: every facility-year, every leak counts).
+
+MODEL (Poisson elastic net / PPML — count with exposure offset):
+  outcome  Y = n_leaks  (facility-year leak count; ≈0/1, rare 2+)
+  offset   = log(active_tanks)                       # exposure -> per-tank RATE
+  features FEAT = ~ (age_bin + has_single_walled + active_tanks + total_capacity
+                     + has_gasoline_year + has_diesel_year)^2 + state_f + year_f
+  glmnet family="poisson", offset=log(active_tanks). α∈{0,.25,.5,.75,1} tuned by CV on a
+  subsample; single fit on full data at best (α,λ). predict type="response" with offset.
+  age_bin: 9 bins (use panel age_bins if labels match AGE_BIN_LABELS, else from avg_tank_age).
+
+PER-TANK RATE = exp(features·β)  (the offset makes the linear predictor a per-tank log-rate).
+  Fitted per-tank rate for facility-year i: mu_i = predict(..., newoffset=0, type="response").
+
+CELL SCHEDULE — *** fitted-values-then-average *** (NOT a synthetic reference grid):
+  For each cell c=(state, age_bin, wall): lambda(c) = mean over facility-years in c of mu_i.
+  NATIONAL row per (age_bin, wall) = exposure-weighted mean of mu_i over ALL states' fac-yrs
+  (i.e. tank-year-weighted: weight = active_tanks).
+  CI: cluster bootstrap by FACILITY (resample facilities, refit at fixed α,λ, re-predict,
+  re-average) B≥200 -> lambda_lo, lambda_hi (2.5/97.5).
+
+DIAGNOSTICS (print):
+  - raw per-tank rate = sum(n_leaks)/sum(active_tanks) on the sample (expect ~0.0045);
+    compare to mean(mu_i). They should be close (calibration check).
+  - single-tank-only cell rates vs pooled cell rates (the equal-shots assumption check);
+    print correlation / a few cells side by side.
+  - national lambda by age×wall (per 1000 tank-yr): expect rising-with-age, SW≥DW.
+
+OUTPUTS (Data/Analysis/):
+  dcm_cell_hazard_pricing.csv   OVERWRITES; cols EXACTLY
+        state, age_bin, has_single_walled, lambda, lambda_lo, lambda_hi
+        rows = (n_states + 1[NATIONAL]) × 9 age × 2 wall. lambda ∈ (0, 0.5).
+  analysis_leak_rate_predictions.csv   per facility-year fitted rate; cols EXACTLY
+        panel_id, panel_year, state, has_single_walled, age_bin, active_tanks, mu_tank
+        (mu_tank = per-tank-year rate). (no CI per row needed; CI lives at cell level.)
+  analysis_leak_rate_model.rds   fit + feature_cols + best(α,λ) + metadata.
+SMOKE knob LEAKRATE_SMOKE=1 subsamples CV + cuts bootstrap B (schema unchanged).
+
+═══════════════════════════════════════════════════
+PART 2 — SEVERITY: 01q_Severity_Model.R  (EXISTS; one alignment edit)
+═══════════════════════════════════════════════════
+Keep the PPML cost model. CHANGE only the NATIONAL aggregation to match Part 1's
+fitted-values-then-average convention:
+  NATIONAL sev_hat per (age_bin, wall) = CLAIM-weighted average of fitted Ŝ over ALL claims
+  in that (age_bin, wall) cell (pool states), NOT a simple mean of per-state cell predictions.
+  Bootstrap CI recomputed on that claim-pooled average. Per-state rows unchanged.
+ADD: analysis_severity_predictions.csv — per claim fitted; cols EXACTLY
+  state, age_bin, has_single_walled, sev_hat_claim.
+Output dcm_cell_severity_pricing.csv cols unchanged (state, age_bin, has_single_walled,
+  sev_hat, sev_lo, sev_hi).
+
+═══════════════════════════════════════════════════
+PART 3 — COMBINE: 08_Fair_Premium.R  (NEW)
+═══════════════════════════════════════════════════
+Join the two cell schedules and emit per-cell and per-unit fair premiums WITH CIs.
+Frequency sample (facility-years) and severity sample (claims) are INDEPENDENT, so combine
+by joint draw: fair = λ · S; CI via independent product bootstrap OR delta method
+  Var(λS) = S²·Var(λ) + λ²·Var(S)  ->  fair_lo/hi.
+(Use the cell CIs already produced; treat lambda and S as independent.)
+
+OUTPUTS (Data/Analysis/):
+  dcm_cell_fair_premium.csv   cols EXACTLY
+        state, age_bin, has_single_walled, lambda, sev_hat, fair, fair_lo, fair_hi
+        ((n_states+1) × 18 rows; fair = lambda·sev_hat in $/tank-yr).
+  analysis_fair_premium_tank.csv     per tank-year (join panel_dt tanks to NATIONAL cells):
+        tank_panel_id, panel_id, state, panel_year, age_bin, has_single_walled,
+        lambda, sev_hat, fair, fair_lo, fair_hi
+  analysis_fair_premium_facility.csv per facility-year (sum tanks within panel_id×year):
+        panel_id, state, panel_year, n_tanks, fair, fair_lo, fair_hi
+PRINT: national fair-premium schedule by age×wall ($/tank-yr) + blended mean.
+
+═══════════════════════════════════════════════════
+ACCEPTANCE CRITERIA
+═══════════════════════════════════════════════════
+01r (frequency):
+- [ ] glmnet family="poisson" with offset=log(active_tanks) on outcome n_leaks; NO weights; NO Platt.
+- [ ] Sample is ALL detection-era (1990–2016) facility-years (NO has_previous_leak filter); active_tanks>0.
+- [ ] FEAT formula as specified (age×wall interaction present; year_f present).
+- [ ] Cell lambda = fitted-values-then-average (mean of per-fac-yr mu over the cell), NOT a
+      single synthetic-grid prediction; NATIONAL = tank-year(exposure)-weighted.
+- [ ] Cluster bootstrap by facility -> lambda_lo/hi; B≥200 (smoke may reduce).
+- [ ] Calibration print: mean(mu_i) ≈ sum(n_leaks)/sum(active_tanks) (raw ~0.0045); within ~15%.
+- [ ] Single-tank-vs-pooled cell check printed.
+- [ ] dcm_cell_hazard_pricing.csv has the 6 cols incl lambda_lo/hi; (n_states+1)*18 rows.
+- [ ] analysis_leak_rate_predictions.csv cols exact. 01p moved to Archive/.
+- [ ] Hard errors only (no tryCatch->NULL/try silent); logging block; SMOKE knob schema-safe.
+01q (severity align):
+- [ ] NATIONAL sev_hat = claim-pooled fitted average (not simple per-state mean); per-state rows unchanged.
+- [ ] analysis_severity_predictions.csv written with the 4 cols.
+08 (combine):
+- [ ] fair = lambda·sev_hat per cell; fair_lo/hi from independent combination of the two cell CIs.
+- [ ] dcm_cell_fair_premium.csv (8 cols), analysis_fair_premium_tank.csv, analysis_fair_premium_facility.csv
+      written with EXACT columns above; facility fair = sum of its tanks' fair.
+- [ ] National blended fair-premium printed (~$1–6k/tank-yr range expected; sanity, not a hard bound).
+
+═══════════════════════════════════════════════════
+KNOWN LIMITATIONS (note; do not block)
+═══════════════════════════════════════════════════
+- Site→tank uses equal-shots-per-tank (exact for single-tank sites; assumption for multi-tank).
+  We report the single-tank-vs-pooled check as evidence it holds.
+- λ uses facility-aggregate age/wall (releases not attributable to a specific tank); single-tank
+  sites carry the clean signal.
+- Severity uncapped (fund coverage limit not yet applied) — overstates fund liability; parked.
+- Detection still adjusted by calendar year only (wall-specific detection device data sparse; parked).
+- Severity sample = per-incident states CO/NM/PA/TN (LA site-aggregated, UT tiny); figure
+  states borrow NATIONAL severity for LA.
+
+═══════════════════════════════════════════════════
+DOWNSTREAM (separate follow-on tickets, not this one)
+═══════════════════════════════════════════════════
+- Rewire 07f/07g to read analysis_fair_premium_tank/_facility (fair + CI) instead of λ×flat-S̄.
+- 06 TX fair-vs-real premium uses dcm_cell_fair_premium.csv (TX rows).
+- DCM consumes dcm_cell_hazard_pricing.csv (new λ) + dcm_cell_severity_pricing.csv.
+
+═══════════════════════════════════════════════════
+ATTEMPT LOG
+═══════════════════════════════════════════════════
+[blank until first attempt]
