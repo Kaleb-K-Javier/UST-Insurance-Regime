@@ -166,7 +166,10 @@ cat(sprintf("First-leak events: %s | event rate: %.5f\n",
 cat("=== STEP 2: DESIGN MATRIX + CLASS WEIGHTS ===\n")
 # =============================================================================
 Y <- cv$event_first_leak
-W <- ifelse(Y == 1L, sum(Y == 0L) / sum(Y == 1L), 1)   # inverse-frequency weights
+# No class-imbalance reweighting: a logistic elastic net is well-calibrated on the
+# raw rare outcome (the intercept absorbs the base rate). 01n's inverse-frequency
+# weights + Platt rescaling were a GRF device; here they put glmnet on a balanced
+# scale that the Platt slope could not map back (slope -> 0 -> flat predictions).
 X <- model.matrix(FEAT_FORMULA, data = as.data.frame(cv))[, -1L]
 cat(sprintf("Design matrix: %s rows x %d cols\n", format(nrow(X), big.mark=","), ncol(X)))
 
@@ -186,36 +189,31 @@ cat(sprintf("Tuning alpha over %d values, %d-fold CV, %d threads...\n",
 alpha_res <- lapply(ELNET_ALPHA, function(a) {
   set.seed(20260626L)
   f <- cv.glmnet(X[tune_idx,], Y[tune_idx], family="binomial", alpha=a,
-                 weights=W[tune_idx], nfolds=ELNET_FOLDS, type.measure="deviance",
-                 parallel=TRUE)
+                 nfolds=ELNET_FOLDS, type.measure="deviance", parallel=TRUE)
   cat(sprintf("  alpha=%.2f  lambda.min=%.6f  dev=%.5f\n", a, f$lambda.min, min(f$cvm)))
   list(alpha=a, dev=min(f$cvm))
 })
 best_alpha <- ELNET_ALPHA[which.min(sapply(alpha_res, `[[`, "dev"))]
 cat(sprintf(">> best alpha: %.2f\n", best_alpha))
 
-cat("Full-data CV at best alpha for OOS predictions (sequential)...\n")
+cat("Full-data CV at best alpha (sequential)...\n")
 set.seed(20260626L)
-cvfit <- cv.glmnet(X, Y, family="binomial", alpha=best_alpha, weights=W,
-                   nfolds=ELNET_FOLDS, type.measure="deviance", keep=TRUE, parallel=FALSE)
+cvfit <- cv.glmnet(X, Y, family="binomial", alpha=best_alpha,
+                   nfolds=ELNET_FOLDS, type.measure="deviance", parallel=FALSE)
 best_lambda <- cvfit$lambda.min
-lp_oos  <- cvfit$fit.preval[, which.min(abs(cvfit$lambda - best_lambda))]
 
-# Platt scaling: unweighted logistic of labels on OOS linear predictor (restores
-# the true probability scale that inverse-frequency weights shifted toward 0.5).
-platt <- glm(Y ~ lp_oos, family = binomial)
-cat(sprintf("lambda.min=%.6f | OOS median pred (post-Platt): %.5f (rate %.5f)\n",
-            best_lambda, median(predict(platt, type="response")), event_rate))
-
-# refit on full data at best (alpha, lambda) for the prediction engine
+# refit on full data at best (alpha, lambda). Unweighted binomial -> predictions
+# are calibrated probabilities directly; no Platt step.
 set.seed(20260626L)
-fit <- glmnet(X, Y, family="binomial", alpha=best_alpha, weights=W, lambda=best_lambda)
+fit <- glmnet(X, Y, family="binomial", alpha=best_alpha, lambda=best_lambda)
+cat(sprintf("lambda.min=%.6f | in-sample median pred: %.5f (rate %.5f)\n",
+            best_lambda,
+            median(as.numeric(predict(fit, newx=X, type="response"))), event_rate))
 
-# helper: covariate frame -> calibrated per-tank hazard
+# helper: covariate frame -> per-tank hazard (calibrated probability)
 predict_haz <- function(df) {
-  M  <- align_cols(model.matrix(FEAT_FORMULA, data = df)[, -1L, drop=FALSE], colnames(X))
-  lp <- as.numeric(predict(fit, newx = M, type = "link"))
-  as.numeric(predict(platt, newdata = data.frame(lp_oos = lp), type = "response"))
+  M <- align_cols(model.matrix(FEAT_FORMULA, data = df)[, -1L, drop=FALSE], colnames(X))
+  as.numeric(predict(fit, newx = M, type = "response"))
 }
 
 # =============================================================================
@@ -282,7 +280,7 @@ fwrite(score[, .(panel_id, panel_year, state, has_single_walled, age_bin, pred_p
 cat(sprintf("Saved: analysis_hazard_predictions_pricing.csv (%s rows)\n",
             format(nrow(score), big.mark=",")))
 
-saveRDS(list(fit=fit, platt=platt, feature_cols=colnames(X),
+saveRDS(list(fit=fit, feature_cols=colnames(X),
              best_alpha=best_alpha, best_lambda=best_lambda,
              state_levels=STATE_LEVELS, year_levels=YEAR_LEVELS,
              age_bin_levels=AGE_BIN_LABELS, ref_year=REFERENCE_YEAR, ref_cap=ref_cap,
