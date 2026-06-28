@@ -425,12 +425,23 @@ hte_rows[["has_gasoline"]] <- hte_long(mF, "has_gasoline", "0")
 
 if (file.exists(GIS_PATH)) {
   cat("  Spatial HTE...\n")
-  gis <- fread(GIS_PATH,
-               select     = c("panel_id", "rural", "low_pop", "low_income",
-                              "high_pov", "thin_market"),
-               na.strings = c("", "NA"))
-  fy <- gis[fy, on = "panel_id"]
-  for (sv in c("rural", "low_pop", "low_income", "high_pov", "thin_market")) {
+  # gis_hte_vars schema: rural_2000, low_pop_density (binary); med_hh_income_2000,
+  # pct_poverty_2000 (continuous -> median-split binaries). No thin_market in file.
+  .gis_hdr  <- names(fread(GIS_PATH, nrows = 0))
+  .gis_want <- intersect(c("panel_id", "rural_2000", "low_pop_density",
+                           "med_hh_income_2000", "pct_poverty_2000"), .gis_hdr)
+  gis <- fread(GIS_PATH, select = .gis_want, na.strings = c("", "NA"))
+  if ("rural_2000"         %in% names(gis)) gis[, rural      := as.integer(rural_2000)]
+  if ("low_pop_density"    %in% names(gis)) gis[, low_pop    := as.integer(low_pop_density)]
+  if ("med_hh_income_2000" %in% names(gis)) gis[, low_income := as.integer(med_hh_income_2000 < median(med_hh_income_2000, na.rm = TRUE))]
+  if ("pct_poverty_2000"   %in% names(gis)) gis[, high_pov   := as.integer(pct_poverty_2000  > median(pct_poverty_2000,  na.rm = TRUE))]
+  SPATIAL_DIMS <- intersect(c("rural", "low_pop", "low_income", "high_pov"), names(gis))
+  gis <- gis[, c("panel_id", SPATIAL_DIMS), with = FALSE]
+  fy  <- gis[fy, on = "panel_id"]
+  for (sv in SPATIAL_DIMS) {
+    if (uniqueN(na.omit(fy[[sv]])) < 2L) {
+      cat(sprintf("  spatial %s: no usable variation -- skipped\n", sv)); next
+    }
     mSp <- setNames(
       lapply(HTE_MARGINS, hte_fit_numeric, fvar = sv, ref_val = 0L), HTE_MARGINS)
     hte_rows[[sv]] <- hte_long(mSp, sv, "0")

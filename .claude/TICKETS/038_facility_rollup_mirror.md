@@ -84,7 +84,7 @@ SPEC (mirrors the tank exactly, every margin):
 
 HTE (FE-version A only): interaction-only (did_term × Z), common FE = panel_id + cell_comp_year_fe_A,
   cluster ~state. Dims: size (cap_G on total_capacity_reform), vintage (fac_vintage, ref 1989–98),
-  fuel (has_gasoline), spatial (gis_hte_vars.csv by panel_id: rural/low_pop/low_income/high_pov/thin_market).
+  fuel (has_gasoline), spatial (gis_hte_vars.csv by panel_id; ACTUAL schema: rural_2000, low_pop_density binary + med_hh_income_2000/pct_poverty_2000 median-split into low_income/high_pov; NO thin_market).
   Spatial is LOCAL-ONLY → skip GRACEFULLY if gis_hte_vars.csv absent (server); core HTE still runs.
 
 BOOTSTRAP (DEFERRED to the very end; never blocks deliverables): after ALL tables/figures are written,
@@ -234,8 +234,8 @@ Section 7 — HTE (FE-version A only; interaction-only; cluster ~state):
     CAP_BREAKS=c(-Inf,9000,20000,30000,Inf), CAP_LABS=c("G1_lt9k","G2_9to20k","G3_20to30k","G4_gt30k") (02j:68-69).
     vintage: vintage := factor(fac_vintage); VREF="1989-1998" (02j:375); run vintage HTE only if VREF %in% levels(vintage).
   fuel: has_gasoline. spatial: GIS_HTE <- here("Output","GIS","gis_hte_vars.csv") (02j:58); if file.exists(GIS_HTE)
-    join by panel_id and add rural/low_pop/
-    low_income/high_pov/thin_market; else cat "GIS absent — skipping spatial HTE" and skip.
+    map the ACTUAL schema -> rural=rural_2000, low_pop=low_pop_density, low_income=1{med_hh_income_2000<median},
+    high_pov=1{pct_poverty_2000>median} (no thin_market); per-dim guard (skip dims absent / no variation); else skip.
   For each dim, each m in HTE_MARGINS: feols(<m> ~ i(<dim>, did_term, ref=<ref>) + <mandates>
     | panel_id + cell_comp_year_fe_A, cluster=~state). Emit long rows via the 02j Step-6 coeftable idiom:
     (margin, dimension, level, is_reference, estimate, std_error, p_value, fe_version="A").
