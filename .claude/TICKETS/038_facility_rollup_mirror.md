@@ -111,8 +111,10 @@ I5  MARGINS = Ticket-031 definitions, REL_THRESH = 0.05. Before coding the parti
     definitions. Do not re-derive from scratch. Constants: REL_THRESH=0.05; Clag = total_capacity_dec −
     capacity_change; contraction gate = facility_exit==0 & net_tank_change<0 & Clag>0 & !is.na(capacity_change).
 I6  did_term = texas_treated * as.integer(panel_year >= 1999L). Build it on the facility-year table; do not
-    trust an inherited column name. mandates rolled up from data_C_active (state×year ⇒ constant within
-    facility-year): take the unique value per (panel_id, panel_year) and ASSERT uniqueness.
+    trust an inherited column name. mandates are TANK-level (tank-specific UST upgrade-compliance timing) and
+    VARY within a facility-year -> aggregate to the facility-year MEAN (share of the facility's tanks subject to
+    each mandate). texas_treated and state ARE facility-constant -> take first value + ASSERT those are unique
+    per (panel_id, panel_year). (Do NOT assert mandate uniqueness — they are tank-level; that assumption was wrong.)
 I7  FE built PER version from the matched roster (sorted ⇒ order-invariant; collapse preserves multiplicity).
     cell_comp_year_fe_{A,B} := .GRP by (panel_year, comp_{A,B}). Same composition across years for a facility.
 I8  CLUSTER = ~state for every static, ES, HTE, and bootstrap call. No exceptions.
@@ -153,10 +155,10 @@ Section 2 — Facility-year skeleton + closure outcomes (I4):
   cs <- data_C_active[, .(any_closure = as.integer(sum(closure_event, na.rm=TRUE) > 0),
                           n_tanks_fy = .N, n_tanks_fy_unique = uniqueN(tank_panel_id)),
                       by = .(panel_id, panel_year)]
-  carry facility-constant + state×year fields by joining the unique (panel_id, panel_year) values from
-  data_C_active: texas_treated, state, mandate_release_det, mandate_spill_overfill, mandate_integrity.
-  ASSERT (I6) each mandate_* is unique within (panel_id, panel_year).
-  fy <- cs[<carried fields>]; fy[, did_term := texas_treated * as.integer(panel_year >= 1999L)]
+  In the SAME by=(panel_id,panel_year) aggregation also produce: mandate_{release_det,spill_overfill,integrity}
+  = MEAN (share of the facility's tanks subject — tank-level, vary within a facility-year); texas_treated=.[1L],
+  state=.[1L] with stopifnot(uniqueN==1) on texas_treated AND state (NOT the mandates). This single agg = fy.
+  fy[, did_term := texas_treated * as.integer(panel_year >= 1999L)]
   fy[, rel_year := as.integer(panel_year) - 1998L]
 
 Section 3 — Composition FE from the matched roster (I7):
@@ -312,7 +314,7 @@ ACCEPTANCE CRITERIA
 - [ ] CLOSURE outcome = any_closure = as.integer(sum(closure_event)>0) by (panel_id, panel_year) over
       data_C_active rows — NOT facility_panel. Every outcome is a 1/0 indicator (no continuous closure_share/repl_share).
 - [ ] UNWEIGHTED everywhere; no cem_weight; no Yhat0; no matched_facs_birth_cem / fac_cem_* / 02k.
-- [ ] did_term = texas_treated*1{year>=1999}; mandates rolled up unique within facility-year (asserted); cluster ~state.
+- [ ] did_term = texas_treated*1{year>=1999}; mandates aggregated to facility-year MEAN (tank-level, vary within fac-year); texas_treated/state asserted facility-constant; cluster ~state.
 - [ ] Two composition FEs built from the matched roster (A exact, B 5-yr-band-coarsened); singleton facility-year
       counts reported for each.
 - [ ] 6 portfolio margins ported from 02j build_margins / Ticket-031 (REL_THRESH=0.05; Clag=total_capacity_dec−

@@ -156,28 +156,29 @@ cat(sprintf("  data_C_active: nrow=%s | facilities=%s | tanks=%s | TX_facilities
 # =============================================================================
 cat("=== SECTION 2: FACILITY-YEAR SKELETON ===\n")
 
-cs <- data_C_active[, .(
-  any_closure       = as.integer(sum(closure_event, na.rm = TRUE) > 0),
-  n_tanks_fy        = .N,
-  n_tanks_fy_unique = uniqueN(tank_panel_id)
+# Roll the matched tanks up to facility-year. Closure outcome = any_closure (I4).
+# Mandates are TANK-level (tank-specific UST upgrade-compliance timing), so they vary
+# across tanks within a facility-year -> aggregate to the facility-year MEAN = the
+# share of the facility's tanks subject to each mandate that year (a valid [0,1] control).
+# texas_treated and state ARE facility-constant -> take the first value and assert it.
+fy <- data_C_active[, .(
+  any_closure            = as.integer(sum(closure_event, na.rm = TRUE) > 0),
+  n_tanks_fy             = .N,
+  n_tanks_fy_unique      = uniqueN(tank_panel_id),
+  mandate_release_det    = mean(mandate_release_det,    na.rm = TRUE),
+  mandate_spill_overfill = mean(mandate_spill_overfill, na.rm = TRUE),
+  mandate_integrity      = mean(mandate_integrity,      na.rm = TRUE),
+  texas_treated          = texas_treated[1L],
+  state                  = state[1L],
+  nu_tt                  = uniqueN(texas_treated),
+  nu_st                  = uniqueN(state)
 ), by = .(panel_id, panel_year)]
-
-mand_check <- data_C_active[, .(
-  nu_rel = uniqueN(mandate_release_det),
-  nu_spi = uniqueN(mandate_spill_overfill),
-  nu_int = uniqueN(mandate_integrity)
-), by = .(panel_id, panel_year)]
-stopifnot(all(mand_check$nu_rel == 1L))
-stopifnot(all(mand_check$nu_spi == 1L))
-stopifnot(all(mand_check$nu_int == 1L))
-cat("  Mandate uniqueness assertion PASSED\n")
-
-carry <- unique(data_C_active[, .(panel_id, panel_year, texas_treated, state,
-                                   mandate_release_det, mandate_spill_overfill,
-                                   mandate_integrity)])
-fy <- carry[cs, on = c("panel_id", "panel_year")]
+stopifnot(all(fy$nu_tt == 1L), all(fy$nu_st == 1L))   # treatment & state ARE facility-constant
+fy[, c("nu_tt", "nu_st") := NULL]
 fy[, did_term := texas_treated * as.integer(panel_year >= 1999L)]
 fy[, rel_year := as.integer(panel_year) - 1998L]
+cat(sprintf("  mandates -> facility-year mean shares: rel=%.3f spill=%.3f integ=%.3f\n",
+    mean(fy$mandate_release_det), mean(fy$mandate_spill_overfill), mean(fy$mandate_integrity)))
 
 cat(sprintf("  fy skeleton: %s facility-years | %s facilities | %d states\n",
     format(nrow(fy), big.mark = ","),
