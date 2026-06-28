@@ -192,27 +192,36 @@ cat("=== SECTION 3: COMPOSITION FE ===\n")
 
 tc <- unique(data_C_active[, .(panel_id, tank_panel_id, make_model_noage, install_yr_int)],
              by = "tank_panel_id")
-tc[, cell_A := paste(make_model_noage, install_yr_int, sep = "@")]
-tc[, install_band := cut(install_yr_int,
-                         breaks = c(-Inf, 1979, 1984, 1989, 1994, 1998),
-                         labels = c("le79", "80_84", "85_89", "90_94", "95_98"))]
-tc[, cell_B := paste(make_model_noage, as.character(install_band), sep = "@")]
+tc[, cell := paste(make_model_noage, install_yr_int, sep = "@")]   # exact tank cell (make_model x install_yr)
 
-comp <- tc[, .(comp_A = paste(sort(cell_A), collapse = "|"),
-               comp_B = paste(sort(cell_B), collapse = "|")),
-           by = panel_id]
+# Per-facility keys, ALL anchored on the OLDEST tank (min install_yr; tie-break min make_model).
+# Three-rung richness ladder; ALL keep exact make_model x cohort cells (no cohort coarsening):
+#   MG2 (headline)  = founding-tank cell x size bin     -> keeps ~99.5%
+#   MG1 (robust)    = founding + newest cell (vintage span) -> ~83%
+#   FULL (robust)   = full portfolio multiset           -> ~58% (strictest)
+setorder(tc, panel_id, install_yr_int, make_model_noage)
+k_old <- tc[, .(oldest = cell[1L], n_tanks = .N), by = panel_id]
+setorder(tc, panel_id, -install_yr_int, make_model_noage)
+k_new <- tc[, .(newest = cell[1L]), by = panel_id]
+k_cmp <- tc[, .(full   = paste(sort(cell), collapse = "|")), by = panel_id]
+K <- k_old[k_new, on = "panel_id"][k_cmp, on = "panel_id"]
+K[, size_bin  := cut(n_tanks, c(0, 1, 3, 6, Inf), labels = c("1", "2_3", "4_6", "7p"))]
+K[, comp_MG2  := paste(oldest, as.character(size_bin), sep = "||")]
+K[, comp_MG1  := paste(oldest, newest, sep = "||")]
+K[, comp_FULL := full]
 
-fy <- comp[fy, on = "panel_id"]
-fy[, cell_comp_year_fe_A := .GRP, by = .(panel_year, comp_A)]
-fy[, cell_comp_year_fe_B := .GRP, by = .(panel_year, comp_B)]
+fy <- K[, .(panel_id, comp_MG2, comp_MG1, comp_FULL)][fy, on = "panel_id"]
+fy[, cell_comp_year_fe_MG2  := .GRP, by = .(panel_year, comp_MG2)]
+fy[, cell_comp_year_fe_MG1  := .GRP, by = .(panel_year, comp_MG1)]
+fy[, cell_comp_year_fe_FULL := .GRP, by = .(panel_year, comp_FULL)]
 
-for (v in c("A", "B")) {
+for (v in c("MG2", "MG1", "FULL")) {
   comp_col <- paste0("comp_", v)
   fe_col   <- paste0("cell_comp_year_fe_", v)
   gsz      <- fy[, .(gsz = .N), by = c("panel_year", comp_col)]
   n_sing   <- sum(gsz$gsz == 1L)
-  cat(sprintf("  FE-%s: compositions=%d | comp*year cells=%d | singleton FY=%d\n",
-      v, uniqueN(fy[[comp_col]]), uniqueN(fy[[fe_col]]), n_sing))
+  cat(sprintf("  FE-%-4s: compositions=%d | comp*year cells=%d | singleton FY=%d (%.1f%%)\n",
+      v, uniqueN(fy[[comp_col]]), uniqueN(fy[[fe_col]]), n_sing, 100 * n_sing / nrow(fy)))
 }
 
 # =============================================================================
@@ -280,7 +289,7 @@ cat("=== SECTION 5: STATIC DiD ===\n")
 models_static <- list()
 att_rows      <- list()
 
-for (v in c("A", "B")) {
+for (v in c("MG2", "MG1", "FULL")) {
   fe_str <- paste0("panel_id + cell_comp_year_fe_", v)
   cat(sprintf("[%s] version %s\n", format(Sys.time(), "%H:%M:%S"), v))
   for (mg in MARGINS) {
@@ -318,7 +327,7 @@ AC_NOTES <- paste0(
   " matched tank close in that facility-year; $=0$ otherwise.",
   " Matched tank sample (birth-CEM, unweighted). SE clustered by state.")
 
-for (v in c("A", "B")) {
+for (v in c("MG2", "MG1", "FULL")) {
   fe_str <- paste0("panel_id + cell_comp_year_fe_", v)
   m1 <- feols(any_closure ~ did_term, data = fy, cluster = ~state)
   m2 <- feols(any_closure ~ did_term | panel_id, data = fy, cluster = ~state)
@@ -333,7 +342,7 @@ for (v in c("A", "B")) {
              headers = c("(1)", "(2)", "(3)", "(4)"))
 }
 
-for (v in c("A", "B")) {
+for (v in c("MG2", "MG1", "FULL")) {
   mods_v        <- models_static[paste(MARGINS, v)]
   names(mods_v) <- MARGINS
   pub_etable(mods_v,
@@ -364,7 +373,7 @@ if (!run_reconf_es)
   cat("  reconfigure_up ES SKIPPED (< 200 treated post events)\n")
 
 es_coef_list <- list()
-for (v in c("A", "B")) {
+for (v in c("MG2", "MG1", "FULL")) {
   fe_str <- paste0("panel_id + cell_comp_year_fe_", v)
   cat(sprintf("[%s] ES version %s\n", format(Sys.time(), "%H:%M:%S"), v))
   for (mg in ES_MARGINS_RUN) {
@@ -388,21 +397,21 @@ cat(sprintf("  T_Facility_Rollup_ES_Coefs.csv: %d rows\n", nrow(es_coef_dt)))
 # =============================================================================
 # SECTION 7 — HTE (FE-version A only; interaction-only; cluster ~state)
 # =============================================================================
-cat("=== SECTION 7: HTE (FE-A) ===\n")
-FE_A <- "panel_id + cell_comp_year_fe_A"
+cat("=== SECTION 7: HTE (headline FE = MG2) ===\n")
+FE_HEAD <- "panel_id + cell_comp_year_fe_MG2"
 
 hte_fit_factor <- function(mg, fvar, ref_str) {
   d <- fy[!is.na(get(mg)) & !is.na(get(fvar))]
   feols(as.formula(sprintf(
     "%s ~ i(%s, did_term, ref = '%s') + did_term %s | %s",
-    mg, fvar, ref_str, MAND_RHS, FE_A)), data = d, cluster = ~state)
+    mg, fvar, ref_str, MAND_RHS, FE_HEAD)), data = d, cluster = ~state)
 }
 
 hte_fit_numeric <- function(mg, fvar, ref_val) {
   d <- fy[!is.na(get(mg)) & !is.na(get(fvar))]
   feols(as.formula(sprintf(
     "%s ~ i(%s, did_term, ref = %s) + did_term %s | %s",
-    mg, fvar, as.character(ref_val), MAND_RHS, FE_A)), data = d, cluster = ~state)
+    mg, fvar, as.character(ref_val), MAND_RHS, FE_HEAD)), data = d, cluster = ~state)
 }
 
 hte_rows <- list()
@@ -452,7 +461,7 @@ if (file.exists(GIS_PATH)) {
 }
 
 hte_dt <- rbindlist(hte_rows, fill = TRUE)
-hte_dt[, fe_version := "A"]
+hte_dt[, fe_version := "MG2"]
 fwrite(hte_dt, file.path(OUTPUT_TABLES, "T_Facility_HTE.csv"))
 cat(sprintf("  T_Facility_HTE.csv: %d rows\n", nrow(hte_dt)))
 
@@ -467,7 +476,7 @@ if (!requireNamespace("fwildclusterboot", quietly = TRUE)) {
              " skipping deferred bootstrap; all other outputs already written\n"))
 } else {
   boot_rows <- list()
-  for (v in c("A", "B")) {
+  for (v in c("MG2", "MG1", "FULL")) {
     cat(sprintf("[%s] bootstrap version %s\n", format(Sys.time(), "%H:%M:%S"), v))
     for (mg in MARGINS) {
       key  <- paste(mg, v)
@@ -513,7 +522,7 @@ for (mg in MARGINS) {
 }
 
 cat("\n--- Composition cardinalities ---\n")
-for (v in c("A", "B")) {
+for (v in c("MG2", "MG1", "FULL")) {
   comp_col <- paste0("comp_", v)
   fe_col   <- paste0("cell_comp_year_fe_", v)
   gsz      <- fy[, .(gsz = .N), by = c("panel_year", comp_col)]
@@ -523,7 +532,7 @@ for (v in c("A", "B")) {
 }
 
 cat("\n--- ES figures ---\n")
-for (v in c("A", "B")) for (mg in ES_MARGINS_RUN)
+for (v in c("MG2", "MG1", "FULL")) for (mg in ES_MARGINS_RUN)
   cat(sprintf("  Fig_ES_Facility_%s_%s.{pdf,png}\n", mg, v))
 
 cat(sprintf("\nBootstrap: %s\n",
