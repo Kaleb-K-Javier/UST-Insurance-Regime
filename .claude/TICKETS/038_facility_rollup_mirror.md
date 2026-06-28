@@ -65,24 +65,25 @@ OUTCOMES (Decision 1 + ALL-BINARY revision 2026-06-27 per researcher):
   n_closures_replacement, tanks dropped) — Poisson/neg-bin FE (fixest::fepois) with the same did + FE, optional
   log(n_tanks_active) exposure offset. Own ticket later.
 
-FIXED EFFECTS — build and COMPARE two composition specs, both from the matched roster (FIXED baseline,
-  time-invariant per facility — mirrors the tank cell's time-invariance):
-  A_exact     comp_A = sorted multiset of (make_model_noage, install_yr_int) over the facility's matched
-                       tanks → cell_comp_year_fe_A := .GRP(panel_year, comp_A). Station analogue of the
-                       tank cell make_model_noage × install_yr_int × year.
-  B_coarsened comp_B = sorted multiset of (make_model_noage, install_band) where install_band bins
-                       install_yr_int into 5-yr bands {<=1979, 1980–84, 1985–89, 1990–94, 1995–98};
-                       make_model_noage kept EXACT → cell_comp_year_fe_B := .GRP(panel_year, comp_B).
-  Report, for each version: # distinct compositions, # distinct comp×year cells, and # facility-years
-  absorbed as singleton comp×year cells (size 1 → dropped by feols).
-  FE in every regression = panel_id + cell_comp_year_fe_{A|B}. (panel_id is the facility id, already.)
+FIXED EFFECTS — 3-rung richness ladder (REVISED 2026-06-27 after the singleton diagnostic). All anchored on
+  the OLDEST tank (min install_yr; tie min make_model), all keep EXACT make_model x install_yr cohort cells
+  (NO cohort coarsening — regulation/treatment vary within cohort, so coarsening is dispreferred). The old
+  full-portfolio multiset dropped 42% of facility-years as singletons (multi-tank portfolios are near-unique,
+  82.5% of facilities are multi-tank); the diagnostic showed founding-cell schemes keep ~99-100%.
+  tank cell = (make_model_noage, install_yr_int). oldest/newest = the facility's earliest/latest tank's cell.
+  MG2 (HEADLINE) comp_MG2  = paste(oldest_cell, size_bin) -> cell_comp_year_fe_MG2 := .GRP(panel_year, comp_MG2);
+                            size_bin = n_tanks in {1, 2_3, 4_6, 7p}. Keeps ~99.5%.
+  MG1 (robust)   comp_MG1  = paste(oldest_cell, newest_cell) (vintage span) -> .GRP(panel_year, comp_MG1). ~83%.
+  FULL (robust)  comp_FULL = sorted multiset of all tanks' cells (strictest) -> .GRP(panel_year, comp_FULL). ~58%.
+  Report, for each: # distinct compositions, # distinct comp×year cells, # singleton facility-years (+%).
+  FE in every regression = panel_id + cell_comp_year_fe_{MG2|MG1|FULL}. HTE uses the HEADLINE (MG2).
 
 SPEC (mirrors the tank exactly, every margin):
   static : <margin> ~ did_term + <mandates> | panel_id + cell_comp_year_fe_v          cluster ~state
   ES     : <margin> ~ i(rel_year, texas_treated, ref=-1) + <mandates> | panel_id + cell_comp_year_fe_v
   did_term = texas_treated * 1{panel_year >= 1999}. rel_year = panel_year - 1998. NO weights. NO Yhat0.
 
-HTE (FE-version A only): interaction-only (did_term × Z), common FE = panel_id + cell_comp_year_fe_A,
+HTE (headline FE (MG2) only): interaction-only (did_term × Z), common FE = panel_id + cell_comp_year_fe_MG2,
   cluster ~state. Dims: size (cap_G on total_capacity_reform), vintage (fac_vintage, ref 1989–98),
   fuel (has_gasoline), spatial (gis_hte_vars.csv by panel_id; ACTUAL schema: rural_2000, low_pop_density binary + med_hh_income_2000/pct_poverty_2000 median-split into low_income/high_pov; NO thin_market).
   Spatial is LOCAL-ONLY → skip GRACEFULLY if gis_hte_vars.csv absent (server); core HTE still runs.
@@ -116,7 +117,7 @@ I6  did_term = texas_treated * as.integer(panel_year >= 1999L). Build it on the 
     each mandate). texas_treated and state ARE facility-constant -> take first value + ASSERT those are unique
     per (panel_id, panel_year). (Do NOT assert mandate uniqueness — they are tank-level; that assumption was wrong.)
 I7  FE built PER version from the matched roster (sorted ⇒ order-invariant; collapse preserves multiplicity).
-    cell_comp_year_fe_{A,B} := .GRP by (panel_year, comp_{A,B}). Same composition across years for a facility.
+    cell_comp_year_fe_{MG2,MG1,FULL} := .GRP by (panel_year, comp_{MG2,MG1,FULL}); all anchored on the oldest tank. Same composition across years for a facility.
 I8  CLUSTER = ~state for every static, ES, HTE, and bootstrap call. No exceptions.
 I9  HARD ERRORS: no tryCatch(.,error→NULL), no try(silent=TRUE). The ONLY sanctioned soft path is the
     requireNamespace("fwildclusterboot") guard in the deferred bootstrap (skip-with-message), and a
@@ -163,22 +164,22 @@ Section 2 — Facility-year skeleton + closure outcomes (I4):
 
 Section 3 — Composition FE from the matched roster (I7):
   tc <- unique(data_C_active[, .(panel_id, tank_panel_id, make_model_noage, install_yr_int)], by="tank_panel_id")
-  tc[, cell_A := paste(make_model_noage, install_yr_int, sep="@")]
-  tc[, install_band := cut(install_yr_int, breaks=c(-Inf,1979,1984,1989,1994,1998),
-                           labels=c("le79","80_84","85_89","90_94","95_98"))]
-  tc[, cell_B := paste(make_model_noage, as.character(install_band), sep="@")]
-  comp <- tc[, .(comp_A = paste(sort(cell_A), collapse="|"),
-                 comp_B = paste(sort(cell_B), collapse="|")), by=panel_id]
-  fy <- comp[fy, on="panel_id"]   # composition is facility-fixed (same across years)
-  fy[, cell_comp_year_fe_A := .GRP, by=.(panel_year, comp_A)]
-  fy[, cell_comp_year_fe_B := .GRP, by=.(panel_year, comp_B)]
-  Diagnostics per version: uniqueN(comp_v), uniqueN cell_comp_year_fe_v, and singleton facility-years
-    fy[, gsz_v := .N, by=.(panel_year, comp_v)]; n_singleton_v <- fy[gsz_v==1, .N]. cat all.
+  tc[, cell := paste(make_model_noage, install_yr_int, sep="@")]      # exact tank cell
+  setorder(tc, panel_id, install_yr_int, make_model_noage); k_old <- tc[, .(oldest=cell[1L], n_tanks=.N), by=panel_id]
+  setorder(tc, panel_id, -install_yr_int, make_model_noage); k_new <- tc[, .(newest=cell[1L]), by=panel_id]
+  k_cmp <- tc[, .(full = paste(sort(cell), collapse="|")), by=panel_id]
+  K <- k_old[k_new, on="panel_id"][k_cmp, on="panel_id"]
+  K[, size_bin := cut(n_tanks, c(0,1,3,6,Inf), labels=c("1","2_3","4_6","7p"))]
+  K[, comp_MG2 := paste(oldest, as.character(size_bin), sep="||")]
+  K[, comp_MG1 := paste(oldest, newest, sep="||")]; K[, comp_FULL := full]
+  fy <- K[, .(panel_id, comp_MG2, comp_MG1, comp_FULL)][fy, on="panel_id"]
+  for v in {MG2,MG1,FULL}: fy[, cell_comp_year_fe_<v> := .GRP, by=.(panel_year, comp_<v>)]
+  Diagnostics per version: uniqueN(comp_v), uniqueN cell_comp_year_fe_v, singleton facility-years (+%). cat all.
 
 Section 4 — Portfolio margins from facility_panel.csv (I5; Decision 1):
   READ 02j build_margins() (02j:78-119) first; PORT ONLY the 6 portfolio margins. Do NOT port build_margins'
   closure_share/perm_share (02j:90-92, full-portfolio rate), post/did_term/rel_year, or cell_fac_year —
-  closure_share + any_closure are the matched roll-up (Section 2) and the FE is comp_A/comp_B (Section 3). Then:
+  closure_share + any_closure are the matched roll-up (Section 2) and the FE is comp_MG2/MG1/FULL (Section 3). Then:
   fp <- fread(ANALYSIS_DIR/facility_panel.csv, select = the needed cols:
         panel_id, panel_year, facility_exit, net_tank_change, capacity_change, total_capacity_dec,
         n_closures, n_closures_replacement, total_capacity_reform, fac_vintage, has_gasoline,
@@ -212,9 +213,9 @@ Section 5 — Static DiD (all 7 margins × {A,B}):
         n_singleton_dropped = nrow(dat) - mod$nobs)
   fwrite → T_Facility_Rollup_ATT.csv.
   STEPPED pub table for any_closure (the headline closure mirror; mirror 02b:4032–4076), each FE version: M1 ~did_term;
-    M2 |panel_id; M3 +mandates|panel_id; M4 +mandates|panel_id+<fe>. pub_etable → T_DiD_Facility_Stepped_<A|B>.tex.
+    M2 |panel_id; M3 +mandates|panel_id; M4 +mandates|panel_id+<fe>. pub_etable → T_DiD_Facility_Stepped_<MG2|MG1|FULL>.tex.
   Per-FE-version all-margins pub table: pub_etable(models_static for that v across MARGINS) →
-    T_Facility_Rollup_ATT_Pub_<A|B>.tex (clean labels via RF_DICT).
+    T_Facility_Rollup_ATT_Pub_<MG2|MG1|FULL>.tex (clean labels via RF_DICT).
 
 Section 6 — Event studies + figures:
   ES_MARGINS <- c("any_closure","downsize","consolidate","any_replace"); reconfigure_up ES ONLY if
@@ -228,7 +229,7 @@ Section 6 — Event studies + figures:
     tag co with margin=<m>, fe_version=v, is_reference=(rel_year==-1L); rbind into es_coef_dt
       (margin, fe_version, rel_year, estimate=est, se, ci_lo, ci_hi, is_reference). fwrite → T_Facility_Rollup_ES_Coefs.csv.
 
-Section 7 — HTE (FE-version A only; interaction-only; cluster ~state):
+Section 7 — HTE (headline FE (MG2) only; interaction-only; cluster ~state):
   HTE_MARGINS <- c("any_closure","facility_exit","downsize","consolidate","any_replace")
   size: cap_G := factor(cut(total_capacity_reform, CAP_BREAKS, labels=CAP_LABS), levels=CAP_LABS) with
     CAP_BREAKS=c(-Inf,9000,20000,30000,Inf), CAP_LABS=c("G1_lt9k","G2_9to20k","G3_20to30k","G4_gt30k") (02j:68-69).
@@ -237,7 +238,7 @@ Section 7 — HTE (FE-version A only; interaction-only; cluster ~state):
     map the ACTUAL schema -> rural=rural_2000, low_pop=low_pop_density, low_income=1{med_hh_income_2000<median},
     high_pov=1{pct_poverty_2000>median} (no thin_market); per-dim guard (skip dims absent / no variation); else skip.
   For each dim, each m in HTE_MARGINS: feols(<m> ~ i(<dim>, did_term, ref=<ref>) + <mandates>
-    | panel_id + cell_comp_year_fe_A, cluster=~state). Emit long rows via the 02j Step-6 coeftable idiom:
+    | panel_id + cell_comp_year_fe_MG2, cluster=~state). Emit long rows via the 02j Step-6 coeftable idiom:
     (margin, dimension, level, is_reference, estimate, std_error, p_value, fe_version="A").
   fwrite → T_Facility_HTE.csv.
 
@@ -259,25 +260,25 @@ Section 9 — Console summary: per margin, betas for A vs B (+ p) and base rates
 DELIVERABLES — ENUMERATED (rows × columns × types)
 ═══════════════════════════════════════════════════
 1. Output/Tables/T_Facility_Rollup_ATT.csv
-   ROWS: 7 margins × 2 FE versions = 14.  (margins: any_closure, facility_exit, downsize, consolidate,
+   ROWS: 7 margins × 3 FE versions = 21.  (margins: any_closure, facility_exit, downsize, consolidate,
      reconfigure_up, any_replace, cap_decrease)
    COLS (in order): margin(chr) | fe_version(chr "A"/"B") | beta(num, did_term) | se(num, cluster~state) |
      p_value(num) | n_obs(int facility-years) | n_fac(int) | n_singleton_dropped(int).
 2. Output/Tables/T_Facility_Rollup_ES_Coefs.csv
    ROWS: one per (margin, fe_version, rel_year) for ES_MARGINS that ran (any_closure always; downsize/
-     consolidate/any_replace; reconfigure_up only if ≥200 treated post events) × 2 FE × the rel_year grid.
+     consolidate/any_replace; reconfigure_up only if ≥200 treated post events) × 3 FE × the rel_year grid.
    COLS: margin(chr) | fe_version(chr) | rel_year(int) | estimate(num) | se(num) | ci_lo(num) | ci_hi(num) |
      is_reference(lgl, TRUE at rel_year=-1).
-3. Output/Figures/Fig_ES_Facility_<Margin>_<A|B>.{pdf,png}  (es_one slide style from 02j; one per ES margin×version).
-4. Output/Tables/T_DiD_Facility_Stepped_<A|B>.tex  (any_closure headline, 4 stepped columns, per FE version;
+3. Output/Figures/Fig_ES_Facility_<Margin>_<MG2|MG1|FULL>.{pdf,png}  (es_one slide style from 02j; one per ES margin×version).
+4. Output/Tables/T_DiD_Facility_Stepped_<MG2|MG1|FULL>.tex  (any_closure headline, 4 stepped columns, per FE version;
    \textit{Notes:} defines any_closure and states all outcomes are 1/0 facility-year indicators, per I11).
-   Output/Tables/T_Facility_Rollup_ATT_Pub_<A|B>.tex (7 margins as columns, per FE version, RF_DICT labels).
+   Output/Tables/T_Facility_Rollup_ATT_Pub_<MG2|MG1|FULL>.tex (7 margins as columns, per FE version, RF_DICT labels).
 5. Output/Tables/T_Facility_HTE.csv
    ROWS: per (margin in HTE_MARGINS, dimension, level). dimensions: cap_G, vintage, has_gasoline, +spatial if present.
    COLS: margin(chr) | dimension(chr) | level(chr) | is_reference(lgl) | estimate(num) | std_error(num) |
      p_value(num) | fe_version(chr "A").
 6. Output/Tables/T_Facility_Bootstrap_SEs.csv  (written LAST; absent only if package missing)
-   ROWS: 7 margins × 2 FE versions = 14.
+   ROWS: 7 margins × 3 FE versions = 21.
    COLS: margin(chr) | fe_version(chr) | beta(num) | analytic_se(num) | wcb_p_value(num) | wcb_ci_lo(num) |
      wcb_ci_hi(num) | B(int 9999) | n_clusters(int).
 
@@ -290,7 +291,7 @@ R-IMPLEMENTATION NOTES
 - Reuse 02j's CAP_BREAKS/CAP_LABS, fac_vintage reference level (VREF), and the Step-6 coeftable→data.table
   →grepl/tstrsplit idiom for HTE long output (do not invent a new parser).
 - comp strings: sort() before paste(collapse="|") so identical portfolios collide; duplicates preserved
-  (multiset). Keep make_model_noage exact in BOTH versions; only install year is coarsened in B.
+  (multiset). All three rungs keep EXACT make_model x install_yr cohort cells (no cohort coarsening); they differ only in how much of the portfolio the key spans (MG2 founding+size / MG1 founding+newest / FULL all tanks).
 - n_singleton_dropped = nrow(non-NA estimation data) − mod$nobs. n_fac via mod$fixef_sizes["panel_id"].
 - boottest needs the fixest object unmodified; keep models_static in memory through Section 8.
 - Logging per CLAUDE.md (FIXED name, not rstudioapi). Loop checkpoints with timestamps for the long sections.
@@ -315,17 +316,17 @@ ACCEPTANCE CRITERIA
       data_C_active rows — NOT facility_panel. Every outcome is a 1/0 indicator (no continuous closure_share/repl_share).
 - [ ] UNWEIGHTED everywhere; no cem_weight; no Yhat0; no matched_facs_birth_cem / fac_cem_* / 02k.
 - [ ] did_term = texas_treated*1{year>=1999}; mandates aggregated to facility-year MEAN (tank-level, vary within fac-year); texas_treated/state asserted facility-constant; cluster ~state.
-- [ ] Two composition FEs built from the matched roster (A exact, B 5-yr-band-coarsened); singleton facility-year
+- [ ] Three composition FEs from the matched roster, all anchored on the oldest tank, all exact cohort: MG2 (oldest×size, headline), MG1 (oldest+newest), FULL (portfolio); singleton facility-year
       counts reported for each.
 - [ ] 6 portfolio margins ported from 02j build_margins / Ticket-031 (REL_THRESH=0.05; Clag=total_capacity_dec−
       capacity_change); partition mutually exclusive (max sum ≤1) and 0 where exit==1 | dN>=0 | is.na(dC).
-- [ ] T_Facility_Rollup_ATT.csv: 14 rows, columns exactly as enumerated, all finite.
-- [ ] T_Facility_Rollup_ES_Coefs.csv + Fig_ES_Facility_*_{A,B} produced (any_closure both versions at minimum;
+- [ ] T_Facility_Rollup_ATT.csv: 21 rows, columns exactly as enumerated, all finite.
+- [ ] T_Facility_Rollup_ES_Coefs.csv + Fig_ES_Facility_*_{MG2,MG1,FULL} produced (any_closure all versions at minimum;
       reconfigure_up ES gated ≥200 treated post events with printed skip otherwise).
 - [ ] Stepped + per-version pub .tex produced (RF_DICT labels).
-- [ ] T_Facility_HTE.csv produced (FE-A; spatial included iff gis_hte_vars.csv present, else printed-skip).
+- [ ] T_Facility_HTE.csv produced (headline FE MG2; spatial included iff gis_hte_vars.csv present, else printed-skip).
 - [ ] ALL of {ATT, ES, .tex, HTE} written BEFORE the bootstrap section starts (I10).
-- [ ] T_Facility_Bootstrap_SEs.csv: 14 rows, columns as enumerated — OR a clear WARNING + skip if
+- [ ] T_Facility_Bootstrap_SEs.csv: 21 rows, columns as enumerated — OR a clear WARNING + skip if
       fwildclusterboot absent (no hard failure of the script).
 - [ ] No tryCatch→NULL / try(silent) except the two sanctioned requireNamespace/file.exists guards. Log written.
 - [ ] Console summary printed (A-vs-B betas, base rates, comp cardinalities/singletons, bootstrap status).
