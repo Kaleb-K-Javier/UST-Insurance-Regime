@@ -34,9 +34,15 @@ ANALYSIS_DIR <- here("Data", "Analysis"); dir.create(ANALYSIS_DIR, recursive = T
 # === LOGGING ===
 .log_path <- here("logs", paste0("01r_Leak_Rate_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".log"))
 dir.create(dirname(.log_path), recursive = TRUE, showWarnings = FALSE)
-.log <- file(.log_path, open = "wt"); sink(.log, type="output"); sink(.log, type="message", append=TRUE)
-on.exit({ sink(type="output"); sink(type="message"); close(.log) }, add = TRUE)
-cat(sprintf("LOG START %s\nScript: 01r_Leak_Rate.R\nR: %s\nWD: %s\n\n", .log_path, R.version.string, getwd()))
+# Interactive (VS Code R console) or LEAKRATE_NOSINK=1 -> stream output to the console instead
+# of redirecting it into the logfile (so you can watch live). Batch Rscript -> sink to log as before.
+.use_sink <- !interactive() && !nzchar(Sys.getenv("LEAKRATE_NOSINK"))
+if (.use_sink) {
+  .log <- file(.log_path, open = "wt"); sink(.log, type="output"); sink(.log, type="message", append=TRUE)
+  on.exit({ sink(type="output"); sink(type="message"); close(.log) }, add = TRUE)
+} else .log <- stdout()
+cat(sprintf("LOG START %s (sink=%s)\nScript: 01r_Leak_Rate.R\nR: %s\nWD: %s\n\n",
+            .log_path, .use_sink, R.version.string, getwd()))
 
 # === PARAMETERS ===
 SMOKE          <- nzchar(Sys.getenv("LEAKRATE_SMOKE"))
@@ -44,7 +50,7 @@ DETECTION_START<- 1990L; TRAIN_END <- 2016L
 K              <- if (SMOKE) 3L else 10L
 ALPHAS         <- if (SMOKE) c(0.5, 1) else c(0, 0.25, 0.5, 0.75, 1)   # smoke drops slow ridge
 NLAMBDA        <- if (SMOKE) 20L else 60L
-NBOOT          <- if (SMOKE) 20L else 300L
+NBOOT          <- if (SMOKE) 20L else as.integer(Sys.getenv("LEAKRATE_NBOOT", 300L))  # B=100 for a fast first look
 SMOKE_NFAC     <- 8000L
 NWORKERS       <- max(1L, min(parallel::detectCores() - 1L, as.integer(Sys.getenv("LEAKRATE_NWORKERS", 8L))))
 CHUNK_ROWS     <- if (SMOKE) 25000L else as.integer(Sys.getenv("LEAKRATE_CHUNK_ROWS", 250000L))  # row-chunk size for memory-safe design build
