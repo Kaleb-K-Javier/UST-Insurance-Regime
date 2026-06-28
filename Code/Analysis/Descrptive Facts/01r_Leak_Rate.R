@@ -44,6 +44,7 @@ NLAMBDA        <- if (SMOKE) 20L else 60L
 NBOOT          <- if (SMOKE) 20L else 300L
 SMOKE_NFAC     <- 8000L
 NWORKERS       <- max(1L, min(parallel::detectCores() - 1L, as.integer(Sys.getenv("LEAKRATE_NWORKERS", 8L))))
+CHUNK_ROWS     <- if (SMOKE) 25000L else as.integer(Sys.getenv("LEAKRATE_CHUNK_ROWS", 250000L))  # row-chunk size for memory-safe design build
 CONTROL_STATES <- c("ME","NM","AR","OK","LA","KS","MT","ID","SD","AL","MN","NC","IL","MA","OH","PA","TN","VA","CO")
 ALL_STUDY_STATES <- c("TX", CONTROL_STATES)
 AGE9_LAB <- c("0-2","3-5","6-8","9-11","12-14","15-17","18-20","21-23","24+")   # figure bins
@@ -52,6 +53,35 @@ FEAT <- ~ (age_bin + has_single_walled + active_tanks + total_capacity +
            has_gasoline_year + has_diesel_year)^2 + state_f + year_f
 
 wmean <- function(x, w) sum(x * w) / sum(w)   # exposure(tank-year)-weighted mean of per-tank rate
+
+# Memory-safe sparse design build. A one-shot sparse.model.matrix() on the full panel
+# spikes RAM during CONSTRUCTION — the saturated (...)^2 + state_f + year_f interaction
+# expansion builds large transient blocks even though the final dgCMatrix is small (~0.5GB).
+# Build it in row-chunks with factor levels PINNED via xlev (+ drop.unused.levels=FALSE) so
+# every chunk yields an IDENTICAL column set, drop the per-chunk intercept, then rbind. The
+# transient peak scales with chunk_rows, not nrow(data). Row order is preserved (sequential
+# chunks), so X stays aligned with y/off/foldid built from the same d.
+build_design_chunked <- function(formula, data, xlev, chunk_rows) {
+  n      <- nrow(data)
+  starts <- seq.int(1L, n, by = chunk_rows)
+  parts  <- vector("list", length(starts))
+  ref_cols <- NULL
+  for (i in seq_along(starts)) {
+    lo <- starts[i]; hi <- min(lo + chunk_rows - 1L, n)
+    mm <- sparse.model.matrix(formula, data = data[lo:hi],
+                              xlev = xlev, drop.unused.levels = FALSE)[, -1L, drop = FALSE]
+    if (is.null(ref_cols)) ref_cols <- colnames(mm) else stopifnot(identical(colnames(mm), ref_cols))
+    parts[[i]] <- mm
+    cat(sprintf("  [%s] design chunk %d/%d rows %s-%s: %d cols\n",
+                format(Sys.time(),"%H:%M:%S"), i, length(starts),
+                format(lo, big.mark=","), format(hi, big.mark=","), ncol(mm))); flush(.log)
+    rm(mm); gc(verbose = FALSE)
+  }
+  X <- do.call(rbind, parts)
+  rm(parts); gc(verbose = FALSE)
+  stopifnot(nrow(X) == n, inherits(X, "CsparseMatrix"))
+  X
+}
 
 # =============================================================================
 cat("=== STEP 1: LOAD + SAMPLE (detection era, recurrent) ===\n")
@@ -85,10 +115,12 @@ cat(sprintf("RAW per-tank rate = sum(n_leaks)/sum(active_tanks) = %.5f (calibrat
 # =============================================================================
 cat("=== STEP 2: SPARSE DESIGN + GROUPED/STRATIFIED FOLDS ===\n")
 # =============================================================================
-X   <- sparse.model.matrix(FEAT, data = d)[, -1L]
+xlev <- list(age_bin = levels(d$age_bin), state_f = levels(d$state_f), year_f = levels(d$year_f))
+cat(sprintf("Building sparse design in row-chunks of %s rows (memory-safe)...\n", format(CHUNK_ROWS, big.mark=",")))
+X   <- build_design_chunked(FEAT, d, xlev, CHUNK_ROWS)
 y   <- d$n_leaks
 off <- log(d$active_tanks)
-cat(sprintf("Sparse X: %s rows x %d cols (%.1f%% nonzero)\n",
+cat(sprintf("Sparse X: %s rows x %d cols (%.2f%% nonzero)\n",
             format(nrow(X), big.mark=","), ncol(X), 100*length(X@x)/(as.numeric(nrow(X))*ncol(X))))
 
 # foldid: assign each FACILITY to a fold WITHIN its state (stratified), so all of a
