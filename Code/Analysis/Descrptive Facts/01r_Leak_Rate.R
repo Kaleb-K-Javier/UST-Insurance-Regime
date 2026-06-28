@@ -244,8 +244,8 @@ cat(sprintf("Reference contrast: single gasoline tank, cap=%.0f, state=%s, year=
 # =============================================================================
 cat("=== STEP 6: FACILITY-CLUSTER BOOTSTRAP (parallel) -> cell CIs ===\n")
 # =============================================================================
-fac_rows <- split(seq_len(nrow(d)), d$panel_id)   # row indices per facility
-fac_ids  <- names(fac_rows)
+fac_id   <- as.integer(factor(d$panel_id))        # row -> facility index 1..nfac (cluster id)
+nfac     <- max(fac_id)
 fit_full <- glmnet(X, y, family="poisson", offset=off, alpha=best_alpha, lambda=best_lambda)
 ref_grid[, lambda_ref := as.numeric(predict(fit_full, newx=Xref, newoffset=rep(0, nrow(Xref)),
                                             s=best_lambda, type="response"))]   # reference point est
@@ -254,18 +254,22 @@ keyf <- d[, paste(state, age_bin, has_single_walled, sep="|")]; keyn <- d[, past
 keyd <- d[, paste(wall, age8, sep="|")]
 act  <- d$active_tanks            # export the vector, not the whole table
 invisible(clusterEvalQ(cl, { suppressPackageStartupMessages({library(glmnet); library(Matrix)}) }))
-clusterExport(cl, c("X","y","off","fac_rows","fac_ids","best_alpha","best_lambda",
+clusterExport(cl, c("X","y","off","fac_id","nfac","best_alpha","best_lambda",
                     "act","keyf","keyn","keyd","wmean","Xref"), envir=environment())
+# Nonparametric FACILITY bootstrap via resample COUNTS as weights on the FIXED X. A facility
+# drawn k times == its rows get weight k; glmnet's weighted Poisson deviance equals the
+# duplicated-data deviance (incl. the lambda scaling, since sum(weights)=resampled-row-count).
+# No per-draw matrix copy (X[idb,] was the memory hog) -> RAM stays flat, workers don't swap.
 boot1 <- function(b) {
   set.seed(b)
-  idb <- unlist(fac_rows[sample(fac_ids, length(fac_ids), replace=TRUE)], use.names=FALSE)
-  Xb  <- X[idb, ]                                   # build the resampled design ONCE (reused below)
-  fb  <- glmnet(Xb, y[idb], family="poisson", offset=off[idb], alpha=best_alpha, lambda=best_lambda)
-  mub <- as.numeric(predict(fb, newx=Xb, newoffset=rep(0, length(idb)), s=best_lambda, type="response"))
-  w   <- act[idb]
-  agg <- function(key) { kk <- key[idb]; tapply(seq_along(kk), kk, function(i) wmean(mub[i], w[i])) }
-  ref <- as.numeric(predict(fb, newx=Xref, newoffset=rep(0, nrow(Xref)), s=best_lambda, type="response"))
-  list(fig=agg(keyf), natl=agg(keyn), dcm=agg(keyd), ref=ref)
+  cnt <- tabulate(sample.int(nfac, nfac, replace = TRUE), nbins = nfac)  # facility resample counts
+  wr  <- cnt[fac_id]                                                      # row weight = times facility drawn
+  fb  <- glmnet(X, y, family = "poisson", offset = off, weights = wr, alpha = best_alpha, lambda = best_lambda)
+  mub <- as.numeric(predict(fb, newx = X, newoffset = rep(0, nrow(X)), s = best_lambda, type = "response"))
+  aw  <- act * wr                                                         # aggregation weight = exposure x count
+  agg <- function(key) tapply(seq_along(key), key, function(i) wmean(mub[i], aw[i]))
+  ref <- as.numeric(predict(fb, newx = Xref, newoffset = rep(0, nrow(Xref)), s = best_lambda, type = "response"))
+  list(fig = agg(keyf), natl = agg(keyn), dcm = agg(keyd), ref = ref)
 }
 cat(sprintf("Bootstrap B=%d across %d workers...\n", NBOOT, NWORKERS)); flush(.log)
 # Batched so progress is visible (parLapply over all B prints nothing until done). Batching does
