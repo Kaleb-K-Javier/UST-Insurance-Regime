@@ -138,9 +138,25 @@ cat("=== STEP 3: ALPHA TUNE (shared foldid) -> best (alpha, lambda) ===\n")
 # =============================================================================
 cl <- makeCluster(NWORKERS); registerDoParallel(cl); on.exit(stopCluster(cl), add = TRUE)
 cat(sprintf("Workers: %d\n", NWORKERS)); flush(.log)
+# ALPHA is robust and the cvdev-vs-alpha curve is near-flat (p=108 << n; lambda.min ~ 0),
+# and lambda is re-tuned on the FULL data in STEP 4 -> selecting alpha on a facility
+# subsample is safe and ~1/TUNE_FRAC faster. Subsample FACILITIES (state-stratified, whole
+# facilities) so the grouped folds stay valid and every (state,fold) cell is populated.
+TUNE_FRAC <- as.numeric(Sys.getenv("LEAKRATE_TUNE_FRAC", "1"))
+if (TUNE_FRAC < 1) {
+  set.seed(20260627L)
+  fac_keep  <- fac_tab[, .SD[sample(.N, max(1L, round(.N * TUNE_FRAC)))], by = state]$panel_id
+  tune_rows <- which(d$panel_id %in% fac_keep)
+  Xt <- X[tune_rows, , drop = FALSE]; yt <- y[tune_rows]; offt <- off[tune_rows]; foldt <- foldid[tune_rows]
+  stopifnot(length(unique(foldt)) == K, all(table(foldt) > 0))
+  cat(sprintf("ALPHA TUNE on %.0f%% facility subsample: %s rows / %s facilities (lambda still tuned on FULL in STEP 4)\n",
+              100*TUNE_FRAC, format(length(tune_rows), big.mark=","), format(length(fac_keep), big.mark=","))); flush(.log)
+} else {
+  Xt <- X; yt <- y; offt <- off; foldt <- foldid
+}
 res <- lapply(ALPHAS, function(a) {
   t0 <- Sys.time()
-  f <- cv.glmnet(X, y, family="poisson", offset=off, foldid=foldid, alpha=a,
+  f <- cv.glmnet(Xt, yt, family="poisson", offset=offt, foldid=foldt, alpha=a,
                  nlambda=NLAMBDA, type.measure="deviance", parallel=TRUE)
   cat(sprintf("  [%s] alpha=%.2f  lambda.min=%.6f  cvdev=%.5f  (%.0fs)\n",
               format(Sys.time(),"%H:%M:%S"), a, f$lambda.min, min(f$cvm),
@@ -148,7 +164,8 @@ res <- lapply(ALPHAS, function(a) {
   list(alpha=a, dev=min(f$cvm))
 })
 best_alpha <- ALPHAS[which.min(sapply(res, `[[`, "dev"))]
-cat(sprintf(">> best alpha=%.2f\n", best_alpha)); flush(.log)
+cat(sprintf(">> best alpha=%.2f (tuned on %s)\n", best_alpha,
+            if (TUNE_FRAC < 1) sprintf("%.0f%% subsample", 100*TUNE_FRAC) else "full")); flush(.log)
 
 # =============================================================================
 cat("=== STEP 4: PREVALIDATED OOS PER-TANK RATE (keep=TRUE) ===\n")
