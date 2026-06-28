@@ -55,7 +55,8 @@ relcsv <- function(p)
 find_one <- function(rx) {
   hits <- list.files(file.path(root, "Data"), pattern = rx, recursive = TRUE,
                      full.names = TRUE, ignore.case = TRUE)
-  hits[!grepl("\\.(rds|jpg|png|url|docx|pdf|zip|gz)$", hits, ignore.case = TRUE)]
+  hits <- hits[!grepl("\\.(rds|jpg|png|url|docx|pdf|zip|gz)$", hits, ignore.case = TRUE)]
+  hits[order(!grepl("\\.csv$", hits, ignore.case = TRUE))]   # prefer parsed .csv over raw .txt (fixed-width)
 }
 
 # tabulate one column from a (small) duckdb table/relation, NA included

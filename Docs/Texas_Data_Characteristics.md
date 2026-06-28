@@ -14,10 +14,10 @@ All of `Data/` is gitignored and lives on the SERVER — the laptop is code-only
 | File | What it is | Key fields | Notes |
 |---|---|---|---|
 | `Data/Raw/state_databases/Texas/pst_fin_assur.txt` | RAW financial-responsibility records | issuer, coverage, mechanism, dates | source for the FR panels (locate exact path via profiler) |
-| `Data/Raw/state_databases/Texas/` (`pst_ust*`) | RAW tank registry — the **rich construction** file | `TANK_*`, `PIP_*`, `DET_*`, `CORR_*`, `MAT_*`, `PIPE_TYPE`, `STATUS`, `INSTALL_DATE` | the ONLY source of construction/detection detail; **locate via profiler** |
+| **`Data/Raw/state_databases/Texas/raw_pst_ust.csv`** ✓verified | RAW tank registry (parsed) — the **rich construction** file | `TANK_*`, `PIP_*`, `DET_*`, `CORR_*`, `MAT_*`, `PIPE_TYPE`, `STATUS`, `INSTALL_DATE` | the ONLY source of construction/detection detail. Use the `.csv`; the sibling `pst_ust.txt` is the raw FIXED-WIDTH source (unparsed) |
 | `Data/Processed/texas_fr_facility_month_panel.csv` | FR facility×month panel | `ISSUER_NAME`, `max_COVER_OCC/AGG`, `CATEGORY`, `DETAIL_TYPE`, flags | **~22 GB — DuckDB only**, never `fread` |
 | `Data/Processed/texas_fr_contract_month_panel.csv` | FR contract×month panel (the engine's `fa_monthly_contract`) | `ISSUER_NAME`, `COVER_OCC`, `COVER_AGG`, `EFF/EXP_DATE` | smaller; the rate engines read this |
-| `Data/Raw_do_not_write/panel_merge_staging/texas_static_tank_details.csv` | per-tank attribute dummies | construction / piping / detection / status / age | **built by Mid-Continent Section A; may not exist on server — regenerate** |
+| `texas_static_tank_details.csv` | per-tank attribute dummies | construction / piping / detection / status / age | NOT on the server — **regenerate via Mid-Continent Section A from `raw_pst_ust.csv` above** (the hardcoded `Raw_do_not_write/panel_merge_staging/` path is wrong) |
 | `Data/Analysis/panel_dt.csv`, `pm_panel.csv` | model tank/facility panels | wall, age, capacity, G | carry wall/age/capacity but the **finer construction dummies were dropped** — use the raw tank file for those |
 | `tx_midcont_premium_all_1999_onwards.csv` | the BUILT Mid-Continent premium card | per-tank premium by age×wall×era | consumed by `PM02_Lookups.R`; proof the inputs above existed at build time |
 | `Docs/petroleum-storage-tank-data-specifications (10).docx` | the official data dictionary | — | `.docx` — convert with pandoc to read |
@@ -56,8 +56,10 @@ Do NOT flag these as unobservable — they are explicit `"Y"/"N"` columns.
   TOMICS = `TANK OWNERS MEMBERS INS CO`; some rows are pipe-joined combos (`A | B`).
 - **Construction/detection Y/N flags live ONLY in the raw tank file** — the model panels (`panel_dt`)
   carry wall/age/capacity but dropped the finer dummies. Use the raw `pst_ust` for FRP / interstitial / piping.
-- **Deductible**: not present in the FR panel's substantive columns; Mid-Continent assumes the standard
-  **$5k** (its base rate is "500k/1m, $5k deductible"). Confirm per carrier before assuming otherwise.
+- **Deductible**: CONFIRMED absent from BOTH the FR panel and the contract panel
+  (`texas_fr_contract_month_panel.csv` cols are `…COVER_OCC, COVER_AGG, PREMIUM_PREPAID, PROOF_OF_FA,
+  FP_CORR_MET, TP_FA_MET, USE_PRIVATE, USE_SELF` — no deductible). Mid-Continent assumes the standard
+  **$5k** (base rate "500k/1m, $5k deductible"); do the same.
 - **Data quality ramps over time**: FR insurance coverage is near-empty pre-2008, then ~80–95% filled
   2008–2022. Profile time-varying fields BY YEAR, not pooled.
 
