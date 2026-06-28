@@ -253,15 +253,25 @@ clusterExport(cl, c("X","y","off","fac_rows","fac_ids","best_alpha","best_lambda
 boot1 <- function(b) {
   set.seed(b)
   idb <- unlist(fac_rows[sample(fac_ids, length(fac_ids), replace=TRUE)], use.names=FALSE)
-  fb  <- glmnet(X[idb,], y[idb], family="poisson", offset=off[idb], alpha=best_alpha, lambda=best_lambda)
-  mub <- as.numeric(predict(fb, newx=X[idb,], newoffset=rep(0, length(idb)), s=best_lambda, type="response"))
+  Xb  <- X[idb, ]                                   # build the resampled design ONCE (reused below)
+  fb  <- glmnet(Xb, y[idb], family="poisson", offset=off[idb], alpha=best_alpha, lambda=best_lambda)
+  mub <- as.numeric(predict(fb, newx=Xb, newoffset=rep(0, length(idb)), s=best_lambda, type="response"))
   w   <- act[idb]
   agg <- function(key) { kk <- key[idb]; tapply(seq_along(kk), kk, function(i) wmean(mub[i], w[i])) }
   ref <- as.numeric(predict(fb, newx=Xref, newoffset=rep(0, nrow(Xref)), s=best_lambda, type="response"))
   list(fig=agg(keyf), natl=agg(keyn), dcm=agg(keyd), ref=ref)
 }
 cat(sprintf("Bootstrap B=%d across %d workers...\n", NBOOT, NWORKERS)); flush(.log)
-bdraws <- parLapply(cl, seq_len(NBOOT), boot1)
+# Batched so progress is visible (parLapply over all B prints nothing until done). Batching does
+# NOT change results: each boot1 seeds by its own draw index b, so draws are order-independent.
+.bt0 <- Sys.time(); bdraws <- vector("list", NBOOT)
+.batches <- split(seq_len(NBOOT), cut(seq_len(NBOOT), min(NBOOT, 10L), labels = FALSE))
+for (.bi in seq_along(.batches)) {
+  .ix <- .batches[[.bi]]
+  bdraws[.ix] <- parLapply(cl, .ix, boot1)
+  cat(sprintf("  [%s] bootstrap %d/%d draws (%.0fs elapsed)\n", format(Sys.time(),"%H:%M:%S"),
+              max(.ix), NBOOT, as.numeric(difftime(Sys.time(), .bt0, units="secs")))); flush(.log)
+}
 ci <- function(cells, comp) {
   m <- sapply(bdraws, function(z) z[[comp]][cells]); # cells x B (NA if cell absent in a draw)
   data.table(lo = apply(m, 1, quantile, 0.025, na.rm=TRUE), hi = apply(m, 1, quantile, 0.975, na.rm=TRUE))
