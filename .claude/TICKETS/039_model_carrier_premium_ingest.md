@@ -98,9 +98,15 @@ LOCKED DECISIONS
 - No carrier kernel, no carrier FE, no facility FE; keep 17 state FEs. Static expectations.
 - gamma_r / H*D / hazard / costs / tolerances / gates UNCHANGED.
 - Limit fixed $1M. Imputed carriers -> market-mean card + premium_imputed flag (robustness re-fit).
-- (coder Q1, 2026-06-27) age_bin = INTEGER model bin 1-8 EVERYWHERE — boy_composition_long AND the
-  rate_engines/*.csv cards (NOT "0-5" strings). After `as.integer(age_bin)` add
-  `stopifnot(!anyNA(bin), all(bin %in% 1:8))` so a type mismatch fails loud, not silent.
+- (coder Q1, CORRECTED 2026-06-27) TWO age_bin formats, each handled separately in PM02:
+  (i) boy_composition_long = INTEGER model bin 1-8 -> `as.integer`;
+  (ii) the rate_engines/*.csv cards = STRING band labels "0-5","5-10","10-15","15-20","20-25",
+       "25-30","30-35","35+" (human-transcribed from filings) -> mapped to 1-8 via AGE_BIN_MAP.
+  My earlier "integer everywhere" was WRONG for the engine cards — string labels are natural for
+  transcription and PM02's AGE_BIN_MAP path is CORRECT as-is (do NOT rewrite it). The 8 label strings
+  are AGE_BIN_MAP's keys = the engine-CSV contract (036 transcription must emit exactly these).
+  After EACH age_bin->bin conversion (engine via AGE_BIN_MAP, boy via as.integer) add
+  `stopifnot(!anyNA(bin), all(bin %in% 1:8))` so an unmapped/typo label fails loud, not silent.
 - (coder Q2) Unmatched TX facility-years (uninsured / NO COVERAGE / thin 2006-07) get
   carrier="IMPUTED", premium_imputed=1 — FILL the LEFT-join NA BEFORE the assertion; do NOT drop
   them (keeps the current model's TX sample; they take the share-weighted market-mean card like
