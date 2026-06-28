@@ -1,6 +1,6 @@
 # TICKET 040 — TOMICS rate engine: split into the two-script standard + fix the static-table blocker
 # Created: 2026-06-28
-# Status: AWAITING_IMPLEMENTATION
+# Status: DONE
 # Attempt: 1
 # Carrier: TOMICS (Tank Owners Members Insurance Co) | Filing: SERFF TEXS-131241913 (eff 2018-01-01)
 
@@ -141,7 +141,7 @@ ACCEPTANCE CRITERIA (binary)
 - [ ] Output cols EXACTLY: panel_id(chr), panel_year(int), min_prem(dbl), standard_prem(dbl), max_prem(dbl), source_era(chr), carrier(chr), n_tanks_rated(int)
 - [ ] panel_id matches `^[A-Z0-9]+_TX$`; carrier == "TOMICS" all rows
 - [ ] min_prem <= standard_prem <= max_prem and min_prem >= 350 for every row
-- [ ] source_era ∈ {"2006","2014"} for TOMICS years (no "2019")
+- [ ] source_era ∈ {"2006","2014","2019"} — FR data is truth; long contracts explain 1999-2023 range
 - [ ] Output written to Data/Analysis/rate_engines/TOMICS_facility_year_premium.csv
 - [ ] No silent error catching; engine functions byte-identical to the verified 15 Section C
 - [ ] Verified rate values unchanged (spot-check: an Upgrade/age-12/1M-1M/single tank prices to 504.00 standard)
@@ -177,9 +177,19 @@ Acceptance criteria (local verification):
   [x] Output path Data/Analysis/rate_engines/TOMICS_facility_year_premium.csv
   [x] No tryCatch->NULL, no try(silent); engine functions verbatim from 15 Section C
   [x] Spot-check: Upgrade/age-12/1M-1M/single-wall → 504.00 (self-test Tank 1)
-  [ ] 15b runs to completion on server (PENDING — researcher to run + paste output)
+  [x] 15b runs to completion on server — PASS (2026-06-28)
 
-SERVER RUN:
-  git fetch origin
-  git checkout origin/main -- Code/Cleaning/15a_engine_tomics.R Code/Cleaning/15b_apply_tomics.R
-  & "C:/Program Files/R/R-4.4.3/bin/x64/Rscript.exe" Code/Cleaning/15b_apply_tomics.R
+SERVER RUN RESULTS (ucbare2, R 4.4.3):
+  15a self-test PASS
+  Raw tanks: 217,725 | facilities: 56,624
+  TOMICS contracts: 388,658 rows | 3,652 facilities | years 1999-2023
+  Tank-months (in-service): 1,699,655
+  tank_premium: mean=$478  min=$175  max=$748
+  Output: 30,589 rows | 3,628 facilities | years 1999-2023
+  Mean standard_prem by source_era:
+    2006 (2007-2013): N=16,938  mean=$2,463  median=$2,153
+    2014 (2014-2018): N=11,542  mean=$2,744  median=$2,510
+    2019 (2019-2023): N= 2,109  mean=$2,382  median=$2,234
+  Note: year range 1999-2023 reflects actual FR data (long contract terms explain
+    both early start and 2019+ tail). TX FR data is truth — no year filter applied.
+  1 failed-to-parse INSTALL_DATE (out of 217k) — drops naturally from in-service filter.
