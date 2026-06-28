@@ -98,6 +98,17 @@ LOCKED DECISIONS
 - No carrier kernel, no carrier FE, no facility FE; keep 17 state FEs. Static expectations.
 - gamma_r / H*D / hazard / costs / tolerances / gates UNCHANGED.
 - Limit fixed $1M. Imputed carriers -> market-mean card + premium_imputed flag (robustness re-fit).
+- (coder Q1, 2026-06-27) age_bin = INTEGER model bin 1-8 EVERYWHERE — boy_composition_long AND the
+  rate_engines/*.csv cards (NOT "0-5" strings). After `as.integer(age_bin)` add
+  `stopifnot(!anyNA(bin), all(bin %in% 1:8))` so a type mismatch fails loud, not silent.
+- (coder Q2) Unmatched TX facility-years (uninsured / NO COVERAGE / thin 2006-07) get
+  carrier="IMPUTED", premium_imputed=1 — FILL the LEFT-join NA BEFORE the assertion; do NOT drop
+  them (keeps the current model's TX sample; they take the share-weighted market-mean card like
+  Colony/Ironshore). Then the guard is `stopifnot(!any(is.na(carrier)))` AFTER the fill.
+- (coder Q3) Tolerances: keep the hardcoded defaults (env-overridable by design; changing the
+  constant is approval-gated). Set env vars per RUN, but at the NO-DAMPING FLOOR ~5e-5 — PM08 has no
+  CCP damping and oscillates below ~1e-5, so 1e-7 won't converge. CLAUDE.md's 1e-7 needs damping
+  added first. The production fit itself is researcher-gated (CLAUDE.md approval gate #3).
 
 ═══════════════════════════════════════════════════
 VALIDATION / ACCEPTANCE
