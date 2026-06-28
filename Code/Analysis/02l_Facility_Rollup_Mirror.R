@@ -318,7 +318,7 @@ for (v in c("MG2", "MG1", "FULL")) {
 }
 
 att_dt <- rbindlist(att_rows)
-stopifnot(nrow(att_dt) == 14L)
+stopifnot(nrow(att_dt) == length(MARGINS) * 3L)   # 7 margins x 3 FE rungs (MG2/MG1/FULL) = 21
 fwrite(att_dt, file.path(OUTPUT_TABLES, "T_Facility_Rollup_ATT.csv"))
 cat(sprintf("  T_Facility_Rollup_ATT.csv: %d rows\n", nrow(att_dt)))
 
@@ -502,7 +502,7 @@ if (!requireNamespace("fwildclusterboot", quietly = TRUE)) {
     }
   }
   boot_dt <- rbindlist(boot_rows)
-  stopifnot(nrow(boot_dt) == 14L)
+  stopifnot(nrow(boot_dt) == length(MARGINS) * 3L)   # 7 x 3 = 21
   fwrite(boot_dt, file.path(OUTPUT_TABLES, "T_Facility_Bootstrap_SEs.csv"))
   cat(sprintf("  T_Facility_Bootstrap_SEs.csv: %d rows\n", nrow(boot_dt)))
   bootstrap_ran <- TRUE
