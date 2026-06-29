@@ -404,6 +404,7 @@ COMP_CONT_COLS  <- c("oldest_age", "youngest_age", "age_spread",
 for (col in COMP_SHARE_COLS)
   cv_data[is.na(get(col)), (col) := 0]
 for (col in COMP_CONT_COLS) {
+  cv_data[, (col) := as.numeric(get(col))]   # ensure double before mean impute
   m <- mean(cv_data[[col]], na.rm = TRUE)
   cv_data[is.na(get(col)), (col) := m]
 }
@@ -652,6 +653,7 @@ if (USE_ELNET) {
 
   for (col in COMP_SHARE_COLS) full_data[is.na(get(col)), (col) := 0]
   for (col in COMP_CONT_COLS) {
+    full_data[, (col) := as.numeric(get(col))]   # ensure double before mean impute
     m <- mean(full_data[[col]], na.rm = TRUE)
     full_data[is.na(get(col)), (col) := m]
   }
