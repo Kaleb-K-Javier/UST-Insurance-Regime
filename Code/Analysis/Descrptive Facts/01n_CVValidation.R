@@ -517,23 +517,38 @@ if (USE_ELNET) {
   registerDoParallel(elnet_cl)
   on.exit(stopCluster(elnet_cl), add = TRUE)
 
-  cat(sprintf("\n--- Alpha tuning: %d values, K=%d, %d threads (parallel over alphas) ---\n",
+  cat(sprintf("\n--- Alpha tuning: %d values, K=%d, %d threads ---\n",
       length(ELNET_ALPHA), K_FOLDS, NUM_THREADS))
 
-  # parLapply over alphas — all alpha values fit simultaneously; parallel=FALSE
-  # inside each cv.glmnet avoids nested parallelism (PSOCK workers don't inherit
-  # the foreach backend, so parallel=TRUE inside would be silently sequential anyway)
-  clusterExport(elnet_cl, c("X_tune", "Y_tune", "fold_tune"), envir = environment())
-  clusterEvalQ(elnet_cl, library(glmnet))
-
-  alpha_results <- parLapply(elnet_cl, ELNET_ALPHA, function(a) {
-    set.seed(20260202L)
-    cv_fit <- cv.glmnet(
-      x = X_tune, y = Y_tune, family = "binomial", alpha = a,
-      foldid = fold_tune, type.measure = "deviance", parallel = FALSE
-    )
-    list(alpha = a, cv_fit = cv_fit, best_dev = min(cv_fit$cvm))
-  })
+  # Alpha tuning parallelism strategy (Windows PSOCK):
+  #   TEST_MODE: parLapply over alphas — X_tune is a 30% subsample (~700k rows),
+  #     small enough to serialize to each worker. parallel=FALSE inside each
+  #     cv.glmnet (PSOCK workers don't inherit the foreach backend; nested
+  #     parallel=TRUE would be silently serial anyway).
+  #   Production: lapply over alphas with parallel=TRUE inside — X_tune = X_elnet
+  #     (~2.3M x 146). Serializing to 11 workers would be ~30GB; use the registered
+  #     doParallel backend to parallelize over folds instead (no matrix duplication).
+  if (TEST_MODE) {
+    clusterExport(elnet_cl, c("X_tune", "Y_tune", "fold_tune"), envir = environment())
+    clusterEvalQ(elnet_cl, library(glmnet))
+    alpha_results <- parLapply(elnet_cl, ELNET_ALPHA, function(a) {
+      set.seed(20260202L)
+      cv_fit <- cv.glmnet(
+        x = X_tune, y = Y_tune, family = "binomial", alpha = a,
+        foldid = fold_tune, type.measure = "deviance", parallel = FALSE
+      )
+      list(alpha = a, cv_fit = cv_fit, best_dev = min(cv_fit$cvm))
+    })
+  } else {
+    alpha_results <- lapply(ELNET_ALPHA, function(a) {
+      set.seed(20260202L)
+      cv_fit <- cv.glmnet(
+        x = X_tune, y = Y_tune, family = "binomial", alpha = a,
+        foldid = fold_tune, type.measure = "deviance", parallel = TRUE
+      )
+      list(alpha = a, cv_fit = cv_fit, best_dev = min(cv_fit$cvm))
+    })
+  }
   for (r in alpha_results)
     cat(sprintf("  alpha=%.2f  lambda.min=%.6f  CV deviance=%.5f\n",
                 r$alpha, r$cv_fit$lambda.min, r$best_dev))
