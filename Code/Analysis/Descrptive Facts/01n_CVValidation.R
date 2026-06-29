@@ -492,7 +492,7 @@ if (USE_ELNET) {
   cat(sprintf("  CV folds: K=%d, facility-grouped, state-stratified (%d states)\n",
       K_FOLDS, uniqueN(cv_data$state)))
 
-  ELNET_ALPHA <- if (TEST_MODE) c(0.0, 0.5, 1.0) else c(0.0, 0.25, 0.5, 0.75, 1.0)
+  ELNET_ALPHA <- if (TEST_MODE) c(0, 0.25, 0.5, 0.75, 1.0) else seq(0, 1, by = 0.1)
 
   # ---- Alpha tuning -----------------------------------------------------------
   # TEST_MODE: subsample facilities (30%) to speed up alpha search.
