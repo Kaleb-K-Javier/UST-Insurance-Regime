@@ -517,20 +517,26 @@ if (USE_ELNET) {
   registerDoParallel(elnet_cl)
   on.exit(stopCluster(elnet_cl), add = TRUE)
 
-  cat(sprintf("\n--- Alpha tuning: %d values, K=%d, %d threads ---\n",
+  cat(sprintf("\n--- Alpha tuning: %d values, K=%d, %d threads (parallel over alphas) ---\n",
       length(ELNET_ALPHA), K_FOLDS, NUM_THREADS))
 
-  alpha_results <- lapply(ELNET_ALPHA, function(a) {
+  # parLapply over alphas — all alpha values fit simultaneously; parallel=FALSE
+  # inside each cv.glmnet avoids nested parallelism (PSOCK workers don't inherit
+  # the foreach backend, so parallel=TRUE inside would be silently sequential anyway)
+  clusterExport(elnet_cl, c("X_tune", "Y_tune", "fold_tune"), envir = environment())
+  clusterEvalQ(elnet_cl, library(glmnet))
+
+  alpha_results <- parLapply(elnet_cl, ELNET_ALPHA, function(a) {
     set.seed(20260202L)
     cv_fit <- cv.glmnet(
       x = X_tune, y = Y_tune, family = "binomial", alpha = a,
-      foldid = fold_tune, type.measure = "deviance", parallel = TRUE
+      foldid = fold_tune, type.measure = "deviance", parallel = FALSE
     )
-    best_dev <- min(cv_fit$cvm)
-    cat(sprintf("  alpha=%.2f  lambda.min=%.6f  CV deviance=%.5f\n",
-                a, cv_fit$lambda.min, best_dev))
-    list(alpha = a, cv_fit = cv_fit, best_dev = best_dev)
+    list(alpha = a, cv_fit = cv_fit, best_dev = min(cv_fit$cvm))
   })
+  for (r in alpha_results)
+    cat(sprintf("  alpha=%.2f  lambda.min=%.6f  CV deviance=%.5f\n",
+                r$alpha, r$cv_fit$lambda.min, r$best_dev))
 
   best_alpha_idx <- which.min(sapply(alpha_results, `[[`, "best_dev"))
   best_alpha     <- alpha_results[[best_alpha_idx]]$alpha
@@ -889,15 +895,20 @@ cat(sprintf("  Resampling %d facilities, B=%d draws...\n", n_facs_cv, NBOOT_METR
 NBOOT_USE <- if (TEST_MODE) min(NBOOT_METRICS, 100L) else NBOOT_METRICS
 if (TEST_MODE) cat(sprintf("  TEST_MODE: using B=%d\n", NBOOT_USE))
 
-boot_metric_list <- vector("list", NBOOT_USE)
-for (b in seq_len(NBOOT_USE)) {
-  if (b %% 200L == 0L)
-    cat(sprintf("  [%s] bootstrap %d/%d\n", format(Sys.time(), "%H:%M:%S"), b, NBOOT_USE))
-  set.seed(20260202L + b)
+# Parallel bootstrap — export fixed OOS preds and row map to workers
+boot_pred_oos <- cv_data$pred_elnet
+boot_y_all    <- as.integer(cv_data$event_first_leak)
+clusterExport(elnet_cl,
+  c("fac_to_rows_cv", "fac_ids_cv", "n_facs_cv", "boot_pred_oos", "boot_y_all"),
+  envir = environment())
+clusterEvalQ(elnet_cl, { library(pROC); library(PRROC) })
+clusterSetRNGStream(elnet_cl, 20260202L)
+
+boot_metric_list <- parLapply(elnet_cl, seq_len(NBOOT_USE), function(b) {
   samp_f  <- sample(fac_ids_cv, n_facs_cv, replace = TRUE)
   row_idx <- unlist(fac_to_rows_cv[samp_f], use.names = FALSE)
-  p_b     <- cv_data$pred_elnet[row_idx]
-  y_b     <- as.integer(cv_data$event_first_leak[row_idx])
+  p_b     <- boot_pred_oos[row_idx]
+  y_b     <- boot_y_all[row_idx]
   n_b     <- length(y_b)
 
   auc_b <- tryCatch(
@@ -906,15 +917,15 @@ for (b in seq_len(NBOOT_USE)) {
   pr_b <- tryCatch({
     ev_idx <- which(y_b == 1L); ne_idx <- which(y_b == 0L)
     if (length(ev_idx) == 0L || length(ne_idx) == 0L) NA_real_ else
-      pr.curve(scores.class0 = p_b[ev_idx], scores.class1 = p_b[ne_idx])$auc.integral
+      PRROC::pr.curve(scores.class0 = p_b[ev_idx], scores.class1 = p_b[ne_idx])$auc.integral
   }, error = function(e) NA_real_)
   lift10_b <- tryCatch({
     ord_b <- order(p_b, decreasing = TRUE)[seq_len(ceiling(0.10 * n_b))]
     sum(y_b[ord_b]) / max(sum(y_b), 1L)
   }, error = function(e) NA_real_)
 
-  boot_metric_list[[b]] <- list(auc = auc_b, pr_auc = pr_b, lift10 = lift10_b)
-}
+  list(auc = auc_b, pr_auc = pr_b, lift10 = lift10_b)
+})
 
 boot_metrics <- rbindlist(lapply(boot_metric_list, as.data.table))
 metric_ci_dt <- boot_metrics[, .(
