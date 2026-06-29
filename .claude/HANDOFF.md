@@ -1,3 +1,126 @@
+# HANDOFF -- 2026-06-29 (T042 first-leak hazard rewrite DONE; server run pending)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T042 — 01n_CVValidation.R complete rewrite
+═══════════════════════════════════════════════════
+Modified: Code/Analysis/Descrptive Facts/01n_CVValidation.R (full rewrite)
+Archived: Code/Analysis/Descrptive Facts/Archive/01r_Leak_Rate.R (superseded recurrent Poisson)
+New ticket: .claude/TICKETS/042_first_leak_pricing_hazard.md
+
+Done:
+  - Regime-clean sample: TX panel_year<1999; control states ALL years >=1990
+  - factor(panel_year) year control in elnet design
+  - S2b: tank roster join from panel_dt.csv — 35 composition features (wall shares,
+    9 age-bin shares, 9 vintage-cohort shares, 6 capacity shares, 4 fuel shares, 5 summary stats)
+    Blank mm_capacity imputed to "Unknown-Cap"; has_single_walled derived from mm_wall
+  - Facility-grouped state-stratified CV folds (port from 01r STEP 2) — fixes leakage
+  - No class weights, no Platt scaling (follows 01p; breaks CI assumption)
+  - S4b: analytic IJ CIs — feglm unpenalized + cluster-robust sandwich + delta method
+    Cell-mean CIs (18 cells) + SW-DW contrast CIs -> Table_CV_CellRisk_RefContrast.csv
+  - S4c: cluster-resample metric CIs (B=1000) over fixed OOS preds, no model refit
+  - S7: Figure_CV_CellRisk gets geom_ribbon CI bands; new Figure_CV_CellRisk_Contrast
+  - All existing outputs/figures preserved
+
+Remaining (server run + review):
+  1. Push to server: git push origin main (on ucbare2: git pull)
+  2. Run TEST_MODE first: & "C:/Program Files/R/R-4.4.3/bin/x64/Rscript.exe" "Code/Analysis/Descrptive Facts/01n_CVValidation.R"
+  3. Verify gates: calibration 45° holds | DW>SW fixed (vintage features) | age gradient |
+     CI sanity | sample expansion (control states post-1999 > 0)
+  4. Gate 2: run Sonnet reviewer: .claude/run_reviewer_pro_api.ps1 -TicketID 042
+
+Issues:
+  - feglm column names need make.names() sanitization (handled in code)
+  - Year factor clamping for full-panel scoring (handled: panel_year_clamped)
+
+Resume: "Load CLAUDE.md. T042 01n rewrite complete, committed. Push to server and run in TEST_MODE to verify 5 gates, then Sonnet review."
+==========================
+
+# HANDOFF -- 2026-06-29 (STRUCTURAL RUN PLAN: two-gamma + carrier-premium + psi*R — run order locked, PM02 ingest refactor spec'd)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: two-gamma + carrier-premium + psi*R pipeline — run order + refactor spec (2026-06-29, Opus architect)
+═══════════════════════════════════════════════════
+WHAT: locked the full run order to get the NEW structural model (two-gamma exposure
+  gamma_p/gamma_r + carrier-specific premiums + psi*R operating) estimated and through
+  the CFs, and spec'd the PM02 premium-ingest refactor. Researcher runs this AFTER
+  finishing the remaining carrier rate manuals -> engine code. Coding handed to other
+  LLM agents (this is the spec for them).
+
+DECISIONS LOCKED (researcher, this session):
+  D1 OPERATING TERM = psi*R (measured revenue), NOT phi_G. => run the macro chain
+     (M01->M02->M03->M03b) so R_rev lands in PM_Lookups; PM08 runs with use_psi=TRUE.
+  D2 PM02 BUILDS THE PER-CARRIER CARD ITSELF from the facility-year premium files
+     (refactor option B). Engines emit ONLY `<KEY>_facility_year_premium.csv` (040
+     standard); the pre-collapsed `<carrier>_engine.csv` card input is RETIRED.
+  D3 RENAME the carrier card object `pbar_carrier` -> `avg_facility_premium`
+     (clearer: it is the average facility premium by cell x era x carrier). Blast
+     radius is ONLY 2 files: PM02_Lookups.R (defines/saves it) and PM03_State_Space.R
+     (reads `lk$pbar_carrier` at L50 to build `P_RB_all`). PM08/PM09 read `P_RB_all`
+     (PM03 output) and are UNTOUCHED by the rename.
+  D4 carrier + era dimensions come DIRECTLY from the facility-year file columns
+     (`carrier`, `source_era`) — no separate crosswalk needed in the lookups.
+  D5 IMPUTE every carrier we lack a filing for: IMPUTED card = priceable-carrier
+     (share-weighted) average; per-facility-year `premium_imputed` 0/1 flag marks
+     imputed vs real (already in the T039 design — carry it through the rename).
+  D6 CFs: add CF5 (raise flat fee to BREAK-EVEN on CO/LA/TN, per-STATE welfare
+     breakout) to PM09; PM10 consumer-surplus wrapper (ticket 041) targets CO/LA/TN.
+
+RUN ORDER (server ucbare2, repo root, R 4.4.3; Data/ is gitignored = server-resident):
+  STAGE 1 PREMIUM BUILD (Code/Cleaning + 04a):
+    - per-carrier engines NNa_engine_<carrier>.R + NNb_apply_<carrier>.R
+      -> Data/Analysis/rate_engines/<KEY>_facility_year_premium.csv
+      (KEYs: MID_CONTINENT, TOMICS, GREAT_AMERICAN, ZURICH, ACE, AIG; rest IMPUTED)
+  STAGE 2 REVENUE for psi*R (Code/Macro): M01_SEDS_tax -> M02_wholesale_margin ->
+    M03_revenue_lookup -> M03b_attach_R_rev. M03b ATTACHES R_rev into PM_Lookups.rds,
+    so M03b MUST run AFTER PM02 and BEFORE PM08 (M01-M03 can run anytime earlier).
+  STAGE 3 STRUCTURAL (Code/Dynamic_Model):
+    PM01_Estimation_Panel.R -> pm_panel.csv, pm_G_breaks.rds
+    PM02_Lookups.R          -> PM_Lookups.rds  (avg_facility_premium card + ALL_CARRIERS)
+    M03b_attach_R_rev.R     -> re-saves PM_Lookups.rds WITH R_rev   (Stage-2 join point)
+    PM03_State_Space.R      -> PM_StateSpace.rds, pm_agg_counts.csv (carrier col)
+    [PM04-PM07 = one-time benchmarks; skip on a normal run]
+    PM08_Estimator_v4.R     -> Model_Portfolio_v4_two_gamma_FE_on_observed_<date>.rds
+       $env:PM08_NWORKERS="13"; PM08_MAXITER="200"; PM08_TOL_THETA="1e-7"; PM08_TOL_P="1e-7"
+       (PM08_POOLED unset = two-gamma; PM08_NO_ALPHA unset = FE on; use_psi auto if psi in fit)
+  STAGE 4 CFs + WELFARE:
+    PM09_CF_Portfolio.R (CF_FIT_PATH=the new fit; CF_E_EXT=5.0; PM09_NWORKERS=15)
+      -> Output/Tables/CF{1,3,4}_*_Welfare.csv (+ CF5 once added) + PM09_CF_All_*.csv
+    PM10_CS_Welfare_Bound.R (ticket 041) -> Output/Tables|Figures/CS_Welfare_Bound_*
+
+CHANGE TASKS FOR THE CODING AGENTS (discrete; spec each from here):
+  T-A  PM02 refactor (D2+D3+D4): stop reading `<carrier>_engine.csv`; instead read all
+       `<KEY>_facility_year_premium.csv`, and (a) BUILD `avg_facility_premium[16 MARG x
+       3 ERAS x N_CARRIERS]` and (b) BUILD the per-facility carrier assignment that
+       currently comes from `tx_facility_premium_rebuilt.csv` (PM02 L171/216, PM03
+       L360/366) by stacking those files (write the rebuilt CSV for PM03, or have PM03
+       read the stacked files directly). RESHAPE NOTE TO CONFIRM: the card cell is
+       per-(wall,age) and the file is facility-level (sum over the portfolio); recover
+       per-cell values from HOMOGENEOUS facility-years (all tanks one cell) as
+       standard_prem / n_tanks_rated, averaged by (cell, era, carrier) — ~82% of
+       fac-yrs are homogeneous so the cell card is identified. Must preserve whatever
+       P_RB_all expects in PM03. Rename `pbar_carrier`->`avg_facility_premium` in PM02
+       (save) + PM03 (L50 read); leave P_RB_all and PM08/PM09 names alone.
+  T-B  Confirm M03b reads + re-saves PM_Lookups.rds (attach R_rev) and slot it AFTER
+       PM02, BEFORE PM03/PM08. PM08 L263 hard-stops if use_psi & R_rev absent.
+  T-C  PM09: add CF5 = break-even fee on CO/LA/TN, with PER-ENV (per-state) welfare
+       (restrict mu to each control env), not the FF aggregate. Reuse CF1's prem_override
+       machinery; fee level = mean fair premium from cross_subsidy_facility.csv.
+  T-D  PM10 (ticket 041) answers A1-A5 (this session): CF_ROW default = "CF1a_contract_rb1"
+       for the CF1 stand-in (CF5's single row for the real run); assert dNet==dPS-dExt-dGov
+       (dGov=0 for CF1/CF5); STATE=CO/LA/TN, year 2005; N_fac + break-even fee from
+       Data/Analysis/cross_subsidy_facility.csv; tau = state UST levy from the EIA
+       "Federal and state motor fuel taxes" table (CO Environmental Response Surcharge
+       ~$0.0094-0.0125/gal; LA/TN off the same table) — NOT SEDS gas_tax_state_usd_gal,
+       NOT NM, NOT TX. gamma_p now treated as a normal IDENTIFIED point (carrier work) ->
+       drop the [0,gamma_r] bracket; keep fee netted (draft "premiums net out").
+
+Resume: "Load CLAUDE.md + HANDOFF.md (this checkpoint) + Reports/Paper/
+  Structural_Model_Current_Spec.md + ticket 041. Run order Stage 1->4 is locked;
+  PM02 ingest refactor (T-A) is the main code task. Today: [build remaining carrier
+  engines] then [T-A PM02 refactor] -> run Stage 2-4."
+═══════════════════════════════════════════════════
+
+
 # HANDOFF -- 2026-06-28 (T040 TOMICS two-script engine: 15a PASS locally; 15b server run pending)
 
 ═══════════════════════════════════════════════════
@@ -3263,4 +3386,9 @@ Remaining:
 Resume: "Load CLAUDE.md + .claude/RATE_ENGINES_README.md. TOMICS engine reviewed +
   two-script standard written. Today: build TICKET 040 (15a/15b) or rule on the
   card-vs-facility-file output decision."
+==========================
+
+=== AUTO-CHECKPOINT: Pre-compaction 20260629_114612 ===
+Context approaching limit — state saved before compaction.
+Resume: Load CLAUDE.md and this HANDOFF.md.
 ==========================
