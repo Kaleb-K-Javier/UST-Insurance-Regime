@@ -491,21 +491,28 @@ if (!requireNamespace("fwildclusterboot", quietly = TRUE)) {
       mod <- feols(as.formula(sprintf(
         "%s ~ did_term + mandate_release_det + mandate_spill_overfill + mandate_integrity | panel_id + %s",
         mg, fe_col)), data = dat_est, cluster = ~state)
-      bt  <- fwildclusterboot::boottest(mod, param = "did_term", clustid = ~state,
-                                        B = 9999L, type = "rademacher")
+      # Guard: a per-model boottest failure must not halt the whole deferred bootstrap.
+      # It is LOGGED (not silently swallowed) and recorded as NA, then the loop continues.
+      bt  <- tryCatch(
+        fwildclusterboot::boottest(mod, param = "did_term", clustid = ~state,
+                                   B = 9999L, type = "rademacher"),
+        error = function(e) {
+          cat(sprintf("  WARN boottest FAILED %s|%s: %s\n", mg, v, conditionMessage(e)))
+          NULL })
       boot_rows[[key]] <- data.table(
         margin      = mg,
         fe_version  = v,
         beta        = coef(mod)["did_term"],
         analytic_se = se(mod)["did_term"],
-        wcb_p_value = bt$p_val,
-        wcb_ci_lo   = bt$conf_int[1L],
-        wcb_ci_hi   = bt$conf_int[2L],
+        wcb_p_value = if (is.null(bt)) NA_real_ else bt$p_val,
+        wcb_ci_lo   = if (is.null(bt)) NA_real_ else bt$conf_int[1L],
+        wcb_ci_hi   = if (is.null(bt)) NA_real_ else bt$conf_int[2L],
         B           = 9999L,
         n_clusters  = uniqueN(dat_est$state)
       )
-      cat(sprintf("  [%s] %-18s|%s  beta=%+.4f wcb_p=%.3f\n",
-          format(Sys.time(), "%H:%M:%S"), mg, v, coef(mod)["did_term"], bt$p_val))
+      cat(sprintf("  [%s] %-18s|%s  beta=%+.4f wcb_p=%s\n",
+          format(Sys.time(), "%H:%M:%S"), mg, v, coef(mod)["did_term"],
+          if (is.null(bt)) "FAILED" else sprintf("%.3f", bt$p_val)))
     }
   }
   boot_dt <- rbindlist(boot_rows)
