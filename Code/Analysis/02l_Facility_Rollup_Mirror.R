@@ -473,14 +473,26 @@ if (!requireNamespace("fwildclusterboot", quietly = TRUE)) {
   boot_rows <- list()
   for (v in c("oldtank_size", "full_portfolio")) {
     cat(sprintf("[%s] bootstrap version %s\n", format(Sys.time(), "%H:%M:%S"), v))
+    fe_col <- paste0("cell_comp_year_fe_", v)
     for (mg in MARGINS) {
-      key  <- paste(mg, v)
-      mod  <- models_static[[key]]
-      bt   <- fwildclusterboot::boottest(mod, param    = "did_term",
-                                              clustid  = ~state,
-                                              B        = 9999L,
-                                              type     = "rademacher")
+      key <- paste(mg, v)
+      # boottest cannot handle a fixest model that dropped FE singletons during estimation
+      # (errors on $fixef_removed). Refit on a singleton-free sample: iteratively drop singleton
+      # panel_id and comp-year cells until stable. Singletons contribute nothing to the FE
+      # estimate, so the did coef matches the Section-5 model; this just gives boottest a clean object.
       dat_est <- fy[!is.na(get(mg))]
+      repeat {
+        n0 <- nrow(dat_est)
+        dat_est[, .np := .N, by = panel_id];   dat_est <- dat_est[.np > 1L]
+        dat_est[, .nf := .N, by = c(fe_col)];   dat_est <- dat_est[.nf > 1L]
+        if (nrow(dat_est) == n0) break
+      }
+      dat_est[, c(".np", ".nf") := NULL]
+      mod <- feols(as.formula(sprintf(
+        "%s ~ did_term + mandate_release_det + mandate_spill_overfill + mandate_integrity | panel_id + %s",
+        mg, fe_col)), data = dat_est, cluster = ~state)
+      bt  <- fwildclusterboot::boottest(mod, param = "did_term", clustid = ~state,
+                                        B = 9999L, type = "rademacher")
       boot_rows[[key]] <- data.table(
         margin      = mg,
         fe_version  = v,
@@ -492,8 +504,8 @@ if (!requireNamespace("fwildclusterboot", quietly = TRUE)) {
         B           = 9999L,
         n_clusters  = uniqueN(dat_est$state)
       )
-      cat(sprintf("  [%s] %-18s|%s  wcb_p=%.3f\n",
-          format(Sys.time(), "%H:%M:%S"), mg, v, bt$p_val))
+      cat(sprintf("  [%s] %-18s|%s  beta=%+.4f wcb_p=%.3f\n",
+          format(Sys.time(), "%H:%M:%S"), mg, v, coef(mod)["did_term"], bt$p_val))
     }
   }
   boot_dt <- rbindlist(boot_rows)
