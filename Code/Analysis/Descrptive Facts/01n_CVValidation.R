@@ -168,7 +168,7 @@ stopifnot(
   "PRIMARY_MODEL = 'ELNET' requires USE_ELNET = TRUE" = !(PRIMARY_MODEL == "ELNET" && !USE_ELNET)
 )
 
-TEST_MODE <- TRUE
+TEST_MODE <- FALSE
 BEST_PARAMS_FIXED <- list(mtry = 7L, min.node.size = 5L, sample.fraction = 0.7)
 
 if (TEST_MODE && USE_GRF)
