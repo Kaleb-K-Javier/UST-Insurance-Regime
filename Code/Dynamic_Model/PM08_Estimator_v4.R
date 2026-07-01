@@ -38,11 +38,20 @@ cat(sprintf("  USE_PSI:        %s\n", use_psi))
 cat("\n=== SECTION: LOAD INPUTS ===\n")
 ss  <- readRDS(here::here("Output", "Estimation_Results", "PM_StateSpace.rds"))
 lk  <- readRDS(here::here("Output", "Estimation_Results", "PM_Lookups.rds"))
-agg <- fread(here::here("Data", "Analysis", "pm_agg_counts.csv"))
+agg <- fread(here::here("Data", "Analysis", "pm_agg_counts.csv"), na.strings = c("", "NA"))
 cat(sprintf("  pm_agg_counts: %d rows, cols: %s\n", nrow(agg), paste(names(agg), collapse = ",")))
 
-stopifnot(all(as.character(agg$era) %in% c("2006", "2014", "2019")))
+# Canonical sets (passed through PM_Lookups to avoid re-definition)
+ERAS         <- lk$ERAS         # c("2006","2014","2019")
+ALL_CARRIERS <- lk$ALL_CARRIERS # c(PRICEABLE_CARRIERS, "IMPUTED")
+
+# PM08_REAL_ENGINE_ONLY=1 -> robustness re-fit: drop IMPUTED envs (step 6)
+.real_engine_only <- nzchar(Sys.getenv("PM08_REAL_ENGINE_ONLY"))
+
+stopifnot(all(as.character(agg$era) %in% ERAS))
 cat("  era in {2006,2014,2019} [OK]\n")
+stopifnot(!any(agg[g == "TX", is.na(carrier)]))
+cat("  TX rows have non-NA carrier [OK]\n")
 
 beta     <- lk$BETA
 eps_prob <- 1e-10
@@ -96,7 +105,8 @@ cat("  post_cm spot-check [OK]\n")
 
 # === SECTION A1: ENVIRONMENTS ===
 cat("\n=== SECTION A1: ENVIRONMENTS ===\n")
-agg[, env_key := ifelse(g == "TX", paste0("RB_", era), as.character(g))]
+# carrier dimension added per TICKET 039: RB env key = "RB_<era>_<carrier>"
+agg[, env_key := ifelse(g == "TX", paste0("RB_", era, "_", carrier), as.character(g))]
 
 exit_dt     <- agg[action == "X", .(n_exit = sum(n_obs)), by = env_key]
 env_summary <- agg[, .(n_obs_total = sum(n_obs)), by = env_key]
@@ -111,6 +121,12 @@ cat(sprintf("  Folded (< %d exits): %s\n",
             EXIT_FLOOR, if (length(ff_drop) > 0) paste(ff_drop, collapse = ", ") else "none"))
 
 env_keep <- env_summary[!env_key %in% ff_drop, env_key]
+# Robustness re-fit: drop IMPUTED envs (PM08_REAL_ENGINE_ONLY=1)
+if (.real_engine_only) {
+  env_keep <- env_keep[!grepl("_IMPUTED$", env_keep)]
+  cat(sprintf("  *** PM08_REAL_ENGINE_ONLY: %d envs after dropping IMPUTED ***\n",
+              length(env_keep)))
+}
 .fast_test <- nzchar(Sys.getenv("PM08_TEST_NENV"))   # PM08_TEST_NENV=N -> N FF envs + 1 RB
 if (.fast_test) {
   .nff <- max(1L, as.integer(Sys.getenv("PM08_TEST_NENV")))
@@ -124,7 +140,13 @@ n_env    <- length(env_keep)
 rb_envs  <- env_keep[grepl("^RB_", env_keep)]
 ff_envs  <- env_keep[!grepl("^RB_", env_keep)]
 n_ff     <- length(ff_envs)
-if (!.fast_test) stopifnot(length(rb_envs) == 3L)
+# Parse era and carrier from RB env keys ("RB_<era>_<carrier>")
+rb_eras     <- sub("^RB_(2006|2014|2019)_.*$", "\\1", rb_envs)
+rb_carriers <- sub("^RB_(2006|2014|2019)_(.+)$", "\\2", rb_envs)
+if (!.fast_test)
+  stopifnot(length(rb_envs) >= 3L,
+            all(rb_eras %in% ERAS),
+            all(rb_carriers %in% ALL_CARRIERS))
 cat(sprintf("  Survivors: %d envs (RB=%d, FF=%d)\n", n_env, length(rb_envs), n_ff))
 cat(sprintf("  Env list: %s\n", paste(sort(env_keep), collapse = " ")))
 
@@ -133,12 +155,18 @@ stopifnot(all(agg_keep$env_key %in% env_keep))
 cat(sprintf("  All %d agg_keep rows map to a survivor env [OK]\n", nrow(agg_keep)))
 
 # Build env table
+# RB env_key format: "RB_<era>_<carrier>" (carrier may contain underscores; parse by era anchor)
 env_tbl <- data.table(
   env_idx    = seq_len(n_env),
   env_key    = env_keep,
   type       = ifelse(grepl("^RB_", env_keep), "RB", "FF"),
   g          = ifelse(grepl("^RB_", env_keep), "TX", env_keep),
-  era_str    = ifelse(grepl("^RB_", env_keep), sub("^RB_", "", env_keep), NA_character_),
+  era_str    = ifelse(grepl("^RB_", env_keep),
+                      sub("^RB_(2006|2014|2019)_.*$", "\\1", env_keep),
+                      NA_character_),
+  carrier    = ifelse(grepl("^RB_", env_keep),
+                      sub("^RB_(2006|2014|2019)_(.+)$", "\\2", env_keep),
+                      NA_character_),
   alpha_slot = ifelse(grepl("^RB_", env_keep), NA_character_, env_keep)
 )
 d_vals   <- numeric(n_env)
@@ -187,6 +215,7 @@ cat(sprintf("  haz_j [%d x %d], feasible range [%.4f, %.4f]\n",
             C, n_act, min(haz_j[feas_mask]), max(haz_j[feas_mask])))
 
 # prem_ej: list n_env, each C x n_act (premium at post-action comp for env e, work action i)
+# RB envs: ss$P_RB_all[pc, era_str, carrier] — 3D array indexed by carrier (TICKET 039)
 prem_ej <- vector("list", n_env)
 for (e in seq_len(n_env)) {
   pm <- matrix(0.0, nrow = C, ncol = n_act)
@@ -196,7 +225,7 @@ for (e in seq_len(n_env)) {
     if (length(valid) == 0L) next
     pc <- post_cm[valid, i]
     pm[valid, i] <- if (ev$type == "RB") {
-      ss$P_RB_all[pc, ev$era_str]
+      ss$P_RB_all[pc, ev$era_str, ev$carrier]
     } else {
       ev$tau * ss$N_vec[pc]
     }
@@ -204,6 +233,26 @@ for (e in seq_len(n_env)) {
   prem_ej[[e]] <- pm
 }
 cat(sprintf("  prem_ej: %d env x [%d x %d] [OK]\n", n_env, C, n_act))
+
+# Pre-fit diagnostic: within-(era, pc) premium CV from carrier variation
+# (new orthogonal variation; TICKET 039 acceptance check)
+cat("=== PRE-FIT DIAGNOSTIC: within-(era, pc) carrier premium CV ===\n")
+rb_era_list <- sort(unique(env_tbl$era_str[env_tbl$type == "RB"]))
+for (era_l in rb_era_list) {
+  era_envs <- which(env_tbl$type == "RB" & env_tbl$era_str == era_l)
+  if (length(era_envs) < 2L) { cat(sprintf("  era %s: only 1 carrier env, CV=0\n", era_l)); next }
+  set.seed(123L)
+  pc_samp <- sample(seq_len(C), min(500L, C))
+  cv_vals <- sapply(pc_samp, function(pc) {
+    prems <- sapply(era_envs, function(e) prem_ej[[e]][pc, maint_idx])
+    if (all(prems == prems[1L]) || mean(prems) == 0) return(0)
+    sd(prems) / mean(prems)
+  })
+  cat(sprintf("  era %s (%d carrier envs): median within-(era,pc) CV = %.4f (must be > 0)\n",
+              era_l, length(era_envs), median(cv_vals, na.rm = TRUE)))
+}
+stopifnot(length(rb_era_list) >= 1L)
+cat("  CV diagnostic PASS (at least 1 RB era present)\n")
 
 # R_rev_e: per-env MEASURED revenue R(G, state, era), length-4 over G (T029). Only built
 # under use_psi. Mirrors prem_ej's env/era path: RB -> R_rev[,"TX",era_str]; FF (era-pooled,
@@ -400,7 +449,7 @@ for (si in spot_sidx) {
       ai <- which(k_vec == ki & m_vec == mi)
       pc <- post_cm[c_s, ai]
       if (is.na(pc)) next
-      prem_formula <- if (ev$type == "RB") ss$P_RB_all[pc, ev$era_str] else ev$tau * ss$N_vec[pc]
+      prem_formula <- if (ev$type == "RB") ss$P_RB_all[pc, ev$era_str, ev$carrier] else ev$tau * ss$N_vec[pc]
       haz_formula  <- lk$h_aw[ss$h_idx[pc]]
       stopifnot(abs(prem_formula - prem_ej[[e]][c_s, ai]) < 1e-12)
       stopifnot(abs(haz_formula  - haz_j[c_s, ai])        < 1e-12)
@@ -1257,7 +1306,8 @@ cat("\n=== SECTION: SAVE FIT ===\n")
 sample_label <- paste0(
   if (use_pooled) "pooled" else "two_gamma",
   if (use_psi)    "_psiR"  else "",
-  if (use_alpha)  "_FE_on" else "_FE_off"
+  if (use_alpha)  "_FE_on" else "_FE_off",
+  if (.real_engine_only) "_carrier_real_engine" else "_carrier"
 )
 fit_path <- here::here("Output", "Estimation_Results",
   sprintf("Model_Portfolio_v4_%s_observed_%s.rds",

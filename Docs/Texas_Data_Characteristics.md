@@ -54,8 +54,17 @@ Do NOT flag these as unobservable — they are explicit `"Y"/"N"` columns.
 - **`ISSUER_NAME` is the FR *mechanism***, not carrier-among-insured: ~78% of facility-years are
   `NO COVERAGE` / `SELF(FIN TEST OR LOCAL GOV FT)` / `PARENT (GUARANTEE)`; only ~22% are real carriers.
   TOMICS = `TANK OWNERS MEMBERS INS CO`; some rows are pipe-joined combos (`A | B`).
-- **Construction/detection Y/N flags live ONLY in the raw tank file** — the model panels (`panel_dt`)
-  carry wall/age/capacity but dropped the finer dummies. Use the raw `pst_ust` for FRP / interstitial / piping.
+- **Construction/detection live ONLY in `raw_pst_ust.csv`** (217,725 tanks, 107 cols) — the model
+  panels (`panel_dt`) carry only `mm_wall`/capacity/age. The raw file has BOTH raw flags AND pre-built
+  derived dummies — **USE THE DERIVED DUMMIES** (all TRUE/FALSE, consistent):
+  `single_walled`/`double_walled`; `is_fiberglass_tank` (=FRP, 53k), `is_composite_tank` (41k),
+  `is_steel_tank`; `has_interstitial_det`/`has_electronic_det`/`has_manual_stat_det`/`has_any_det`;
+  fuel `is_gasoline`/`is_diesel`/`is_oil_kerosene`/`is_jet_fuel`/`is_other`. Finer raw flags exist too:
+  `TANK_MAT_*`, `PIP_MAT_FLEX` (flex pipe, 21k), `DET_C_INTERSTITIAL`/`DET_P_INTERSTITIAL`, `CORR_TANK_CP`.
+- **MIXED-CODING TRAP in the raw tank file**: `TANK_SINGLE`/`TANK_DOUBLE` are **`TRUE`/`FALSE`**, but
+  `TANK_MAT_*`/`PIP_*`/`DET_*`/`CORR_*` are **`Y`/`N`**. So Mid-Continent's `TANK_DOUBLE == "Y"`
+  (`12_Rate_MidCont` §A) silently yields **all-FALSE** wall dummies against this file — use the pre-built
+  `single_walled`/`double_walled` instead. (Material/detection `== "Y"` are fine; only the wall flags are the trap.)
 - **Deductible**: CONFIRMED absent from BOTH the FR panel and the contract panel
   (`texas_fr_contract_month_panel.csv` cols are `…COVER_OCC, COVER_AGG, PREMIUM_PREPAID, PROOF_OF_FA,
   FP_CORR_MET, TP_FA_MET, USE_PRIVATE, USE_SELF` — no deductible). Mid-Continent assumes the standard

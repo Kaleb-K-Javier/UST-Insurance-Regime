@@ -45,9 +45,12 @@ bin_age <- function(a) {
 # 0. Load lookups needed for statics
 # ==============================================================================
 cat("=== SECTION 0: load lookups ===\n")
-lk   <- readRDS(file.path(RES_DIR, "PM_Lookups.rds"))
-pbar <- lk$pbar    # 16 x 3 (MARG order x eras)
-adv  <- lk$adv     # length-8 advance probabilities; adv[8]=0
+lk           <- readRDS(file.path(RES_DIR, "PM_Lookups.rds"))
+pbar         <- lk$pbar          # 16 x 3 (MARG order x eras) — legacy / marginal fallback
+pbar_carrier <- lk$pbar_carrier  # 16 x 3 x 7 [MARG, ERAS, ALL_CARRIERS] — carrier-specific cards
+adv          <- lk$adv           # length-8 advance probabilities; adv[8]=0
+ERAS         <- lk$ERAS          # c("2006","2014","2019")
+ALL_CARRIERS <- lk$ALL_CARRIERS  # c(PRICEABLE_CARRIERS, "IMPUTED")
 
 # ==============================================================================
 # 1. Enumerate compositions: all 16-vectors n with 1 <= sum(n) <= N_BAR
@@ -95,10 +98,20 @@ majwall_int <- as.integer(majwall == "DW") + 1L           # SW=1, DW=2
 h_idx <- (majwall_int - 1L) * 8L + abar_bin
 stopifnot(all(h_idx >= 1L), all(h_idx <= 16L))
 
-# P_RB by era: comp_mat %*% pbar (vectorized, C x 3)
-P_RB_all <- comp_mat %*% pbar     # C x 3; colnames = c("2006","2014","2019")
-cat(sprintf("  P_RB_2006 range: [%.4f, %.4f] (model units)\n",
-            min(P_RB_all[,1]), max(P_RB_all[,1])))
+# P_RB by era x carrier: comp_mat %*% pbar_carrier[, era, carrier] -> C x era x carrier 3D array
+# NA in pbar_carrier for (era, carrier) combos not observed in data -> NA in P_RB_all;
+# those (era, carrier) combos will never appear in env_keep so prem_ej never reads them.
+P_RB_all <- array(NA_real_,
+  dim      = c(C, length(ERAS), length(ALL_CARRIERS)),
+  dimnames = list(NULL, ERAS, ALL_CARRIERS))
+for (cr in ALL_CARRIERS) {
+  P_RB_all[, , cr] <- comp_mat %*% pbar_carrier[, , cr]
+}
+cat(sprintf("  P_RB_all: [%d x %d x %d] (C x eras x carriers)\n",
+            dim(P_RB_all)[1L], dim(P_RB_all)[2L], dim(P_RB_all)[3L]))
+cat(sprintf("  P_RB_all[,'2006','MID_CONTINENT'] range: [%.4f, %.4f] (model units)\n",
+            min(P_RB_all[, "2006", "MID_CONTINENT"], na.rm = TRUE),
+            max(P_RB_all[, "2006", "MID_CONTINENT"], na.rm = TRUE)))
 
 # ==============================================================================
 # 3. Removal map rmap[C, 0:K_BAR]
@@ -343,14 +356,45 @@ incl <- pm[excl_state == 0L & excl_expansion == 0L & excl_bigN == 0L &
 cat(sprintf("  included rows with valid sidx: %s (of %s total pm_panel rows)\n",
             format(nrow(incl), big.mark=","), format(nrow(pm), big.mark=",")))
 
-agg_counts <- incl[, .(n_obs = .N), by = .(sidx, g, era, action)]
-setorder(agg_counts, sidx, g, era, action)
+# --- Carrier assignment (TICKET 039): stamp each TX obs with its carrier ---
+REBUILT_CSV <- file.path(DATA_DIR, "tx_facility_premium_rebuilt.csv")
+stopifnot(
+  "tx_facility_premium_rebuilt.csv missing — run TICKET 036 first" =
+    file.exists(REBUILT_CSV)
+)
+cat(sprintf("  [GATE 036] tx_facility_premium_rebuilt.csv: OK\n"))
+rebuilt <- fread(REBUILT_CSV,
+                 select = c("panel_id", "panel_year", "carrier", "premium_imputed"))
+rebuilt[, panel_id    := as.character(panel_id)]
+rebuilt[, panel_year  := as.integer(panel_year)]
+rebuilt[, carrier     := as.character(carrier)]
+rebuilt[, premium_imputed := as.integer(premium_imputed)]
+
+# Left-join onto incl: TX obs get (carrier, premium_imputed); non-TX rows get NA
+incl <- merge(incl, rebuilt, by = c("panel_id", "panel_year"), all.x = TRUE)
+
+n_tx_miss <- incl[g == "TX" & is.na(carrier), .N]
+if (n_tx_miss > 0L)
+  warning(sprintf("  %d TX included rows have no carrier match in rebuilt CSV", n_tx_miss))
+cat(sprintf("  TX carrier distribution (included sample):\n"))
+print(incl[g == "TX", .(n = .N), by = carrier][order(-n)])
+
+# TX: group by (sidx, g, era, carrier, action); non-TX: carrier = NA (grouping unchanged)
+agg_counts <- incl[, .(n_obs = .N), by = .(sidx, g, era, carrier, action)]
+setorder(agg_counts, sidx, g, era, carrier, action)
 # enforce types
-agg_counts[, sidx   := as.integer(sidx)]
-agg_counts[, g      := as.character(g)]
-agg_counts[, era    := as.character(era)]
-agg_counts[, action := as.character(action)]
-agg_counts[, n_obs  := as.integer(n_obs)]
+agg_counts[, sidx            := as.integer(sidx)]
+agg_counts[, g               := as.character(g)]
+agg_counts[, era             := as.character(era)]
+agg_counts[, carrier         := as.character(carrier)]
+agg_counts[, action          := as.character(action)]
+agg_counts[, n_obs           := as.integer(n_obs)]
+# premium_imputed: 1 for IMPUTED envs, 0 for real-engine TX, NA for FF/controls
+agg_counts[, premium_imputed := fcase(
+  g != "TX",            NA_integer_,
+  carrier == "IMPUTED", 1L,
+  default =             0L
+)]
 
 stopifnot(sum(agg_counts$n_obs) == nrow(incl))
 cat(sprintf("  agg_counts: %s rows | sum(n_obs)=%s == included rows: PASS\n",
@@ -358,8 +402,10 @@ cat(sprintf("  agg_counts: %s rows | sum(n_obs)=%s == included rows: PASS\n",
             format(sum(agg_counts$n_obs), big.mark=",")))
 cat("  agg_counts action distribution:\n")
 print(agg_counts[, .(n_obs = sum(n_obs)), by = action][order(-n_obs)])
+cat("  agg_counts carrier distribution (TX only):\n")
+print(agg_counts[g == "TX", .(n_obs = sum(n_obs)), by = carrier][order(-n_obs)])
 
-fwrite(agg_counts, file.path(DATA_DIR, "pm_agg_counts.csv"))
+fwrite(agg_counts, file.path(DATA_DIR, "pm_agg_counts.csv"), na = "NA")
 cat(sprintf("  saved %s\n", file.path(DATA_DIR, "pm_agg_counts.csv")))
 
 # ==============================================================================

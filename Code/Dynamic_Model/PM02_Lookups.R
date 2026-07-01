@@ -20,6 +20,14 @@ ERAS     <- c("2006", "2014", "2019")     # 3 portfolio eras
 # 04a ERA_BOUNDS (lines 82-87); 2021 byte-identical to 2019 (line 266)
 era_of_year <- function(y) fcase(y <= 2013L, "2006", y <= 2018L, "2014", default = "2019")
 
+# Canonical carrier keys (ticket 036 crosswalk; no cleanup in 039)
+PRICEABLE_CARRIERS <- c("MID_CONTINENT", "TOMICS", "GREAT_AMERICAN", "ZURICH", "ACE", "AIG")
+ALL_CARRIERS       <- c(PRICEABLE_CARRIERS, "IMPUTED")
+# age_bin label in engine CSVs ("0-5" etc.) -> integer bin 1=youngest 8=oldest
+AGE_BIN_MAP <- c("0-5"=1L, "5-10"=2L, "10-15"=3L, "15-20"=4L,
+                 "20-25"=5L, "25-30"=6L, "30-35"=7L, "35+"=8L)
+ENGINE_DIR  <- file.path(DATA_DIR, "rate_engines")
+
 # MARG order: position 1=SW_8 (oldest) .. position 8=SW_1, 9=DW_8 .. 16=DW_1
 MARG_WALL <- c(rep("SW", 8L), rep("DW", 8L))
 MARG_BIN  <- c(8:1, 8:1)   # age_bin for each of the 16 positions
@@ -152,6 +160,109 @@ for (era_label in ERAS) {
 stopifnot(all(is.finite(pbar)), all(pbar > 0), dim(pbar) == c(16L, 3L))
 cat(sprintf("  pbar: dim %dx%d | range [%.4f, %.4f] (model units)\n",
             nrow(pbar), ncol(pbar), min(pbar), max(pbar)))
+
+# ==============================================================================
+# L1b CARRIER ENGINE CARDS  pbar_carrier[16 cells, 3 eras, 7 carriers]
+# Per-tank card for each priceable carrier from transcription engine CSVs;
+# IMPUTED = share-weighted priceable mean per (MARG cell, era).
+# ==============================================================================
+cat("=== L1b: carrier-indexed engine cards ===\n")
+
+REBUILT_CSV <- file.path(DATA_DIR, "tx_facility_premium_rebuilt.csv")
+stopifnot(
+  "tx_facility_premium_rebuilt.csv missing — run TICKET 036 first" =
+    file.exists(REBUILT_CSV)
+)
+cat(sprintf("  [GATE 036] tx_facility_premium_rebuilt.csv: OK\n"))
+
+pbar_carrier <- array(NA_real_,
+  dim      = c(16L, 3L, length(ALL_CARRIERS)),
+  dimnames = list(NULL, ERAS, ALL_CARRIERS))
+
+for (cr in PRICEABLE_CARRIERS) {
+  eng_path <- file.path(ENGINE_DIR, paste0(cr, "_engine.csv"))
+  stopifnot(
+    sprintf("Engine CSV missing for %s — run TICKET 036 first: %s", cr, eng_path) =
+      file.exists(eng_path)
+  )
+  eng <- fread(eng_path, select = c("carrier", "wall", "age_bin", "era",
+                                    "premium_usd_per_tank_yr"))
+  stopifnot(all(eng$carrier == cr))
+  stopifnot(
+    sprintf("Non-canonical era in %s engine: %s", cr,
+            paste(setdiff(eng$era, ERAS), collapse=",")) =
+      all(eng$era %in% ERAS)
+  )
+  stopifnot(
+    sprintf("Unrecognised age_bin in %s engine: %s", cr,
+            paste(setdiff(eng$age_bin, names(AGE_BIN_MAP)), collapse=",")) =
+      all(eng$age_bin %in% names(AGE_BIN_MAP))
+  )
+  # map age_bin string -> integer; MARG pos: SW bin b -> pos 9-b; DW bin b -> pos 17-b
+  eng[, bin := AGE_BIN_MAP[age_bin]]
+  eng[, pos := ifelse(wall == "SW", 9L - bin, 17L - bin)]
+  stopifnot(all(eng$pos >= 1L), all(eng$pos <= 16L))
+  for (ri in seq_len(nrow(eng))) {
+    pbar_carrier[eng$pos[ri], eng$era[ri], cr] <-
+      eng$premium_usd_per_tank_yr[ri] / SCALE
+  }
+  cat(sprintf("  %s: %d era-cell entries loaded\n", cr, nrow(eng)))
+}
+
+# IMPUTED card: share-weighted priceable mean per (MARG pos, era)
+# Weights from single-cell TX RB facility-years with a real engine premium
+cat("  Computing IMPUTED card from observed carrier market shares...\n")
+rebuilt <- fread(REBUILT_CSV,
+                 select = c("panel_id", "panel_year", "carrier", "premium_imputed"))
+rebuilt[, panel_id := as.character(panel_id)]
+rebuilt <- rebuilt[premium_imputed == 0L & carrier %in% PRICEABLE_CARRIERS]
+
+# Reuse single_tx (already built in L1: single-cell TX 2006+ obs with wall + age_bin)
+share_dt <- merge(
+  single_tx[, .(panel_id, panel_year, wall, age_bin,
+                era = era_of_year(panel_year))],
+  rebuilt, by = c("panel_id", "panel_year"))
+share_agg <- share_dt[, .(n = .N), by = .(wall, age_bin, era, carrier)]
+share_agg[, bin := as.integer(age_bin)]
+share_agg[, pos := ifelse(wall == "SW", 9L - bin, 17L - bin)]
+
+# Build long card table for join
+card_long <- rbindlist(lapply(PRICEABLE_CARRIERS, function(cr) {
+  data.table(pos     = rep(seq_len(16L), times = length(ERAS)),
+             era     = rep(ERAS, each = 16L),
+             carrier = cr,
+             card    = as.vector(pbar_carrier[, , cr]))
+}))
+card_long <- card_long[!is.na(card)]
+
+# Join shares x cards, compute weighted mean per (pos, era)
+imp_dt <- merge(share_agg, card_long, by = c("pos", "era", "carrier"))
+imp_by_cell <- imp_dt[, .(imputed_card = sum(n * card) / sum(n)), by = .(pos, era)]
+
+# Fallback for cells with no share data: equal-weight mean over available carrier cards
+all_cells <- CJ(pos = seq_len(16L), era = ERAS)
+imp_by_cell <- merge(all_cells, imp_by_cell, by = c("pos", "era"), all.x = TRUE)
+for (ri in seq_len(nrow(imp_by_cell))) {
+  if (is.na(imp_by_cell$imputed_card[ri])) {
+    p_i   <- imp_by_cell$pos[ri]
+    era_i <- imp_by_cell$era[ri]
+    avail <- pbar_carrier[p_i, era_i, PRICEABLE_CARRIERS]
+    avail <- avail[!is.na(avail)]
+    if (length(avail) > 0L)
+      imp_by_cell$imputed_card[ri] <- mean(avail)
+  }
+}
+for (ri in seq_len(nrow(imp_by_cell)))
+  pbar_carrier[imp_by_cell$pos[ri], imp_by_cell$era[ri], "IMPUTED"] <-
+    imp_by_cell$imputed_card[ri]
+
+stopifnot(all(is.finite(pbar_carrier[, , "IMPUTED"])),
+          all(pbar_carrier[, , "IMPUTED"] > 0))
+cat(sprintf("  IMPUTED card range: [%.4f, %.4f] (model units)\n",
+            min(pbar_carrier[, , "IMPUTED"]), max(pbar_carrier[, , "IMPUTED"])))
+cat(sprintf("  pbar_carrier: dim %s | priceable NAs (missing era-cell combos): %d\n",
+            paste(dim(pbar_carrier), collapse="x"),
+            sum(is.na(pbar_carrier[, , PRICEABLE_CARRIERS]))))
 
 # ==============================================================================
 # L2 CONTRACTS  tau[state], D[state]
@@ -346,7 +457,8 @@ stopifnot(BETA == 0.9957)  # locked value from spec
 # ==============================================================================
 cat("=== SAVE: PM_Lookups.rds ===\n")
 lookups <- list(
-  pbar          = pbar,          # 16 x 3 numeric, model units
+  pbar          = pbar,          # 16 x 3 numeric, model units (legacy / carrier-marginal fallback)
+  pbar_carrier  = pbar_carrier,  # 16 x 3 x 7 array [MARG, ERAS, ALL_CARRIERS], model units
   tau           = tau_vec,       # named numeric (state -> tau/SCALE), TX=NA
   D             = D_vec,         # named numeric (state -> D/SCALE)
   excluded_states = excluded_states,
@@ -357,7 +469,9 @@ lookups <- list(
   Gmat          = Gmat,          # named list of 4x4 matrices
   G_breaks      = readRDS(file.path(DATA_DIR, "pm_G_breaks.rds")),
   BETA          = BETA,
-  SCALE         = SCALE
+  SCALE         = SCALE,
+  ERAS          = ERAS,
+  ALL_CARRIERS  = ALL_CARRIERS
 )
 out_rds <- file.path(RES_DIR, "PM_Lookups.rds")
 saveRDS(lookups, out_rds)

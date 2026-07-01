@@ -2,8 +2,8 @@
 # 15b_apply_tomics.R — TOMICS premium: load raw data, price, write output
 # Filing:  SERFF TEXS-131241913  (eff. 2018-01-01)
 # Carrier: Tank Owners Members Insurance Company
-# Window:  TOMICS presence in TX FR data ~2007-2018; era tagged by contract YEAR
-#          source_era ∈ {"2006" (2007-2013), "2014" (2014-2018)}
+# Window:  TOMICS in TX FR data 1999-2023 (long contract terms; FR data is truth)
+#          source_era ∈ {"2006" (≤2013), "2014" (2014-2018), "2019" (≥2019)}
 #
 # Sources 15a_engine_tomics.R for all rating functions and module constants.
 # Builds tank attributes from raw_pst_ust.csv (DO NOT READ texas_static_tank_details.csv
@@ -27,9 +27,9 @@
 # ║     0.000 load for all underground storage tanks.                          ║
 # ║ A7  Prior contamination: LUST join deferred to v2 → 0.000 load.           ║
 # ║ A8  TOMICS 2nd program (filing 131214138) is OUT OF SCOPE.                 ║
-# ║     Single filed card (131241913, eff. 2018-01-01) applied backward to      ║
-# ║     all TOMICS contract-years in the FR data (~2007-2018). Assumption:      ║
-# ║     rate structure did not change materially over this window.               ║
+# ║     Single filed card (131241913, eff. 2018-01-01) applied to all TOMICS   ║
+# ║     contract-years in the FR data (1999-2023; long contract terms explain   ║
+# ║     the full range). TX FR data taken as truth — no year filter applied.    ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 library(data.table)

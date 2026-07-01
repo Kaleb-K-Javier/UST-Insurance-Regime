@@ -1,3 +1,409 @@
+# HANDOFF -- 2026-06-29 (T042 first-leak hazard rewrite DONE; server run pending)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T042 — 01n_CVValidation.R complete rewrite
+═══════════════════════════════════════════════════
+Modified: Code/Analysis/Descrptive Facts/01n_CVValidation.R (full rewrite)
+Archived: Code/Analysis/Descrptive Facts/Archive/01r_Leak_Rate.R (superseded recurrent Poisson)
+New ticket: .claude/TICKETS/042_first_leak_pricing_hazard.md
+
+Done:
+  - Regime-clean sample: TX panel_year<1999; control states ALL years >=1990
+  - factor(panel_year) year control in elnet design
+  - S2b: tank roster join from panel_dt.csv — 35 composition features (wall shares,
+    9 age-bin shares, 9 vintage-cohort shares, 6 capacity shares, 4 fuel shares, 5 summary stats)
+    Blank mm_capacity imputed to "Unknown-Cap"; has_single_walled derived from mm_wall
+  - Facility-grouped state-stratified CV folds (port from 01r STEP 2) — fixes leakage
+  - No class weights, no Platt scaling (follows 01p; breaks CI assumption)
+  - S4b: analytic IJ CIs — feglm unpenalized + cluster-robust sandwich + delta method
+    Cell-mean CIs (18 cells) + SW-DW contrast CIs -> Table_CV_CellRisk_RefContrast.csv
+  - S4c: cluster-resample metric CIs (B=1000) over fixed OOS preds, no model refit
+  - S7: Figure_CV_CellRisk gets geom_ribbon CI bands; new Figure_CV_CellRisk_Contrast
+  - All existing outputs/figures preserved
+
+Remaining (server run + review):
+  1. Push to server: git push origin main (on ucbare2: git pull)
+  2. Run TEST_MODE first: & "C:/Program Files/R/R-4.4.3/bin/x64/Rscript.exe" "Code/Analysis/Descrptive Facts/01n_CVValidation.R"
+  3. Verify gates: calibration 45° holds | DW>SW fixed (vintage features) | age gradient |
+     CI sanity | sample expansion (control states post-1999 > 0)
+  4. Gate 2: run Sonnet reviewer: .claude/run_reviewer_pro_api.ps1 -TicketID 042
+
+Issues:
+  - feglm column names need make.names() sanitization (handled in code)
+  - Year factor clamping for full-panel scoring (handled: panel_year_clamped)
+
+Resume: "Load CLAUDE.md. T042 01n rewrite complete, committed. Push to server and run in TEST_MODE to verify 5 gates, then Sonnet review."
+==========================
+
+# HANDOFF -- 2026-06-29 (STRUCTURAL RUN PLAN: two-gamma + carrier-premium + psi*R — run order locked, PM02 ingest refactor spec'd)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: two-gamma + carrier-premium + psi*R pipeline — run order + refactor spec (2026-06-29, Opus architect)
+═══════════════════════════════════════════════════
+WHAT: locked the full run order to get the NEW structural model (two-gamma exposure
+  gamma_p/gamma_r + carrier-specific premiums + psi*R operating) estimated and through
+  the CFs, and spec'd the PM02 premium-ingest refactor. Researcher runs this AFTER
+  finishing the remaining carrier rate manuals -> engine code. Coding handed to other
+  LLM agents (this is the spec for them).
+
+DECISIONS LOCKED (researcher, this session):
+  D1 OPERATING TERM = psi*R (measured revenue), NOT phi_G. => run the macro chain
+     (M01->M02->M03->M03b) so R_rev lands in PM_Lookups; PM08 runs with use_psi=TRUE.
+  D2 PM02 BUILDS THE PER-CARRIER CARD ITSELF from the facility-year premium files
+     (refactor option B). Engines emit ONLY `<KEY>_facility_year_premium.csv` (040
+     standard); the pre-collapsed `<carrier>_engine.csv` card input is RETIRED.
+  D3 RENAME the carrier card object `pbar_carrier` -> `avg_facility_premium`
+     (clearer: it is the average facility premium by cell x era x carrier). Blast
+     radius is ONLY 2 files: PM02_Lookups.R (defines/saves it) and PM03_State_Space.R
+     (reads `lk$pbar_carrier` at L50 to build `P_RB_all`). PM08/PM09 read `P_RB_all`
+     (PM03 output) and are UNTOUCHED by the rename.
+  D4 carrier + era dimensions come DIRECTLY from the facility-year file columns
+     (`carrier`, `source_era`) — no separate crosswalk needed in the lookups.
+  D5 IMPUTE every carrier we lack a filing for: IMPUTED card = priceable-carrier
+     (share-weighted) average; per-facility-year `premium_imputed` 0/1 flag marks
+     imputed vs real (already in the T039 design — carry it through the rename).
+  D6 CFs: add CF5 (raise flat fee to BREAK-EVEN on CO/LA/TN, per-STATE welfare
+     breakout) to PM09; PM10 consumer-surplus wrapper (ticket 041) targets CO/LA/TN.
+
+RUN ORDER (server ucbare2, repo root, R 4.4.3; Data/ is gitignored = server-resident):
+  STAGE 1 PREMIUM BUILD (Code/Cleaning + 04a):
+    - per-carrier engines NNa_engine_<carrier>.R + NNb_apply_<carrier>.R
+      -> Data/Analysis/rate_engines/<KEY>_facility_year_premium.csv
+      (KEYs: MID_CONTINENT, TOMICS, GREAT_AMERICAN, ZURICH, ACE, AIG; rest IMPUTED)
+  STAGE 2 REVENUE for psi*R (Code/Macro): M01_SEDS_tax -> M02_wholesale_margin ->
+    M03_revenue_lookup -> M03b_attach_R_rev. M03b ATTACHES R_rev into PM_Lookups.rds,
+    so M03b MUST run AFTER PM02 and BEFORE PM08 (M01-M03 can run anytime earlier).
+  STAGE 3 STRUCTURAL (Code/Dynamic_Model):
+    PM01_Estimation_Panel.R -> pm_panel.csv, pm_G_breaks.rds
+    PM02_Lookups.R          -> PM_Lookups.rds  (avg_facility_premium card + ALL_CARRIERS)
+    M03b_attach_R_rev.R     -> re-saves PM_Lookups.rds WITH R_rev   (Stage-2 join point)
+    PM03_State_Space.R      -> PM_StateSpace.rds, pm_agg_counts.csv (carrier col)
+    [PM04-PM07 = one-time benchmarks; skip on a normal run]
+    PM08_Estimator_v4.R     -> Model_Portfolio_v4_two_gamma_FE_on_observed_<date>.rds
+       $env:PM08_NWORKERS="13"; PM08_MAXITER="200"; PM08_TOL_THETA="1e-7"; PM08_TOL_P="1e-7"
+       (PM08_POOLED unset = two-gamma; PM08_NO_ALPHA unset = FE on; use_psi auto if psi in fit)
+  STAGE 4 CFs + WELFARE:
+    PM09_CF_Portfolio.R (CF_FIT_PATH=the new fit; CF_E_EXT=5.0; PM09_NWORKERS=15)
+      -> Output/Tables/CF{1,3,4}_*_Welfare.csv (+ CF5 once added) + PM09_CF_All_*.csv
+    PM10_CS_Welfare_Bound.R (ticket 041) -> Output/Tables|Figures/CS_Welfare_Bound_*
+
+CHANGE TASKS FOR THE CODING AGENTS (discrete; spec each from here):
+  T-A  PM02 refactor (D2+D3+D4): stop reading `<carrier>_engine.csv`; instead read all
+       `<KEY>_facility_year_premium.csv`, and (a) BUILD `avg_facility_premium[16 MARG x
+       3 ERAS x N_CARRIERS]` and (b) BUILD the per-facility carrier assignment that
+       currently comes from `tx_facility_premium_rebuilt.csv` (PM02 L171/216, PM03
+       L360/366) by stacking those files (write the rebuilt CSV for PM03, or have PM03
+       read the stacked files directly). RESHAPE NOTE TO CONFIRM: the card cell is
+       per-(wall,age) and the file is facility-level (sum over the portfolio); recover
+       per-cell values from HOMOGENEOUS facility-years (all tanks one cell) as
+       standard_prem / n_tanks_rated, averaged by (cell, era, carrier) — ~82% of
+       fac-yrs are homogeneous so the cell card is identified. Must preserve whatever
+       P_RB_all expects in PM03. Rename `pbar_carrier`->`avg_facility_premium` in PM02
+       (save) + PM03 (L50 read); leave P_RB_all and PM08/PM09 names alone.
+  T-B  Confirm M03b reads + re-saves PM_Lookups.rds (attach R_rev) and slot it AFTER
+       PM02, BEFORE PM03/PM08. PM08 L263 hard-stops if use_psi & R_rev absent.
+  T-C  PM09: add CF5 = break-even fee on CO/LA/TN, with PER-ENV (per-state) welfare
+       (restrict mu to each control env), not the FF aggregate. Reuse CF1's prem_override
+       machinery; fee level = mean fair premium from cross_subsidy_facility.csv.
+  T-D  PM10 (ticket 041) answers A1-A5 (this session): CF_ROW default = "CF1a_contract_rb1"
+       for the CF1 stand-in (CF5's single row for the real run); assert dNet==dPS-dExt-dGov
+       (dGov=0 for CF1/CF5); STATE=CO/LA/TN, year 2005; N_fac + break-even fee from
+       Data/Analysis/cross_subsidy_facility.csv; tau = state UST levy from the EIA
+       "Federal and state motor fuel taxes" table (CO Environmental Response Surcharge
+       ~$0.0094-0.0125/gal; LA/TN off the same table) — NOT SEDS gas_tax_state_usd_gal,
+       NOT NM, NOT TX. gamma_p now treated as a normal IDENTIFIED point (carrier work) ->
+       drop the [0,gamma_r] bracket; keep fee netted (draft "premiums net out").
+
+Resume: "Load CLAUDE.md + HANDOFF.md (this checkpoint) + Reports/Paper/
+  Structural_Model_Current_Spec.md + ticket 041. Run order Stage 1->4 is locked;
+  PM02 ingest refactor (T-A) is the main code task. Today: [build remaining carrier
+  engines] then [T-A PM02 refactor] -> run Stage 2-4."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-28 (T040 TOMICS two-script engine: 15a PASS locally; 15b server run pending)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T040 TOMICS engine split — 15a PASS (local self-test), 15b ready for server (2026-06-28, data-coder Sonnet)
+═══════════════════════════════════════════════════
+WHAT: Split 15_Rate_TOMICS_TEXS_131241913.R into the two-script standard + fixed the
+  static-table blocker. Two files written/confirmed:
+  Code/Cleaning/15a_engine_tomics.R — pure functions (data.table only) + self-test
+  Code/Cleaning/15b_apply_tomics.R  — behavioral-assumptions banner + build from raw + write
+
+15a LOCAL SELF-TEST: PASS (local R 4.5.2). Values confirmed:
+  standard=604.00 / min=362.40 / max=845.60 (floor not binding); floor case all 350. ✓
+
+KEY DESIGN IN 15b (no ambiguities; all per spec or prior locked decisions):
+  - Reads raw_pst_ust.csv directly (canonical path, staging fallback; NEVER texas_static_tank_details.csv)
+  - FACILITY_ID: FACILITY_ID_PAD if present, else FACILITY_ID (handles both file versions)
+  - CLOSED_DATE from end_date (per 04a). Binary attrs all fifelse 0/1, never NA; stopifnot asserted.
+  - Rollup: per-tank-month → facility-month SUM → facility-year MEAN → ±40% band + $350 floor (mean last)
+  - source_era = era_of_year(YEAR); TOMICS active ~2007-2018 → "2006" and "2014" only
+  - Output: Data/Analysis/rate_engines/TOMICS_facility_year_premium.csv (canonical 8-col schema)
+
+SERVER RUN (from repo root on ucbare2):
+  git fetch origin
+  git checkout origin/main -- Code/Cleaning/15a_engine_tomics.R Code/Cleaning/15b_apply_tomics.R
+  & "C:/Program Files/R/R-4.4.3/bin/x64/Rscript.exe" Code/Cleaning/15b_apply_tomics.R
+  (15a self-test prints before 15b data work; paste the "Mean standard_prem by source_era" table back)
+
+Resume: "Load CLAUDE.md + HANDOFF.md (T040 section). 15a PASS locally; 15b written; paste server
+  output so acceptance criteria can be marked and ticket closed."
+═══════════════════════════════════════════════════
+
+# HANDOFF -- 2026-06-27 (T039 carrier-premium ingest: PM02/PM03/PM08 implemented; run RESEARCHER-GATED)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: T039 carrier-premium ingest — implementation complete, pending researcher gate (2026-06-27, coder Sonnet)
+═══════════════════════════════════════════════════
+WHAT: wired carrier-specific premiums (from ticket-036 engine CSVs) into the portfolio estimator
+  so gamma_p has within-(TX, era, cell) variation orthogonal to the hazard term. Three files changed.
+
+PM02_Lookups.R:
+  - Added pbar_carrier[16 x 3 x 7] (MARG x ERAS x ALL_CARRIERS) built from rate_engines/<carrier>_engine.csv.
+  - IMPUTED card = share-weighted priceable mean per (MARG pos, era); fallback = equal-weight mean.
+  - GATE 036 check at load time. Saves pbar_carrier + ALL_CARRIERS into PM_Lookups.rds.
+  - BUG FIX (A1): added stopifnot(!anyNA(share_agg$bin), all(share_agg$bin %in% 1:8))
+    after the age_bin -> integer mapping in the IMPUTED card weight computation.
+
+PM03_State_Space.R:
+  - Section 0: reads pbar_carrier + ALL_CARRIERS from PM_Lookups.
+  - Section 2: P_RB_all is now 3D array [C x eras x carriers] (was 2D); loop over ALL_CARRIERS.
+  - Section 9: LEFT-JOINs rebuilt CSV (panel_id, panel_year -> carrier, premium_imputed) onto incl
+    before the count aggregation; groups by (sidx, g, era, carrier, action).
+  - BUG FIX (A2, real bug): unmatched TX rows got carrier=NA -> PM08 stopifnot hard-fail.
+    Fix: fill NA TX carrier -> "IMPUTED", premium_imputed = 1L with cat() count + hard stopifnot after fill.
+    DO NOT drop; dropping silently changes estimation sample.
+  - pm_agg_counts.csv has new column `carrier` (NA for FF/controls).
+
+PM08_Estimator_v4.R:
+  - env_key = "RB_<era>_<carrier>" for TX; controls unchanged.
+  - prem_ej[[e]] = ss$P_RB_all[pc, ev$era_str, ev$carrier] (3D index).
+  - Pre-fit CV diagnostic per era printed. PM08_REAL_ENGINE_ONLY=1 for robustness re-fit.
+  - Tolerances: defaults 1e-5/1e-5/10 UNCHANGED. Server run: PM08_TOL_THETA=5e-5, PM08_TOL_P=5e-5,
+    PM08_MAXITER=200 (no damping -> oscillates below 1e-7; damping = separate change).
+
+STATUS: implementation done. RUN IS RESEARCHER-GATED (CLAUDE.md Gate #3).
+  Gated on: (1) ticket-036 data on server; (2) researcher approves fit run.
+
+SERVER RUN SEQUENCE (after 036 data lands):
+  & "C:/Program Files/R/R-4.4.3/bin/x64/Rscript.exe" Code/Dynamic_Model/PM02_Lookups.R
+  & "C:/Program Files/R/R-4.4.3/bin/x64/Rscript.exe" Code/Dynamic_Model/PM03_State_Space.R
+  $env:PM08_NWORKERS="13"; $env:PM08_MAXITER="200"; $env:PM08_TOL_THETA="5e-5"; $env:PM08_TOL_P="5e-5"
+  & "C:/Program Files/R/R-4.4.3/bin/x64/Rscript.exe" Code/Dynamic_Model/PM08_Estimator_v4.R
+  $env:PM08_REAL_ENGINE_ONLY="1"; & "C:/Program Files/R/R-4.4.3/bin/x64/Rscript.exe" Code/Dynamic_Model/PM08_Estimator_v4.R
+
+Resume: "Load CLAUDE.md + HANDOFF.md (T039 section). T039 done (PM02/PM03/PM08, 2 bug fixes).
+  Gated on 036 data on server + researcher gate #3. Today: run PM02->PM03->PM08, report gamma_p."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-27 (RF FACILITY ROLL-UP: ticket 038 spec written + researcher-approved; ready for coder run on server)  [REDUCED-FORM workstream]
+
+═══════════════════════════════════════════════════
+CHECKPOINT: Facility roll-up mirror — ticket 038 spec locked (2026-06-27, Opus architect)
+═══════════════════════════════════════════════════
+WHAT: facility-level RF portfolio analysis as a FAITHFUL roll-up of the tank closure analysis (02b),
+  REPLACING the old 02j/02k facility route (no matched_facs_birth_cem, no Yhat0, unweighted).
+SPEC: .claude/TICKETS/038_facility_rollup_mirror.md (researcher-approved; closure mirror revised this session).
+DESIGN (locked):
+  - SAMPLE = data_C_active rolled to facility-years (mirror 02b:3965-3988 exactly). Unweighted. No Yhat0.
+  - ALL outcomes are 1/0 indicators. Closure outcome = any_closure (station had >=1 matched-tank closure that
+    year). closure_share + repl_share DROPPED (-> any_closure, any_replace=1{n_closures_replacement>0}); the
+    "how many tanks moved" question is deferred to a future COUNT regression (Poisson/neg-bin FE).
+  - 6 portfolio margins (facility_exit, downsize, consolidate, reconfigure_up, any_replace, cap_decrease) from
+    facility_panel.csv joined on (panel_id, panel_year) [Decision 1: matched roll-up degenerates on pre-99
+    tanks, so margins read the full portfolio of the SAME stations]; port 02j build_margins / ticket 031 defs.
+  - THREE FE versions (richness ladder, all anchored on the OLDEST tank, all exact make_model x install_yr
+    cohort cells): MG2 (HEADLINE) = oldest cell x size_bin x year (~99.5% kept); MG1 = oldest+newest x year
+    (~83%); FULL = full portfolio multiset x year (~58%). (Full-portfolio-only dropped 42% as singletons.)
+  - Spec mirrors tank exactly: did=texas_treated*1{yr>=1999}, mandates, i(rel_year,texas_treated,ref=-1),
+    cluster ~state. HTE (headline MG2 only): size/vintage/fuel/spatial (GIS skips gracefully on server).
+  - WILD-CLUSTER BOOTSTRAP by state (fwildclusterboot::boottest, B=9999, static did per margin x version)
+    DEFERRED to the very end -> T_Facility_Bootstrap_SEs.csv; self-skips if package missing; NOT on the ES.
+DELIVERABLES (new script Code/Analysis/02l_Facility_Rollup_Mirror.R; 02j/02k untouched):
+  T_Facility_Rollup_ATT.csv (21 rows = 7 margins x 3 FE), T_Facility_Rollup_ES_Coefs.csv + Fig_ES_Facility_*_{MG2,MG1,FULL},
+  stepped + per-version pub .tex, T_Facility_HTE.csv, T_Facility_Bootstrap_SEs.csv (written last).
+NEXT: launch coder -> .\.claude\run_coder_pro_api.ps1 -TicketID 038. Coder writes + parse-checks 02l LOCALLY
+  (Sonnet seat); the actual RUN is on the SERVER (matched_tanks_birth_cem.csv + facility_panel.csv server-only,
+  in-repo Data/Analysis; from repo root, full Rscript path, NO --vanilla, do NOT set UST_ANALYSIS_DIR).
+  fwildclusterboot prereq on server for the WCB CSV (else self-skips). Then Sonnet reviewer on 038.
+Resume: "Load CLAUDE.md + HANDOFF.md + ticket 038. Facility roll-up spec locked (ALL outcomes 1/0: any_closure +
+  any_replace; closure_share/repl_share dropped; counts deferred; 3-rung FE ladder MG2/MG1/FULL; margins from facility_panel; deferred WCB). Today: run the
+  coder on 038, push, run on the server, then the reviewer."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-27 (TWO-PART FAIR PREMIUM rebuild, Ticket 037: 01r leak-rate SMOKE PASSED, FULL run choked at sparse matrix build — fix STEP 2 memory next)  [M1 workstream]
+
+═══════════════════════════════════════════════════
+CHECKPOINT: Ticket 037 two-part fair premium — 01r built + smoke-verified; full run OOM at matrix build (2026-06-27, Opus)
+═══════════════════════════════════════════════════
+WORKSTREAM: M1 fair premium, rebuilt from first principles as TWO PARTS:
+  fair premium/tank-yr = leak RATE λ(age,wall) × cleanup COST S(age,wall).
+  Frequency = leaks per tank-year (count + log(active_tanks) offset → per-tank), ALL detection-era
+  (1990-2016) fac-years, recurrent. Severity = avg $/cleanup (PPML, 01q, already built).
+  Site→tank: equal-shots per tank (exact for single-tank sites). NO-LEAKAGE: grouped CV by FACILITY,
+  STRATIFIED by STATE; prevalidated OOS fitted values; facility-cluster bootstrap CIs.
+
+DOCS (all committed): .claude/TICKETS/037_two_part_fair_premium.md (full spec + CV/no-leakage protocol +
+  performance + DCM contract); Code/Analysis/M1_pricing_methods_audit.md (code↔math); Reports/Paper/
+  M1_fair_premium_explainer.md (OUTPUT MANIFEST for review — paper edits deferred until results reviewed).
+  glmnet mechanics verified vs official docs (keep/fit.preval prevalidation, foldid, sparse, parallel).
+
+BUILT: Code/Analysis/Descrptive Facts/01r_Leak_Rate.R (frequency). 01q_Severity_Model.R (severity,
+  built earlier; needs national-align edit = STEP 2). 01p left in place (NOT archived per researcher).
+
+01r SMOKE PASSED (8k facilities) — the checks that matter:
+  - CALIBRATION EXACT: wmean(mu,tanks)=0.00647 vs raw 0.00646; count 0.01724 vs 0.01719. Offset/per-tank
+    mapping is correct (the whole bridge works).
+  - DE-CONFOUNDING WORKED: SW≥DW in 7/8 age bins (old h_aw young-DW>SW artifact gone). age8-DW noisy (thin).
+  - single-tank-vs-pooled corr 0.832 (equal-shots assumption holds; tightens at full scale).
+  - WATCH: per-tank RECURRENT rate looked FLATTER across age (~5-7.6/1k) than old first-release prob —
+    but smoke shrinkage may flatten; FULL run is the real test of the age gradient (choked before producing it).
+
+01r FULL RUN CHOKED (THE BLOCKER): loaded fine (2,664,451 fac-yrs, 213,489 facilities, 46,090 leaks,
+  raw rate 0.00641), then died at STEP 2 building sparse.model.matrix on 2.66M rows — log cut off at the
+  STEP 2 header with NO error text (= hard kill, almost certainly OOM during matrix CONSTRUCTION; the final
+  sparse matrix is only ~0.5GB but the saturated (...)^2 + state_f + year_f build spikes). Smoke (100k) was fine.
+
+FIX NEXT SESSION (STEP 2 of 01r): make the design-matrix build memory-safe. Options, in order:
+  1. Build sparse.model.matrix in ROW-CHUNKS and rbind (Matrix::rbind) so the transient peak stays small.
+  2. Or construct the dummies manually (sparseMatrix) instead of sparse.model.matrix.
+  3. Or cap with LEAKRATE_NWORKERS and/or trim interactions if construction (not copy) is the spike.
+  (01p used DENSE model.matrix on 2.3M but only survived via SEQUENTIAL CV — don't reintroduce the
+   parallel-copy OOM.) Then re-run full; verify calibration + DCM SW-vs-DW age profile + pseudo-R2 (now honest).
+
+REMAINING PIPELINE after 01r full works:
+  STEP 2: 01q severity — align NATIONAL to claim-weighted (fitted-values-then-average) + per-claim output.
+  STEP 3: 08_Fair_Premium.R (NEW) — combine λ·S per cell + per-unit (tank & facility) with combined CIs.
+  STEP 4: rewire 07f/07g figures to the two-part fair premium; re-run; pull figs.
+  DCM deliverable = dcm_cell_hazard_struct.csv (NATIONAL age×wall 16, keyed (wall,age 1..8 on 5yr breaks));
+    severity feeds WELFARE/E_ext, NOT the kernel (risk = γ_r·H·D). Memory dcm_hazard_input_contract.
+
+SERVER RUN (after fix): git fetch; git checkout origin/main -- "Code/Analysis/Descrptive Facts/01r_Leak_Rate.R";
+  smoke first ($env:LEAKRATE_SMOKE="1"; & "C:/Program Files/R/R-4.4.3/bin/x64/Rscript.exe" "...01r..."), then full
+  (Remove-Item Env:LEAKRATE_SMOKE; ...). Per-alpha elapsed prints show pace. Outputs to Data/Analysis on server.
+GIT: M1 work on main through f3f083d (01r fixes). Note origin tip showed 0fd9b46 (structural-agent commit
+  interleaved) — both on main; CRLF makes `git pull` skip files, use `git checkout origin/main -- <file>`.
+Resume: "Load CLAUDE.md + HANDOFF.md + memory dcm_hazard_input_contract + project_01n_wall_hazard_vintage_confound.
+  Ticket 037 two-part fair premium: 01r smoke PASSED (calibration exact, de-confounded), FULL run OOM'd at
+  sparse.model.matrix on 2.66M rows. Today: fix 01r STEP 2 matrix build (chunked sparse), re-run full, verify,
+  then 01q align → 08 combine → 07f/07g rewire."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-27 (PREMIUM-VARIATION / gamma_p workstream — NEXT SESSION FOCUS: bring in more price variation, exploit it for a substantive premium coefficient)
+
+═══════════════════════════════════════════════════
+CHECKPOINT: gamma_p is UNIDENTIFIED, not zero — recover within-TX premium variation (2026-06-27, Opus)
+═══════════════════════════════════════════════════
+PROBLEM (settled this session): the portfolio structural premium is ONE Mid-Continent card
+  (age x wall x era). With 17 state FEs, cross-state premium variation is FE-absorbed and
+  within-state is thin (FF controls = tanks x flat fee, collinear with exposure). So PM08
+  two-gamma converges gamma_r=4.32 (workhorse, fine) but gamma_p ~= -0.04 (~0) — that is a
+  DATA limitation, NOT a behavioral zero. Single-tank DCM got gamma_price~1 EMPIRICALLY off
+  cross-regime/cross-state premium-LEVEL variation the portfolio FE strips out (different
+  object, not a contradiction). Dead ends ruled out this session: H*L (firms never pay full
+  loss; constant L just rescales H*D — same within-state axis); psi*R operating (rejected,
+  operating is flat). Memory: [[project_gammap_premium_rebuild_carrier_engines]],
+  [[model_dollar_anchors_premium_and_deductible]].
+THE FIX (ticket 036, READY): TX FR panel Data/Processed/texas_fr_facility_month_panel.csv
+  (20GB, DuckDB only — fread OOMs; 694 cols; key fields ISSUER_NAME + Coverage Amount per
+  Occ/Agg + Coverage begin/end dates; premium_prepaid is a Y/N FLAG, no $) gives each
+  facility's ACTUAL carrier over time. Mid-Continent is only ~38% of insured fac-years; ~60%
+  on TOMICS/Ironshore/Colony/Great American/Zurich/ACE-AIG with heavy churn (Zurich exits
+  2008-14, TOMICS post-2019). => model MIS-ASSIGNS everyone Mid-Continent. Build per-carrier
+  rate ENGINES from SERFF filings (Data/Raw/Rate_Filings/: TOMICS+real-firm support, Great
+  American 2020 + "comparison to other insurers" doc, Commerce&Industry=AIG redlined, Zurich
+  2009=Iowa level-proxy; Mid-Continent in hand; Ironshore/Colony PULLING) -> match via FR ->
+  rebuild facility-year premiums -> within-TX premium variation: carrier SWITCHES (supply-
+  driven, exogenous, survive a facility FE) + coverage limits + cross-carrier level + re-pricing.
+MAKE-OR-BREAK: do carriers price the same cell DIFFERENTLY? (Great American comparison doc +
+  TOMICS support = early read.) If yes -> gamma_p identified; if "same design" flat loadings
+  -> report small variation honestly.
+OTHER LEVERS to weigh next session: (1) relax state FE -> observable controls (de-confounded
+  01p hazard + region + enforcement), lean on FISCAL-EXOGENEITY of the FF flat fees, report
+  vs FE-on as a pair; (2) Mundlak/correlated-RE middle ground; (3) time-varying FF fees if
+  any state changed its fee; (4) Iowa 2nd treated state (within-state FF->RB premium change =
+  the clean capstone). Carrier-switch (036) is the best because it KEEPS the FEs.
+LOCKED: deductible/OOP (gamma_r, H*D) UNCHANGED — this work rebuilds only the PREMIUM term.
+  PM08 flags added this session: PM08_PSI (psi*R, dead), PM08_RISK_LOSS (H*L test, dead),
+  PM08_TOL_THETA/PM08_TOL_P (no-damping floor ~1e-5 -> run at 5e-5, not 1e-7). PM09 psi*R swap
+  done but gated/moot. Hazard primitive = NATIONAL age x wall (16, [SW1..8,DW1..8]); G breaks
+  fixed [1,9k,20k,30k,360k]; severity = welfare-only (pooled S_bar), not in the behavioral kernel.
+Resume: "Load CLAUDE.md + HANDOFF.md (this checkpoint) + ticket 036 + memory
+  project_gammap_premium_rebuild_carrier_engines. Goal: bring in more PRICE variation and
+  exploit it for a substantive gamma_p. Status: gamma_p unidentified (not 0) under the single
+  mis-assigned Mid-Continent card; fix = carrier rate-engines (036) using TX FR + SERFF
+  filings (TOMICS/Zurich-Iowa/Mid-Continent in hand; Ironshore/Colony pulling). Today: build
+  the first 2-3 carrier engines (Mid-Continent + a switcher), check whether a carrier SWITCH
+  actually moves the premium (the make-or-break), and weigh the other levers (relax-FE/Mundlak/
+  time-varying-fees/Iowa)."
+═══════════════════════════════════════════════════
+
+
+# HANDOFF -- 2026-06-26 (M1 TANK pricing pipeline: 01p + 07f built, Sonnet PASS, PRODUCTION RUN DONE; wall-mode choice + TX alignment next)  [M1 cross-subsidy workstream]
+
+═══════════════════════════════════════════════════
+CHECKPOINT: 01p pricing hazard + 07f tank cross-subsidy — built, PRODUCTION RUN DONE, Sonnet PASS (2026-06-26, Opus)
+═══════════════════════════════════════════════════
+WORKSTREAM: M1 dollar cross-subsidy, now at the TANK level (Meredith: rates priced per tank).
+  All on main through efbf1a5. Separate from the PM09/PM08 two-gamma structural work below.
+
+PRODUCTION RESULTS (full 2.3M fac-years / 34,859 events; dcm_cell_hazard_pricing.csv + figures written on server):
+  - Age = clean BATHTUB (0-2 ~21/1k install defects, dip 3-5 ~8.5, rising to 24+ ~19). Period diag 8.7->3.3/1k.
+  - Wall FLIPPED vs smoke: SW > DW in 9/9 bins (modest ~3-5%, physically sensible). Smoke's DW>=SW was a
+    small-sample artifact. AgeWall is now defensible; wall mode is a presentation choice (tau differs <2%).
+  - Fair premium (uniform/break-even tau) ~= $5,800-$6,000 / tank-year (CO 5943 / TN 6025 / LA 5815).
+  - Fee = 0.3-2.2% of fair (CO 0.4 / LA 0.3 / TN 2.1) -> "fund priced ~1% of fair, gas-tax-backed" = the lead.
+  - NM ABSENT at tank level (no rows in panel_dt; was facility-level-only) -> tank figs are CO/LA/TN only.
+    07f now skips absent states (no empty NM figures). Getting NM into panel_dt is a separate data task.
+  - S_bar = $377,838 [95% CI 363,099-392,408], bootstrap B=1000 (unchanged).
+
+BUILT + REVIEWED (Ticket 033 PASS, all 19 criteria):
+  Code/Analysis/Descrptive Facts/01p_Pricing_Hazard.R  — NEW de-confounded per-tank leak hazard
+    for pricing (separate from 01n = observability). Detection-era train (1990-2016) + year_f period
+    control + predict cell schedule at REFERENCE_YEAR=2008, single-tank. Non-destructive: writes
+    dcm_cell_hazard_pricing.csv + analysis_hazard_predictions_pricing.csv + analysis_pricing_hazard_model.rds.
+    01n untouched. PRICING_SMOKE=1 = fast end-to-end check.
+  Code/Analysis/07f_Tank_CrossSubsidy.R — tank cross-subsidy off that schedule; uniform-premium framing
+    (no "subsidy"), severity-bootstrap CI band, single-year + pooled-by-state + fee-vs-fair, each in BOTH
+    wall modes (AgeWall + AgeOnly) so researcher picks later. Reads dcm_cell_hazard_pricing.csv.
+
+KEY DEBUG (smoke): cell schedule came out FLAT at the base rate. NOT the model (coefs healthy: age
+  0.50/wall 0.40/year 1.09) — it was 01n's inverse-frequency weights + Platt: the weighted glmnet scale
+  collapsed the Platt slope to ~0. FIX = drop weights + Platt; unweighted logistic elnet predicts
+  type=response (self-calibrated). After fix: age gradient is a clean bathtub (0-2 ~21/1k install defects,
+  dip 3-5 ~8, rising to 24+ ~18); period diag declines 8.2->3.1/1k (detection trend captured).
+
+WALL NOTE (now resolved): smoke showed DW>=SW (looked like a wall-detection artifact) but the full run
+  flips to SW>DW 9/9 — small-sample artifact, not real. Detection confound likely still attenuates the gap,
+  so 3-5% is a lower bound. Parked refinement (not a blocker): build a detection-method feature with an
+  "Unknown/Missing" level (DET_C_*/DET_P_* exist in raw TX, sparse elsewhere). Memory
+  project_01n_wall_hazard_vintage_confound.
+
+KEY OPS LESSON: server `git pull` silently did NOT update the working tree (CRLF phantom local changes
+  blocked it) -> kept running 3-commits-stale 01p (the hang). Fix that worked: `git fetch origin` then
+  `git checkout origin/main -- <file>` to force the file. Verify with Select-String on a distinctive new line.
+  TODO: add a .gitattributes (text=auto / eol normalization) so this stops recurring (need server git status).
+
+NEXT (M1 workstream):
+  1. DONE: full 01p + 07f run on server; production schedule + CO/LA/TN figures (both wall modes) written.
+     REMAINING: eyeball Output/Figures Fig_TankCrossSub_Pooled_Panel_{AgeWall,AgeOnly} via Z portal; pick a
+     wall mode (negligible diff). Stray empty NM figs from the pre-guard run can be deleted (07f now skips NM).
+  2. TX actuarial-alignment rebuild (thread B): 06_Actuarial_Alignment.R — swap old Duan-smeared L_hat for
+     corrected severity S_bar; TX SW-only age alignment vs Mid-Continent schedule. Wall issue doesn't bite
+     TX (~0% DW). Could also use dcm_cell_hazard_pricing.csv (TX rows) for the TX hazard side.
+  3. PA claim-based lambda add-back (own ticket, ~half day).
+  4. .gitattributes CRLF fix (see KEY OPS LESSON).
+Resume (M1): "Load CLAUDE.md + HANDOFF.md + memory project_cross_subsidy_state_coverage +
+  project_01n_wall_hazard_vintage_confound. 01p+07f built, Sonnet-PASS, PRODUCTION RUN DONE (fair ~$6k/tank-yr,
+  fee ~1% of fair, SW>DW 9/9, CO/LA/TN). Today: pick wall mode, then TX actuarial-alignment rebuild (06)."
+═══════════════════════════════════════════════════
+
+
 # HANDOFF -- 2026-06-26 NIGHT (PIVOT TASKS 1+2+AUDIT DONE: PM09 psi*R+2gamma swap; spec+editor brief; PM08 audited + tight-tol knobs added + PUSHED. Next = run two-gamma fit tight on server -> read gamma_p)
 
 ═══════════════════════════════════════════════════
@@ -99,6 +505,12 @@ IDENTIFICATION (paper-honest):
 DEPENDENCY CHAIN: ticket 028 (gas-agent) lands R_rev[G,state,era] in PM_Lookups.rds (verify
   >0) -> 029 RE-SCOPED: PM08 swap phi_G->psi*R in the TWO-GAMMA path (NOT pooled) -> re-fit
   two-gamma+psi*R FE-on = THE headline fit -> then CFs.
+GAS-DATA STATUS (verified 2026-06-26 eve): R_rev is NOT yet in PM_Lookups.rds (names =
+  pbar,tau,D,excluded_states,h_aw,midpts,age_breaks,adv,Gmat,G_breaks,BETA,SCALE -- no
+  revenue). Code/Macro/ has ONLY M01_SEDS_tax.R (025) + M02_wholesale_margin.R (026); the
+  028 assembly (SEDS x margin x capacity -> R_rev[G,state,era] -> write into PM_Lookups) is
+  NOT built. So psi*R cannot run yet -- the model literally can't find the gas data until
+  028 completes. CF-code fix (PM09) can be PREPARED now but only RUNS post-028.
 CF INFRA (Code/Dynamic_Model/PM09_CF_Portfolio.R, committed 0693a7d): solver + welfare +
   CF1/CF3/CF4 built; gates CF-A/CF-B PASS. attempt-5 = always-rebuild precond (build cheap
   0.68s/env; hoist/adaptive abandoned) + PSOCK (PM09_NWORKERS, parallel==serial NOT yet
@@ -2939,3 +3351,44 @@ Candidates for skill extraction after T002-T003 land:
   - architect_environment_block_template (the pre-resolved env preamble)
   - architect_dependency_chain_checker (verify-or-add-prereq-step rule)
   - coder_runner_guardrails (max_tokens cap + capped key + non-reasoning)
+
+═══════════════════════════════════════════════════
+=== CHECKPOINT: rate-engine docs cleanup + TOMICS two-script ticket (2026-06-28) ===
+Done:
+  - Reviewer pass on 15_Rate_TOMICS_TEXS_131241913.R: rate transcription is
+    FAITHFUL to the filing (verified via pdftotext -table/-raw + dollar==base×pct
+    cross-check; the -layout view is misaligned, looked like 3 false bugs).
+  - Diagnosed run blocker: 15 hard-stops on texas_static_tank_details.csv —
+    that staging CSV is EMPTY/absent on the server. Fix = build from raw
+    (raw_pst_ust.csv at Data/Raw/state_databases/Texas/), like 04a does.
+  - NEW two-script rate-engine standard authored:
+      .claude/RATE_ENGINES_README.md           (start-here: HITL rules,
+        unreadable-PDF protocol, doc map, data map, output contract + open decision)
+      .claude/SESSION_PROMPT_040_rate_engine_standard.md  (the engine HOW)
+      .claude/TICKETS/040_tomics_two_script_engine.md     (TOMICS build spec:
+        15a_engine_tomics.R + 15b_apply_tomics.R; self-test; canonical output)
+  - Cleaned existing rate docs for consistency: 036 + 036b session prompts and
+    the 036 ticket now point to the README, carry the HITL/unreadable-PDF rule,
+    and fix the stale "reuse texas_static_tank_details.csv" guidance (build from raw).
+Output contract (040, mirrors MidCont 04a):
+  Data/Analysis/rate_engines/<KEY>_facility_year_premium.csv —
+  panel_id, panel_year, min_prem, standard_prem, max_prem, source_era, carrier, n_tanks_rated.
+  min/std/max = ±40% schedule band only (default contract, no credit-guessing);
+  all three floored at the filing min ($350). panel_id = <FACILITY_ID>_TX.
+DECISION (researcher, RESOLVED 2026-06-28): engines emit ONLY the per-facility-year
+  min/std/max file; the DCM reshapes facility-level itself (NO collapsed card from
+  engines). Switching PM02 off the old <KEY>_engine.csv card to the facility-year file
+  is a separate DCM-side ticket. Do NOT refactor MidCont scripts (12/13/14).
+Remaining:
+  - Hand TICKET 040 to the builder (see .claude/SESSION_PROMPT_040b_tomics_build.md); then
+    run 15b on server (git fetch + checkout).
+  - TOMICS 2nd program (filing 131214138) is a separate engine — not in 040.
+Resume: "Load CLAUDE.md + .claude/RATE_ENGINES_README.md. TOMICS engine reviewed +
+  two-script standard written. Today: build TICKET 040 (15a/15b) or rule on the
+  card-vs-facility-file output decision."
+==========================
+
+=== AUTO-CHECKPOINT: Pre-compaction 20260629_114612 ===
+Context approaching limit — state saved before compaction.
+Resume: Load CLAUDE.md and this HANDOFF.md.
+==========================

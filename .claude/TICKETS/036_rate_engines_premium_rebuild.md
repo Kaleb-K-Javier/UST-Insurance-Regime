@@ -50,8 +50,29 @@ STEPS
    premium = share-weighted PRICEABLE-market mean for the matching age x wall x era cell; set
    premium_imputed = TRUE (keep the real carrier label for reference); do NOT drop. Expect ~70% of
    insured fac-years on a real engine, ~30% imputed.
-5. OUTPUT Data/Analysis/tx_facility_premium_rebuilt.csv (panel_id, year, carrier, coverage_limit,
-   premium_rebuilt, premium_imputed) + a companion .md.
+5. OUTPUTS — TWO artifacts (so ticket 039 ingests cleanly; see 039 for the exact consumer):
+   (a) CARDS: Data/Analysis/rate_engines/<carrier>_engine.csv per priceable carrier — cols
+       carrier, wall, age_bin, era, premium_usd_per_tank_yr, limit_usd=1000000, source_doc. Feeds PM02 pbar.
+   (b) ASSIGNMENT: Data/Analysis/tx_facility_premium_rebuilt.csv — cols panel_id, panel_year, carrier,
+       coverage_limit, premium_rebuilt_usd, premium_imputed (+ companion .md). Feeds PM03.
+   CONVENTIONS (locked for the 036<->039 interface):
+     - year column = panel_year (calendar; matches pm_panel for the join key (panel_id, panel_year)).
+     - carrier = NORMALIZED key in {MID_CONTINENT, TOMICS, GREAT_AMERICAN, ZURICH, ACE, AIG, IMPUTED}.
+       036 owns the FR ISSUER_NAME -> key crosswalk (step 2); 039 does NO string cleanup.
+     - ENGINE-CARD (a) format — PM02 fails otherwise (verified vs the draft tomics_131214138 file):
+         * FILENAME = <CARRIER_KEY>_engine.csv using the canonical key (e.g. TOMICS_engine.csv) —
+           NOT filing-numbered/lowercase (tomics_131214138_engine.csv won't match PM02's loop).
+         * carrier column = the same canonical key; wall in {SW,DW}; age_bin = the 8 band-label strings
+           "0-5","5-10","10-15","15-20","20-25","25-30","30-35","35+" (PM02 AGE_BIN_MAP keys);
+           era in {"2006","2014","2019"} ONLY — no "2014_PENDING" / placeholders.
+         * ERA COVERAGE: emit rows for EVERY era the carrier was active in (per fr_carrier_diagnostics),
+           not just the filing year — e.g. TOMICS active 2007-2018 -> emit BOTH era 2006 AND 2014
+           (one filing's rates carry across the carrier's active eras unless it re-filed). 039/PM02
+           only needs (era,carrier) cards for the combos that actually occur in pm_agg_counts.
+     - premium_imputed = INTEGER 0/1 (0 = real engine, 1 = imputed).
+     - premiums in USD; PM02 divides the CARDS by SCALE (10000), like the current pbar. premium_rebuilt_usd
+       in (b) is AUDIT/diagnostic only — the model path uses (a) cards + the (b) carrier assignment,
+       NOT the per-facility premium (a facility spans multiple cells, so it can't recover a per-cell card).
 
 ═══════════════════════════════════════════════════
 LOCKED DECISIONS
