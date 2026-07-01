@@ -14,6 +14,9 @@
 # OUTPUTS (Data/Analysis/):
 #   dcm_cell_hazard_pricing.csv   figure bins: state,age_bin,has_single_walled,lambda,lambda_lo,lambda_hi (+NATIONAL)
 #   dcm_cell_hazard_struct.csv    DCM bins (national): wall,age_bin(1..8),lambda,lambda_lo,lambda_hi  (16 rows)
+#   dcm_cell_hazard_refcontrast.csv  fixed-reference SW-vs-DW contrast (vary only wall; single gasoline
+#                                 tank at ref cap/state/year): age_bin(9),has_single_walled,wall,lambda_ref,
+#                                 lambda_ref_lo,lambda_ref_hi  — the SW>DW-over-age figure with CIs
 #   analysis_leak_rate_predictions.csv  per fac-yr OOS rate: panel_id,panel_year,state,has_single_walled,age_bin,active_tanks,mu_tank
 #   analysis_leak_rate_model.rds  final fit + foldid + bootstrap draws + OOS metrics (reload, no refit)
 #
@@ -31,9 +34,15 @@ ANALYSIS_DIR <- here("Data", "Analysis"); dir.create(ANALYSIS_DIR, recursive = T
 # === LOGGING ===
 .log_path <- here("logs", paste0("01r_Leak_Rate_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".log"))
 dir.create(dirname(.log_path), recursive = TRUE, showWarnings = FALSE)
-.log <- file(.log_path, open = "wt"); sink(.log, type="output"); sink(.log, type="message", append=TRUE)
-on.exit({ sink(type="output"); sink(type="message"); close(.log) }, add = TRUE)
-cat(sprintf("LOG START %s\nScript: 01r_Leak_Rate.R\nR: %s\nWD: %s\n\n", .log_path, R.version.string, getwd()))
+# Interactive (VS Code R console) or LEAKRATE_NOSINK=1 -> stream output to the console instead
+# of redirecting it into the logfile (so you can watch live). Batch Rscript -> sink to log as before.
+.use_sink <- !interactive() && !nzchar(Sys.getenv("LEAKRATE_NOSINK"))
+if (.use_sink) {
+  .log <- file(.log_path, open = "wt"); sink(.log, type="output"); sink(.log, type="message", append=TRUE)
+  on.exit({ sink(type="output"); sink(type="message"); close(.log) }, add = TRUE)
+} else .log <- stdout()
+cat(sprintf("LOG START %s (sink=%s)\nScript: 01r_Leak_Rate.R\nR: %s\nWD: %s\n\n",
+            .log_path, .use_sink, R.version.string, getwd()))
 
 # === PARAMETERS ===
 SMOKE          <- nzchar(Sys.getenv("LEAKRATE_SMOKE"))
@@ -41,7 +50,7 @@ DETECTION_START<- 1990L; TRAIN_END <- 2016L
 K              <- if (SMOKE) 3L else 10L
 ALPHAS         <- if (SMOKE) c(0.5, 1) else c(0, 0.25, 0.5, 0.75, 1)   # smoke drops slow ridge
 NLAMBDA        <- if (SMOKE) 20L else 60L
-NBOOT          <- if (SMOKE) 20L else 300L
+NBOOT          <- if (SMOKE) 20L else as.integer(Sys.getenv("LEAKRATE_NBOOT", 300L))  # B=100 for a fast first look
 SMOKE_NFAC     <- 8000L
 NWORKERS       <- max(1L, min(parallel::detectCores() - 1L, as.integer(Sys.getenv("LEAKRATE_NWORKERS", 8L))))
 CHUNK_ROWS     <- if (SMOKE) 25000L else as.integer(Sys.getenv("LEAKRATE_CHUNK_ROWS", 250000L))  # row-chunk size for memory-safe design build
@@ -205,30 +214,74 @@ po <- d[,               .(lam_pooled = wmean(mu, active_tanks)), by = .(age_bin,
 chk <- merge(st, po, by=c("age_bin","has_single_walled"))
 cat(sprintf("Single-tank vs pooled cell rates: corr=%.3f (want high)\n", cor(chk$lam_single, chk$lam_pooled)))
 
+# --- Fixed-reference SW-vs-DW contrast design (vary ONLY wall; hold others at a reference) ---
+# The population-average cell means above cross over at old ages where DW tanks are ~absent
+# (a thin-cell COMPOSITION artifact, not the model). The reference contrast isolates the wall +
+# age:wall effect: predict a single gasoline tank at a fixed reference size/state/year, varying
+# ONLY wall, across all 9 figure age bins. state_f/year_f are ADDITIVE (not in the ^2 block), so
+# the SW/DW gap is invariant to the reference state/year; they set only the level. This is how a
+# rate card prices age x wall (by formula), so old-DW is honest model extrapolation. Point est +
+# bootstrap CIs are filled in STEP 6 (reuses the same facility-cluster draws).
+REF_CAP   <- as.numeric(median(d[active_tanks == 1L]$total_capacity))
+REF_STATE <- d[, .(tk = sum(active_tanks)), by = state][order(-tk)][1L, state]    # modal by exposure
+REF_YEAR  <- if (2008L %in% YEAR_LEVELS) 2008L else as.integer(median(YEAR_LEVELS))
+ref_grid  <- CJ(age_bin = AGE9_LAB, has_single_walled = c(0L, 1L))
+ref_grid[, `:=`(age_bin = factor(age_bin, levels = AGE9_LAB), active_tanks = 1L,
+                total_capacity = REF_CAP, has_gasoline_year = 1L, has_diesel_year = 0L,
+                state_f = factor(REF_STATE, levels = STATE_LEVELS),
+                year_f  = factor(REF_YEAR,  levels = YEAR_LEVELS),
+                wall    = fifelse(has_single_walled == 1L, "SW", "DW"))]
+align_to <- function(M, cols) {                                  # zero-fill to X's exact columns
+  out <- Matrix(0, nrow(M), length(cols), sparse = TRUE, dimnames = list(NULL, cols))
+  cm <- intersect(colnames(M), cols); out[, cm] <- M[, cm]; out
+}
+Xref <- align_to(sparse.model.matrix(FEAT, data = ref_grid, xlev = xlev,
+                                     drop.unused.levels = FALSE)[, -1L, drop = FALSE], colnames(X))
+stopifnot(ncol(Xref) == ncol(X), identical(colnames(Xref), colnames(X)))
+cat(sprintf("Reference contrast: single gasoline tank, cap=%.0f, state=%s, year=%d (SW/DW gap is state/year-invariant)\n",
+            REF_CAP, REF_STATE, REF_YEAR))
+
 # =============================================================================
 cat("=== STEP 6: FACILITY-CLUSTER BOOTSTRAP (parallel) -> cell CIs ===\n")
 # =============================================================================
-fac_rows <- split(seq_len(nrow(d)), d$panel_id)   # row indices per facility
-fac_ids  <- names(fac_rows)
+fac_id   <- as.integer(factor(d$panel_id))        # row -> facility index 1..nfac (cluster id)
+nfac     <- max(fac_id)
 fit_full <- glmnet(X, y, family="poisson", offset=off, alpha=best_alpha, lambda=best_lambda)
+ref_grid[, lambda_ref := as.numeric(predict(fit_full, newx=Xref, newoffset=rep(0, nrow(Xref)),
+                                            s=best_lambda, type="response"))]   # reference point est
 # keys for re-aggregation inside workers
 keyf <- d[, paste(state, age_bin, has_single_walled, sep="|")]; keyn <- d[, paste(age_bin, has_single_walled, sep="|")]
 keyd <- d[, paste(wall, age8, sep="|")]
 act  <- d$active_tanks            # export the vector, not the whole table
 invisible(clusterEvalQ(cl, { suppressPackageStartupMessages({library(glmnet); library(Matrix)}) }))
-clusterExport(cl, c("X","y","off","fac_rows","fac_ids","best_alpha","best_lambda",
-                    "act","keyf","keyn","keyd","wmean"), envir=environment())
+clusterExport(cl, c("X","y","off","fac_id","nfac","best_alpha","best_lambda",
+                    "act","keyf","keyn","keyd","wmean","Xref"), envir=environment())
+# Nonparametric FACILITY bootstrap via resample COUNTS as weights on the FIXED X. A facility
+# drawn k times == its rows get weight k; glmnet's weighted Poisson deviance equals the
+# duplicated-data deviance (incl. the lambda scaling, since sum(weights)=resampled-row-count).
+# No per-draw matrix copy (X[idb,] was the memory hog) -> RAM stays flat, workers don't swap.
 boot1 <- function(b) {
   set.seed(b)
-  idb <- unlist(fac_rows[sample(fac_ids, length(fac_ids), replace=TRUE)], use.names=FALSE)
-  fb  <- glmnet(X[idb,], y[idb], family="poisson", offset=off[idb], alpha=best_alpha, lambda=best_lambda)
-  mub <- as.numeric(predict(fb, newx=X[idb,], newoffset=rep(0, length(idb)), s=best_lambda, type="response"))
-  w   <- act[idb]
-  agg <- function(key) { kk <- key[idb]; tapply(seq_along(kk), kk, function(i) wmean(mub[i], w[i])) }
-  list(fig=agg(keyf), natl=agg(keyn), dcm=agg(keyd))
+  cnt <- tabulate(sample.int(nfac, nfac, replace = TRUE), nbins = nfac)  # facility resample counts
+  wr  <- cnt[fac_id]                                                      # row weight = times facility drawn
+  fb  <- glmnet(X, y, family = "poisson", offset = off, weights = wr, alpha = best_alpha, lambda = best_lambda)
+  mub <- as.numeric(predict(fb, newx = X, newoffset = rep(0, nrow(X)), s = best_lambda, type = "response"))
+  aw  <- act * wr                                                         # aggregation weight = exposure x count
+  agg <- function(key) tapply(seq_along(key), key, function(i) wmean(mub[i], aw[i]))
+  ref <- as.numeric(predict(fb, newx = Xref, newoffset = rep(0, nrow(Xref)), s = best_lambda, type = "response"))
+  list(fig = agg(keyf), natl = agg(keyn), dcm = agg(keyd), ref = ref)
 }
 cat(sprintf("Bootstrap B=%d across %d workers...\n", NBOOT, NWORKERS)); flush(.log)
-bdraws <- parLapply(cl, seq_len(NBOOT), boot1)
+# Batched so progress is visible (parLapply over all B prints nothing until done). Batching does
+# NOT change results: each boot1 seeds by its own draw index b, so draws are order-independent.
+.bt0 <- Sys.time(); bdraws <- vector("list", NBOOT)
+.batches <- split(seq_len(NBOOT), cut(seq_len(NBOOT), min(NBOOT, 10L), labels = FALSE))
+for (.bi in seq_along(.batches)) {
+  .ix <- .batches[[.bi]]
+  bdraws[.ix] <- parLapply(cl, .ix, boot1)
+  cat(sprintf("  [%s] bootstrap %d/%d draws (%.0fs elapsed)\n", format(Sys.time(),"%H:%M:%S"),
+              max(.ix), NBOOT, as.numeric(difftime(Sys.time(), .bt0, units="secs")))); flush(.log)
+}
 ci <- function(cells, comp) {
   m <- sapply(bdraws, function(z) z[[comp]][cells]); # cells x B (NA if cell absent in a draw)
   data.table(lo = apply(m, 1, quantile, 0.025, na.rm=TRUE), hi = apply(m, 1, quantile, 0.975, na.rm=TRUE))
@@ -236,6 +289,19 @@ ci <- function(cells, comp) {
 fig_state[, c("lo","hi") := ci(paste(state, age_bin, has_single_walled, sep="|"), "fig")]
 fig_natl [, c("lo","hi") := ci(paste(age_bin, has_single_walled, sep="|"), "natl")]
 dcm      [, c("lo","hi") := ci(paste(wall, age_bin, sep="|"), "dcm")]
+
+# Reference SW-vs-DW contrast CIs (percentiles across the same facility-cluster draws)
+refm <- sapply(bdraws, function(z) z$ref)              # nrow(ref_grid) x B
+ref_grid[, `:=`(lambda_ref_lo = apply(refm, 1, quantile, 0.025),
+                lambda_ref_hi = apply(refm, 1, quantile, 0.975))]
+cat("\nFixed-reference SW vs DW (per 1000 tank-yr) by age bin [95% CI], single gasoline tank:\n")
+rr <- dcast(ref_grid[, .(age_bin, wall, est = lambda_ref*1000, lo = lambda_ref_lo*1000, hi = lambda_ref_hi*1000)],
+            age_bin ~ wall, value.var = c("est","lo","hi"))
+setorder(rr, age_bin)
+print(rr[, .(age_bin,
+             SW = sprintf("%.2f [%.2f, %.2f]", est_SW, lo_SW, hi_SW),
+             DW = sprintf("%.2f [%.2f, %.2f]", est_DW, lo_DW, hi_DW),
+             SW_gt_DW = est_SW > est_DW)]); flush(.log)
 
 # =============================================================================
 cat("=== STEP 7: WRITE OUTPUTS ===\n")
@@ -248,13 +314,18 @@ fwrite(dcm[, .(wall, age_bin, lambda, lambda_lo=lo, lambda_hi=hi)],
        file.path(ANALYSIS_DIR, "dcm_cell_hazard_struct.csv"))
 fwrite(d[, .(panel_id, panel_year, state, has_single_walled, age_bin, active_tanks, mu_tank = mu)],
        file.path(ANALYSIS_DIR, "analysis_leak_rate_predictions.csv"))
+setorder(ref_grid, age_bin, has_single_walled)
+fwrite(ref_grid[, .(age_bin, has_single_walled, wall, lambda_ref, lambda_ref_lo, lambda_ref_hi)],
+       file.path(ANALYSIS_DIR, "dcm_cell_hazard_refcontrast.csv"))
 saveRDS(list(fit = fit_full, best_alpha = best_alpha, best_lambda = best_lambda,
              feature_formula = deparse(FEAT), feature_cols = colnames(X),
              state_levels = STATE_LEVELS, year_levels = YEAR_LEVELS, foldid = foldid,
              boot_draws = bdraws, raw_rate = raw_rate,
+             ref_grid = ref_grid, ref_boot = refm,
+             ref_choices = list(cap = REF_CAP, state = REF_STATE, year = REF_YEAR),
              oos = list(cv_dev = cv_dev, null_dev = null_dev, pseudo_r2 = 1 - cv_dev/null_dev),
              n_facyears = nrow(d), n_facilities = uniqueN(d$panel_id), seed = 20260627L,
              timestamp = Sys.time()),
         file.path(ANALYSIS_DIR, "analysis_leak_rate_model.rds"))
-cat("Saved: dcm_cell_hazard_pricing.csv, dcm_cell_hazard_struct.csv, analysis_leak_rate_predictions.csv, analysis_leak_rate_model.rds\n")
+cat("Saved: dcm_cell_hazard_pricing.csv, dcm_cell_hazard_struct.csv, dcm_cell_hazard_refcontrast.csv, analysis_leak_rate_predictions.csv, analysis_leak_rate_model.rds\n")
 cat("=== DONE ===\n")

@@ -192,27 +192,31 @@ cat("=== SECTION 3: COMPOSITION FE ===\n")
 
 tc <- unique(data_C_active[, .(panel_id, tank_panel_id, make_model_noage, install_yr_int)],
              by = "tank_panel_id")
-tc[, cell_A := paste(make_model_noage, install_yr_int, sep = "@")]
-tc[, install_band := cut(install_yr_int,
-                         breaks = c(-Inf, 1979, 1984, 1989, 1994, 1998),
-                         labels = c("le79", "80_84", "85_89", "90_94", "95_98"))]
-tc[, cell_B := paste(make_model_noage, as.character(install_band), sep = "@")]
+tc[, cell := paste(make_model_noage, install_yr_int, sep = "@")]   # oldest-tank cell = make/model (build) x install year (vintage)
 
-comp <- tc[, .(comp_A = paste(sort(cell_A), collapse = "|"),
-               comp_B = paste(sort(cell_B), collapse = "|")),
-           by = panel_id]
+# Per-facility keys anchored on the OLDEST tank (earliest install_yr; tie-break min make_model).
+# Two FE specs (both keep exact make_model x install_yr cohort cells, no coarsening):
+#   oldtank_size   (HEADLINE) = oldest tank's cell x station size bin  -> keeps ~99.5%
+#   full_portfolio (ROBUST)   = the station's full tank lineup         -> ~58% (strictest; no size in FE)
+setorder(tc, panel_id, install_yr_int, make_model_noage)
+k_old <- tc[, .(oldest = cell[1L], n_tanks = .N), by = panel_id]
+k_cmp <- tc[, .(full = paste(sort(cell), collapse = "|")), by = panel_id]
+K <- k_old[k_cmp, on = "panel_id"]
+K[, size_bin := cut(n_tanks, c(0, 1, 3, 6, Inf), labels = c("1", "2_3", "4_6", "7p"))]
+K[, comp_oldtank_size   := paste(oldest, as.character(size_bin), sep = "||")]
+K[, comp_full_portfolio := full]
 
-fy <- comp[fy, on = "panel_id"]
-fy[, cell_comp_year_fe_A := .GRP, by = .(panel_year, comp_A)]
-fy[, cell_comp_year_fe_B := .GRP, by = .(panel_year, comp_B)]
+fy <- K[, .(panel_id, comp_oldtank_size, comp_full_portfolio)][fy, on = "panel_id"]
+fy[, cell_comp_year_fe_oldtank_size   := .GRP, by = .(panel_year, comp_oldtank_size)]
+fy[, cell_comp_year_fe_full_portfolio := .GRP, by = .(panel_year, comp_full_portfolio)]
 
-for (v in c("A", "B")) {
+for (v in c("oldtank_size", "full_portfolio")) {
   comp_col <- paste0("comp_", v)
   fe_col   <- paste0("cell_comp_year_fe_", v)
   gsz      <- fy[, .(gsz = .N), by = c("panel_year", comp_col)]
   n_sing   <- sum(gsz$gsz == 1L)
-  cat(sprintf("  FE-%s: compositions=%d | comp*year cells=%d | singleton FY=%d\n",
-      v, uniqueN(fy[[comp_col]]), uniqueN(fy[[fe_col]]), n_sing))
+  cat(sprintf("  FE %-16s: compositions=%d | comp*year cells=%d | singleton FY=%d (%.1f%%)\n",
+      v, uniqueN(fy[[comp_col]]), uniqueN(fy[[fe_col]]), n_sing, 100 * n_sing / nrow(fy)))
 }
 
 # =============================================================================
@@ -280,7 +284,7 @@ cat("=== SECTION 5: STATIC DiD ===\n")
 models_static <- list()
 att_rows      <- list()
 
-for (v in c("A", "B")) {
+for (v in c("oldtank_size", "full_portfolio")) {
   fe_str <- paste0("panel_id + cell_comp_year_fe_", v)
   cat(sprintf("[%s] version %s\n", format(Sys.time(), "%H:%M:%S"), v))
   for (mg in MARGINS) {
@@ -309,7 +313,7 @@ for (v in c("A", "B")) {
 }
 
 att_dt <- rbindlist(att_rows)
-stopifnot(nrow(att_dt) == 14L)
+stopifnot(nrow(att_dt) == length(MARGINS) * 2L)   # 7 margins x 2 FE specs (oldtank_size, full_portfolio) = 14
 fwrite(att_dt, file.path(OUTPUT_TABLES, "T_Facility_Rollup_ATT.csv"))
 cat(sprintf("  T_Facility_Rollup_ATT.csv: %d rows\n", nrow(att_dt)))
 
@@ -318,7 +322,7 @@ AC_NOTES <- paste0(
   " matched tank close in that facility-year; $=0$ otherwise.",
   " Matched tank sample (birth-CEM, unweighted). SE clustered by state.")
 
-for (v in c("A", "B")) {
+for (v in c("oldtank_size", "full_portfolio")) {
   fe_str <- paste0("panel_id + cell_comp_year_fe_", v)
   m1 <- feols(any_closure ~ did_term, data = fy, cluster = ~state)
   m2 <- feols(any_closure ~ did_term | panel_id, data = fy, cluster = ~state)
@@ -333,7 +337,7 @@ for (v in c("A", "B")) {
              headers = c("(1)", "(2)", "(3)", "(4)"))
 }
 
-for (v in c("A", "B")) {
+for (v in c("oldtank_size", "full_portfolio")) {
   mods_v        <- models_static[paste(MARGINS, v)]
   names(mods_v) <- MARGINS
   pub_etable(mods_v,
@@ -364,7 +368,7 @@ if (!run_reconf_es)
   cat("  reconfigure_up ES SKIPPED (< 200 treated post events)\n")
 
 es_coef_list <- list()
-for (v in c("A", "B")) {
+for (v in c("oldtank_size", "full_portfolio")) {
   fe_str <- paste0("panel_id + cell_comp_year_fe_", v)
   cat(sprintf("[%s] ES version %s\n", format(Sys.time(), "%H:%M:%S"), v))
   for (mg in ES_MARGINS_RUN) {
@@ -388,21 +392,21 @@ cat(sprintf("  T_Facility_Rollup_ES_Coefs.csv: %d rows\n", nrow(es_coef_dt)))
 # =============================================================================
 # SECTION 7 — HTE (FE-version A only; interaction-only; cluster ~state)
 # =============================================================================
-cat("=== SECTION 7: HTE (FE-A) ===\n")
-FE_A <- "panel_id + cell_comp_year_fe_A"
+cat("=== SECTION 7: HTE (headline FE = oldtank_size) ===\n")
+FE_HEAD <- "panel_id + cell_comp_year_fe_oldtank_size"
 
 hte_fit_factor <- function(mg, fvar, ref_str) {
   d <- fy[!is.na(get(mg)) & !is.na(get(fvar))]
   feols(as.formula(sprintf(
     "%s ~ i(%s, did_term, ref = '%s') + did_term %s | %s",
-    mg, fvar, ref_str, MAND_RHS, FE_A)), data = d, cluster = ~state)
+    mg, fvar, ref_str, MAND_RHS, FE_HEAD)), data = d, cluster = ~state)
 }
 
 hte_fit_numeric <- function(mg, fvar, ref_val) {
   d <- fy[!is.na(get(mg)) & !is.na(get(fvar))]
   feols(as.formula(sprintf(
     "%s ~ i(%s, did_term, ref = %s) + did_term %s | %s",
-    mg, fvar, as.character(ref_val), MAND_RHS, FE_A)), data = d, cluster = ~state)
+    mg, fvar, as.character(ref_val), MAND_RHS, FE_HEAD)), data = d, cluster = ~state)
 }
 
 hte_rows <- list()
@@ -425,12 +429,23 @@ hte_rows[["has_gasoline"]] <- hte_long(mF, "has_gasoline", "0")
 
 if (file.exists(GIS_PATH)) {
   cat("  Spatial HTE...\n")
-  gis <- fread(GIS_PATH,
-               select     = c("panel_id", "rural", "low_pop", "low_income",
-                              "high_pov", "thin_market"),
-               na.strings = c("", "NA"))
-  fy <- gis[fy, on = "panel_id"]
-  for (sv in c("rural", "low_pop", "low_income", "high_pov", "thin_market")) {
+  # gis_hte_vars schema: rural_2000, low_pop_density (binary); med_hh_income_2000,
+  # pct_poverty_2000 (continuous -> median-split binaries). No thin_market in file.
+  .gis_hdr  <- names(fread(GIS_PATH, nrows = 0))
+  .gis_want <- intersect(c("panel_id", "rural_2000", "low_pop_density",
+                           "med_hh_income_2000", "pct_poverty_2000"), .gis_hdr)
+  gis <- fread(GIS_PATH, select = .gis_want, na.strings = c("", "NA"))
+  if ("rural_2000"         %in% names(gis)) gis[, rural      := as.integer(rural_2000)]
+  if ("low_pop_density"    %in% names(gis)) gis[, low_pop    := as.integer(low_pop_density)]
+  if ("med_hh_income_2000" %in% names(gis)) gis[, low_income := as.integer(med_hh_income_2000 < median(med_hh_income_2000, na.rm = TRUE))]
+  if ("pct_poverty_2000"   %in% names(gis)) gis[, high_pov   := as.integer(pct_poverty_2000  > median(pct_poverty_2000,  na.rm = TRUE))]
+  SPATIAL_DIMS <- intersect(c("rural", "low_pop", "low_income", "high_pov"), names(gis))
+  gis <- gis[, c("panel_id", SPATIAL_DIMS), with = FALSE]
+  fy  <- gis[fy, on = "panel_id"]
+  for (sv in SPATIAL_DIMS) {
+    if (uniqueN(na.omit(fy[[sv]])) < 2L) {
+      cat(sprintf("  spatial %s: no usable variation -- skipped\n", sv)); next
+    }
     mSp <- setNames(
       lapply(HTE_MARGINS, hte_fit_numeric, fvar = sv, ref_val = 0L), HTE_MARGINS)
     hte_rows[[sv]] <- hte_long(mSp, sv, "0")
@@ -441,7 +456,7 @@ if (file.exists(GIS_PATH)) {
 }
 
 hte_dt <- rbindlist(hte_rows, fill = TRUE)
-hte_dt[, fe_version := "A"]
+hte_dt[, fe_version := "oldtank_size"]
 fwrite(hte_dt, file.path(OUTPUT_TABLES, "T_Facility_HTE.csv"))
 cat(sprintf("  T_Facility_HTE.csv: %d rows\n", nrow(hte_dt)))
 
@@ -456,33 +471,52 @@ if (!requireNamespace("fwildclusterboot", quietly = TRUE)) {
              " skipping deferred bootstrap; all other outputs already written\n"))
 } else {
   boot_rows <- list()
-  for (v in c("A", "B")) {
+  for (v in c("oldtank_size", "full_portfolio")) {
     cat(sprintf("[%s] bootstrap version %s\n", format(Sys.time(), "%H:%M:%S"), v))
+    fe_col <- paste0("cell_comp_year_fe_", v)
     for (mg in MARGINS) {
-      key  <- paste(mg, v)
-      mod  <- models_static[[key]]
-      bt   <- fwildclusterboot::boottest(mod, param    = "did_term",
-                                              clustid  = ~state,
-                                              B        = 9999L,
-                                              type     = "rademacher")
+      key <- paste(mg, v)
+      # boottest cannot handle a fixest model that dropped FE singletons during estimation
+      # (errors on $fixef_removed). Refit on a singleton-free sample: iteratively drop singleton
+      # panel_id and comp-year cells until stable. Singletons contribute nothing to the FE
+      # estimate, so the did coef matches the Section-5 model; this just gives boottest a clean object.
       dat_est <- fy[!is.na(get(mg))]
+      repeat {
+        n0 <- nrow(dat_est)
+        dat_est[, .np := .N, by = panel_id];   dat_est <- dat_est[.np > 1L]
+        dat_est[, .nf := .N, by = c(fe_col)];   dat_est <- dat_est[.nf > 1L]
+        if (nrow(dat_est) == n0) break
+      }
+      dat_est[, c(".np", ".nf") := NULL]
+      mod <- feols(as.formula(sprintf(
+        "%s ~ did_term + mandate_release_det + mandate_spill_overfill + mandate_integrity | panel_id + %s",
+        mg, fe_col)), data = dat_est, cluster = ~state)
+      # Guard: a per-model boottest failure must not halt the whole deferred bootstrap.
+      # It is LOGGED (not silently swallowed) and recorded as NA, then the loop continues.
+      bt  <- tryCatch(
+        fwildclusterboot::boottest(mod, param = "did_term", clustid = ~state,
+                                   B = 9999L, type = "rademacher"),
+        error = function(e) {
+          cat(sprintf("  WARN boottest FAILED %s|%s: %s\n", mg, v, conditionMessage(e)))
+          NULL })
       boot_rows[[key]] <- data.table(
         margin      = mg,
         fe_version  = v,
         beta        = coef(mod)["did_term"],
         analytic_se = se(mod)["did_term"],
-        wcb_p_value = bt$p_val,
-        wcb_ci_lo   = bt$conf_int[1L],
-        wcb_ci_hi   = bt$conf_int[2L],
+        wcb_p_value = if (is.null(bt)) NA_real_ else bt$p_val,
+        wcb_ci_lo   = if (is.null(bt)) NA_real_ else bt$conf_int[1L],
+        wcb_ci_hi   = if (is.null(bt)) NA_real_ else bt$conf_int[2L],
         B           = 9999L,
         n_clusters  = uniqueN(dat_est$state)
       )
-      cat(sprintf("  [%s] %-18s|%s  wcb_p=%.3f\n",
-          format(Sys.time(), "%H:%M:%S"), mg, v, bt$p_val))
+      cat(sprintf("  [%s] %-18s|%s  beta=%+.4f wcb_p=%s\n",
+          format(Sys.time(), "%H:%M:%S"), mg, v, coef(mod)["did_term"],
+          if (is.null(bt)) "FAILED" else sprintf("%.3f", bt$p_val)))
     }
   }
   boot_dt <- rbindlist(boot_rows)
-  stopifnot(nrow(boot_dt) == 14L)
+  stopifnot(nrow(boot_dt) == length(MARGINS) * 2L)   # 7 x 3 = 21
   fwrite(boot_dt, file.path(OUTPUT_TABLES, "T_Facility_Bootstrap_SEs.csv"))
   cat(sprintf("  T_Facility_Bootstrap_SEs.csv: %d rows\n", nrow(boot_dt)))
   bootstrap_ran <- TRUE
@@ -502,7 +536,7 @@ for (mg in MARGINS) {
 }
 
 cat("\n--- Composition cardinalities ---\n")
-for (v in c("A", "B")) {
+for (v in c("oldtank_size", "full_portfolio")) {
   comp_col <- paste0("comp_", v)
   fe_col   <- paste0("cell_comp_year_fe_", v)
   gsz      <- fy[, .(gsz = .N), by = c("panel_year", comp_col)]
@@ -512,7 +546,7 @@ for (v in c("A", "B")) {
 }
 
 cat("\n--- ES figures ---\n")
-for (v in c("A", "B")) for (mg in ES_MARGINS_RUN)
+for (v in c("oldtank_size", "full_portfolio")) for (mg in ES_MARGINS_RUN)
   cat(sprintf("  Fig_ES_Facility_%s_%s.{pdf,png}\n", mg, v))
 
 cat(sprintf("\nBootstrap: %s\n",
