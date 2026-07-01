@@ -39,6 +39,7 @@ cat("=== 02m: FACILITY ROLL-UP TWO-PANEL SUMMARY (038 sample, unweighted) ===\n"
 
 ANALYSIS_DIR <- here("Data", "Analysis")
 OUT_TAB      <- here("Output", "Tables")
+GAS_COMP     <- here("Output", "GIS", "gis_gas_competitors.csv")   # motor-fuel competitor counts
 dir.create(OUT_TAB, recursive = TRUE, showWarnings = FALSE)
 REL_THRESH   <- 0.05          # Ticket-031 capacity band (verbatim)
 CONTROL_STATES <- c("AR","CO","ID","KS","KY","LA","MA","MD","ME","MN","MO","NC","OH","OK","SD","TN","VA")
@@ -111,6 +112,21 @@ fy <- dca_after[, .(any_closure   = as.integer(sum(closure_event, na.rm = TRUE) 
 fy[, post := as.integer(panel_year >= 1999L)]
 rm(mt, dC_after, dca_after); invisible(gc())
 
+# motor-fuel share (is_gas) + gasoline-competitor count within 1 mi (n_gas_1609m), joined by panel_id.
+# Source: Output/GIS/gis_gas_competitors.csv (Code/GIS/03_gas_competitors.R). Fixed pre-reform geography.
+HAS_GAS <- file.exists(GAS_COMP)
+if (HAS_GAS) {
+  gcmp <- fread(GAS_COMP, select = c("panel_id", "is_gas", "n_gas_1609m"), na.strings = c("", "NA"))
+  fac_before <- merge(fac_before, gcmp, by = "panel_id", all.x = TRUE)
+  fac_after  <- merge(fac_after,  gcmp, by = "panel_id", all.x = TRUE)
+  cat(sprintf("  motor-fuel share: before TX=%.3f Ctrl=%.3f | after TX=%.3f Ctrl=%.3f\n",
+      fac_before[texas_treated == 1L, mean(is_gas, na.rm = TRUE)], fac_before[texas_treated == 0L, mean(is_gas, na.rm = TRUE)],
+      fac_after[texas_treated == 1L,  mean(is_gas, na.rm = TRUE)], fac_after[texas_treated == 0L,  mean(is_gas, na.rm = TRUE)]))
+  cat(sprintf("  gas competitors <=1mi (MEDIAN): before TX=%.0f Ctrl=%.0f | after TX=%.0f Ctrl=%.0f\n",
+      median(fac_before[texas_treated == 1L]$n_gas_1609m, na.rm = TRUE), median(fac_before[texas_treated == 0L]$n_gas_1609m, na.rm = TRUE),
+      median(fac_after[texas_treated == 1L]$n_gas_1609m,  na.rm = TRUE), median(fac_after[texas_treated == 0L]$n_gas_1609m,  na.rm = TRUE)))
+} else cat("  gas-competitors lookup absent -- motor-fuel/competition rows skipped\n")
+
 # ---------------------------------------------------------------------------
 # 2. PANEL A — TX vs control balance, before/after CEM, with SMDs (unweighted)
 # ---------------------------------------------------------------------------
@@ -130,6 +146,8 @@ VARS <- c(n_tanks     = "Tanks per station",
           avg_age     = "Mean tank age at reform (yrs)",
           sw_share    = "Single-walled share",
           pre89_share = "Pre-1989 vintage share")
+if (HAS_GAS) VARS <- c(VARS, is_gas      = "Motor-fuel share",
+                             n_gas_1609m = "Gas competitors within 1 mi (mean)")
 
 panelA <- rbindlist(lapply(names(VARS), function(v) {
   b <- bal_one(fac_before, v); a <- bal_one(fac_after, v)

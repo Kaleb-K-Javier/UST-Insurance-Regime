@@ -37,6 +37,8 @@ MARGINS      <- c("any_closure", "facility_exit", "downsize", "consolidate",
 ES_MARGINS   <- c("any_closure", "downsize", "consolidate", "any_replace")
 HTE_MARGINS  <- c("any_closure", "facility_exit", "downsize", "consolidate", "any_replace")
 GIS_PATH     <- here("Output", "GIS", "gis_hte_vars.csv")
+GAS_PATH     <- here("Output", "GIS", "gis_gas_competitors.csv")
+THIN_CUT     <- 1L   # thin_market = 1{n_gas_1609m <= THIN_CUT}: <=1 gasoline competitor within 1 mile
 
 ES_LABELS <- c(
   any_closure    = "P(any closure | facility-year)",
@@ -453,6 +455,23 @@ if (file.exists(GIS_PATH)) {
   }
 } else {
   cat("  GIS absent -- skipping spatial HTE (gis_hte_vars.csv not found)\n")
+}
+
+# Thin market = few GASOLINE competitors within 1 mile (motor-fuel competition, NOT all-UST density).
+# n_gas_1609m from Code/GIS/03_gas_competitors.R (edges x ever-gasoline flag), joined by panel_id.
+if (file.exists(GAS_PATH)) {
+  cat("  Thin-market (gasoline competitors within 1 mi) HTE...\n")
+  gc <- fread(GAS_PATH, select = c("panel_id", "n_gas_1609m"), na.strings = c("", "NA"))
+  gc[, thin_market := as.integer(n_gas_1609m <= THIN_CUT)]
+  fy <- gc[, .(panel_id, thin_market)][fy, on = "panel_id"]
+  if (uniqueN(na.omit(fy$thin_market)) >= 2L) {
+    mTh <- setNames(lapply(HTE_MARGINS, hte_fit_numeric, fvar = "thin_market", ref_val = 0L), HTE_MARGINS)
+    hte_rows[["thin_market"]] <- hte_long(mTh, "thin_market", "0")
+    cat(sprintf("  thin_market share = %.3f (n_gas_1609m <= %d)\n",
+                mean(fy$thin_market, na.rm = TRUE), THIN_CUT))
+  } else cat("  thin_market: no usable variation -- skipped\n")
+} else {
+  cat("  gas-competitors file absent -- thin_market HTE skipped\n")
 }
 
 hte_dt <- rbindlist(hte_rows, fill = TRUE)
