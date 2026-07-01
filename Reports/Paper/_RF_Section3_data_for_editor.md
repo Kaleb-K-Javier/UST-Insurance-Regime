@@ -71,9 +71,26 @@ Size-transition margins wash out under oldtank_size BY CONSTRUCTION (size is in 
 full_portfolio. Inference: analytic cluster-robust SE by state (G=18) — PROVISIONAL (single treated cluster
 over-rejects; wild-cluster bootstrap OOMs, deferred).
 
-## E. §4 HTE (T_Facility_HTE.csv) — status
+## E. §4 HTE (T_Facility_HTE.csv, 100 rows; fe_version = oldtank_size)
 
-Current file = 90 rows (cap_G, vintage, has_gasoline, rural, low_pop, low_income, high_pov). The **thin_market**
-dimension (1{≤1 gasoline competitor within 1 mi}) was just wired into 02l and will appear as ~10 more rows
-(→100) after the next 02l run — hold the thin-market sentence until that lands. Sorting story from the current
-HTE: small (<9k gal) / old (pre-1975) / gasoline stations EXIT; large / newer stations DOWNSIZE + REPLACE.
+Dimensions: cap_G, vintage, has_gasoline, rural, low_pop, low_income, high_pov, **thin_market**.
+Sorting story (levels): small (<9k gal) / old (pre-1975) / gasoline stations EXIT; large / newer stations
+DOWNSIZE + REPLACE.
+
+**Thin-market (local gasoline competition).** `thin_market = 1{≤1 gasoline competitor within 1 mile}` (n_gas_1609m
+from Code/GIS/03_gas_competitors.R) — **17.4%** of the sample. Interaction-only; reference = competitive markets
+(thin_market=0). Values from T_Facility_HTE.csv rows where dimension="thin_market":
+
+| margin | competitive (thin=0) | differential in thin mkts (thin=1) | implied thin effect |
+|---|---|---|---|
+| any_closure | +1.82 pp*** | **−1.52 pp*** | +0.31 pp |
+| facility_exit | +1.79 pp*** | **−1.51 pp*** | +0.28 pp |
+| downsize | +0.08 pp (n.s.) | −0.18 pp*** | −0.11 pp |
+| consolidate | −0.07 pp** | +0.07 pp*** | ≈0 |
+| any_replace | +0.14 pp (n.s.) | −0.15 pp*** | ≈0 |
+
+Reading: the reform's closure/exit effect is concentrated in competitive markets; captive (thin-market) stations
+barely respond (~+0.3 pp vs ~+1.8 pp), a −1.5 pp differential on both closure and exit — consistent with the
+rural result (captive demand → stay open). Caveats: `thin_market` uses "ever-gasoline" neighbors (biography), a
+slightly different fuel definition than the has_gasoline HTE dim; n_gas is mildly undercounted (~86% edge-endpoint
+mapping); analytic cluster-robust SE with a single treated cluster (TX) → provisional, WCB deferred.
