@@ -14,6 +14,14 @@ The RCRA mandate dummies are absorbed by the cell×year FE (fixest drops them fo
 collinearity) — they do not move the estimates. Rural / low-population HTE skip on the
 server (GIS lookups are local-only); run those locally or copy the lookups over.
 
+> **Facility block updated 2026-07-01 (Ticket 038).** The facility-level analysis was rebuilt as the
+> unweighted **02l roll-up** (`Code/Analysis/02l_Facility_Rollup_Mirror.R`) with two FE versions —
+> `oldtank_size` (headline) and `full_portfolio` (robust) — plus the two-panel Section-3 summary/balance
+> table (`Code/Analysis/02m_Facility_Rollup_Baseline.R`). This **supersedes** the 02j $\hat Y^0$-route
+> facility results described in §§4–7 and their `T_Facility_Portfolio_*` files. §8 lists the current output
+> files and where they live (pulled to the local repo `Output/` on 2026-07-01). The 02j-route numbers still
+> quoted in the narrative below are stale and should be refreshed from the new `T_Facility_Rollup_*` tables.
+
 ---
 
 ## Results (verified on server 2026-06-26 — cluster-robust by state)
@@ -262,17 +270,46 @@ feols(closure_share ~ did_term + did_Z + Yhat0 + <mandates> |
 
 ---
 
-## 8. Outputs
+## 8. Outputs — where the current result files live
+
+All paths repo-relative. Every file is generated on the server (ucbare2) and pulled to the local repo
+`Output/` for inspection (facility roll-up + figures pulled 2026-07-01). The facility block below is the
+**02l roll-up** and **supersedes** the old 02j $\hat Y^0$-route files.
+
+**Tank-level (headline, still current):**
 
 | file | what |
 |---|---|
 | `Output/Tables/T_Stepped_DiD_OLS.tex` | tank static ATT (headline) |
 | `Output/Figures/Fig_ES_HTE_Pooled.*` | tank event study |
 | `Output/Tables/T_HTE_GIS_FirstPass.csv` | tank HTE (interaction) |
-| `Data/Analysis/facility_cellfe_xwalk.csv` | $\hat Y^0_{ft}$ / $\tau_{ft}$ crosswalk |
-| `Output/Tables/T_Facility_Portfolio_ATT.csv` | facility ATT, routes A & B, all outcomes |
-| `Output/Tables/T_Facility_Portfolio_HTE.csv` | facility HTE (interaction) |
-| `Output/Figures/Fig_ES_Facility_Portfolio.*` | facility event study |
 
-**Deferred:** wild cluster bootstrap (final inference), HonestDiD sensitivity, the
-route-B 45° predicted-rate figure, and an interaction event study for group dynamics.
+**Facility roll-up — current** (`Code/Analysis/02l_Facility_Rollup_Mirror.R`; FE versions
+`oldtank_size` = headline, `full_portfolio` = robust):
+
+| file | what |
+|---|---|
+| `Output/Tables/T_Facility_Rollup_ATT.csv` | facility ATT, 7 margins × 2 FE (14 rows) |
+| `Output/Tables/T_Facility_Rollup_ES_Coefs.csv` | facility event-study coefficients (360 rows) |
+| `Output/Tables/T_Facility_HTE.csv` | facility HTE, 7 dimensions (90 rows) |
+| `Output/Tables/T_Facility_Bootstrap_SEs.csv` | WCB SEs — placeholder, `wcb_*` all NA (boottest OOM; analytic SEs stand) |
+| `Output/Tables/T_DiD_Facility_Stepped_{oldtank_size,full_portfolio}.tex` | any_closure stepped DiD, per FE |
+| `Output/Tables/T_Facility_Rollup_ATT_Pub_{oldtank_size,full_portfolio}.tex` | all-margin ATT, per FE |
+| `Output/Figures/Fig_ES_Facility_<margin>_{oldtank_size,full_portfolio}.{pdf,png}` | ES figures; margin ∈ {any_closure, downsize, consolidate, any_replace, reconfigure_up} |
+
+**Facility Section-3 summary / balance** (`Code/Analysis/02m_Facility_Rollup_Baseline.R`):
+
+| file | what |
+|---|---|
+| `Output/Tables/T_Facility_Rollup_Balance_PanelA.csv` | Panel A: TX-vs-control balance, before/after CEM, SMDs |
+| `Output/Tables/T_Facility_Rollup_BaseRates_PanelB.csv` | Panel B: pre-reform outcome base rates (Section-4 denominators) |
+| `Output/Tables/T_Facility_Rollup_Summary.tex` | combined two-panel booktabs table |
+
+**Superseded (02j $\hat Y^0$ route — kept for reference, NOT the current facility results):**
+`Output/Tables/T_Facility_Portfolio_ATT.csv`, `T_Facility_Portfolio_HTE.csv`,
+`Output/Figures/Fig_ES_Facility_Portfolio.*`, `Data/Analysis/facility_cellfe_xwalk.csv`
+($\hat Y^0/\tau$). Also stale: the pre-rename `_A`/`_B`-suffixed 02l files/figures (now `oldtank_size` /
+`full_portfolio`) and the CamelCase `Fig_ES_Facility_{Consolidate,Downsize,ReconfigureUp,Replace}.*`.
+
+**Deferred:** wild cluster bootstrap (final inference — currently OOMs on this FE design), HonestDiD
+sensitivity, the route-B 45° predicted-rate figure.
