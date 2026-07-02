@@ -72,6 +72,24 @@
 # SUPERSEDED: 01r_Leak_Rate.R (recurrent Poisson) archived to
 #   Code/Analysis/Descrptive Facts/Archive/01r_Leak_Rate.R.
 #
+# TICKET 050 CHANGES (2026-07-02, additive over Ticket 042 — Option A):
+#   NM enters the sample as an unknown-wall state via is_make_model. Note:
+#   fac_wall=="Unknown-Wall" is NOT used to derive the wall indicator — that
+#   column is a TX-reform-date snapshot broadcast across all of a facility's
+#   years, blank (not NA) for any facility without tanks active ~Dec-1998,
+#   which covers 61% of NM rows and 69% of PA rows. has_unknown_wall is
+#   instead scoped directly to state=="NM" — the only state currently priced
+#   with wall=unknown (the broader cross-state unrecorded-wall pattern, e.g.
+#   PA ~29%/CO ~27% blank fac_wall, is deferred to its own ticket). NM is
+#   EXCLUDED from every SW-vs-DW cell/contrast view (ij_cell_dt, contrast_dt,
+#   S7 obs_dt/cell_dt, S11 dcm_hazard/dcm_state_hazard_rates.csv — the last
+#   stays a strict 16-cell [SW1..8,DW1..8] vector for the DCM kernel's fixed
+#   index contract). NM's hazard reaches downstream only via
+#   analysis_hazard_predictions_full.csv (per-facility, carries
+#   has_unknown_wall). Alpha re-tuned from scratch (SKIP_ALPHA_TUNING set to
+#   FALSE) since sample + design changed materially. New output:
+#   Table_CV_CellRisk_PerCell.csv (per-cell IJ CI, known-wall cells only).
+#
 # SWITCHES: USE_GRF=FALSE, USE_ELNET=TRUE, PRIMARY_MODEL="ELNET" (locked).
 #
 # OUTPUTS (preserved + new):
@@ -208,6 +226,7 @@ build_comp_dt <- function(roster_subset) {
   comp_core <- rr[, .(
     n_tanks_roster   = .N,
     n_sw             = sum(mm_wall == "Single-Walled"),
+    n_unknown_wall   = sum(mm_wall == "Unknown-Wall"),
     oldest_age       = max(tank_age, na.rm = TRUE),
     youngest_age     = min(tank_age, na.rm = TRUE),
     n_distinct_vintages = uniqueN(vint5_id),
@@ -223,7 +242,8 @@ build_comp_dt <- function(roster_subset) {
     n_cap_25kplus = sum(mm_capacity == "25k-Plus"),
     n_cap_unknown = sum(mm_capacity == "Unknown-Cap")
   ), by = .(panel_id, panel_year)]
-  comp_core[, share_sw_roster   := n_sw / n_tanks_roster]
+  comp_core[, share_sw_roster      := n_sw / n_tanks_roster]
+  comp_core[, share_unknown_wall   := n_unknown_wall / n_tanks_roster]
   comp_core[, age_spread        := oldest_age - youngest_age]
   comp_core[, share_fuel_gas    := n_gas / n_tanks_roster]
   comp_core[, share_fuel_diesel := n_diesel / n_tanks_roster]
@@ -235,7 +255,7 @@ build_comp_dt <- function(roster_subset) {
   comp_core[, share_cap_12k25k  := n_cap_12k25k / n_tanks_roster]
   comp_core[, share_cap_25kplus := n_cap_25kplus / n_tanks_roster]
   comp_core[, share_cap_unknown := n_cap_unknown / n_tanks_roster]
-  comp_core[, c("n_sw", "n_gas", "n_diesel", "n_mixed", "n_other_fuel",
+  comp_core[, c("n_sw", "n_unknown_wall", "n_gas", "n_diesel", "n_mixed", "n_other_fuel",
                "n_cap_under1k", "n_cap_1k5k", "n_cap_5k12k", "n_cap_12k25k",
                "n_cap_25kplus", "n_cap_unknown") := NULL]
 
@@ -263,7 +283,7 @@ build_comp_dt <- function(roster_subset) {
   }
 
   setcolorder(out, intersect(c(
-    "panel_id", "panel_year", "n_tanks_roster", "share_sw_roster",
+    "panel_id", "panel_year", "n_tanks_roster", "share_sw_roster", "share_unknown_wall",
     paste0("share_", TANK_AGE_NAMES_COMP), paste0("share_", VINT_NAMES_COMP),
     "share_cap_under1k", "share_cap_1k5k", "share_cap_5k12k", "share_cap_12k25k",
     "share_cap_25kplus", "share_cap_unknown",
@@ -315,8 +335,10 @@ PRIMARY_MODEL <- "ELNET"
 # ==============================================================================
 # PERFORMANCE SWITCHES (added — see header "PERFORMANCE AMENDMENTS" note)
 # ==============================================================================
-SKIP_ALPHA_TUNING <- TRUE    # use KNOWN_BEST_ALPHA, skip the 11x full-data grid
-KNOWN_BEST_ALPHA  <- 0.60    # from prior full run on this exact sample (see header)
+SKIP_ALPHA_TUNING <- FALSE   # Ticket 050 B5: sample/design changed materially
+                              # (NM + has_unknown_wall) -- re-tune from scratch
+KNOWN_BEST_ALPHA  <- 0.60    # unused while SKIP_ALPHA_TUNING=FALSE; kept as
+                              # the pre-050 reference point (see header table)
 # ==============================================================================
 
 stopifnot(
@@ -396,10 +418,16 @@ if ("age_bins" %in% names(annual_data)) {
 }
 
 annual_data[, is_make_model := as.integer(
-  fac_wall != MM_WALL_EXCLUDE &
+  (fac_wall != MM_WALL_EXCLUDE | state == "NM") &
   fac_fuel != MM_FUEL_EXCLUDE &
   !is.na(age_bin)
 )]
+
+# Ticket 050 B2 (Option A): unknown-wall indicator, scoped to NM only (see
+# header "TICKET 050 CHANGES" for why fac_wall itself isn't used). Derived on
+# annual_data, not cv_data, so both cv_data and full_data inherit it via
+# row-filter, exactly like is_make_model/age_bin already do.
+annual_data[, has_unknown_wall := as.integer(state == "NM")]
 
 # ---- Sample filter (Ticket 042) ---------------------------------------------
 # TX: pre-reform years with detection floor
@@ -434,6 +462,10 @@ cat(sprintf(
   format(nrow(cv_data), big.mark = ","),
   format(uniqueN(cv_data$panel_id), big.mark = ","),
   uniqueN(cv_data$state)))
+
+# Ticket 050 B1: report NM admission (unknown-wall, Option A scoping)
+n_nm_cv <- sum(cv_data$state == "NM")
+cat(sprintf("  NM (unknown-wall, Ticket 050): %s fac-yrs\n", format(n_nm_cv, big.mark = ",")))
 
 # Control states must now contribute post-1999 facility-years
 n_ctrl_post99 <- sum(cv_data$state %in% CONTROL_STATES & cv_data$panel_year >= POST_YEAR)
@@ -527,6 +559,14 @@ if (n_miss_roster > 0L)
     "%s cv_data rows have no match in panel_dt — composition features imputed",
     format(n_miss_roster, big.mark = ",")))
 
+# Ticket 050 B4: imputed-row count BY STATE -- PA/NM must be ~0 now that
+# Part A landed them in panel_dt.csv's roster (pre-050 they imputed via the
+# zero/mean fallback below because their tanks weren't in panel_dt at all).
+imputed_by_state <- cv_data[, .(n = .N, n_imputed = sum(is.na(n_tanks_roster))),
+                             by = state][order(-n_imputed)]
+cat("  Roster-join imputation by state:\n")
+print(imputed_by_state)
+
 # Impute missing: share columns -> 0; continuous -> column mean
 COMP_SHARE_COLS <- grep("^share_", names(cv_data), value = TRUE)
 COMP_CONT_COLS  <- c("oldest_age", "youngest_age", "age_spread",
@@ -588,9 +628,9 @@ if (USE_ELNET) {
   cat("Building saturated feature matrix (Ticket 042 extended design)...\n")
 
   X_elnet <- model.matrix(
-    ~ (factor(age_bin) + has_single_walled + active_tanks +
+    ~ (factor(age_bin) + has_single_walled + has_unknown_wall + active_tanks +
          total_capacity + has_gasoline_year + has_diesel_year)^2 +
-        share_sw_roster + oldest_age + youngest_age + age_spread +
+        share_sw_roster + share_unknown_wall + oldest_age + youngest_age + age_spread +
         n_distinct_vintages + n_distinct_makes +
         share_age_0_2 + share_age_3_5 + share_age_6_8 + share_age_9_11 +
         share_age_12_14 + share_age_15_17 + share_age_18_20 + share_age_21_23 +
@@ -601,6 +641,16 @@ if (USE_ELNET) {
         factor(state) + factor(panel_year_f),
     data = as.data.frame(cv_data)
   )[, -1L]
+
+  # Ticket 050 B3: has_single_walled and has_unknown_wall are mutually
+  # exclusive by construction (has_unknown_wall==1 only for NM, whose
+  # has_single_walled is always 0), so their ^2-block cross term is
+  # structurally all-zero -- a zero-variance column that NaNs glmnet's
+  # standardization. Drop by name here; X_full gets the identical drop at its
+  # own model.matrix() call below (not left to the setequal guard to do it).
+  ZERO_VAR_INTERACTIONS <- c("has_single_walled:has_unknown_wall",
+                             "has_unknown_wall:has_single_walled")
+  X_elnet <- X_elnet[, !colnames(X_elnet) %in% ZERO_VAR_INTERACTIONS, drop = FALSE]
 
   cat(sprintf("  Design matrix: %s rows x %d cols\n",
       format(nrow(X_elnet), big.mark = ","), ncol(X_elnet)))
@@ -818,9 +868,9 @@ if (USE_ELNET) {
   full_data[, panel_year_clamped := NULL]
 
   X_full <- model.matrix(
-    ~ (factor(age_bin) + has_single_walled + active_tanks +
+    ~ (factor(age_bin) + has_single_walled + has_unknown_wall + active_tanks +
          total_capacity + has_gasoline_year + has_diesel_year)^2 +
-        share_sw_roster + oldest_age + youngest_age + age_spread +
+        share_sw_roster + share_unknown_wall + oldest_age + youngest_age + age_spread +
         n_distinct_vintages + n_distinct_makes +
         share_age_0_2 + share_age_3_5 + share_age_6_8 + share_age_9_11 +
         share_age_12_14 + share_age_15_17 + share_age_18_20 + share_age_21_23 +
@@ -831,6 +881,10 @@ if (USE_ELNET) {
         factor(state) + factor(panel_year_f),
     data = as.data.frame(full_data)
   )[, -1L]
+
+  # Ticket 050 B3: same structurally-zero interaction as X_elnet -- drop by
+  # name here too, before the setequal alignment guard below.
+  X_full <- X_full[, !colnames(X_full) %in% ZERO_VAR_INTERACTIONS, drop = FALSE]
 
   # Column alignment guard
   if (!setequal(colnames(X_full), colnames(X_elnet))) {
@@ -857,7 +911,7 @@ if (USE_ELNET) {
                   ][order(era)])
 
   fwrite(full_data[, .(panel_id, panel_year, state, texas_treated,
-                       has_single_walled, age_bin, pred_elnet_full)],
+                       has_single_walled, has_unknown_wall, age_bin, pred_elnet_full)],
          file.path(ANALYSIS_DIR, "analysis_hazard_predictions_full.csv"))
   cat("  Saved: analysis_hazard_predictions_full.csv\n")
 
@@ -964,7 +1018,10 @@ if (USE_ELNET) {
   ij_rows_list <- list()
   for (wb in c(0L, 1L)) {
     for (ab in AGE_BIN_LABELS) {
+      # Ticket 050 Q1/D4: has_unknown_wall==0 keeps NM out of the SW/DW cell
+      # table -- without it NM (has_single_walled==0) would pool into "DW".
       rows_c <- which(cv_data$has_single_walled == wb &
+                      cv_data$has_unknown_wall  == 0L &
                       as.character(cv_data$age_bin) == ab)
       ci_c   <- delta_cell_ci(rows_c)
       ij_rows_list[[length(ij_rows_list) + 1L]] <- data.table(
@@ -973,7 +1030,8 @@ if (USE_ELNET) {
         ij_est_per1k      = ci_c$est * 1000,
         ij_lo_per1k       = ci_c$lo  * 1000,
         ij_hi_per1k       = ci_c$hi  * 1000,
-        n_rows            = length(rows_c)
+        n_rows            = length(rows_c),
+        n_events          = sum(cv_data$event_first_leak[rows_c])
       )
     }
   }
@@ -985,11 +1043,21 @@ if (USE_ELNET) {
   )]
   cat(sprintf("  IJ cell CIs: %d cells computed\n", nrow(ij_cell_dt)))
 
+  # Ticket 050 B6: per-cell CI table (known-wall cells only, per D4 -- the
+  # has_unknown_wall==0 guard above already keeps NM out of ij_cell_dt).
+  fwrite(ij_cell_dt[, .(age_bin, has_single_walled, ij_est_per1k, ij_lo_per1k,
+                         ij_hi_per1k, n_fac_years = n_rows, n_events)],
+         file.path(OUTPUT_TABLES, "Table_CV_CellRisk_PerCell.csv"))
+  cat("  Saved: Table_CV_CellRisk_PerCell.csv\n")
+
   # ---- SW-DW contrast per age bin -------------------------------------------
   contrast_list <- list()
   for (ab in AGE_BIN_LABELS) {
-    rows_sw <- which(cv_data$has_single_walled == 1L & as.character(cv_data$age_bin) == ab)
-    rows_dw <- which(cv_data$has_single_walled == 0L & as.character(cv_data$age_bin) == ab)
+    # Ticket 050 Q1/D4: has_unknown_wall==0 excludes NM from the SW-DW contrast.
+    rows_sw <- which(cv_data$has_single_walled == 1L & cv_data$has_unknown_wall == 0L &
+                      as.character(cv_data$age_bin) == ab)
+    rows_dw <- which(cv_data$has_single_walled == 0L & cv_data$has_unknown_wall == 0L &
+                      as.character(cv_data$age_bin) == ab)
     if (length(rows_sw) == 0L || length(rows_dw) == 0L) next
 
     Xsw  <- X_ij_int[rows_sw, , drop = FALSE]
@@ -1245,7 +1313,9 @@ cat(sprintf("  Figure_CV_PR saved  (PR-AUC = %.3f)\n", pr_auc))
 cell_colors <- c("Single-Walled" = COL_TX,  "Double-Walled" = COL_CTRL)
 cell_lty    <- c("Single-Walled" = "solid", "Double-Walled" = "dashed")
 
-obs_dt <- cv_data[, .(
+# Ticket 050 #1/D4: exclude NM (has_unknown_wall==1) from the SW-DW cell-risk
+# views -- same principle as the ij_cell_dt/contrast_dt loops above.
+obs_dt <- cv_data[has_unknown_wall == 0L, .(
   obs_per1k   = mean(event_first_leak, na.rm = TRUE) * 1000,
   n_fac_years = .N,
   n_events    = sum(event_first_leak)
@@ -1258,7 +1328,8 @@ obs_dt[, age_bin := factor(age_bin, levels = AGE_BIN_LABELS)]
 fwrite(obs_dt, file.path(OUTPUT_TABLES, "Table_CV_CellRates_Observed.csv"))
 cat(sprintf("\nObserved cell rates: %d cells\n", nrow(obs_dt)))
 
-cell_dt <- cv_data[!is.na(pred), .(
+# Ticket 050 #1/D4: same NM exclusion as obs_dt above.
+cell_dt <- cv_data[!is.na(pred) & has_unknown_wall == 0L, .(
   model_per1k = mean(pred, na.rm = TRUE) * 1000,
   n_fac_years = .N,
   n_events    = sum(event_first_leak)
@@ -1632,7 +1703,11 @@ ks <- ks.test(snap[texas_treated == 1L, risk_score], snap[texas_treated == 0L, r
 cat(sprintf("KS test TX vs Control: D = %.4f, p = %.4f\n", ks$statistic, ks$p.value))
 
 # ── DCM hazard cell schedule (per S11, unchanged role) ──────────────────────
-dcm_hazard <- cv_data[!is.na(pred), .(
+# Ticket 050 #2: exclude NM (has_unknown_wall==1) -- this card is the fixed
+# [SW1..8, DW1..8] 16-vector the DCM kernel (PM02_Lookups.R) reads by index;
+# adding an "Unknown" wall category would break that contract. NM's hazard is
+# delivered per-facility via analysis_hazard_predictions_full.csv instead.
+dcm_hazard <- cv_data[!is.na(pred) & has_unknown_wall == 0L, .(
   h_hat        = mean(pred,             na.rm = TRUE),
   h_hat_per1k  = mean(pred,             na.rm = TRUE) * 1000,
   h_obs_per1k  = mean(event_first_leak, na.rm = TRUE) * 1000,
