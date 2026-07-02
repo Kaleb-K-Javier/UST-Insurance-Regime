@@ -192,3 +192,47 @@ stopifnot(isTRUE(all.equal(rfl$standard_prem, 350, tolerance = 1e-8)))
 stopifnot(isTRUE(all.equal(rfl$max_prem,      350, tolerance = 1e-8)))
 
 cat("15a self-test PASS\n")
+
+###############################################################################
+## SS5 — price_tomics_tank: pure per-tank premium (Ticket 053, LAYER 2)      ##
+##   Vectorized over rows of the shared priced-tank panel. Extracts the      ##
+##   per-tank formula already computed inline inside tomics_facility_        ##
+##   premium() (SS3 above) into its own named function — same math,         ##
+##   unchanged, just callable standalone so 20_/15b can price a tank without ##
+##   summing a whole facility. Returns the per-tank STANDARD premium (no    ##
+##   schedule band, no floor — those are facility-level, applied in 15b).   ##
+###############################################################################
+price_tomics_tank <- function(base_category, COVER_OCC, COVER_AGG, age_years,
+                               det_interstitial, double_walled, is_composite,
+                               pip_dw_rigid) {
+  sec_load <- (
+    ilf_load_tomics(COVER_OCC, COVER_AGG) +
+    age_load_tomics(age_years) +
+    leak_load_tomics(det_interstitial) +
+    construction_load_tomics(double_walled, is_composite) +
+    pipe_load_tomics(pip_dw_rigid)
+  )
+  base_rate_tomics(base_category) * (1 + sec_load)
+}
+
+cat("=== 15a price_tomics_tank self-test ===\n")
+
+# Re-use fake2's two tanks (SS4 Case 1 above) — per-tank values were already
+# hand-verified there (504.00, 100.00) and their sum (604.00) matched
+# tomics_facility_premium()$standard_prem. Cross-check the new function
+# reproduces the identical per-tank numbers and reconciles to the same sum.
+pt <- price_tomics_tank(
+  base_category    = c("Upgrade", "New"),
+  COVER_OCC        = c(1e6, 1e6),
+  COVER_AGG        = c(1e6, 1e6),
+  age_years        = c(12L, 1L),
+  det_interstitial = c(0L,  1L),
+  double_walled    = c(0L,  1L),
+  is_composite     = c(0L,  1L),
+  pip_dw_rigid     = c(0L,  1L)
+)
+stopifnot(isTRUE(all.equal(pt, c(504.00, 100.00), tolerance = 1e-8)))
+stopifnot(isTRUE(all.equal(sum(pt), 604.00, tolerance = 1e-8)))
+stopifnot(isTRUE(all.equal(sum(pt), r2$standard_prem, tolerance = 1e-8)))
+
+cat("15a price_tomics_tank self-test PASS\n")

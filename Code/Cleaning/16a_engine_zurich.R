@@ -342,3 +342,51 @@ stopifnot(isTRUE(all.equal(r3$standard_prem, 425, tolerance = 1e-4)))
 stopifnot(isTRUE(all.equal(r3$max_prem,      425, tolerance = 1e-4)))
 
 cat("16a self-test PASS\n")
+
+###############################################################################
+## price_zurich_tank — pure per-tank premium (Ticket 053, LAYER 2)          ##
+##   Vectorized over rows of the shared priced-tank panel. Trivial wrapper  ##
+##   composing the existing granular load functions (§VIII.1-4, contents)   ##
+##   exactly as zurich_facility_premium() already does internally — no new  ##
+##   math. Returns per-tank STANDARD premium (no size/loc/release credit,   ##
+##   no floor — those are facility-level, applied in 16b).                  ##
+###############################################################################
+price_zurich_tank <- function(age_years, double_walled, rate_era, capacity_gal,
+                               has_leak_det, spill_comply_y, corr_present,
+                               is_gasoline, is_diesel, is_oil_kero, is_jet_fuel) {
+  base_r <- zurich_base_rate(age_years, double_walled, rate_era)
+  base_r *
+    (1 + zurich_cap_load(capacity_gal)) *
+    (1 + zurich_leak_load(has_leak_det)) *
+    (1 + zurich_overfill_load(spill_comply_y)) *
+    (1 + zurich_corr_load(corr_present)) *
+    (1 + zurich_contents_load(is_gasoline, is_diesel, is_oil_kero, is_jet_fuel))
+}
+
+cat("=== 16a price_zurich_tank self-test ===\n")
+
+# Re-use t1 (SS Case 1) — single tank, all facility factors at reference in
+# that test, so the per-tank price equals r1$standard_prem exactly.
+pt1 <- price_zurich_tank(
+  age_years = 20L, double_walled = 0L, rate_era = "r2010", capacity_gal = 5000,
+  has_leak_det = TRUE, spill_comply_y = TRUE, corr_present = TRUE,
+  is_gasoline = FALSE, is_diesel = TRUE, is_oil_kero = FALSE, is_jet_fuel = FALSE
+)
+stopifnot(isTRUE(all.equal(pt1, 1293.520, tolerance = 1e-4)))
+stopifnot(isTRUE(all.equal(pt1, r1$standard_prem, tolerance = 1e-4)))
+
+# Re-use t2 (SS Case 2) — two tanks; per-tank values 556.71 / 192.28 were
+# hand-verified inline in the SS Case 2 comment (tank_sum = 748.99, BEFORE
+# the facility-level size/location/release factors that push r2 to 988.6668).
+pt2 <- price_zurich_tank(
+  age_years = c(10L, 0L), double_walled = c(0L, 1L),
+  rate_era = c("r2008", "r2008"), capacity_gal = c(5000, 5000),
+  has_leak_det = c(FALSE, TRUE), spill_comply_y = c(TRUE, FALSE),
+  corr_present = c(TRUE, TRUE), is_gasoline = c(TRUE, FALSE),
+  is_diesel = c(FALSE, TRUE), is_oil_kero = c(FALSE, FALSE),
+  is_jet_fuel = c(FALSE, FALSE)
+)
+stopifnot(isTRUE(all.equal(pt2, c(556.71, 192.28), tolerance = 1e-4)))
+stopifnot(isTRUE(all.equal(sum(pt2), 748.99, tolerance = 1e-4)))
+
+cat("16a price_zurich_tank self-test PASS\n")

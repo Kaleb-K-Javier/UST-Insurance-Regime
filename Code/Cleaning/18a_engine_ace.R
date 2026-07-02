@@ -263,3 +263,33 @@ stopifnot(inherits(
 cat("  non-reference-contract hard-stop OK\n")
 
 cat("18a self-test PASS\n")
+
+###############################################################################
+## price_ace_tank — pure per-tank premium (Ticket 053, LAYER 2)             ##
+##   Vectorized over rows of the shared priced-tank panel. Extracts the     ##
+##   "tank_standard" step already computed inline inside                    ##
+##   ace_facility_premium() (SS1 above) into its own named function — same  ##
+##   math, unchanged. Returns per-tank STANDARD premium (no multi-tank      ##
+##   credit, no schedule band, no floor — facility-level, applied in 18b).  ##
+###############################################################################
+price_ace_tank <- function(age_years, construction_code) {
+  base_premium_ace(age_years) * (1 - construction_credit_ace(construction_code))
+}
+
+cat("=== 18a price_ace_tank self-test ===\n")
+
+# Re-use fake1 (SS2 Case 1) — single tank, tank_standard = 150.00, which
+# equals r1$standard_prem's pre-floor facility_standard (n_tanks=1 -> multi-
+# tank credit 0%), though r1$standard_prem itself floors at 350.
+pt1 <- price_ace_tank(age_years = 2L, construction_code = "STIP3")
+stopifnot(isTRUE(all.equal(pt1, 150.00, tolerance = 1e-8)))
+
+# Re-use fake3 (SS2 Case 3) — 15 identical fiberglass tanks, each
+# tank_standard = 374.40 (hand-verified in the Case 3 comment;
+# facility_unmodified = 5616.00 before the 5% multi-tank credit that
+# produces r3$standard_prem = 5335.20).
+pt3 <- price_ace_tank(age_years = rep(7L, 15), construction_code = rep("FIBERGLASS", 15))
+stopifnot(isTRUE(all.equal(pt3, rep(374.40, 15), tolerance = 1e-6)))
+stopifnot(isTRUE(all.equal(sum(pt3), 5616.00, tolerance = 1e-6)))
+
+cat("18a price_ace_tank self-test PASS\n")

@@ -508,3 +508,66 @@ stopifnot(inherits(
 cat("  non-reference-ILF hard-stop OK\n")
 
 cat("19a self-test PASS\n")
+
+###############################################################################
+## price_ga_tank — pure per-tank premium (Ticket 053, LAYER 2)              ##
+##   Vectorized over rows of the shared priced-tank panel. Extracts the     ##
+##   "tank_premium" step already computed inline inside                     ##
+##   ga_facility_premium() (SS1 above) into its own named function — same   ##
+##   math, unchanged (fully multiplicative chain, see header). deductible/  ##
+##   ILF factor is computed at the 036-locked reference contract internally ##
+##   ($5,000 ded, $1M/$1M -> factor 1.000; ilf_factor_ga() would hard-stop  ##
+##   on any other limit, so this function is reference-contract-only by     ##
+##   construction, matching every other carrier's card invariant). Returns  ##
+##   per-tank premium (no multiple-tank factor, no floor — facility-level,  ##
+##   applied in 19b). NOTE: unlike the other 4 carriers, GA has NO schedule ##
+##   band -> this per-tank number IS the standalone standard (min=std=max   ##
+##   at facility level too, per 19a's own convention).                     ##
+###############################################################################
+price_ga_tank <- function(capacity_gal, age_years, construction_code,
+                           contents_code, leak_code, line_leak_code) {
+  rating_adjustments <- (
+    capacity_factor_ga(capacity_gal) *
+    age_factor_ga(age_years) *
+    construction_factor_ga(construction_code) *
+    contents_factor_ga(contents_code) *
+    leak_detection_factor_ga(leak_code) *
+    line_leak_detection_factor_ga(line_leak_code)
+  )
+  ded_ilf_factor <- deductible_factor_ga(REF_DEDUCTIBLE) *
+                     ilf_factor_ga(REF_COVER_OCC, REF_COVER_AGG)
+  BASE_RATE_GA * rating_adjustments * ded_ilf_factor
+}
+
+cat("=== 19a price_ga_tank self-test ===\n")
+
+# Re-use fake1 (SS2 Case 1) — best-in-class single tank, 432.00, equals
+# r1$standard_prem exactly (n_tanks=1 -> multiple tank factor 1.000, no band).
+pt1 <- price_ga_tank(
+  capacity_gal = 3000, age_years = 5L, construction_code = "DWS",
+  contents_code = "GASOLINE", leak_code = "CONTINUOUS_IN_TANK",
+  line_leak_code = "YES"
+)
+stopifnot(isTRUE(all.equal(pt1, 432.00, tolerance = 1e-6)))
+stopifnot(isTRUE(all.equal(pt1, r1$standard_prem, tolerance = 1e-6)))
+
+# Re-use fake2 (SS2 Case 2) — worst-case single tank, 10350.00.
+pt2 <- price_ga_tank(
+  capacity_gal = 25000, age_years = 50L, construction_code = "SWS",
+  contents_code = "GASOLINE", leak_code = "MANUAL", line_leak_code = "NO"
+)
+stopifnot(isTRUE(all.equal(pt2, 10350.00, tolerance = 1e-6)))
+stopifnot(isTRUE(all.equal(pt2, r2$standard_prem, tolerance = 1e-6)))
+
+# Re-use fake3 (SS2 Case 3) — 15 identical tanks, each tank_premium = 712.50
+# (hand-verified in the Case 3 comment; facility_unmodified = 10687.50 before
+# the 0.900 multiple-tank factor that produces r3$standard_prem = 9618.75).
+pt3 <- price_ga_tank(
+  capacity_gal = rep(3000, 15), age_years = rep(8L, 15),
+  construction_code = rep("DWF", 15), contents_code = rep("DIESEL", 15),
+  leak_code = rep("SIR", 15), line_leak_code = rep("NO", 15)
+)
+stopifnot(isTRUE(all.equal(pt3, rep(712.50, 15), tolerance = 1e-6)))
+stopifnot(isTRUE(all.equal(sum(pt3), 10687.50, tolerance = 1e-6)))
+
+cat("19a price_ga_tank self-test PASS\n")

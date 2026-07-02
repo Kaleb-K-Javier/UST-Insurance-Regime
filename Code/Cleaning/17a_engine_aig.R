@@ -473,3 +473,54 @@ stopifnot(isTRUE(all.equal(r4$min_prem,      500,    tolerance = 1e-8)))
 stopifnot(isTRUE(all.equal(r4$max_prem,      1151.5, tolerance = 1e-8)))
 
 cat("17a self-test PASS\n")
+
+###############################################################################
+## price_aig_tank — pure per-tank premium (Ticket 053, LAYER 2)             ##
+##   Vectorized over rows of the shared priced-tank panel. Extracts the     ##
+##   §II "tank_unmodified" step already computed inline inside              ##
+##   aig_facility_premium() (SS1 above) into its own named function — same  ##
+##   math, unchanged. era must be pre-computed by the caller (era_of_date_  ##
+##   aig(eff_date), tank-month grain in the original engine, tank-year in   ##
+##   20_/17b) since it depends on contract EFF_DATE, not a tank attribute.  ##
+##   Returns per-tank STANDARD premium (no multi-tank credit, no schedule   ##
+##   band, no ILF/deductible, no floor — all facility-level, applied in     ##
+##   17b; at the 036-locked reference contract the ILF/deductible factor is ##
+##   a no-op anyway, see 17b's LIMIT_DED_FACTOR invariant check).           ##
+###############################################################################
+price_aig_tank <- function(age_years, era, construction_code, leak_code,
+                            pipe_construction_code, pipe_leak_code) {
+  tank_char_load <- (
+    construction_load_aig(construction_code) +
+    leak_detection_load_aig(leak_code) +
+    pipe_construction_load_aig(pipe_construction_code) +
+    pipe_leak_load_aig(pipe_leak_code)
+  )
+  base_premium_aig(age_years, era) * (1 + tank_char_load)
+}
+
+cat("=== 17a price_aig_tank self-test ===\n")
+
+# Re-use fake1 (SS2 Case 1) — single tank, tank_unmodified = 327.60 (the
+# pre-floor value from the Case 1 comment; r1$standard_prem is 525.00 AFTER
+# the $525 minimum-premium floor, so it is NOT the right comparison here —
+# price_aig_tank() returns the unfloored per-tank standard, same as File 2).
+pt1 <- price_aig_tank(
+  age_years = 2L, era = "NEW", construction_code = "DW",
+  leak_code = "NONE", pipe_construction_code = "BARE_STEEL_PIPING",
+  pipe_leak_code = "NONE"
+)
+stopifnot(isTRUE(all.equal(pt1, 327.60, tolerance = 1e-6)))
+
+# Re-use fake3 (SS2 Case 3) — 10 identical tanks, each tank_unmodified =
+# 662.50 (hand-verified in the Case 3 comment; facility_unmodified = 6625.00
+# before the 5% multi-tank credit that produces r3$standard_prem=6293.75).
+pt3 <- price_aig_tank(
+  age_years = rep(8L, 10), era = "NEW",
+  construction_code = rep("BARE_STEEL", 10), leak_code = rep("SIR", 10),
+  pipe_construction_code = rep("CATHODIC_PIPING", 10),
+  pipe_leak_code = rep("SUCTION_CHECK_VALVE", 10)
+)
+stopifnot(isTRUE(all.equal(pt3, rep(662.50, 10), tolerance = 1e-6)))
+stopifnot(isTRUE(all.equal(sum(pt3), 6625.00, tolerance = 1e-6)))
+
+cat("17a price_aig_tank self-test PASS\n")
