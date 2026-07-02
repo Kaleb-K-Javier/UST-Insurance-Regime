@@ -127,7 +127,10 @@ la_claims <- read_excel(la_claims_path, sheet = 1, col_types = "text") |> data.t
 
 la_claims[, claims_start_date := safe_parse(x1st_app_received_date)]
 la_claims[, claims_end_date   := safe_parse(last_app_processed_date)]
-la_claims[, total_cost        := clean_cost(total_requested_amt)]
+# total_cost = site-level recommended fund payout allocated evenly across the
+# AI's applications (total_requested_amt is the ASK, not the fund's actual
+# recommended payout). LOCKED 2026-07-01.
+la_claims[, total_cost        := clean_cost(total_recommended_amt) / as.numeric(app_count)]
 # facility_id = raw numeric ai_num — matches panel's raw LA ID
 la_claims[, facility_id       := norm_id(ai_num, prefix = NULL)]
 la_claims[, lust_id           := as.character(ai_num)]
@@ -335,7 +338,16 @@ co_clean <- finalize_claims(
 ##############################################################################
 cat("Processing Pennsylvania (PA)...\n")
 
-pa_repo_base  <- "C:/Users/kalebkja/PA_UST_Auction_Analysis"
+pa_repo_candidates <- c(
+  "C:/Users/kaleb/Documents/PA_UST_Auction_Analysis",   # local laptop
+  "Z:/C_Drive_Portal/PA_UST_Auction_Analysis",          # local, server mirror
+  "C:/Users/kalebkja/PA_UST_Auction_Analysis"           # server (ucbare2)
+)
+pa_repo_found <- pa_repo_candidates[dir.exists(pa_repo_candidates)]
+if (length(pa_repo_found) == 0L)
+  stop("PA_UST_Auction_Analysis repo not found in any candidate location:\n  ",
+       paste(pa_repo_candidates, collapse = "\n  "))
+pa_repo_base  <- pa_repo_found[1]
 pa_claims_csv <- file.path(pa_repo_base, "data", "processed", "claims_clean.csv")
 pa_linkage    <- file.path(pa_repo_base, "data", "external", "padep", "facility_linkage_table.csv")
 
@@ -361,12 +373,12 @@ pa_link_key <- pa_link_dt[!is.na(facility_id) & facility_id != "", .(
 
 pa_claims_raw[, dept_key := toupper(trimws(department))]
 
-cost_col <- intersect(
-  c("total_paid", "total_cost", "amount_paid", "paid_amount"),
-  names(pa_claims_raw)
-)[1]
-if (is.na(cost_col)) cost_col <- grep("paid|cost|amount", names(pa_claims_raw), value = TRUE)[1]
-cat(sprintf("   Using '%s' as cost column\n", cost_col))
+# incurred_loss = paid + case reserves = the ULTIMATE fund-payable cost, valid
+# for both open and closed claims (no closed-only filter needed). LOCKED 2026-07-01.
+if (!"incurred_loss" %in% names(pa_claims_raw))
+  stop("PA claims_clean.csv missing required column 'incurred_loss' — check upstream PA repo build")
+cost_col <- "incurred_loss"
+cat(sprintf("   Using '%s' as cost column (locked 2026-07-01: ultimate fund-payable cost)\n", cost_col))
 
 pa_claims_raw[, total_cost := as.numeric(get(cost_col))]
 
