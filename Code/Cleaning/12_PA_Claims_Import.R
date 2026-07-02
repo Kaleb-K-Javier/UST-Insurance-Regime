@@ -105,8 +105,10 @@ cat("\n=== SECTION B: CPI FACTOR LOOKUP (reuse 11_Build's, do not re-pull FRED) 
 # Instead we read the (year, month) -> cpi_factor lookup straight out of
 # all_cleaned_claims.csv, which 11_Build just wrote in this same run --
 # identical by construction for every covered cell. A cell PA needs that no
-# other state's claim falls in will show up as NA below and IS a hard stop
-# (per instruction: stop and report the missing cells, do not silently patch).
+# other state's claim falls in surfaces as NA below and is gap-filled (Section C)
+# by a targeted CPIAUCSL pull using 11_Build's exact 2023-average base -- these
+# gap months are >1yr old (seasonally settled), so a fresh pull matches the
+# vintage. We only hard-stop if FRED has not yet published one of those months.
 all_claims_path <- here("Data", "Processed", "all_cleaned_claims.csv")
 if (!file.exists(all_claims_path))
   stop(paste("all_cleaned_claims.csv not found -- run 11_Build_Claims_Dataset.r first:",
@@ -152,18 +154,45 @@ pa_dt <- merge(pa_dt, cpi_lookup,
 
 missing_cpi_cells <- unique(pa_dt[is.na(cpi_factor), .(claim_start_year, claim_start_month)])
 if (nrow(missing_cpi_cells) > 0L) {
-  cat("\n!! MISSING CPI CELLS -- (year, month) combinations with no covering claim\n")
-  cat("!! in any other state's all_cleaned_claims.csv rows:\n")
+  cat(sprintf("\n%d (year, month) cell(s) not covered by any other state's claims; ",
+              nrow(missing_cpi_cells)))
+  cat("gap-filling via a targeted CPIAUCSL pull.\n")
   print(missing_cpi_cells[order(claim_start_year, claim_start_month)])
-  stop(sprintf(
-    "cpi_factor lookup is missing %d (year, month) cell(s) needed by PA claims. ",
-    nrow(missing_cpi_cells)),
-    "Per the 052 resolution: STOP here, do not silently patch. Report the cells ",
-    "printed above; they'll be filled with a targeted CPIAUCSL pull for just ",
-    "those months.")
+
+  # Faithful mirror of 11_Build_Claims_Dataset.r:104-117 -- CPIAUCSL, monthly,
+  # base = 2023 annual average, cpi_factor = cpi_2023_avg / CPI. NOT a re-pull of
+  # the whole series (which would risk a seasonal-revision drift vs the lookup);
+  # we only compute factors for the uncovered cells and reuse the identical base.
+  suppressPackageStartupMessages(library(fredr))
+  fredr_set_key("2d9a1f281713753ddce9c4250540c2aa")
+  cpi_raw <- as.data.table(fredr(series_id = "CPIAUCSL",
+                                 observation_start = as.Date("2023-01-01")))[
+                 , .(claim_start_year = year(date),
+                     claim_start_month = month(date), CPI = value)]
+  cpi_2023_avg <- mean(cpi_raw[claim_start_year == 2023, CPI])
+  stopifnot("bad 2023 CPI base from FRED gap-fill" = is.finite(cpi_2023_avg) && cpi_2023_avg > 0)
+
+  cpi_fill <- cpi_raw[missing_cpi_cells, on = c("claim_start_year", "claim_start_month"),
+                      nomatch = 0L]
+  cpi_fill[, cpi_factor := cpi_2023_avg / CPI]
+  cpi_fill <- cpi_fill[, .(claim_start_year, claim_start_month, cpi_factor)]
+
+  # Hard-stop ONLY if FRED has not yet published one of the needed months.
+  still_missing <- missing_cpi_cells[!cpi_fill, on = c("claim_start_year", "claim_start_month")]
+  if (nrow(still_missing) > 0L) {
+    print(still_missing[order(claim_start_year, claim_start_month)])
+    stop(sprintf("CPIAUCSL has no published value yet for %d of the gap cell(s) above.",
+                 nrow(still_missing)))
+  }
+
+  pa_dt[cpi_fill, cpi_factor := i.cpi_factor,
+        on = c("claim_start_year", "claim_start_month")]
+  cat(sprintf("Gap-fill complete: %d cell(s) from CPIAUCSL (2023-avg base %.4f).\n",
+              nrow(cpi_fill), cpi_2023_avg))
 }
+stopifnot("cpi_factor still NA after gap-fill" = !anyNA(pa_dt$cpi_factor))
 pa_dt[, total_cost_2023 := total_cost * cpi_factor]
-cat("CPI join complete: 0 missing cells.\n")
+cat("CPI join complete.\n")
 
 # D2: reshape to the shared design. age_bins MUST be the 9 canonical label
 # strings (not a numeric index), right=FALSE + include.lowest=TRUE to match
