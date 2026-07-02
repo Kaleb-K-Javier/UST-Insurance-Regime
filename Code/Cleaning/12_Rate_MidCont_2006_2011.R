@@ -53,10 +53,46 @@ ust_raw[, is_closed_removed := as.integer(
 
 ust_raw[,CLOSED_DATE:=ymd(end_date)]
 
-# 5) wall‑type flags ----------------------------------------------------------
+# 5) wall‑type flags — mm_wall JOIN (SINGLE source of truth, researcher 2026-07-01)
+# SUPERSEDES the old "use the pre-built dummy" fix: TANK_SINGLE/TANK_DOUBLE were
+# TRUE/FALSE logicals (not "Y"/"N", the original MIXED-CODING TRAP bug), but the
+# pre-built single_walled/double_walled dummy is ALSO retired now — every engine
+# sources wall from the estimation panel's mm_wall column (Data/Analysis/
+# panel_dt.csv) so the card cell matches the structural model's state cell.
+panel_wall <- fread(here("Data", "Analysis", "panel_dt.csv"),
+                     select = c("facility_id", "tank_id", "state", "mm_wall"))
+panel_wall <- panel_wall[state == "TX"]
+panel_wall[, state := NULL]
+panel_wall <- unique(panel_wall, by = c("facility_id", "tank_id"))
+# PM-state wall mapping — mirrors 04al_BOY_Composition_Build.R:67 (the BOY-
+# composition input PM01/PM03 build the portfolio state space from): SW iff
+# mm_wall contains "single" (case-insensitive), else DW. Mixed-Wall/Unknown-Wall
+# fall through to DW here exactly as the panel does — not special-cased.
+panel_wall[, wall := fifelse(grepl("single", mm_wall, ignore.case = TRUE), "SW", "DW")]
+panel_wall[, mm_wall := NULL]
+setnames(panel_wall, c("facility_id", "tank_id"), c("facility_id_key", "tank_id_key"))
+
+# Join keys mirror 08_Clean_TX.R's own harmonization of panel_dt.csv's IDs:
+# facility_id is standardize_numeric_id()'d (integer round-trip, leading zeros
+# stripped; 08_Clean_TX.R:566) and tank_id is a straight as.character(TANK_ID),
+# no zero-strip (08_Clean_TX.R:824). Straight join, no fallback / match-rate
+# heuristics.
+ust_raw[, facility_id_key := {
+  v <- suppressWarnings(as.integer(as.character(FACILITY_ID)))
+  fifelse(is.na(v), trimws(as.character(FACILITY_ID)), as.character(v))
+}]
+ust_raw[, tank_id_key := trimws(as.character(TANK_ID))]
+
+ust_raw <- panel_wall[ust_raw, on = c("facility_id_key", "tank_id_key")]
+cat(sprintf("  mm_wall panel join: %d / %d tanks matched (%.1f%%)\n",
+            sum(!is.na(ust_raw$wall)), nrow(ust_raw), 100 * mean(!is.na(ust_raw$wall))))
+ust_raw[, c("facility_id_key", "tank_id_key") := NULL]
+
+# single_walled/double_walled derived FROM wall (0/1, no NA — unmatched tanks
+# default to neither flag set, same behavior as the old NA -> 0 convention).
 ust_raw[, `:=`(
-  single_walled = as.integer(TANK_SINGLE == "Y"),
-  double_walled = as.integer(TANK_DOUBLE == "Y")
+  single_walled = fifelse(is.na(wall), 0L, as.integer(wall == "SW")),
+  double_walled = fifelse(is.na(wall), 0L, as.integer(wall == "DW"))
 )]
 
 # 6) tank‑construction dummies (Mid‑Continent language) ----------------------

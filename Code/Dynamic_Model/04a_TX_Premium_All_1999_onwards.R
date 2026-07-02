@@ -124,10 +124,48 @@ ust_raw[, is_closed_removed := as.integer(
   STATUS %chin% c("REMOVED FROM GROUND", "PERM FILLED IN PLACE"))]
 ust_raw[, CLOSED_DATE := ymd(end_date)]
 
-# 5) wall-type flags
+# 5) wall-type flags — mm_wall JOIN (SINGLE source of truth, researcher 2026-07-01)
+# SUPERSEDES the old "use the pre-built dummy" fix: TANK_SINGLE/TANK_DOUBLE were
+# TRUE/FALSE logicals (not "Y"/"N", the original MIXED-CODING TRAP bug), but the
+# pre-built single_walled/double_walled dummy is ALSO retired now — every engine
+# sources wall from the estimation panel's mm_wall column (Data/Analysis/
+# panel_dt.csv) so the card cell matches the structural model's state cell. This
+# also repairs is_double_walled_steel / is_steel_cathodic downstream (Section 6),
+# which are derived from single_walled/double_walled below.
+panel_wall <- fread(z_path("Data", "Analysis", "panel_dt.csv"),
+                     select = c("facility_id", "tank_id", "state", "mm_wall"))
+panel_wall <- panel_wall[state == "TX"]
+panel_wall[, state := NULL]
+panel_wall <- unique(panel_wall, by = c("facility_id", "tank_id"))
+# PM-state wall mapping — mirrors 04al_BOY_Composition_Build.R:67 (the BOY-
+# composition input PM01/PM03 build the portfolio state space from): SW iff
+# mm_wall contains "single" (case-insensitive), else DW. Mixed-Wall/Unknown-Wall
+# fall through to DW here exactly as the panel does — not special-cased.
+panel_wall[, wall := fifelse(grepl("single", mm_wall, ignore.case = TRUE), "SW", "DW")]
+panel_wall[, mm_wall := NULL]
+setnames(panel_wall, c("facility_id", "tank_id"), c("facility_id_key", "tank_id_key"))
+
+# Join keys mirror 08_Clean_TX.R's own harmonization of panel_dt.csv's IDs:
+# facility_id is standardize_numeric_id()'d (integer round-trip, leading zeros
+# stripped; 08_Clean_TX.R:566) and tank_id is a straight as.character(TANK_ID),
+# no zero-strip (08_Clean_TX.R:824). Straight join, no fallback / match-rate
+# heuristics.
+ust_raw[, facility_id_key := {
+  v <- suppressWarnings(as.integer(as.character(FACILITY_ID)))
+  fifelse(is.na(v), trimws(as.character(FACILITY_ID)), as.character(v))
+}]
+ust_raw[, tank_id_key := trimws(as.character(TANK_ID))]
+
+ust_raw <- panel_wall[ust_raw, on = c("facility_id_key", "tank_id_key")]
+cat(sprintf("  mm_wall panel join: %d / %d tanks matched (%.1f%%)\n",
+            sum(!is.na(ust_raw$wall)), nrow(ust_raw), 100 * mean(!is.na(ust_raw$wall))))
+ust_raw[, c("facility_id_key", "tank_id_key") := NULL]
+
+# single_walled/double_walled derived FROM wall (0/1, no NA — unmatched tanks
+# default to neither flag set, same behavior as the old NA -> 0 convention).
 ust_raw[, `:=`(
-  single_walled = as.integer(TANK_SINGLE == "Y"),
-  double_walled = as.integer(TANK_DOUBLE == "Y"))]
+  single_walled = fifelse(is.na(wall), 0L, as.integer(wall == "SW")),
+  double_walled = fifelse(is.na(wall), 0L, as.integer(wall == "DW")))]
 
 # 6) tank-construction dummies
 ust_raw[, `:=`(
@@ -153,8 +191,11 @@ ust_raw[, `:=`(
   det_groundwater  = as.integer(DET_C_GW == "Y"           | DET_P_GW == "Y"))]
 
 # 9) assemble static table
+# `wall` (SW/DW, mm_wall-sourced) carried through for the STEP 3b card build —
+# separate from is_double_walled_steel, which is a narrower "double-walled AND
+# steel material" rating dummy, not the card's wall dimension.
 tank_static <- ust_raw[, .(
-  FACILITY_ID, UST_ID, INSTALL_DATE, CLOSED_DATE, tank_status,
+  FACILITY_ID, UST_ID, INSTALL_DATE, CLOSED_DATE, tank_status, wall,
   is_steel_cathodic, is_double_walled_steel, is_reinforced_fiberglass,
   pip_steel_cathodic, pip_fiberglass, pip_double_walled,
   pip_suction, pip_pressure_ll,
@@ -420,6 +461,39 @@ ust_tm[, `:=`(
   tank_premium_sched_max = tank_premium * SCHED_MAX_FACTOR
 )]
 
+###############################################################################
+## STEP 3b — Aggregate to cell-year card (File 2 — keyed on panel_year,     ##
+##           per RATE_ENGINE_BUILD_TARGET.md; NOT the old {2006,2014,2019}  ##
+##           era buckets — those were a MidCont-filing artifact)            ##
+###############################################################################
+cat("[3b/5] Building cell-year card...\n")
+
+# wall carried through from tank_static (mm_wall-sourced, see Section 1 STEP 5) —
+# NOT is_double_walled_steel, which is the narrower "double-walled AND steel"
+# rating dummy, not the card's wall dimension.
+ust_tm[, age_bin    := as.integer(cut(age_years,
+                        c(0, 5, 10, 15, 20, 25, 30, 35, Inf),
+                        labels = 1:8, right = FALSE, include.lowest = TRUE))]
+ust_tm[is.na(age_bin), age_bin := 8L]
+ust_tm[, panel_year := as.integer(YEAR)]
+
+cell_card <- ust_tm[!is.na(wall), .(premium_usd_per_tank_yr = mean(tank_premium, na.rm = TRUE)),
+                     by = .(wall, age_bin, panel_year)]
+cell_card[, carrier := "MID_CONTINENT"]
+setcolorder(cell_card, c("carrier", "wall", "age_bin", "panel_year", "premium_usd_per_tank_yr"))
+
+stopifnot(all(is.finite(cell_card$premium_usd_per_tank_yr)))
+stopifnot(all(cell_card$premium_usd_per_tank_yr > 0))
+stopifnot(all(cell_card$age_bin %in% 1:8))
+stopifnot(all(cell_card$wall %in% c("SW", "DW")))
+
+card_dir  <- here("Data", "Analysis", "rate_engines")
+dir.create(card_dir, recursive = TRUE, showWarnings = FALSE)
+card_path <- file.path(card_dir, "MID_CONTINENT_cell_era_card.csv")
+fwrite(cell_card, card_path)
+cat(sprintf("  cell-year card: %s (%d rows)\n", card_path, nrow(cell_card)))
+print(cell_card[order(wall, age_bin, panel_year)][seq_len(min(.N, 10))])
+
 cat("[4/5] Aggregating to facility-year...\n")
 
 # First: facility-month sum-across-tanks (so base_premium is per facility-month)
@@ -485,5 +559,53 @@ print(fac_year[panel_year %in% c(1999, 2002, 2005, 2008, 2014, 2019, 2021, 2024)
                  mean_base    = round(mean(base_premium, na.rm = TRUE), 0),
                  median_base  = round(median(base_premium, na.rm = TRUE), 0)),
                by = panel_year][order(panel_year)])
+
+# ==============================================================================
+# 7. File 3 — multi-tank credit (trivial). Neither this script nor the
+#    12_/13_/14_Rate_MidCont_*.R era engines it mirrors define any facility-
+#    level tank-count discount (fac_month sums tank_premium with no further
+#    facility multiplier) -> one 1..9999 = 1.0 band per active year.
+# ==============================================================================
+cat("\n=== STEP 7: multi-tank credit (File 3) ===\n")
+
+active_years <- sort(unique(fac_year$panel_year))
+credit_tbl <- data.table(
+  carrier     = "MID_CONTINENT",
+  panel_year  = active_years,
+  n_min       = 1L,
+  n_max       = 9999L,
+  credit_mult = 1.0
+)
+setcolorder(credit_tbl, c("carrier", "panel_year", "n_min", "n_max", "credit_mult"))
+stopifnot(all(credit_tbl$n_min == 1L), all(credit_tbl$n_max == 9999L))
+
+credit_path <- file.path(card_dir, "MID_CONTINENT_multitank_credit.csv")
+fwrite(credit_tbl, credit_path)
+cat(sprintf("  multi-tank credit: %s (%d rows, %d active years)\n",
+            credit_path, nrow(credit_tbl), length(active_years)))
+
+# ==============================================================================
+# 8. File 4 — minimum premium. PROPOSED $500/facility-month floor, per
+#    `POLICY_MIN_PREMIUM <- 500` in 12_/13_/14_Rate_MidCont_*.R (identical
+#    across all four era scripts). HITL FLAG: that constant is never actually
+#    applied as a pmax() floor anywhere in THIS script's fac_year rollup above
+#    (base_premium/sched_min/sched_max carry no floor) — confirm $500 against
+#    the underlying filing before treating this file as authoritative.
+# ==============================================================================
+cat("=== STEP 8: minimum premium (File 4) — PROPOSED, confirm before use ===\n")
+
+MIDCONT_MIN_PREMIUM <- 500   # HITL FLAG — see banner above; not independently re-verified here
+min_prem_tbl <- data.table(
+  carrier         = "MID_CONTINENT",
+  panel_year      = active_years,
+  min_premium_usd = MIDCONT_MIN_PREMIUM
+)
+setcolorder(min_prem_tbl, c("carrier", "panel_year", "min_premium_usd"))
+stopifnot(all(min_prem_tbl$min_premium_usd > 0))
+stopifnot(uniqueN(min_prem_tbl$panel_year) == nrow(min_prem_tbl))
+
+min_prem_path <- file.path(card_dir, "MID_CONTINENT_min_premium.csv")
+fwrite(min_prem_tbl, min_prem_path)
+cat(sprintf("  min premium: %s (%d rows)\n", min_prem_path, nrow(min_prem_tbl)))
 
 cat("\n04a complete.\n")
