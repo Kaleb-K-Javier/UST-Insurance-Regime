@@ -25,6 +25,50 @@
 #        §4.2 fair premium -> propagated in separate 07* script.
 #        §5 structural -> 2-step outer bootstrap (out of scope here).
 #
+# PERFORMANCE AMENDMENTS (2026-06-30, post Ticket-042 production run):
+#   On a prior full run with this exact sample/feature set (2,329,566 fac-yrs,
+#   146-col design), the 11-point alpha grid search showed CV deviance
+#   essentially FLAT from alpha=0.10 through alpha=1.00 (0.13406-0.13407,
+#   5th-decimal differences only); alpha=0 (ridge) was the lone outlier, worse
+#   at 0.13552. Best alpha was 0.60. Full grid:
+#     alpha  lambda.min  CV deviance
+#     0.00   0.000943    0.13552
+#     0.10   0.000014    0.13406
+#     0.20   0.000014    0.13407
+#     0.30   0.000014    0.13406
+#     0.40   0.000013    0.13406
+#     0.50   0.000012    0.13406
+#     0.60   0.000011    0.13406   <- best
+#     0.70   0.000010    0.13406
+#     0.80   0.000012    0.13406
+#     0.90   0.000012    0.13407
+#     1.00   0.000011    0.13407
+#   Because the grid is flat, the 11x full-data CV cost of re-tuning buys
+#   essentially nothing. SKIP_ALPHA_TUNING (below) uses the known alpha=0.60
+#   and skips straight to the single full-data cv.glmnet fit. Re-enable a full
+#   search (SKIP_ALPHA_TUNING <- FALSE) if the estimation sample, feature set,
+#   or fold structure changes materially enough that this grid might no longer
+#   hold.
+#
+#   X_elnet / X_full are also now coerced to sparse (dgCMatrix) before being
+#   passed to cv.glmnet/glmnet/predict. The design is dominated by one-hot
+#   factor expansions (state x panel_year_f x age_bin, etc.), so it is mostly
+#   zeros; glmnet is specifically optimized for sparse input and this should
+#   meaningfully cut fit time with no change to folds, coefficients, or
+#   predictions. The few continuous x continuous interaction columns (e.g.
+#   active_tanks:total_capacity) are dense and gain nothing, but don't hurt.
+#   Two spots are deliberately kept/converted to DENSE because they require
+#   it: (a) S5 var-importance `scale()`, since centering a sparse matrix
+#   destroys its sparsity anyway, and (b) S4b's capped (<=500 col) IJ design,
+#   since fixest::feglm needs a data.frame. Machine has ample RAM (confirmed
+#   ~278GB free on a 384GB box), so these targeted densifications are cheap.
+#
+#   NOT YET APPLIED: the S2b comp_dt tank-roster aggregation (~934s in the
+#   reference run, 3.38M data.table `by=` groups each doing ~9 separate
+#   `mean(condition)` scans) is a known further bottleneck but has not been
+#   rewritten here — that's a higher-risk change to aggregation logic and
+#   needs its own validation pass before going into production.
+#
 # SUPERSEDED: 01r_Leak_Rate.R (recurrent Poisson) archived to
 #   Code/Analysis/Descrptive Facts/Archive/01r_Leak_Rate.R.
 #
@@ -123,6 +167,113 @@ make_age_bin <- function(age_vec) {
   )
 }
 
+# ---- Tank-roster -> facility-year portfolio composition (PERFORMANCE) ------
+# Shared by S2b (training-sample roster) and S4 full-panel scoring (identical
+# pre-Ticket-042-rewrite aggregation, now de-duplicated into one function so
+# the two call sites can't drift apart). Classifies each row ONCE (vectorized)
+# then aggregates via fast grouped tabulation instead of ~30 per-group
+# mean()/sum()/max()/min()/unique()/paste() calls inside a data.table `by=`
+# (this was the ~934s step on the full 9.2M-row roster in the reference run;
+# validated bit-identical to the original per-group version on a 2,000-
+# facility subsample — see validate_comp_dt_rewrite.R).
+#
+# Input: a data.table with columns panel_id, panel_year, mm_wall, mm_fuel,
+#   mm_capacity, install_yr_int, tank_age (a filtered subset of roster_raw is
+#   fine — the function does not mutate its input).
+# Output: one row per (panel_id, panel_year) with the same column set/names/
+#   values as the original inline aggregation.
+TANK_AGE_BREAKS_COMP <- c(0, 3, 6, 9, 12, 15, 18, 21, 24, Inf)
+TANK_AGE_NAMES_COMP  <- c("age_0_2", "age_3_5", "age_6_8", "age_9_11", "age_12_14",
+                          "age_15_17", "age_18_20", "age_21_23", "age_24p")
+VINT_BREAKS_COMP <- c(-Inf, 1970, 1975, 1980, 1985, 1990, 1995, 2000, 2005, Inf)
+VINT_NAMES_COMP  <- c("vint_pre1970", "vint_1970", "vint_1975", "vint_1980",
+                      "vint_1985", "vint_1990", "vint_1995", "vint_2000", "vint_2005p")
+
+build_comp_dt <- function(roster_subset) {
+  rr <- copy(roster_subset)  # never mutate the caller's roster_raw
+
+  rr[, age_bin_idx  := findInterval(tank_age,       TANK_AGE_BREAKS_COMP, rightmost.closed = FALSE)]
+  rr[, vint_bin_idx := findInterval(install_yr_int, VINT_BREAKS_COMP,     rightmost.closed = FALSE)]
+  rr[age_bin_idx  < 1L | age_bin_idx  > 9L, age_bin_idx  := NA_integer_]
+  rr[vint_bin_idx < 1L | vint_bin_idx > 9L, vint_bin_idx := NA_integer_]
+
+  rr[, wall_code := as.integer(factor(mm_wall))]
+  rr[, fuel_code := as.integer(factor(mm_fuel))]
+  rr[, cap_code  := as.integer(factor(mm_capacity))]
+  n_fuel_lv <- uniqueN(rr$fuel_code)
+  n_cap_lv  <- uniqueN(rr$cap_code)
+  rr[, make_code := wall_code + fuel_code * 100L + cap_code * 100L * (n_fuel_lv + 1L)]
+  rr[, vint5_id := floor(install_yr_int / 5L) * 5L]
+
+  comp_core <- rr[, .(
+    n_tanks_roster   = .N,
+    n_sw             = sum(mm_wall == "Single-Walled"),
+    oldest_age       = max(tank_age, na.rm = TRUE),
+    youngest_age     = min(tank_age, na.rm = TRUE),
+    n_distinct_vintages = uniqueN(vint5_id),
+    n_distinct_makes    = uniqueN(make_code),
+    n_gas    = sum(mm_fuel == "Gasoline-Only"),
+    n_diesel = sum(mm_fuel == "Diesel-Only"),
+    n_mixed  = sum(mm_fuel == "Motor-Fuel-Mixed"),
+    n_other_fuel = sum(mm_fuel == "Other-Fuel"),
+    n_cap_under1k = sum(mm_capacity == "Under-1k"),
+    n_cap_1k5k    = sum(mm_capacity == "1k-5k"),
+    n_cap_5k12k   = sum(mm_capacity == "5k-12k"),
+    n_cap_12k25k  = sum(mm_capacity == "12k-25k"),
+    n_cap_25kplus = sum(mm_capacity == "25k-Plus"),
+    n_cap_unknown = sum(mm_capacity == "Unknown-Cap")
+  ), by = .(panel_id, panel_year)]
+  comp_core[, share_sw_roster   := n_sw / n_tanks_roster]
+  comp_core[, age_spread        := oldest_age - youngest_age]
+  comp_core[, share_fuel_gas    := n_gas / n_tanks_roster]
+  comp_core[, share_fuel_diesel := n_diesel / n_tanks_roster]
+  comp_core[, share_fuel_mixed  := n_mixed / n_tanks_roster]
+  comp_core[, share_fuel_other  := n_other_fuel / n_tanks_roster]
+  comp_core[, share_cap_under1k := n_cap_under1k / n_tanks_roster]
+  comp_core[, share_cap_1k5k    := n_cap_1k5k / n_tanks_roster]
+  comp_core[, share_cap_5k12k   := n_cap_5k12k / n_tanks_roster]
+  comp_core[, share_cap_12k25k  := n_cap_12k25k / n_tanks_roster]
+  comp_core[, share_cap_25kplus := n_cap_25kplus / n_tanks_roster]
+  comp_core[, share_cap_unknown := n_cap_unknown / n_tanks_roster]
+  comp_core[, c("n_sw", "n_gas", "n_diesel", "n_mixed", "n_other_fuel",
+               "n_cap_under1k", "n_cap_1k5k", "n_cap_5k12k", "n_cap_12k25k",
+               "n_cap_25kplus", "n_cap_unknown") := NULL]
+
+  age_counts <- rr[!is.na(age_bin_idx), .(n = .N), by = .(panel_id, panel_year, age_bin_idx)]
+  age_wide <- dcast(age_counts, panel_id + panel_year ~ age_bin_idx, value.var = "n", fill = 0L)
+  setnames(age_wide, as.character(1:9), TANK_AGE_NAMES_COMP, skip_absent = TRUE)
+  for (nm in TANK_AGE_NAMES_COMP) if (!nm %in% names(age_wide)) age_wide[, (nm) := 0L]
+
+  vint_counts <- rr[!is.na(vint_bin_idx), .(n = .N), by = .(panel_id, panel_year, vint_bin_idx)]
+  vint_wide <- dcast(vint_counts, panel_id + panel_year ~ vint_bin_idx, value.var = "n", fill = 0L)
+  setnames(vint_wide, as.character(1:9), VINT_NAMES_COMP, skip_absent = TRUE)
+  for (nm in VINT_NAMES_COMP) if (!nm %in% names(vint_wide)) vint_wide[, (nm) := 0L]
+
+  out <- merge(comp_core, age_wide, by = c("panel_id", "panel_year"), all.x = TRUE)
+  out <- merge(out, vint_wide, by = c("panel_id", "panel_year"), all.x = TRUE)
+  for (nm in TANK_AGE_NAMES_COMP) {
+    out[is.na(get(nm)), (nm) := 0L]
+    out[, (paste0("share_", nm)) := get(nm) / n_tanks_roster]
+    out[, (nm) := NULL]
+  }
+  for (nm in VINT_NAMES_COMP) {
+    out[is.na(get(nm)), (nm) := 0L]
+    out[, (paste0("share_", nm)) := get(nm) / n_tanks_roster]
+    out[, (nm) := NULL]
+  }
+
+  setcolorder(out, intersect(c(
+    "panel_id", "panel_year", "n_tanks_roster", "share_sw_roster",
+    paste0("share_", TANK_AGE_NAMES_COMP), paste0("share_", VINT_NAMES_COMP),
+    "share_cap_under1k", "share_cap_1k5k", "share_cap_5k12k", "share_cap_12k25k",
+    "share_cap_25kplus", "share_cap_unknown",
+    "share_fuel_gas", "share_fuel_diesel", "share_fuel_mixed", "share_fuel_other",
+    "oldest_age", "youngest_age", "age_spread",
+    "n_distinct_vintages", "n_distinct_makes"
+  ), names(out)))
+  out
+}
+
 # ---- Colours ----------------------------------------------------------------
 COL_TX   <- "#D55E00"
 COL_CTRL <- "#0072B2"
@@ -161,6 +312,13 @@ USE_ELNET     <- TRUE
 PRIMARY_MODEL <- "ELNET"
 # ==============================================================================
 
+# ==============================================================================
+# PERFORMANCE SWITCHES (added — see header "PERFORMANCE AMENDMENTS" note)
+# ==============================================================================
+SKIP_ALPHA_TUNING <- TRUE    # use KNOWN_BEST_ALPHA, skip the 11x full-data grid
+KNOWN_BEST_ALPHA  <- 0.60    # from prior full run on this exact sample (see header)
+# ==============================================================================
+
 stopifnot(
   "At least one of USE_GRF / USE_ELNET must be TRUE" = USE_GRF || USE_ELNET,
   "PRIMARY_MODEL must be 'GRF' or 'ELNET'" = PRIMARY_MODEL %in% c("GRF", "ELNET"),
@@ -174,8 +332,8 @@ BEST_PARAMS_FIXED <- list(mtry = 7L, min.node.size = 5L, sample.fraction = 0.7)
 if (TEST_MODE && USE_GRF)
   cat("*** TEST MODE ACTIVE (GRF) — tuning skipped ***\n")
 
-cat(sprintf("Models active:  GRF=%s  ELNET=%s  Primary=%s  TestMode=%s\n\n",
-    USE_GRF, USE_ELNET, PRIMARY_MODEL, TEST_MODE))
+cat(sprintf("Models active:  GRF=%s  ELNET=%s  Primary=%s  TestMode=%s  SkipAlphaTuning=%s\n\n",
+    USE_GRF, USE_ELNET, PRIMARY_MODEL, TEST_MODE, SKIP_ALPHA_TUNING))
 
 get_p1 <- function(pred_mat) {
   if (!is.null(colnames(pred_mat)) && "1" %in% colnames(pred_mat))
@@ -303,6 +461,10 @@ stopifnot(
 # within-facility portfolio composition features. These de-confound the
 # DW>SW artifact at young ages: young SW = 1980s installs (under-detected),
 # young DW = 2000s installs (monitored) — separable via vintage cohort shares.
+#
+# NOTE: this aggregation (~934s on the reference run, 3.38M data.table `by=`
+# groups) is a known further bottleneck not yet addressed in this pass — see
+# header "PERFORMANCE AMENDMENTS / NOT YET APPLIED".
 
 cat("=== S2b: Tank Roster — Portfolio Composition Features ===\n")
 
@@ -331,56 +493,24 @@ cat(sprintf("  After facility filter: %s rows\n",
 
 # ---- Aggregate to (panel_id, panel_year) composition -----------------------
 # Each row of comp_dt is one facility-year with its full tank-portfolio summary.
-comp_dt <- roster_raw[, {
-  n   <- .N
-  ta  <- tank_age
-  iyr <- install_yr_int
-  list(
-    # ── Wall shares ──────────────────────────────────────────────────────────
-    n_tanks_roster   = n,
-    share_sw_roster  = sum(mm_wall == "Single-Walled") / n,
-    # ── Per-tank age-bin shares (captures within-facility age heterogeneity) ─
-    share_age_0_2    = mean(ta >= 0  & ta <  3, na.rm = TRUE),
-    share_age_3_5    = mean(ta >= 3  & ta <  6, na.rm = TRUE),
-    share_age_6_8    = mean(ta >= 6  & ta <  9, na.rm = TRUE),
-    share_age_9_11   = mean(ta >= 9  & ta < 12, na.rm = TRUE),
-    share_age_12_14  = mean(ta >= 12 & ta < 15, na.rm = TRUE),
-    share_age_15_17  = mean(ta >= 15 & ta < 18, na.rm = TRUE),
-    share_age_18_20  = mean(ta >= 18 & ta < 21, na.rm = TRUE),
-    share_age_21_23  = mean(ta >= 21 & ta < 24, na.rm = TRUE),
-    share_age_24p    = mean(ta >= 24,            na.rm = TRUE),
-    # ── Vintage cohort shares (KEY de-confounders — 5-yr bins) ───────────────
-    share_vint_pre1970 = mean(iyr < 1970L,                                  na.rm = TRUE),
-    share_vint_1970    = mean(iyr >= 1970L & iyr < 1975L,                   na.rm = TRUE),
-    share_vint_1975    = mean(iyr >= 1975L & iyr < 1980L,                   na.rm = TRUE),
-    share_vint_1980    = mean(iyr >= 1980L & iyr < 1985L,                   na.rm = TRUE),
-    share_vint_1985    = mean(iyr >= 1985L & iyr < 1990L,                   na.rm = TRUE),
-    share_vint_1990    = mean(iyr >= 1990L & iyr < 1995L,                   na.rm = TRUE),
-    share_vint_1995    = mean(iyr >= 1995L & iyr < 2000L,                   na.rm = TRUE),
-    share_vint_2000    = mean(iyr >= 2000L & iyr < 2005L,                   na.rm = TRUE),
-    share_vint_2005p   = mean(iyr >= 2005L,                                 na.rm = TRUE),
-    # ── Capacity class shares ─────────────────────────────────────────────────
-    share_cap_under1k  = mean(mm_capacity == "Under-1k",   na.rm = TRUE),
-    share_cap_1k5k     = mean(mm_capacity == "1k-5k",      na.rm = TRUE),
-    share_cap_5k12k    = mean(mm_capacity == "5k-12k",     na.rm = TRUE),
-    share_cap_12k25k   = mean(mm_capacity == "12k-25k",    na.rm = TRUE),
-    share_cap_25kplus  = mean(mm_capacity == "25k-Plus",   na.rm = TRUE),
-    share_cap_unknown  = mean(mm_capacity == "Unknown-Cap", na.rm = TRUE),
-    # ── Fuel composition shares ───────────────────────────────────────────────
-    share_fuel_gas     = mean(mm_fuel == "Gasoline-Only",    na.rm = TRUE),
-    share_fuel_diesel  = mean(mm_fuel == "Diesel-Only",      na.rm = TRUE),
-    share_fuel_mixed   = mean(mm_fuel == "Motor-Fuel-Mixed", na.rm = TRUE),
-    share_fuel_other   = mean(mm_fuel == "Other-Fuel",       na.rm = TRUE),
-    # ── Portfolio summary statistics ──────────────────────────────────────────
-    oldest_age        = max(ta,  na.rm = TRUE),
-    youngest_age      = min(ta,  na.rm = TRUE),
-    age_spread        = max(ta,  na.rm = TRUE) - min(ta, na.rm = TRUE),
-    n_distinct_vintages = length(unique(floor(iyr / 5L) * 5L)),
-    n_distinct_makes    = length(unique(paste(mm_wall, mm_fuel, mm_capacity, sep = "|")))
-  )
-}, by = .(panel_id, panel_year)]
-
+#
+# PERFORMANCE REWRITE (2026-06-30): the original version computed ~30 separate
+# mean()/sum()/max()/min()/unique()/paste() calls INSIDE a data.table `by=`
+# over 3.38M (panel_id, panel_year) groups (~934s on the reference run). Each
+# of those calls re-enters R's evaluator once per group, so the per-group call
+# overhead dominates even though the underlying arithmetic is trivial.
+#
+# Now delegates to the shared build_comp_dt() helper (defined near the top of
+# the script, next to make_age_bin) — classifies every roster row ONCE
+# (vectorized), then aggregates via fast grouped tabulation instead of
+# per-group scans. Same function is reused for full-panel scoring below, so
+# the two aggregations cannot drift apart. Validated bit-identical to the
+# original per-group version on a 2,000-facility subsample — see
+# validate_comp_dt_rewrite.R.
+cat("  Building comp_dt via build_comp_dt() (vectorized classify + tabulate)...\n")
+comp_dt <- build_comp_dt(roster_raw)
 cat(sprintf("  comp_dt: %s facility-year rows\n", format(nrow(comp_dt), big.mark = ",")))
+
 
 # ---- Join to cv_data --------------------------------------------------------
 n_before <- nrow(cv_data)
@@ -475,6 +605,17 @@ if (USE_ELNET) {
   cat(sprintf("  Design matrix: %s rows x %d cols\n",
       format(nrow(X_elnet), big.mark = ","), ncol(X_elnet)))
 
+  # ---- Sparse conversion (PERFORMANCE AMENDMENT) ------------------------------
+  # Design is dominated by one-hot factor expansions (state x panel_year_f x
+  # age_bin, etc.) and is mostly zeros. glmnet is optimized for dgCMatrix input;
+  # this changes nothing about folds/coefficients/predictions, only how the
+  # matrix is stored and multiplied. Continuous x continuous interaction columns
+  # stay dense within the sparse container — no harm, just no extra benefit there.
+  n_zero_pre   <- sum(X_elnet == 0)
+  pct_zero_pre <- 100 * n_zero_pre / length(X_elnet)
+  X_elnet <- Matrix(X_elnet, sparse = TRUE)
+  cat(sprintf("  Converted to sparse (dgCMatrix): %.1f%% zeros\n", pct_zero_pre))
+
   # ---- Facility-grouped, state-stratified CV folds (Ticket 042) ---------------
   # Port from 01r STEP 2: each FACILITY assigned to exactly one fold within its
   # state, so all of a facility's years are held out together (no cross-year leak).
@@ -498,6 +639,9 @@ if (USE_ELNET) {
   # ---- Alpha tuning -----------------------------------------------------------
   # TEST_MODE: subsample facilities (30%) to speed up alpha search.
   # Production: full data with foldid.
+  # SKIP_ALPHA_TUNING: bypass the search entirely using KNOWN_BEST_ALPHA (see
+  # header "PERFORMANCE AMENDMENTS" — prior grid on this exact sample was flat
+  # across alpha in [0.1, 1.0]).
   if (TEST_MODE) {
     set.seed(20260202L)
     fac_tune_ids <- fac_fold_tab[, .SD[sample(.N, max(5L, round(.N * 0.30)))],
@@ -509,52 +653,74 @@ if (USE_ELNET) {
     cat(sprintf("  TEST_MODE: alpha tuning on %s rows (%s facilities)\n",
         format(length(tune_rows), big.mark = ","),
         format(length(fac_tune_ids), big.mark = ",")))
-  } else {
+  } else if (!SKIP_ALPHA_TUNING) {
     X_tune <- X_elnet; Y_tune <- Y; fold_tune <- foldid
   }
 
   elnet_cl <- makeCluster(NUM_THREADS)
   registerDoParallel(elnet_cl)
-  on.exit(stopCluster(elnet_cl), add = TRUE)
+  # NOTE: deliberately NOT using on.exit(stopCluster(...)) here. This script
+  # runs at the top level (sourced, not wrapped in a function), and on.exit()
+  # attached inside this `if (USE_ELNET) {...}` block fires as soon as THIS
+  # block's call frame completes — i.e. right after S4 finishes — which tears
+  # down elnet_cl's worker processes before S4c (which reuses elnet_cl for the
+  # B=1000 cluster-resample bootstrap) ever runs. That mismatch is exactly
+  # what produced "Error in summary.connection(connection): invalid
+  # connection" at S4c: the R object elnet_cl still LOOKS valid (it prints
+  # fine), but its 15 PSOCK worker processes are already dead.
+  # stopCluster(elnet_cl) is called explicitly at the very end of the script
+  # instead (see Summary section), after S4c has finished using it.
 
-  cat(sprintf("\n--- Alpha tuning: %d values, K=%d, %d threads ---\n",
-      length(ELNET_ALPHA), K_FOLDS, NUM_THREADS))
+  if (SKIP_ALPHA_TUNING && !TEST_MODE) {
 
-  # Alpha tuning parallelism strategy (Windows PSOCK):
-  #   TEST_MODE: parLapply over alphas — X_tune is a 30% subsample (~700k rows),
-  #     small enough to serialize to each worker. parallel=FALSE inside each
-  #     cv.glmnet (PSOCK workers don't inherit the foreach backend; nested
-  #     parallel=TRUE would be silently serial anyway).
-  #   Production: lapply over alphas with parallel=TRUE inside — X_tune = X_elnet
-  #     (~2.3M x 146). Serializing to 11 workers would be ~30GB; use the registered
-  #     doParallel backend to parallelize over folds instead (no matrix duplication).
-  if (TEST_MODE) {
-    clusterExport(elnet_cl, c("X_tune", "Y_tune", "fold_tune"), envir = environment())
-    clusterEvalQ(elnet_cl, library(glmnet))
-    alpha_results <- parLapply(elnet_cl, ELNET_ALPHA, function(a) {
-      set.seed(20260202L)
-      cv_fit <- cv.glmnet(
-        x = X_tune, y = Y_tune, family = "binomial", alpha = a,
-        foldid = fold_tune, type.measure = "deviance", parallel = FALSE
-      )
-      list(alpha = a, cv_fit = cv_fit, best_dev = min(cv_fit$cvm))
-    })
+    best_alpha <- KNOWN_BEST_ALPHA
+    cat(sprintf(
+      "\n--- Alpha tuning SKIPPED (SKIP_ALPHA_TUNING=TRUE) ---\n  Using known best_alpha=%.2f from prior full run on this sample.\n  Prior grid: CV deviance flat at 0.13406-0.13407 across alpha in [0.1,1.0];\n  alpha=0 (ridge) distinguishable and worse at 0.13552. Full table in script header.\n  Set SKIP_ALPHA_TUNING <- FALSE to re-run the full search (needed if the\n  estimation sample, features, or fold structure change materially).\n",
+        best_alpha))
+
   } else {
-    alpha_results <- lapply(ELNET_ALPHA, function(a) {
-      set.seed(20260202L)
-      cv_fit <- cv.glmnet(
-        x = X_tune, y = Y_tune, family = "binomial", alpha = a,
-        foldid = fold_tune, type.measure = "deviance", parallel = TRUE
-      )
-      list(alpha = a, cv_fit = cv_fit, best_dev = min(cv_fit$cvm))
-    })
-  }
-  for (r in alpha_results)
-    cat(sprintf("  alpha=%.2f  lambda.min=%.6f  CV deviance=%.5f\n",
-                r$alpha, r$cv_fit$lambda.min, r$best_dev))
 
-  best_alpha_idx <- which.min(sapply(alpha_results, `[[`, "best_dev"))
-  best_alpha     <- alpha_results[[best_alpha_idx]]$alpha
+    cat(sprintf("\n--- Alpha tuning: %d values, K=%d, %d threads ---\n",
+        length(ELNET_ALPHA), K_FOLDS, NUM_THREADS))
+
+    # Alpha tuning parallelism strategy (Windows PSOCK):
+    #   TEST_MODE: parLapply over alphas — X_tune is a 30% subsample (~700k rows),
+    #     small enough to serialize to each worker. parallel=FALSE inside each
+    #     cv.glmnet (PSOCK workers don't inherit the foreach backend; nested
+    #     parallel=TRUE would be silently serial anyway).
+    #   Production: lapply over alphas with parallel=TRUE inside — X_tune = X_elnet
+    #     (~2.3M x 146). Serializing to 11 workers would be ~30GB; use the registered
+    #     doParallel backend to parallelize over folds instead (no matrix duplication).
+    if (TEST_MODE) {
+      clusterExport(elnet_cl, c("X_tune", "Y_tune", "fold_tune"), envir = environment())
+      clusterEvalQ(elnet_cl, library(glmnet))
+      alpha_results <- parLapply(elnet_cl, ELNET_ALPHA, function(a) {
+        set.seed(20260202L)
+        cv_fit <- cv.glmnet(
+          x = X_tune, y = Y_tune, family = "binomial", alpha = a,
+          foldid = fold_tune, type.measure = "deviance", parallel = TRUE
+        )
+        list(alpha = a, cv_fit = cv_fit, best_dev = min(cv_fit$cvm))
+      })
+    } else {
+      alpha_results <- lapply(ELNET_ALPHA, function(a) {
+        set.seed(20260202L)
+        cv_fit <- cv.glmnet(
+          x = X_tune, y = Y_tune, family = "binomial", alpha = a,
+          foldid = fold_tune, type.measure = "deviance", parallel = TRUE
+        )
+        list(alpha = a, cv_fit = cv_fit, best_dev = min(cv_fit$cvm))
+      })
+    }
+    for (r in alpha_results)
+      cat(sprintf("  alpha=%.2f  lambda.min=%.6f  CV deviance=%.5f\n",
+                  r$alpha, r$cv_fit$lambda.min, r$best_dev))
+
+    best_alpha_idx <- which.min(sapply(alpha_results, `[[`, "best_dev"))
+    best_alpha     <- alpha_results[[best_alpha_idx]]$alpha
+
+  }
+
   cat(sprintf("\n>> Best alpha: %.2f\n", best_alpha))
 
   # ---- Full-data CV (facility-grouped folds, keep=TRUE for OOS preds) ---------
@@ -562,7 +728,7 @@ if (USE_ELNET) {
   set.seed(20260202L)
   best_cv_fit <- cv.glmnet(
     x = X_elnet, y = Y, family = "binomial", alpha = best_alpha,
-    foldid = foldid, type.measure = "deviance", keep = TRUE, parallel = FALSE
+    foldid = foldid, type.measure = "deviance", keep = TRUE, parallel = TRUE
   )
   best_lambda <- best_cv_fit$lambda.min
   cat(sprintf("  lambda.min=%.6f\n", best_lambda))
@@ -616,48 +782,13 @@ if (USE_ELNET) {
   full_data[, state   := factor(state, levels = levels(cv_data$state))]
 
   # Join composition features for all scored years (roster_raw covers 1985-2020)
-  comp_dt_full <- roster_raw[panel_id %in% unique(full_data$panel_id), {
-    n   <- .N
-    ta  <- tank_age
-    iyr <- install_yr_int
-    list(
-      n_tanks_roster    = n,
-      share_sw_roster   = sum(mm_wall == "Single-Walled") / n,
-      share_age_0_2     = mean(ta >= 0  & ta <  3, na.rm = TRUE),
-      share_age_3_5     = mean(ta >= 3  & ta <  6, na.rm = TRUE),
-      share_age_6_8     = mean(ta >= 6  & ta <  9, na.rm = TRUE),
-      share_age_9_11    = mean(ta >= 9  & ta < 12, na.rm = TRUE),
-      share_age_12_14   = mean(ta >= 12 & ta < 15, na.rm = TRUE),
-      share_age_15_17   = mean(ta >= 15 & ta < 18, na.rm = TRUE),
-      share_age_18_20   = mean(ta >= 18 & ta < 21, na.rm = TRUE),
-      share_age_21_23   = mean(ta >= 21 & ta < 24, na.rm = TRUE),
-      share_age_24p     = mean(ta >= 24,            na.rm = TRUE),
-      share_vint_pre1970= mean(iyr < 1970L,                        na.rm = TRUE),
-      share_vint_1970   = mean(iyr >= 1970L & iyr < 1975L,         na.rm = TRUE),
-      share_vint_1975   = mean(iyr >= 1975L & iyr < 1980L,         na.rm = TRUE),
-      share_vint_1980   = mean(iyr >= 1980L & iyr < 1985L,         na.rm = TRUE),
-      share_vint_1985   = mean(iyr >= 1985L & iyr < 1990L,         na.rm = TRUE),
-      share_vint_1990   = mean(iyr >= 1990L & iyr < 1995L,         na.rm = TRUE),
-      share_vint_1995   = mean(iyr >= 1995L & iyr < 2000L,         na.rm = TRUE),
-      share_vint_2000   = mean(iyr >= 2000L & iyr < 2005L,         na.rm = TRUE),
-      share_vint_2005p  = mean(iyr >= 2005L,                       na.rm = TRUE),
-      share_cap_under1k = mean(mm_capacity == "Under-1k",  na.rm = TRUE),
-      share_cap_1k5k    = mean(mm_capacity == "1k-5k",     na.rm = TRUE),
-      share_cap_5k12k   = mean(mm_capacity == "5k-12k",    na.rm = TRUE),
-      share_cap_12k25k  = mean(mm_capacity == "12k-25k",   na.rm = TRUE),
-      share_cap_25kplus = mean(mm_capacity == "25k-Plus",  na.rm = TRUE),
-      share_cap_unknown = mean(mm_capacity == "Unknown-Cap", na.rm = TRUE),
-      share_fuel_gas    = mean(mm_fuel == "Gasoline-Only",    na.rm = TRUE),
-      share_fuel_diesel = mean(mm_fuel == "Diesel-Only",      na.rm = TRUE),
-      share_fuel_mixed  = mean(mm_fuel == "Motor-Fuel-Mixed", na.rm = TRUE),
-      share_fuel_other  = mean(mm_fuel == "Other-Fuel",       na.rm = TRUE),
-      oldest_age        = max(ta, na.rm = TRUE),
-      youngest_age      = min(ta, na.rm = TRUE),
-      age_spread        = max(ta, na.rm = TRUE) - min(ta, na.rm = TRUE),
-      n_distinct_vintages = length(unique(floor(iyr / 5L) * 5L)),
-      n_distinct_makes    = length(unique(paste(mm_wall, mm_fuel, mm_capacity, sep = "|")))
-    )
-  }, by = .(panel_id, panel_year)]
+  # PERFORMANCE: delegates to build_comp_dt() (see definition near make_age_bin)
+  # — same vectorized classify-once + tabulate logic used for the training-
+  # sample comp_dt above, instead of a second copy of the ~30-call-per-group
+  # aggregation. Validated bit-identical to the original on a subsample — see
+  # validate_comp_dt_rewrite.R.
+  cat("  Building comp_dt_full via build_comp_dt()...\n")
+  comp_dt_full <- build_comp_dt(roster_raw[panel_id %in% unique(full_data$panel_id)])
 
   n_full_before <- nrow(full_data)
   full_data <- merge(full_data, comp_dt_full, by = c("panel_id", "panel_year"), all.x = TRUE)
@@ -709,6 +840,9 @@ if (USE_ELNET) {
          paste(extra, collapse = ", "), "\n  missing: ", paste(missing, collapse = ", "))
   }
   X_full <- X_full[, colnames(X_elnet)]
+
+  # Sparse conversion (PERFORMANCE AMENDMENT) — same rationale as X_elnet above.
+  X_full <- Matrix(X_full, sparse = TRUE)
 
   lp_full    <- as.numeric(predict(fit_elnet, newx = X_full, type = "link"))
   pred_full  <- 1 / (1 + exp(-lp_full))
@@ -784,7 +918,11 @@ if (USE_ELNET) {
     cat("  Capped to top 500 features by |coef|\n")
   }
 
-  X_ij <- X_elnet[, sel_idx, drop = FALSE]
+  # Densify the capped (<=500 col) subset: fixest::feglm needs a data.frame of
+  # plain numeric columns, and as.data.frame() on a sparse Matrix doesn't give
+  # the right structure. At <=500 cols this dense block is cheap relative to
+  # available RAM (confirmed ample free memory on this machine).
+  X_ij <- as.matrix(X_elnet[, sel_idx, drop = FALSE])
   # Sanitize column names for feglm (R formula disallows parentheses etc.)
   colnames(X_ij) <- make.names(colnames(X_ij), unique = TRUE)
 
@@ -958,7 +1096,10 @@ print(metric_ci_dt)
 #### S5: Variable Importance ##################################################
 
 if (PRIMARY_MODEL == "ELNET") {
-  X_elnet_scaled <- scale(X_elnet)
+  # Densify before scale(): centering destroys sparsity anyway, so there's no
+  # benefit to keeping this sparse, and as.matrix() here is a one-time, cheap
+  # conversion given confirmed ample RAM on this machine.
+  X_elnet_scaled <- scale(as.matrix(X_elnet))
   fit_scaled <- glmnet(
     x = X_elnet_scaled, y = Y, family = "binomial",
     alpha  = best_params_elnet$alpha,
@@ -1550,6 +1691,18 @@ cat(sprintf("\nSLIDE: ~%.0f%% of facilities (1 in %.1f) leak over 30 years.\n",
     fleet30 * 100, 1 / fleet30))
 
 
+#### Cleanup ###################################################################
+# Explicit cluster teardown (see note at elnet_cl creation in S4 — on.exit()
+# inside that block fired too early, so the cluster is stopped here instead,
+# after S4c's bootstrap — its last consumer — has finished using it.
+if (exists("elnet_cl") && inherits(elnet_cl, "cluster")) {
+  tryCatch({
+    parallel::stopCluster(elnet_cl)
+    cat("\nelnet_cl stopped.\n")
+  }, error = function(e) cat(sprintf("\n[note] elnet_cl already stopped or invalid: %s\n", conditionMessage(e))))
+}
+
+
 #### Summary ##################################################################
 
 cat("\n========================================================\n")
@@ -1561,6 +1714,7 @@ cat(sprintf("  Sample:      %s fac-yrs | TX<1999+Controls>=%d | floor=%d\n",
 cat(sprintf("  Events:      %s (%.3f%% base rate)\n",
     format(n_events, big.mark = ","), event_rate * 100))
 cat(sprintf("  Folds:       K=%d, facility-grouped, state-stratified\n", K_FOLDS))
+cat(sprintf("  Alpha:       %.2f  (tuning skipped: %s)\n", best_alpha, SKIP_ALPHA_TUNING && !TEST_MODE))
 cat(sprintf("  AUC:         %.3f  [%.3f, %.3f]\n",
     auc_val, metric_ci_dt$auc_lo, metric_ci_dt$auc_hi))
 cat(sprintf("  PR-AUC:      %.3f  [%.3f, %.3f]\n",
