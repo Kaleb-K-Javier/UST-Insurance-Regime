@@ -40,15 +40,34 @@ standardize_county_name <- function(county_name) {
 
 safe_parse_date <- function(date_vec) {
   parsed_dates <- rep(as.Date(NA), length(date_vec))
-  
+
   suppressWarnings({
-    numeric_indices <- !is.na(as.numeric(date_vec))
+    numeric_vals    <- as.numeric(date_vec)
+    numeric_indices <- !is.na(numeric_vals)
   })
-  
+
   if (any(numeric_indices)) {
-    parsed_dates[numeric_indices] <- janitor::excel_numeric_to_date(as.numeric(date_vec[numeric_indices]))
+    # Numeric date fields arrive in two different units depending on source:
+    #   - Esri/ArcGIS exports (e.g. the EPA Releases.csv used for PA LUST
+    #     report dates) encode dates as epoch-MILLISECONDS, not Excel serial
+    #     days. 1985-2020 lands ~5e11-1.6e12 ms since epoch.
+    #   - PADEP tank exports (Excel/CSV) encode dates as Excel serial days
+    #     (days since 1899-12-30), which for realistic UST dates is <1e5.
+    # Blindly running excel_numeric_to_date() on epoch-ms values silently
+    # produced NA for every row (the value is ~7 orders of magnitude too
+    # large to be a serial day) -- this was the PA LUST 0-leaks bug.
+    v   <- numeric_vals[numeric_indices]
+    res <- as.Date(rep(NA, length(v)))
+
+    is_epoch_ms <- v > 1e11
+    res[is_epoch_ms] <- as.Date(as.POSIXct(v[is_epoch_ms] / 1000, origin = "1970-01-01", tz = "UTC"))
+
+    is_excel_serial <- v > 0 & v < 1e5
+    res[is_excel_serial] <- janitor::excel_numeric_to_date(v[is_excel_serial])
+
+    parsed_dates[numeric_indices] <- res
   }
-  
+
   string_indices <- !numeric_indices & !is.na(date_vec)
   
   if (any(string_indices)) {

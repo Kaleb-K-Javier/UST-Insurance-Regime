@@ -4,9 +4,13 @@
 #
 # WHAT THIS DOES: loads Data/Analysis/panel_dt.csv + facility_panel.csv AS-IS
 # (study-state rows are never recomputed), builds PA (PRICING/HAZARD-eligible
-# only, NOT part of the closure-DiD/structural sample) from master_tanks +
-# master_lust, unions PA onto the loaded panels, and OVERWRITES the canonical
-# panel_dt.csv / facility_panel.csv.
+# only, NOT part of the closure-DiD/structural sample) from master_tanks
+# (Data/Processed/Master_Harmonized_UST_Tanks.csv) + the PA-specific LUST
+# source (Data/Raw/state_databases/Pennsylvania/PA_Harmonized_LUST.csv,
+# written by 14_Clean_PA.r -- NOT Master_Harmonized_LUST.csv, whose PA rows
+# are downstream of the same source and inherit its bugs; see the T046.0
+# comment below), unions PA onto the loaded panels, and OVERWRITES the
+# canonical panel_dt.csv / facility_panel.csv.
 #
 # RUN ORDER (D5): 02b_Tank_level_Panel_Build.R (rare, base-data changes) THEN
 # this script (fast, adds PA). This script's output OVERWRITES the canonical
@@ -199,24 +203,31 @@ master_tanks[, tank_panel_id       := paste(facility_id, state, tank_id, sep = "
 log_step(sprintf("Loaded master_tanks: %s rows, %d cols",
   fmt_n(nrow(master_tanks)), ncol(master_tanks)))
 
-# master_lust read here, BEFORE any STUDY_STATES filter exists anywhere in
-# this script -- Bug-A fix. This script never constructs STUDY_STATES at
-# all, so there is no risk of reusing a STUDY_STATES-scoped copy.
-cat("T046.0: Load master_lust...\n")
+# PA leak source: Data/Raw/state_databases/Pennsylvania/PA_Harmonized_LUST.csv
+# (written by 14_Clean_PA.r) -- NOT Master_Harmonized_LUST.csv. The master
+# file's PA rows are downstream of this same source and were, before the
+# safe_parse_date() epoch-ms fix in 14_Clean_PA.r, entirely date-less (every
+# PA LUST record undated because Releases.csv's Reported_Date is epoch-ms and
+# was being run through excel_numeric_to_date() -- see 14_Clean_PA.r). Read
+# here, before any STUDY_STATES filter exists anywhere in this script (this
+# script never constructs STUDY_STATES at all -- Bug-A fix).
+# facility_id here is the PA DEP permit format ("XX-XXXXX"), which matches
+# master_tanks' PA facility_id directly -- no crosswalk needed.
+cat("T046.0: Load PA LUST source (PA_Harmonized_LUST.csv)...\n")
 
-master_lust <- fread(
-  here("Data", "Processed", "Master_Harmonized_LUST.csv"),
+pa_lust_raw <- fread(
+  here("Data", "Raw", "state_databases", "Pennsylvania", "PA_Harmonized_LUST.csv"),
   na.strings = c("", "NA", "N/A")
 )
-master_lust[, `:=`(
+pa_lust_raw[, `:=`(
   facility_id = toupper(trimws(as.character(facility_id))),
   state       = toupper(trimws(as.character(state)))
 )]
-master_lust[, panel_id    := paste(facility_id, state, sep = "_")]
-master_lust[, report_date := as.IDate(report_date)]
+pa_lust_raw[, panel_id    := paste(facility_id, state, sep = "_")]
+pa_lust_raw[, report_date := as.IDate(report_date)]
 
-log_step(sprintf("Loaded master_lust: %s rows, %d cols",
-  fmt_n(nrow(master_lust)), ncol(master_lust)))
+log_step(sprintf("Loaded PA LUST source: %s rows, %d cols",
+  fmt_n(nrow(pa_lust_raw)), ncol(pa_lust_raw)))
 cat("\n")
 
 #### T046.1 PA tank source (MIRRORS S3) ####
@@ -763,11 +774,12 @@ log_step(sprintf("PA stock panel: %s rows | %s fac | %s exits | %s entries",
 #### T046.12 PA leak / leak-closure / leak-install pairing (MIRRORS S13.1) ####
 # Real leak/hazard signal for PA -- researcher instruction (per ticket 046):
 # 01n's never-leaked risk set needs it, so it is NOT left NA/0 like the fee.
-# master_lust loaded fresh in T046.0 above, filtered to PRICING_STATES only
-# (Bug-A fix: never reuse a STUDY_STATES-filtered copy).
+# pa_lust_raw loaded fresh in T046.0 above from the PA-specific source (not
+# Master_Harmonized_LUST.csv -- see T046.0 comment), filtered to
+# PRICING_STATES defensively (the source file is PA-only already).
 cat("T046.12: PA leak history...\n")
 
-pa_leaks_fac_yr <- master_lust[
+pa_leaks_fac_yr <- pa_lust_raw[
   !is.na(report_date) & state %in% PRICING_STATES,
   .(
     n_leak_reports   = .N,
@@ -789,14 +801,14 @@ log_step(sprintf("PA LUST: %s fac-years with leaks | %s reports | %s incidents",
   fmt_n(pa_fac_stock[, sum(n_leak_reports)]),
   fmt_n(pa_fac_stock[, sum(n_leak_incidents)])))
 if (n_pa_leak_fac_years == 0L) {
-  stop("PA leak join produced 0 leak fac-years -- Bug-A regression (master_lust must be scoped to PRICING_STATES, read before any STUDY_STATES filter). STOP.")
+  stop("PA leak join produced 0 leak fac-years. Check that Data/Raw/state_databases/Pennsylvania/PA_Harmonized_LUST.csv has populated report_date values -- this requires 14_Clean_PA.r's safe_parse_date() epoch-ms fix to have been applied AND 14_Clean_PA.r re-run on the server to regenerate that file. STOP.")
 }
 
 pa_closures_for_lust <- pa_tanks[
   !is.na(tank_closed_date),
   .(panel_id, closure_date = tank_closed_date, tank_install_date = tank_installed_date)
 ]
-pa_leaks_for_lust <- master_lust[
+pa_leaks_for_lust <- pa_lust_raw[
   !is.na(report_date) & state %in% PRICING_STATES,
   .(panel_id, report_date)
 ]
