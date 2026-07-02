@@ -336,6 +336,13 @@ co_clean <- finalize_claims(
 ##############################################################################
 # SECTION PA — Pennsylvania (PA)
 ##############################################################################
+# NOTE (Ticket 052, 2026-07-02): this section's PA output still feeds
+# all_cleaned_claims.csv / claims_panel_annual_merged.csv (Sections H/I below)
+# unchanged -- 05_Claims_Analysis.r reads PA out of those and Ticket 052 does
+# not re-derive them. The incident-level PA rows this section contributes via
+# Section J ARE superseded -- see the note in Section J's header. Left as-is
+# (not no-op'd) per the 052 ticket amendment: no-op'ing this whole section
+# would have silently dropped PA from those other two files too.
 cat("Processing Pennsylvania (PA)...\n")
 
 pa_repo_candidates <- c(
@@ -523,6 +530,17 @@ cat("\n✓ COMPLETE\n\n")
 #
 # OUTPUT:
 #   Data/Processed/incident_level_claims.csv   (one row per claim)
+#
+# NOTE (Ticket 052, 2026-07-02): the PA rows written below (~2,323, via the
+# facility_leak_behavior_annual join, which drops ~52% of PA claims) are
+# immediately superseded. Code/Cleaning/12_PA_Claims_Import.R runs right
+# after this script, drops state=="PA" from the incident_level_claims.csv
+# just written, and replaces it with a full reshape of PA's own project
+# dataset (master_analysis_dataset.rds, ~7,792 claims, no facility-panel join
+# needed). This script intentionally still computes PA's stale rows here
+# (no conditional skip) so that running 11_Build alone still produces a
+# complete, well-formed incident_level_claims.csv even if 052's script hasn't
+# run yet.
 ##############################################################################
 cat("=================================================================\n")
 cat("SECTION J — Incident-Level Claims x Panel Merge\n")
