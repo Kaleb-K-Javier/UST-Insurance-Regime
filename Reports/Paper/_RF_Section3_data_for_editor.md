@@ -14,7 +14,7 @@ USE (current):
 | §4 stepped any_closure table (per FE) | `Output/Tables/T_DiD_Facility_Stepped_{oldtank_size,full_portfolio}.tex` |
 | §4 all-margin pub table (per FE) | `Output/Tables/T_Facility_Rollup_ATT_Pub_{oldtank_size,full_portfolio}.tex` |
 | §4 event-study figures | `Output/Figures/Fig_ES_Facility_<margin>_{oldtank_size,full_portfolio}.{pdf,png}` ; margin ∈ {any_closure, downsize, consolidate, any_replace, reconfigure_up} |
-| §4 HTE coefficients | `Output/Tables/T_Facility_HTE.csv` |
+| §4 HTE table (`tbl-fac-hte`) | `Output/Tables/T_Facility_HTE_Pub.tex` (02n; `\input`) — coefficients in `T_Facility_HTE.csv` |
 
 REMOVE / REPLACE (superseded 02j route — do NOT cite):
 `T_Facility_Portfolio_ATT.csv`, `T_Facility_Portfolio_HTE.csv`, `Fig_ES_Facility_Portfolio.*`,
@@ -72,6 +72,12 @@ full_portfolio. Inference: analytic cluster-robust SE by state (G=18) — PROVIS
 over-rejects; wild-cluster bootstrap OOMs, deferred).
 
 ## E. §4 HTE (T_Facility_HTE.csv, 100 rows; fe_version = oldtank_size)
+
+**Exhibit provenance (locked):** `tbl-fac-hte` ⇒ `Output/Tables/T_Facility_HTE_Pub.tex` (built by
+`Code/Analysis/02n_HTE_Pub_Table.R` from the CSV; blessed, on origin). All other facility-HTE `.tex`
+are dead-02j — reject at port via the litmus test: contains `Predicted baseline` / `Mix × year fixed
+effects` / `closure_share` / `repl_share` ⇒ dead. (`.tex` carries its own `\multicolumn` notes row,
+matching T3_triple_diff / T_Stepped_DiD_OLS.)
 
 Dimensions: cap_G, vintage, has_gasoline, rural, low_pop, low_income, high_pov, **thin_market**.
 Sorting story (levels): small (<9k gal) / old (pre-1975) / gasoline stations EXIT; large / newer stations
